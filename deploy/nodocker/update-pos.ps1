@@ -196,6 +196,8 @@ function Set-BuildEnvironment {
   $dUrl = Get-EnvValue 'DIRECT_URL'
   if ($dUrl -ne "") { $env:DIRECT_URL = $dUrl }
   $env:SKIP_ENV_VALIDATION = '1'
+  # The launcher runs .next/standalone/server.js - opt into the standalone output.
+  $env:BUILD_STANDALONE = '1'
 }
 
 function Invoke-RebuildAndAssemble {

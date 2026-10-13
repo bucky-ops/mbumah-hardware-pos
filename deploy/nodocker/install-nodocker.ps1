@@ -145,6 +145,8 @@ if ($envLine -match '^DATABASE_URL=(.+)$') { $env:DATABASE_URL = $Matches[1].Tri
 $dLine = (Get-Content ".env" | Where-Object { $_ -match '^DIRECT_URL=(.+)$' } | Select-Object -First 1)
 if ($dLine -match '^DIRECT_URL=(.+)$') { $env:DIRECT_URL = $Matches[1].Trim('"') }
 $env:SKIP_ENV_VALIDATION = '1'
+# The launcher runs .next/standalone/server.js - opt into the standalone output.
+$env:BUILD_STANDALONE = '1'
 
 # -- 6. Install -> schema -> seed -> build (each step FAILS HARD on error) -------
 # NOTE: `npm install` (not `npm ci`) - the repo is developed with bun, so the

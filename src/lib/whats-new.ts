@@ -22,6 +22,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.3',
+    title: 'Safer database updates: preflight and one-command repair',
+    bullets: [
+      'New `npm run db:preflight` answers "will this update apply safely?" by testing the schema change on a throwaway copy of your database - the live data is never touched.',
+      'New `npm run db:repair` fixes the "Schema drift detected" state in one command: verified backup first, then the safe additive converge, then verification.',
+      'Windows builds are lighter: the standalone server bundle is now produced only where it is used (Docker and the installers), avoiding Windows file-copy errors.',
+    ],
+  },
+  {
     version: '2.17.2',
     title: 'Repository tidy-up: one brand, one database',
     bullets: [

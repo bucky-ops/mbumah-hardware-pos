@@ -60,6 +60,11 @@ function fail(code, ...lines) {
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) fail(1, 'DATABASE_URL is not set and no .env was found.', 'Set DATABASE_URL or run the installer first.');
+// REPAIR_DATABASE_URL: explicit override used by scripts/repair-db.mjs so a
+// repair run backs up the SAME database it repairs (wins over .env).
+if (process.env.REPAIR_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.REPAIR_DATABASE_URL;
+}
 
 // -- Resolve the SQLite database file (file: URL, relative, or absolute) -----
 function sqliteFilePath(url) {

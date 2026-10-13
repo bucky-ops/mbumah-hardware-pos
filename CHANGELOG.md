@@ -2,6 +2,16 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.3] Database safety tooling and standalone opt-in
+
+### Added
+- **Schema preflight (`npm run db:preflight`)**: answers "will this schema apply safely?" BEFORE an install or update touches the live shop database. It copies the SQLite database to a throwaway preflight file, runs the read-only `prisma migrate diff` between the copy and the models, then classifies the convergence on the copy: `in-sync`, `lossless-converge`, `additive-converge` (the known safe case for this project's nullable idempotencyKey / isEngraved columns) or `unsafe` (even `--accept-data-loss` fails; callers must abort). The live database is never written. Server databases are diffed read-only via `PREFLIGHT_DATABASE_URL`. `KEEP_PREFLIGHT_DB=1` keeps the copy for inspection.
+- **Safe additive repair (`npm run db:repair`)**: one operator command for the "Schema drift detected" state: verified backup first (`db:backup` semantics), then the ensure-schema converge (plain push, and only on the known additive-drift refusal a pre-converge SQLite backup plus `--accept-data-loss`), then a verification push that must be a clean no-op. Exit 0 means repaired and verified.
+- **Windows standalone output is now opt-in** (`BUILD_STANDALONE=1`): the Docker image and both no-Docker installers/updaters set the flag (their launchers run `.next/standalone/server.js`); plain `next build` and Vercel build without it, which also avoids the Windows EINVAL copyfile errors the standalone file walk can trigger. `users.isEngraved` was audited and confirmed deliberate (self-healing bootstrap admin); its schema documentation stands.
+
+### Investigated and blocked
+- **`prisma.config.ts` migration (the deprecated `package.json#prisma` seed block stays for now)**: adding a Prisma config file changes Prisma 6.19 CLI behavior - the CLI then resolves the datasource from the .env file and ignores inherited environment variables, and schema management rides `directUrl`, so the entire self-host toolchain (ensure-schema converge, installers, CI database preparation, the new preflight and repair targets) silently loses explicit-target control. Reproduced and documented; reverted. Revisit when adopting Prisma 7, together with a toolchain-wide env strategy.
+
 ## [2.17.2] File organization and duplicate file removal
 
 ### Removed
