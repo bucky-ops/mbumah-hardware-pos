@@ -1,8 +1,9 @@
 // v2.16.0 subdomain workspaces: unit tests for the pure domain helpers.
 // These are the Edge-safe functions consumed by src/proxy.ts and the
 // workspace server resolver (spec Phase 4: "unit-testable helper functions").
+// The v2.17.7 cases cover resolveRequestHost (forwarded-host trust).
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   parseHost,
   isLocalHost,
@@ -13,6 +14,7 @@ import {
   isReservedSubdomain,
   isRootDomain,
   resolveWorkspaceHostMode,
+  resolveRequestHost,
   shouldUseSubdomainMode,
   shouldUsePathMode,
   buildInternalPath,
@@ -198,5 +200,79 @@ describe('buildInternalPath', () => {
     expect(buildInternalPath('api', '/x')).toBeNull();
     expect(buildInternalPath('Admin', '/x')).toBeNull();
     expect(buildInternalPath('-x', '/x')).toBeNull();
+  });
+});
+
+describe('resolveRequestHost (v2.17.7 forwarded-host trust)', () => {
+  const FLAG = 'TRUST_X_FORWARDED_HOST';
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('ignores x-forwarded-host when the trust flag is off (default)', () => {
+    // Empty string keeps the test deterministic even if the CI environment
+    // ever exports the variable; envStr treats it as unset.
+    vi.stubEnv(FLAG, '');
+    expect(
+      resolveRequestHost({ host: 'juja-main.mbumah.test:3000', 'x-forwarded-host': 'evil.example.com' }),
+    ).toBe('juja-main.mbumah.test');
+  });
+
+  it('rejects non-truthy flag spellings', () => {
+    for (const value of ['0', 'false', 'no', 'off', 'enabled']) {
+      vi.stubEnv(FLAG, value);
+      expect(
+        resolveRequestHost({ host: 'mbumah.co.ke', 'x-forwarded-host': 'evil.example.com' }),
+        `flag value ${value} must not trust the forwarded header`,
+      ).toBe('mbumah.co.ke');
+    }
+  });
+
+  it('uses x-forwarded-host when the trust flag is on', () => {
+    vi.stubEnv(FLAG, 'true');
+    expect(
+      resolveRequestHost({ host: 'localhost:3000', 'x-forwarded-host': 'app.mbumah.co.ke' }),
+    ).toBe('app.mbumah.co.ke');
+  });
+
+  it('accepts the truthy spellings case-insensitively', () => {
+    for (const value of ['1', 'TRUE', 'Yes', 'on']) {
+      vi.stubEnv(FLAG, value);
+      expect(
+        resolveRequestHost({ host: 'localhost', 'x-forwarded-host': 'thika.mbumah.co.ke' }),
+        `flag value ${value} must trust the forwarded header`,
+      ).toBe('thika.mbumah.co.ke');
+    }
+  });
+
+  it('takes the FIRST value of a comma-separated forwarded list', () => {
+    vi.stubEnv(FLAG, '1');
+    expect(
+      resolveRequestHost({
+        host: 'localhost:3000',
+        'x-forwarded-host': 'app.mbumah.co.ke, inner-hop.example.com',
+      }),
+    ).toBe('app.mbumah.co.ke');
+  });
+
+  it('strips ports and normalizes the forwarded host', () => {
+    vi.stubEnv(FLAG, 'on');
+    expect(
+      resolveRequestHost({ host: '127.0.0.1:3000', 'x-forwarded-host': 'Juja-Main.Mbumah.co.ke:8443' }),
+    ).toBe('juja-main.mbumah.co.ke');
+  });
+
+  it('falls back to the Host header when the forwarded header is absent or empty', () => {
+    vi.stubEnv(FLAG, 'true');
+    expect(resolveRequestHost({ host: 'mbumah.co.ke', 'x-forwarded-host': null })).toBe('mbumah.co.ke');
+    expect(resolveRequestHost({ host: 'mbumah.co.ke', 'x-forwarded-host': '' })).toBe('mbumah.co.ke');
+    expect(resolveRequestHost({ host: 'mbumah.co.ke:3000' })).toBe('mbumah.co.ke');
+  });
+
+  it('returns null when no usable host information exists', () => {
+    vi.stubEnv(FLAG, '');
+    expect(resolveRequestHost({ host: null })).toBeNull();
+    expect(resolveRequestHost({})).toBeNull();
   });
 });

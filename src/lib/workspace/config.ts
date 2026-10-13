@@ -129,6 +129,53 @@ export function parseHost(hostHeader: string | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
+// Forwarded host resolution (online tunnel / reverse proxy mode, v2.17.7)
+// ---------------------------------------------------------------------------
+
+/** Truthy spellings for the TRUST_X_FORWARDED_HOST flag (case-insensitive). */
+function isTruthyFlag(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+/**
+ * Resolve the client-visible request host for the workspace pipeline.
+ *
+ * SECURITY CONTRACT: the x-forwarded-host header is honored ONLY when
+ * TRUST_X_FORWARDED_HOST is truthy ('1', 'true', 'yes', 'on',
+ * case-insensitive), and it must ONLY be enabled behind a proxy or tunnel
+ * that OVERWRITES x-forwarded-host on every request (Cloudflare Tunnel,
+ * Caddy, nginx with an explicit proxy_set_header). Never enable it on a
+ * directly exposed server: any client could spoof the header and impersonate
+ * another workspace origin. With the flag off (the default everywhere) the
+ * forwarded header is ignored and behavior matches pre-2.17.7 releases.
+ *
+ * When the header carries a comma-separated list (a chain of proxies), the
+ * FIRST value is the host as injected by the outermost client-facing proxy,
+ * which is the one the workspace pipeline should see. If the trusted header
+ * is absent or unparseable, the plain Host header is used as the fallback.
+ *
+ * Returns the normalized host (port stripped, lowercased, trailing dot
+ * removed) or null when no usable host information is present.
+ */
+export function resolveRequestHost(headers: {
+  host?: string | null;
+  'x-forwarded-host'?: string | null;
+}): string | null {
+  if (isTruthyFlag(envStr('TRUST_X_FORWARDED_HOST'))) {
+    const forwarded = headers['x-forwarded-host'];
+    if (forwarded) {
+      const first = forwarded.split(',')[0]?.trim() ?? '';
+      const parsedForwarded = parseHost(first);
+      if (parsedForwarded) return parsedForwarded;
+    }
+  }
+  const parsed = parseHost(headers.host);
+  return parsed === '' ? null : parsed;
+}
+
+// ---------------------------------------------------------------------------
 // Host classification
 // ---------------------------------------------------------------------------
 

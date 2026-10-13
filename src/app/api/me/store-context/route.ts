@@ -8,6 +8,7 @@
 import { type NextRequest } from 'next/server';
 import { requireAuth, type AuthSession } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
+import { resolveRequestHost } from '@/lib/workspace/config';
 import { buildStoreContextPayload } from '@/lib/workspace/server';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,13 @@ async function storeContextHandler(request: NextRequest, session: AuthSession): 
   const slug = searchParams.get('slug');
 
   const payload = await buildStoreContextPayload({
-    host: request.headers.get('host'),
+    // Client-visible host: Host header, or x-forwarded-host when
+    // TRUST_X_FORWARDED_HOST is enabled (security contract in
+    // src/lib/workspace/config.ts).
+    host: resolveRequestHost({
+      host: request.headers.get('host'),
+      'x-forwarded-host': request.headers.get('x-forwarded-host'),
+    }),
     slug,
     session,
   });
