@@ -2,6 +2,14 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.4] Local offline subdomain foundation: env template and hosts writer
+
+### Added
+- **Local offline env template (`.env.local-offline.example`)**: copy to `.env` for a single-shop offline install where every branch behaves like its own website. Pre-wires the `mbumah.test` root domain (the default host allowlist then covers the root and every branch subdomain), SQLite paths for the one shared database, plain-HTTP shared-cookie settings (`.mbumah.test`, secure off) and the sandbox M-Pesa callback. Referenced from `docs/local-offline-setup.md`.
+- **Hosts file writer (`npm run domains:write-hosts`)**: companion to the print-only helper. Writes an idempotent, clearly marked managed block (root domain plus all five seeded branch subdomains, LAN IP or 127.0.0.1 via `--ip`, custom root via `--domain`), takes a timestamped backup of the hosts file before every write, verifies the result, supports `--remove`, and refuses cleanly with the exact elevated command when not run as root/Administrator. Verified: the write, re-run (single replaced block, foreign entries preserved), remove, and the non-elevated refusal path.
+
+The remaining foundation items of this phase (Store slug and subdomain schema, seeded slugs and subdomains for the five branches, store context resolver, middleware host resolution, allowed-host validation, `/stores/[storeSlug]` path fallback, reserved subdomain blocking) shipped in v2.16.0 and are unchanged here.
+
 ## [2.17.3] Database safety tooling and standalone opt-in
 
 ### Added
