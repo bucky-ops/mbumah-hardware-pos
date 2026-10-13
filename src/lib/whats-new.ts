@@ -22,6 +22,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.6',
+    title: 'LAN mode: schema health at a glance',
+    bullets: [
+      'New protected endpoint /api/health/schema shows an authenticated operator the complete database drift picture: which columns are missing, row counts, and the exact repair command to run.',
+      'New LAN env template (.env.lan.example) for hosting the POS on the shop network with mbumah.lan or the static server IP.',
+      'The LAN guide now includes step-by-step Windows Firewall instructions so other tills can reach the server.',
+    ],
+  },
+  {
     version: '2.17.5',
     title: 'Branch workspaces: verified end to end',
     bullets: [
