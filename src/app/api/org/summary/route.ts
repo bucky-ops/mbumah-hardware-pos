@@ -1,0 +1,150 @@
+// GET /api/org/summary (v2.16.0 subdomain workspaces)
+//
+// Organization console data: all active stores with today's KPIs, plus
+// organization-wide alerts (low stock, overdue rentals, debt aging, pending
+// M-Pesa payments) and the most recent audit events.
+//
+// AUTHORIZATION: SUPER_ADMIN and STORE_OWNER only (ACCOUNTANT gets the
+// financial KPI view too; the response contains no customer PII, only
+// aggregates). Branch-only roles must never see organization-wide data
+// (spec: "Do not expose organization-wide data to branch-only users").
+
+import { db, runWithoutTenant } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
+import { withErrorBoundary } from '@/lib/logger';
+
+export const dynamic = 'force-dynamic';
+
+const ORG_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'];
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+async function orgSummaryHandler(): Promise<Response> {
+  return runWithoutTenant(async () => {
+    const today = startOfToday();
+
+    const stores = await db.store.findMany({
+      where: { status: { not: 'ARCHIVED' } },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        slug: true,
+        subdomain: true,
+        location: true,
+        phone: true,
+        status: true,
+        brandingColor: true,
+      },
+    });
+
+    const [salesByStore, lowStockByStore, overdueRentalsByStore, debtByStore, pendingMpesaByStore, recentAudit] =
+      await Promise.all([
+        // Today's revenue per store (SALE type, settled payment statuses)
+        db.salesTransaction.groupBy({
+          by: ['storeId'],
+          where: {
+            createdAt: { gte: today },
+            transactionType: 'SALE',
+            paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
+          },
+          _sum: { totalAmount: true },
+          _count: { _all: true },
+        }),
+        // Low stock per store (at or below reorder level)
+        db.product.groupBy({
+          by: ['storeId'],
+          where: { quantityInStock: { lte: db.product.fields.reorderLevel }, isActive: true },
+          _count: { _all: true },
+        }),
+        // Overdue rentals per store
+        db.equipmentRental.groupBy({
+          by: ['storeId'],
+          where: { status: { in: ['ACTIVE', 'OVERDUE'] }, expectedReturnDate: { lt: new Date() } },
+          _count: { _all: true },
+        }),
+        // Outstanding debt balances per store
+        db.debtLedger.groupBy({
+          by: ['storeId'],
+          where: { status: { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] }, balance: { gt: 0 } },
+          _sum: { balance: true },
+          _count: { _all: true },
+        }),
+        // Pending M-Pesa payments per store
+        db.mpesaTransaction.groupBy({
+          by: ['storeId'],
+          where: { status: 'PENDING' },
+          _count: { _all: true },
+        }),
+        // Recent audit events (org-wide, latest 10; AuditLog orders by timestamp)
+        db.auditLog.findMany({
+          orderBy: { timestamp: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            storeId: true,
+            entityType: true,
+            entityId: true,
+            action: true,
+            userId: true,
+            timestamp: true,
+          },
+        }),
+      ]);
+
+    const revenueMap = new Map(
+      salesByStore.map((r) => [r.storeId, { sum: r._sum?.totalAmount ?? 0, count: r._count?._all ?? 0 }]),
+    );
+    const lowStockMap = new Map(lowStockByStore.map((r) => [r.storeId, r._count._all]));
+    const rentalsMap = new Map(overdueRentalsByStore.map((r) => [r.storeId, r._count._all]));
+    const debtMap = new Map(debtByStore.map((r) => [r.storeId, { balance: r._sum.balance ?? 0, count: r._count._all }]));
+    const mpesaMap = new Map(pendingMpesaByStore.map((r) => [r.storeId, r._count._all]));
+
+    const storeRows = stores.map((s) => {
+      const sales = revenueMap.get(s.id);
+      const debt = debtMap.get(s.id);
+      return {
+        ...s,
+        todayRevenue: Number(sales?.sum ?? 0),
+        todayTransactions: sales?.count ?? 0,
+        lowStockCount: lowStockMap.get(s.id) ?? 0,
+        overdueRentals: rentalsMap.get(s.id) ?? 0,
+        debtOutstanding: Number(debt?.balance ?? 0),
+        debtCount: debt?.count ?? 0,
+        pendingMpesa: mpesaMap.get(s.id) ?? 0,
+      };
+    });
+
+    const totals = storeRows.reduce(
+      (acc, s) => ({
+        revenue: acc.revenue + s.todayRevenue,
+        transactions: acc.transactions + s.todayTransactions,
+        lowStock: acc.lowStock + s.lowStockCount,
+        overdueRentals: acc.overdueRentals + s.overdueRentals,
+        debtOutstanding: acc.debtOutstanding + s.debtOutstanding,
+        pendingMpesa: acc.pendingMpesa + s.pendingMpesa,
+      }),
+      { revenue: 0, transactions: 0, lowStock: 0, overdueRentals: 0, debtOutstanding: 0, pendingMpesa: 0 },
+    );
+
+    return Response.json({
+      success: true,
+      data: {
+        generatedAt: new Date().toISOString(),
+        totals,
+        stores: storeRows,
+        recentAudit,
+      },
+    });
+  });
+}
+
+export const GET = withErrorBoundary(
+  requireAuth(orgSummaryHandler, { roles: ORG_ROLES }),
+  'ORG_SUMMARY',
+);

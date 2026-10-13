@@ -1,0 +1,276 @@
+'use client';
+
+/**
+ * MBUMAH HARDWARE POS - Main application shell (extracted in v2.16.0)
+ *
+ * Previously defined inside src/app/page.tsx; extracted so the branch
+ * workspace routes (/stores/{slug}/..., branch subdomains) can render the
+ * exact same SPA shell without duplicating the tab system. Behavior is
+ * unchanged: sidebar + top bar + lazy tab switch + footer, idle timeout,
+ * keyboard shortcuts.
+ */
+
+import React, { useState, useEffect, useRef, lazy, Suspense, useSyncExternalStore, useCallback } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Keyboard } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { useAuthStore, useAppStore } from '@/lib/stores';
+import { useIdleTimeout } from '@/hooks/use-idle-timeout';
+import { APP_BUILD_LABEL } from '@/lib/version';
+import { TAB_LOADERS } from '@/lib/tab-preload';
+import { ErrorBoundary, SectionErrorBoundary } from '@/components/error-boundary';
+import { FloatingHomeButton } from '@/components/floating-home-button';
+import { AppSidebar } from '@/components/layout/app-sidebar';
+import { TopBar } from '@/components/layout/top-bar';
+import { KeyboardShortcutsHelp } from '@/components/keyboard-shortcuts-help';
+import { WhatsNewDialog } from '@/components/whats-new-dialog';
+
+// LAZY-LOADED TAB COMPONENTS
+//
+// AUDIT FIX (Finding 2.2): the import thunks moved to src/lib/tab-preload.ts
+// so the sidebar can prefetch a tab's chunk on pointerenter/focus (see
+// preloadTab) - the first switch to a tab no longer waits on a cold chunk
+// fetch. Specifiers are unchanged, so chunking is identical to before.
+const LazyDashboardTab = lazy(TAB_LOADERS.dashboard);
+const LazyInventoryTab = lazy(TAB_LOADERS.inventory);
+const LazyCustomersTab = lazy(TAB_LOADERS.customers);
+const LazyRentalsTab = lazy(TAB_LOADERS.rentals);
+const LazyFinancialTab = lazy(TAB_LOADERS.financial);
+const LazyAnalyticsTab = lazy(TAB_LOADERS.analytics);
+const LazyReportsTab = lazy(TAB_LOADERS.reports);
+const LazyAdminTab = lazy(TAB_LOADERS.admin);
+const LazyTransactionsTab = lazy(TAB_LOADERS.transactions);
+const LazySuppliersTab = lazy(TAB_LOADERS.suppliers);
+const LazyCatalogTab = lazy(TAB_LOADERS.catalog);
+const LazyGiftCardsTab = lazy(TAB_LOADERS['gift-cards']);
+const LazyVouchersTab = lazy(TAB_LOADERS.vouchers);
+const LazyInvoicesTab = lazy(TAB_LOADERS.invoices);
+const LazyDeliveryTab = lazy(TAB_LOADERS.delivery);
+const LazyCreditsTab = lazy(TAB_LOADERS.credits);
+const LazyMessagingTab = lazy(TAB_LOADERS.messaging);
+const LazyTransfersTab = lazy(TAB_LOADERS.transfers);
+const LazyBankingTab = lazy(TAB_LOADERS.banking);
+const LazyLoyaltyTab = lazy(TAB_LOADERS.loyalty);
+const LazySecurityTab = lazy(TAB_LOADERS.security);
+const LazyPayrollTab = lazy(TAB_LOADERS.payroll);
+const LazyEtimsTab = lazy(TAB_LOADERS.etims);
+const LazyDebtManagementTab = lazy(TAB_LOADERS['debt-management']);
+const LazyDebtPlansTab = lazy(TAB_LOADERS['debt-plans']);
+const LazyDataExportsTab = lazy(TAB_LOADERS['data-exports']);
+const LazyConversationsTab = lazy(TAB_LOADERS.conversations);
+const LazyPurchaseOrdersTab = lazy(TAB_LOADERS['purchase-orders']);
+const LazyShiftSchedulingTab = lazy(TAB_LOADERS['shift-scheduling']);
+const LazyPOSTab = lazy(TAB_LOADERS.pos);
+
+/**
+ * Live online/offline indicator for the footer status chip (v2.13.0).
+ * useSyncExternalStore mirrors navigator.onLine + the browser's online/offline
+ * events - no effect setState, and the server snapshot (optimistic 'online')
+ * only ever matters pre-mount, since the footer renders client-side inside
+ * MainApp.
+ */
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener('online', onChange);
+  window.addEventListener('offline', onChange);
+  return () => {
+    window.removeEventListener('online', onChange);
+    window.removeEventListener('offline', onChange);
+  };
+}
+
+function useOnlineStatus(): boolean {
+  return useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+}
+
+function TabLoadingFallback() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+      </div>
+      <Skeleton className="h-10 w-full" />
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+}
+
+export function MainApp() {
+  const { activeTab, setActiveTab, currentStoreId } = useAppStore();
+  const user = useAuthStore((s) => s.user);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const online = useOnlineStatus();
+  const searchBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // v2.6.0 IDLE TIMEOUT (30 min): reuse the EXACT 401 session-expired path -
+  // clear the auth tokens and dispatch `mbt:session-expired`, which the
+  // auth-store listener (stores.ts) handles by flipping the SPA to the
+  // LoginScreen. The cart now PERSISTS in IndexedDB (no clearCart on this
+  // path), so the toast tells the cashier their sale survived.
+  const handleIdleTimeout = useCallback(() => {
+    try {
+      const hadSession = !!localStorage.getItem('mbt_token');
+      localStorage.removeItem('mbt_token');
+      localStorage.removeItem('mbt_user');
+      if (hadSession) {
+        window.dispatchEvent(new CustomEvent('mbt:session-expired'));
+      }
+    } catch {
+      // Storage unavailable - still flip to the login screen via the event.
+    }
+    toast.info('Session timed out after 30 minutes - your cart was saved and will be restored on next login.', {
+      duration: 8000,
+    });
+  }, []);
+  useIdleTimeout(handleIdleTimeout);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const { toggleSidebarCollapse } = useAppStore.getState();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+K or Cmd+K: Focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchBtnRef.current?.click();
+        return;
+      }
+
+      // Ctrl+B or Cmd+B: Toggle sidebar collapse/expand
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebarCollapse();
+        return;
+      }
+
+      // F2-F5: Switch tabs (prevent default)
+      if (e.key === 'F2') { e.preventDefault(); setActiveTab('pos'); return; }
+      if (e.key === 'F3') { e.preventDefault(); setActiveTab('inventory'); return; }
+      if (e.key === 'F4') { e.preventDefault(); setActiveTab('customers'); return; }
+      if (e.key === 'F5') { e.preventDefault(); setActiveTab('financial'); return; }
+
+      // F9: Checkout (dispatch custom event that POSTab listens for)
+      if (e.key === 'F9') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('pos-checkout'));
+        return;
+      }
+
+      // F10: Hold cart
+      if (e.key === 'F10') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('pos-hold-cart'));
+        return;
+      }
+
+      // ? or Ctrl+/: Show keyboard shortcuts
+      if (e.key === '?' || ((e.metaKey || e.ctrlKey) && e.key === '/')) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [setActiveTab]);
+
+  const renderTab = () => {
+    switch (activeTab) {
+      case 'dashboard': return <SectionErrorBoundary sectionName="Dashboard"><Suspense fallback={<TabLoadingFallback />}><LazyDashboardTab /></Suspense></SectionErrorBoundary>;
+      case 'pos': return <SectionErrorBoundary sectionName="POS"><Suspense fallback={<TabLoadingFallback />}><LazyPOSTab /></Suspense></SectionErrorBoundary>;
+      case 'catalog': return <SectionErrorBoundary sectionName="Catalog"><Suspense fallback={<TabLoadingFallback />}><LazyCatalogTab /></Suspense></SectionErrorBoundary>;
+      case 'inventory': return <SectionErrorBoundary sectionName="Inventory"><Suspense fallback={<TabLoadingFallback />}><LazyInventoryTab /></Suspense></SectionErrorBoundary>;
+      case 'customers': return <SectionErrorBoundary sectionName="Customers"><Suspense fallback={<TabLoadingFallback />}><LazyCustomersTab /></Suspense></SectionErrorBoundary>;
+      case 'rentals': return <SectionErrorBoundary sectionName="Rentals"><Suspense fallback={<TabLoadingFallback />}><LazyRentalsTab /></Suspense></SectionErrorBoundary>;
+      case 'financial': return <SectionErrorBoundary sectionName="Financial"><Suspense fallback={<TabLoadingFallback />}><LazyFinancialTab /></Suspense></SectionErrorBoundary>;
+      case 'analytics': return <SectionErrorBoundary sectionName="Analytics"><Suspense fallback={<TabLoadingFallback />}><LazyAnalyticsTab /></Suspense></SectionErrorBoundary>;
+      case 'reports': return <SectionErrorBoundary sectionName="Reports"><Suspense fallback={<TabLoadingFallback />}><LazyReportsTab /></Suspense></SectionErrorBoundary>;
+      case 'transactions': return <SectionErrorBoundary sectionName="Transactions"><Suspense fallback={<TabLoadingFallback />}><LazyTransactionsTab /></Suspense></SectionErrorBoundary>;
+      case 'admin': return <SectionErrorBoundary sectionName="Admin"><Suspense fallback={<TabLoadingFallback />}><LazyAdminTab /></Suspense></SectionErrorBoundary>;
+      case 'suppliers': return <SectionErrorBoundary sectionName="Suppliers"><Suspense fallback={<TabLoadingFallback />}><LazySuppliersTab /></Suspense></SectionErrorBoundary>;
+      case 'gift-cards': return <SectionErrorBoundary sectionName="Gift Cards"><Suspense fallback={<TabLoadingFallback />}><LazyGiftCardsTab storeId={currentStoreId} userRole={user?.role || 'CASHIER'} userId={user?.id || ''} /></Suspense></SectionErrorBoundary>;
+      case 'vouchers': return <SectionErrorBoundary sectionName="Vouchers"><Suspense fallback={<TabLoadingFallback />}><LazyVouchersTab /></Suspense></SectionErrorBoundary>;
+      case 'invoices': return <SectionErrorBoundary sectionName="Invoices"><Suspense fallback={<TabLoadingFallback />}><LazyInvoicesTab /></Suspense></SectionErrorBoundary>;
+      case 'delivery': return <SectionErrorBoundary sectionName="Delivery"><Suspense fallback={<TabLoadingFallback />}><LazyDeliveryTab /></Suspense></SectionErrorBoundary>;
+      case 'credits': return <SectionErrorBoundary sectionName="Credits"><Suspense fallback={<TabLoadingFallback />}><LazyCreditsTab /></Suspense></SectionErrorBoundary>;
+      case 'messaging': return <SectionErrorBoundary sectionName="Messaging"><Suspense fallback={<TabLoadingFallback />}><LazyMessagingTab /></Suspense></SectionErrorBoundary>;
+      case 'transfers': return <SectionErrorBoundary sectionName="Transfers"><Suspense fallback={<TabLoadingFallback />}><LazyTransfersTab /></Suspense></SectionErrorBoundary>;
+      case 'banking': return <SectionErrorBoundary sectionName="Banking"><Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense></SectionErrorBoundary>;
+      case 'loyalty': return <SectionErrorBoundary sectionName="Loyalty"><Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense></SectionErrorBoundary>;
+      case 'security': return <SectionErrorBoundary sectionName="Security"><Suspense fallback={<TabLoadingFallback />}><LazySecurityTab /></Suspense></SectionErrorBoundary>;
+      case 'payroll': return <SectionErrorBoundary sectionName="Payroll"><Suspense fallback={<TabLoadingFallback />}><LazyPayrollTab /></Suspense></SectionErrorBoundary>;
+      case 'etims': return <SectionErrorBoundary sectionName="eTIMS"><Suspense fallback={<TabLoadingFallback />}><LazyEtimsTab /></Suspense></SectionErrorBoundary>;
+      case 'debt-management': return <SectionErrorBoundary sectionName="Debt Management"><Suspense fallback={<TabLoadingFallback />}><LazyDebtManagementTab /></Suspense></SectionErrorBoundary>;
+      case 'debt-plans': return <SectionErrorBoundary sectionName="Debt Plans"><Suspense fallback={<TabLoadingFallback />}><LazyDebtPlansTab /></Suspense></SectionErrorBoundary>;
+      case 'data-exports': return <SectionErrorBoundary sectionName="Data Exports"><Suspense fallback={<TabLoadingFallback />}><LazyDataExportsTab /></Suspense></SectionErrorBoundary>;
+      case 'conversations': return <SectionErrorBoundary sectionName="Conversations"><Suspense fallback={<TabLoadingFallback />}><LazyConversationsTab /></Suspense></SectionErrorBoundary>;
+      case 'purchase-orders': return <SectionErrorBoundary sectionName="Purchase Orders"><Suspense fallback={<TabLoadingFallback />}><LazyPurchaseOrdersTab /></Suspense></SectionErrorBoundary>;
+      case 'shift-scheduling': return <SectionErrorBoundary sectionName="Shift Scheduling"><Suspense fallback={<TabLoadingFallback />}><LazyShiftSchedulingTab /></Suspense></SectionErrorBoundary>;
+      default: return <SectionErrorBoundary sectionName="POS"><Suspense fallback={<TabLoadingFallback />}><LazyPOSTab /></Suspense></SectionErrorBoundary>;
+    }
+  };
+
+  return (
+    <ErrorBoundary>
+      <div className="flex h-screen overflow-hidden">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300 ease-in-out">
+          <TopBar searchBtnRef={searchBtnRef} />
+          <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div className="animate-tab-enter" key={activeTab}>
+              {renderTab()}
+            </div>
+          </main>
+          <footer className="border-t bg-background/95 backdrop-blur-sm px-4 py-2 text-center shrink-0 mt-auto">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground">
+                  MBUMAH HARDWARE POS & ERP &copy; {new Date().getFullYear()}
+                </p>
+                {/* VERSION FLOW (v2.6.2): renders package.json version + the
+                    exact commit SHA this bundle was built from - see
+                    src/lib/version.ts. Never hardcode a version here. */}
+                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline" title="App version - build commit">{APP_BUILD_LABEL}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* ONLINE STATUS (v2.13.0): live navigator.onLine mirror -
+                    green pulsing dot when connected, red static when the
+                    browser fires 'offline'. Chip hidden on xs (crowded). */}
+                <div
+                  className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground/60"
+                  role="status"
+                  aria-label={online ? 'Connected to the internet' : 'Offline - check your internet connection'}
+                >
+                  <div
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      online
+                        ? 'bg-green-500 shadow-[0_0_4px] shadow-green-500/50 animate-pulse'
+                        : 'bg-red-500 shadow-[0_0_4px] shadow-red-500/50'
+                    }`}
+                  />
+                  <span>{online ? 'Connected' : 'Offline'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShortcutsOpen(true)}
+                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
+                >
+                  <Keyboard className="h-3 w-3" />
+                  <span className="hidden sm:inline">Shortcuts</span>
+                </button>
+              </div>
+            </div>
+          </footer>
+        </div>
+        <KeyboardShortcutsHelp open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <WhatsNewDialog />
+        <FloatingHomeButton />
+      </div>
+    </ErrorBoundary>
+  );
+}

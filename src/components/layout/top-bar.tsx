@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAppStore, useCartStore, useAuthStore } from '@/lib/stores';
+// v2.16.0 (subdomain workspaces): branch badge in pinned workspaces.
+import { useWorkspaceStore } from '@/lib/workspace/workspace-store';
 import { TAB_CONFIG, safeMap } from '@/lib/app-config';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useNotificationCount } from '@/hooks/use-notification-count';
@@ -17,7 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import {
   Menu, Home, Search, Bell, ShoppingCart, Package, Clock, CalendarDays,
   PanelLeftClose, PanelLeftOpen, Lightbulb, Keyboard, Smartphone, Info,
-  CheckCheck, BellRing,
+  CheckCheck, BellRing, Store,
 } from 'lucide-react';
 import { CurrencySwitcher } from '@/components/currency-switcher';
 import { AboutDialog } from '@/components/about-dialog';
@@ -34,12 +36,15 @@ const TOPBAR_ROLE_LABELS: Record<string, string> = {
   ACCOUNTANT: 'Accountant',
   CASHIER: 'Cashier',
   INVENTORY_MANAGER: 'Inventory Manager',
+  WAREHOUSE_MANAGER: 'Warehouse Manager',
 };
 
 export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLButtonElement | null> }) {
   const { activeTab, toggleSidebar, setActiveTab, isSidebarCollapsed, toggleSidebarCollapse } = useAppStore();
   const cartItems = useCartStore((s) => s.items);
   const authUser = useAuthStore((s) => s.user);
+  // v2.16.0 (subdomain workspaces): branch badge for pinned workspaces.
+  const workspaceBranch = useWorkspaceStore((s) => s.store);
   // v2.12.5 (RBAC): compact role chip next to the top-bar actions
   // (hidden on very small screens).
   const roleBadgeLabel = authUser ? TOPBAR_ROLE_LABELS[authUser.role] ?? authUser.role : null;
@@ -281,6 +286,24 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                 {cartItemCount}
               </Badge>
             )}
+            {/* v2.16.0 (subdomain workspaces): branch badge - shows the pinned
+                branch workspace (name + location) next to the role chip. */}
+            {workspaceBranch ? (
+              <Badge
+                variant="outline"
+                className="hidden md:inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-semibold tracking-wide"
+                style={{
+                  borderColor: `${workspaceBranch.brandingColor || '#B45309'}55`,
+                  color: workspaceBranch.brandingColor || '#B45309',
+                  backgroundColor: `${workspaceBranch.brandingColor || '#B45309'}14`,
+                }}
+                aria-label={`Branch workspace: ${workspaceBranch.name}`}
+                title={[workspaceBranch.name, workspaceBranch.location].filter(Boolean).join(' - ')}
+              >
+                <Store className="h-3 w-3" aria-hidden="true" />
+                {workspaceBranch.code ? `${workspaceBranch.code} · ` : ''}{workspaceBranch.name}
+              </Badge>
+            ) : null}
             {/* v2.12.5 (RBAC): signed-in role chip - muted, hidden on xs */}
             {roleBadgeLabel ? (
               <Badge

@@ -20,8 +20,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   Store, LogOut, Sun, Moon, Bell, X, ChevronDown, ChevronLeft, ChevronRight,
-  ChevronsRight, Keyboard, ShieldCheck, CheckCircle, Lock, Maximize2,
+  ChevronsRight, Keyboard, ShieldCheck, CheckCircle, Lock, Maximize2, MessagesSquare,
 } from 'lucide-react';
+// v2.16.0 (subdomain workspaces): pinned-branch awareness for the selector.
+import { useWorkspaceStore } from '@/lib/workspace/workspace-store';
 
 // v2.14.1 (fullscreen autohide): keyboard shortcut hints surfaced in
 // icon-mode tooltips (spec: "tooltip on hover label + shortcut F2 F3 F4 F5").
@@ -46,7 +48,7 @@ function getAvatarRingClass(role?: string): string {
 }
 
 export function AppSidebar() {
-  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, setCurrentStoreId, isSidebarCollapsed, toggleSidebarCollapse, setSidebarCollapsed, getSidebarState } = useAppStore();
+  const { activeTab, setActiveTab, sidebarOpen, setSidebarOpen, currentStoreId, isSidebarCollapsed, toggleSidebarCollapse, setSidebarCollapsed, getSidebarState } = useAppStore();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useTheme();
@@ -409,56 +411,11 @@ export function AppSidebar() {
             </div>
           )}
 
-          {/* Store Selector */}
-          <div className={`${collapsed ? 'px-1 pt-2 pb-1' : 'px-3 pt-3 pb-1'}`}>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                {collapsed ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button className="w-full flex items-center justify-center px-2 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">
-                        <Store className="h-3.5 w-3.5 shrink-0" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={8}>
-                      {(() => { const s = STORE_LIST.find(x => x.id === currentStoreId); return s ? `${s.code} · ${s.shortName}` : 'Select Branch'; })()}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10 transition-colors">
-                    <Store className="h-3.5 w-3.5 shrink-0" />
-                    {/* Branch code surfacing (v2.3.0 codes: JUJ/THI/RUI/NAI/NAK) */}
-                    <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400 tracking-wide">
-                      {STORE_LIST.find(s => s.id === currentStoreId)?.code || '-'}
-                    </span>
-                    <span className="truncate font-medium">{STORE_LIST.find(s => s.id === currentStoreId)?.shortName || 'Select Branch'}</span>
-                    <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
-                  </button>
-                )}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="start" className="w-64">
-                <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Branch</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {STORE_LIST.map((s) => (
-                  <DropdownMenuItem
-                    key={s.id}
-                    onClick={() => setCurrentStoreId(s.id)}
-                    className={currentStoreId === s.id ? 'bg-primary/10 text-primary font-medium' : ''}
-                  >
-                    <Store className="h-3.5 w-3.5 mr-2 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate flex items-center gap-1.5">
-                        <span className="rounded bg-primary/10 px-1 py-0.5 font-mono text-[10px] font-semibold text-primary tracking-wide">{s.code}</span>
-                        {s.shortName}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground truncate">{s.location}</div>
-                    </div>
-                    {currentStoreId === s.id && <CheckCircle className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {/* Store Selector (v2.16.0 workspace-aware) */}
+          <WorkspaceStoreSelector collapsed={collapsed} />
+
+          {/* Workspace links (v2.16.0): org console, branch selector, chat */}
+          <WorkspaceLinks collapsed={collapsed} />
 
           {/* Navigation */}
           <nav className={`flex-1 py-2 space-y-1 overflow-y-auto overflow-x-hidden custom-scrollbar ${collapsed ? 'px-1' : 'px-3'}`}>
@@ -571,5 +528,212 @@ export function AppSidebar() {
       />
       <ProfileSettingsDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </TooltipProvider>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// v2.16.0 SUBDOMAIN WORKSPACES: workspace-aware store selector + links
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Branch badge/selector. In a PINNED branch workspace (path or subdomain),
+ * single-branch roles (CASHIER, BRANCH_MANAGER, INVENTORY_MANAGER) see a
+ * static branch badge instead of a switcher: "No store switcher for
+ * single-branch users" (spec). Org-wide and multi-store roles keep the
+ * switcher; the server still enforces every switch (assertStoreScope).
+ */
+function WorkspaceStoreSelector({ collapsed }: { collapsed: boolean }) {
+  const { currentStoreId, setCurrentStoreId } = useAppStore();
+  const user = useAuthStore((s) => s.user);
+  const workspaceStore = useWorkspaceStore((s) => s.store);
+  const role = (user?.role || '').toUpperCase();
+
+  const canSwitchStores =
+    ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT', 'WAREHOUSE_MANAGER'].includes(role) ||
+    workspaceStore === null; // root domain keeps the classic selector
+
+  const activeStore = STORE_LIST.find((s) => s.id === currentStoreId);
+
+  if (!canSwitchStores && workspaceStore) {
+    // Pinned single-branch user: static badge, no dropdown.
+    return (
+      <div className={`${collapsed ? 'px-1 pt-2 pb-1' : 'px-3 pt-3 pb-1'}`}>
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className="w-full flex items-center justify-center px-2 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-300"
+                aria-label={`Branch: ${workspaceStore.name}`}
+              >
+                <Store className="h-3.5 w-3.5 shrink-0" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {workspaceStore.code || ''} {workspaceStore.name}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <div
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-300"
+            aria-label={`Branch: ${workspaceStore.name}`}
+          >
+            <Store className="h-3.5 w-3.5 shrink-0" />
+            <span
+              className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide"
+              style={{
+                backgroundColor: `${workspaceStore.brandingColor || '#B45309'}22`,
+                color: workspaceStore.brandingColor || '#0d9488',
+              }}
+            >
+              {workspaceStore.code || 'BRANCH'}
+            </span>
+            <span className="truncate font-medium">{workspaceStore.name}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${collapsed ? 'px-1 pt-2 pb-1' : 'px-3 pt-3 pb-1'}`}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="w-full flex items-center justify-center px-2 py-2 rounded-lg border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">
+                  <Store className="h-3.5 w-3.5 shrink-0" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {(() => { const s = STORE_LIST.find(x => x.id === currentStoreId); return s ? `${s.code} · ${s.shortName}` : 'Select Branch'; })()}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-300 hover:bg-white/10 transition-colors">
+              <Store className="h-3.5 w-3.5 shrink-0" />
+              {/* Branch code surfacing (v2.3.0 codes: JUJ/THI/RUI/NAI/NAK) */}
+              <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400 tracking-wide">
+                {activeStore?.code || workspaceStore?.code || '-'}
+              </span>
+              <span className="truncate font-medium">{activeStore?.shortName || workspaceStore?.name || 'Select Branch'}</span>
+              <ChevronDown className="h-3 w-3 ml-auto shrink-0" />
+            </button>
+          )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start" className="w-64">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Branch</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {STORE_LIST.map((s) => (
+            <DropdownMenuItem
+              key={s.id}
+              onClick={() => setCurrentStoreId(s.id)}
+              className={currentStoreId === s.id ? 'bg-primary/10 text-primary font-medium' : ''}
+            >
+              <Store className="h-3.5 w-3.5 mr-2 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                  <span className="rounded bg-primary/10 px-1 py-0.5 font-mono text-[10px] font-semibold text-primary tracking-wide">{s.code}</span>
+                  {s.shortName}
+                </div>
+                <div className="text-[10px] text-muted-foreground truncate">{s.location}</div>
+              </div>
+              {currentStoreId === s.id && <CheckCircle className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/**
+ * Workspace entry links (expanded sidebar): organization console for
+ * org-wide roles, branch selector for multi-store roles, global chat for
+ * everyone. Plain anchors: these pages boot their own workspace context,
+ * so a full navigation keeps the SPA state clean.
+ */
+function WorkspaceLinks({ collapsed }: { collapsed: boolean }) {
+  const user = useAuthStore((s) => s.user);
+  const role = (user?.role || '').toUpperCase();
+
+  const isOrgWide = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'].includes(role);
+  const isMultiStore = ['SUPER_ADMIN', 'STORE_OWNER', 'WAREHOUSE_MANAGER'].includes(role);
+
+  if (collapsed) {
+    return (
+      <div className="px-1 pb-1 space-y-1">
+        {isMultiStore && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href="/branches/select"
+                className="w-full flex items-center justify-center px-2 py-2 rounded-lg text-slate-300 hover:bg-white/10 transition-colors"
+                aria-label="Branch selector"
+              >
+                <ChevronsRight className="h-3.5 w-3.5" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Branch selector</TooltipContent>
+          </Tooltip>
+        )}
+        {isOrgWide && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href="/org/dashboard"
+                className="w-full flex items-center justify-center px-2 py-2 rounded-lg text-slate-300 hover:bg-white/10 transition-colors"
+                aria-label="Organization console"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Organization console</TooltipContent>
+          </Tooltip>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href="/chat"
+              className="w-full flex items-center justify-center px-2 py-2 rounded-lg text-slate-300 hover:bg-white/10 transition-colors"
+              aria-label="Global chat"
+            >
+              <MessagesSquare className="h-3.5 w-3.5" />
+            </a>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>Global chat</TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-1 space-y-1">
+      {isMultiStore && (
+        <a
+          href="/branches/select"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 transition-colors"
+        >
+          <ChevronsRight className="h-3.5 w-3.5 shrink-0" />
+          <span>Branch Selector</span>
+        </a>
+      )}
+      {isOrgWide && (
+        <a
+          href="/org/dashboard"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 transition-colors"
+        >
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+          <span>Organization Console</span>
+        </a>
+      )}
+      <a
+        href="/chat"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 transition-colors"
+      >
+        <MessagesSquare className="h-3.5 w-3.5 shrink-0" />
+        <span>Global Chat</span>
+      </a>
+    </div>
   );
 }
