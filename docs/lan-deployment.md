@@ -27,6 +27,8 @@ All three approaches keep working with zero internet: the hosts file never chang
 
 ## Environment for LAN mode
 
+A ready-made template lives in `.env.lan.example` (copy to `.env` on the server and fill the secrets). The essential values:
+
 ```env
 NEXT_PUBLIC_ROOT_DOMAIN=mbumah.test
 NEXT_PUBLIC_USE_SUBDOMAINS=true
@@ -37,6 +39,23 @@ MPESA_CALLBACK_URL=http://mbumah.test:3000/api/payments/mpesa/callback
 ```
 
 Raw IP addresses are always accepted by the host allowlist, so `http://192.168.1.20:3000` works for the root app even before DNS is set up.
+
+## Windows Firewall (server reachable from other devices)
+
+Windows Defender Firewall blocks inbound connections on private/public networks by default, so a laptop server answers `localhost` but other tills get timeouts. Open the app port once, as Administrator:
+
+```powershell
+# Inbound rule for the POS port (repeat with your actual port if not 3000)
+New-NetFirewallRule -DisplayName "Mbumah POS 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private,Domain
+
+# Verify from ANOTHER device (not the server itself):
+#   Test-NetConnection 192.168.1.20 -Port 3000
+```
+
+Notes:
+- Keep `-Profile Private,Domain` (mark the shop Wi-Fi network as Private first; Public blocks discovery).
+- The no-Docker installer already starts the server bound to `0.0.0.0`; the firewall rule is what makes it reachable from other devices.
+- Docker Desktop users: publish the port with `-p 3000:3000` and Docker installs its own firewall rules; the manual rule above is still the fallback when composes are run under WSL.
 
 ## Path mode fallback via the LAN IP
 

@@ -133,6 +133,7 @@ There are two health surfaces and they serve different audiences:
 |----------|------|---------|
 | `GET /api/health` | public | Liveness + readiness for load balancers, Docker healthchecks and uptime monitors. Returns `status`, `version`, `appMode`, `workspaceMode`, `databaseProvider`, database connectivity, ledger balance and security checks. |
 | `GET /api/health/system-status` | authenticated | Aggregated in-app system status (health, circuit breakers, DLQ, compliance, retention) for the System Health tab; requires a signed-in session and returns 401 for anonymous callers. |
+- `/api/health/schema` (authenticated): the full database drift picture for operators - per-column drift probes, provider, row counts, and the matching repair command.
 
 Use `/api/health` for automation (Docker `healthcheck`, uptime pings, CI smoke tests) - it is the endpoint that returns `200` without cookies. `/api/health/system-status` is meant for the app's own health UI where the caller is already signed in.
 

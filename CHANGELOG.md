@@ -2,6 +2,16 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.6] LAN hosting and localhost fallback completion
+
+### Added
+- **Protected db-schema health endpoint (`/api/health/schema`)**: an authenticated operator view of the full drift picture that the public `/api/health` only hints at. Probes every known drift-sensitive column (the five nullable `idempotencyKey` columns and `users.isEngraved`), reports per-probe results, the resolved provider, and row counts for the operational tables, and returns the matching remediation ("run the updater" or `npm run db:repair`). The endpoint never throws on a drifted database - reporting is its job.
+- **LAN env template (`.env.lan.example`)**: copy to `.env` on the shop server for `mbumah.lan` (or the static LAN IP variant, documented inline) with the one shared SQLite database, plain-HTTP shared cookies and mock M-Pesa. Referenced from the LAN deployment guide.
+- **Windows Firewall guidance** in `docs/lan-deployment.md`: the exact `New-NetFirewallRule` invocation for the POS port (private/domain profiles), a cross-device `Test-NetConnection` verification, and the Docker Desktop note.
+
+### Verified (already shipped, unchanged)
+- The no-Docker launcher binds `0.0.0.0` (`HOSTNAME` is forced in `deploy/nodocker/start-server.mjs`) and localhost plus raw LAN IPs fall back to path mode automatically (`resolveWorkspaceHostMode` returns `organization` for them); dnsmasq, Pi-hole and router DNS wildcard options are documented in the LAN guide.
+
 ## [2.17.5] Branch workspaces and organization console: verification release
 
 ### Verified
