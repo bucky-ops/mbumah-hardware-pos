@@ -10,9 +10,9 @@
 // or above (PERMISSION_MATRIX hierarchy in src/lib/types.ts).
 
 import { type NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { db, runWithoutTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
-import { requireStoreAccess, type AuthSession } from '@/lib/auth';
+import { requireStoreAccess, auditRecordMiss, type AuthSession } from '@/lib/auth';
 import Decimal from 'decimal.js';
 import { toDec, round2 } from '@/lib/utils/financialMath';
 
@@ -64,6 +64,22 @@ async function getTransactionDetailHandler(...args: unknown[]): Promise<Response
   });
 
   if (!transaction) {
+    // v2.17.8 (Task 44): classify the miss - a transaction that exists in
+    // ANOTHER store is an IDOR probe (financial data) and is security-logged;
+    // both cases answer the same 404 (no existence leak).
+    await auditRecordMiss({
+      request: _request,
+      session,
+      resourceId: id,
+      resource: 'transaction',
+      probe: () =>
+        runWithoutTenant(() =>
+          db.salesTransaction.findUnique({
+            where: { id },
+            select: { storeId: true },
+          })
+        ),
+    });
     return Response.json(
       { success: false, error: 'Transaction not found.' },
       { status: 404 }

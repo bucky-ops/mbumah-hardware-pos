@@ -25,7 +25,7 @@
 import { type NextRequest } from 'next/server';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireStoreAccess } from '@/lib/auth';
+import { requireStoreAccess, assertBodyStoreScope } from '@/lib/auth';
 import { scheduleReminders } from '@/lib/debt-helpers';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +47,17 @@ async function scheduleHandler(
   }
 
   const body = await request.json().catch(() => ({}));
+
+  // v2.17.8 (Task 44): body storeId must pass the same store-scope policy as
+  // query params (SUPER_ADMIN/STORE_OWNER/active membership; otherwise 403 +
+  // SecurityEvent). Scheduled reminders send customer-facing messages per store.
+  const scopeDenied = await assertBodyStoreScope(
+    request,
+    session,
+    body.storeId as string | undefined,
+  );
+  if (scopeDenied) return scopeDenied;
+
   const url = new URL(request.url);
   const storeId =
     (body.storeId as string) || url.searchParams.get('storeId') || session.storeId;

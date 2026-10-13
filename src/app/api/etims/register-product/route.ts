@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getEtimsConfig, initializeEtimsClient } from '@/lib/etims-service';
+// v2.17.8 (Task 44 - security hardening): this route registers a product with
+// the KRA eTIMS API (an external, money-adjacent regulatory action) with NO
+// session validation at all - any junk Bearer token (the edge proxy checks
+// presence only) could register any product id. It now requires a
+// manager-or-above session (requireStoreAccess + MANAGER_PLUS_ROLES); the
+// ORM tenant scope also narrows the product lookup, so a foreign store's
+// product id answers 404 instead of being registered.
+import { requireStoreAccess, MANAGER_PLUS_ROLES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 // POST /api/etims/register-product - Register a product with KRA eTIMS
-export async function POST(request: Request) {
+async function registerProductHandler(...args: unknown[]): Promise<Response> {
+  const request = args[0] as Request;
   try {
     const body = await request.json();
     const { productId } = body;
@@ -59,3 +68,7 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = requireStoreAccess(registerProductHandler, {
+  roles: MANAGER_PLUS_ROLES,
+});

@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.8] Security, RBAC and tenant isolation hardening
+
+### Fixed
+- **`requireAuth` now enforces store-scope validation**: the wrapper skipped `assertStoreScope`, so (a) a non-admin session WITHOUT a store assignment ran handlers in `runWithoutTenant` (no ORM tenant filtering at all) and (b) cross-store `?storeId=` probes were silently answered instead of rejected. Both paths now return 403 and file the same SecurityEvent as `withSessionAuth` / `requireStoreAccess`. SUPER_ADMIN and validated multi-store members are unaffected.
+- **Unauthenticated data routes closed**: `GET /api/suppliers/[id]/performance` (order trends, payment history, balances) and `GET /api/etims/dashboard` were exported with no session validation at all (the edge proxy checks Bearer PRESENCE, never validity); they now run behind `requireStoreAccess`. `POST /api/etims/test-connection` and `POST /api/etims/register-product` (an outbound KRA eTIMS action) require a manager-or-above session.
+- **`X-Powered-By` removed from page responses**: the API headers block blanked it on `/api/*` only; `poweredByHeader: false` (next.config.ts) stops advertising the framework on every response.
+
+### Security
+- **Body storeId validation (`assertBodyStoreScope`)**: several mutating routes accepted `storeId` in the JSON body, and Prisma `create` is deliberately NOT tenant-intercepted (injectTenant only narrows read/update/delete), so a cross-store body value was a REAL cross-tenant write. The new shared guard applies the query-param policy (SUPER_ADMIN/STORE_OWNER pass, active StoreMembership passes, same store passes; otherwise 403 + SecurityEvent) and is wired into stock-movements POST, M-Pesa STK push, KRA submit, eTIMS invoice cancel, debt reminder process/schedule, and gift-card redemption. `reports/export` and receipt distribution already resolve the store server-side (the session wins) and are covered by the requireAuth fix.
+- **[id] 404 policy + denied-attempt audit (`auditRecordMiss`)**: store-scoped `[id]` routes answer 404 for a missing record AND for another store's record (ORM tenancy narrows the unique lookup) - the caller cannot distinguish the two (no enumeration oracle), but a foreign-store id now writes a SecurityEvent (UNAUTHORIZED_ACCESS, blocked) plus a `CROSS_TENANT_RESOURCE_DENIED` ops log so IDOR probing is visible. Wired into `/api/products/[id]` (GET/PUT/DELETE), `/api/customers/[id]` (GET/PUT), `/api/transactions/[id]` (GET) and `/api/suppliers/[id]/performance`. Truly-missing ids stay silent.
+
+### Added
+- 12 new security regression tests (src/tests/lib/store-guard.test.ts) covering the body storeId policy matrix (SUPER_ADMIN / STORE_OWNER / active membership / no store assignment / cross-store deny with SecurityEvent) and the 404 classifier (silent for missing and own-store records, SecurityEvent for foreign-store records, probe failures swallowed so auditing never changes the response).
+
 ## [2.17.7] Online hosting and public subdomains
 
 ### Added

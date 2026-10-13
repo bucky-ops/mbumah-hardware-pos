@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.17.8',
+    title: 'Hardened access control: your branch data stays yours',
+    bullets: [
+      'Every API route that touches branch data now validates your store server-side, including request bodies and record lookups by ID, so one branch can never read or write another branch\'s data.',
+      'Four integration endpoints (supplier performance, eTIMS dashboard, connection test, product registration) that were reachable without a valid session now require a signed-in manager.',
+      'Cross-branch probing attempts are recorded in the security feed with the exact record and store targeted, visible to admins in the security dashboard.',
+      'The server no longer advertises its framework (X-Powered-By) on any response.',
+    ],
+  },
+  {
     version: '2.17.7',
     title: 'Online hosting: your own domain, every branch online',
     bullets: [

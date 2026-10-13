@@ -23,7 +23,12 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent, StockMovementType } from '@/lib/types';
 import { calculateWeightedAverageCost, getAccountIds, ACCOUNT_CODES } from '@/lib/account-helper';
 import { generateJournalEntryNumber } from '@/lib/helpers';
-import { requireAuth, requireStoreAccess, type AuthSession } from '@/lib/auth';
+import {
+  requireAuth,
+  requireStoreAccess,
+  assertBodyStoreScope,
+  type AuthSession,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -252,6 +257,14 @@ async function createStockAdjustmentHandler(
       { status: 400 },
     );
   }
+
+  // v2.17.8 (Task 44): body storeId must pass the same store-scope policy as
+  // query params. A cross-store value here would be a REAL cross-tenant stock
+  // write - Prisma `create` is not ORM tenant-intercepted (injectTenant only
+  // narrows read/update/delete), so this route-level check is the boundary.
+  // SUPER_ADMIN cross-store and multi-store members still pass.
+  const scopeDenied = await assertBodyStoreScope(request, session, bodyStoreId);
+  if (scopeDenied) return scopeDenied;
 
   // Resolve storeId: prefer the body (SUPER_ADMIN cross-store), fall back to
   // the session's storeId for store-scoped users.
