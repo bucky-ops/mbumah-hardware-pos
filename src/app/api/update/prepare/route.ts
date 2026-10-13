@@ -14,7 +14,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
 import { getSessionFromRequest, OWNER_ROLES } from '@/lib/auth';
 import { readUpdateState, writeUpdateState, ACTIVE_PHASES } from '@/lib/updater/state';
 
@@ -82,7 +81,15 @@ export async function POST(request: NextRequest) {
     artifactUrl = raw.artifactUrl;
   }
 
-  const script = join(process.cwd(), 'scripts', 'staged-update.mjs');
+  // The orchestrator lives on the deployed filesystem (<cwd>/scripts), NOT in
+  // the bundle. Turbopack statically folds `process.cwd()` + `path.join()` at
+  // build time and then fails to resolve the folded '/ROOT/...' path during
+  // build-time spawn tracing ("server relative imports are not implemented
+  // yet"), so the path is assembled at runtime through Array.join, which the
+  // bundler cannot evaluate - keeping it an opaque runtime value.
+  const script = [process.cwd(), 'scripts', 'staged-update.mjs']
+    .filter(Boolean)
+    .join('/');
   const args = [script];
   if (targetVersion) args.push('--target-version', targetVersion);
   if (artifactUrl) args.push('--artifact-url', artifactUrl);
