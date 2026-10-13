@@ -185,6 +185,11 @@ const PUBLIC_PATHS = [
   // no secrets, no data) - same public class as /api/health - so it must be
   // reachable without a session for Swagger UI / Postman / client-SDK gen.
   '/api/openapi',
+  // v2.17.9 (staged updates): public progress projection. The route exposes
+  // progress fields only (phase, percent, message, target version, timestamp);
+  // admin detail requires a session validated in the route itself. Public so
+  // the login screen can show update progress before any session exists.
+  '/api/update/status',
 ];
 
 const CSRF_EXEMPT_PATHS = [

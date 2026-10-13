@@ -29,6 +29,9 @@ import { useAuthStore } from '@/lib/stores';
 import { APP_BUILD_LABEL } from '@/lib/version';
 // v2.16.0 (subdomain workspaces): role-based post-login destination.
 import { postLoginRedirect } from '@/lib/workspace/links';
+// v2.17.9 (staged updates): calm progress banner while the server updates.
+// Renders null outside maintenance windows, so it costs nothing normally.
+import { UpdateProgressBar } from '@/components/updater/update-progress-bar';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -134,6 +137,11 @@ export function LoginScreen() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
+        {/* v2.17.9 (staged updates): live update progress while a staged
+            update runs. Renders null outside maintenance windows, so the
+            login form is untouched the rest of the time. */}
+        <UpdateProgressBar />
+
         {/* Welcome tagline above card - animated entrance */}
         <motion.div
           className="text-center mb-5 text-white"
