@@ -2,6 +2,14 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.17.5] Branch workspaces and organization console: verification release
+
+### Verified
+- The full branch workspaces and organization console matrix shipped in v2.16.0 was re-verified end to end against the current build (browser E2E on the seeded local database): SUPER_ADMIN login lands on `/org/dashboard` (5 branches, KPIs, per-branch revenue table); "Open branch workspace" actions open NEW TABS; `/stores/thika/dashboard` renders the pinned branch shell with its own page title and branch badge; the warehouse manager's branch selector lists exactly the assigned branches (Juja Main, Thika); a Juja cashier opening the Thika workspace receives the calm "You do not have access to this branch" denial; the global chat channel is readable from a branch account (chat visibility stays separate from branch data access). All roles share the one database; every workspace request is re-authorized server-side.
+
+### Changed
+- The global chat composer input now declares `type="text"` explicitly (consistency for input styling and accessibility queries; behavior unchanged).
+
 ## [2.17.4] Local offline subdomain foundation: env template and hosts writer
 
 ### Added

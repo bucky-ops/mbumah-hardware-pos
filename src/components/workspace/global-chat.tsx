@@ -290,6 +290,7 @@ export function GlobalChat() {
             }}
           >
             <input
+              type="text"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Message every branch..."
