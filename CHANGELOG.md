@@ -2,6 +2,21 @@
 
 All notable changes. Format: [Version] — Type (FEATURE three-segment / CORRECTION four-segment hotfix).
 
+## [2.18.2.1] — 2026-10-14 — CORRECTION: complete v2.18.2 deliverables + console hardening
+
+### Fixed
+- `docs/TEST_AUDIT_REPORT_v2.18.x.md` existed only as `.json` despite being referenced by the v2.18.2 CHANGELOG — full markdown report added (acceptance table 18/18, E2E 25/25, role×module coverage matrix, risks) and the `.json` gains a `recheck` block.
+- README was missing entirely — added with official logo, console/workspace/mobile screenshots (`docs/screenshots/`), feature map, getting-started, demo credentials and version policy.
+
+### Added
+- `SectionErrorBoundary` (`src/components/org/error-boundary.tsx`) wraps all six console sections (KPI row, Overview, Matrix, Experts, Decision, Activity, Live Feed): a crash inside one panel now degrades to a styled retry card (BRAND.md palette, 44px touch target) instead of blanking the console; crash logged with component stack breadcrumb.
+
+### Changed
+- `src/lib/release.ts` version → `2.18.2.1` (base `v2.18.2`); `VERSION`, `package.json` bumped in lockstep. No data, API, or schema changes.
+
+### Re-certification
+- agent-browser loop re-run (RC-01…RC-14 PASS): console render, health 87, exact KPIs, 9 expert tabs, cmd+K, chat send E2E, workspaces 200/404, subdomain rewrite, footer stick, mobile 390px, ErrorBoundary wiring, release identity 2.18.2.1. Zero page errors; lint 0 errors.
+
 ## [2.18.2] — 2026-10-14 — FEATURE: Organization Console Expert Information System v3.0
 
 ### Added

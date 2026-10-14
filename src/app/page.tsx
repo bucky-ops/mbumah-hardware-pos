@@ -17,6 +17,7 @@ import { BranchMatrix } from "@/components/org/branch-matrix";
 import { ExpertModules } from "@/components/org/experts";
 import { KpiRow } from "@/components/org/kpi-row";
 import { ChangelogModal, CommandPalette, ConsoleFooter, ConsoleHeader, LoginDialog, ShortcutsModal, type SessionUser } from "@/components/org/chrome";
+import { SectionErrorBoundary } from "@/components/org/error-boundary";
 import { KenyaMap, kes, timeAgo, type DashboardData } from "@/components/org/primitives";
 
 const SECTIONS = [
@@ -191,8 +192,9 @@ export default function OrgConsolePage() {
             ))}
           </section>
 
-          <div id="kpi-row"><KpiRow data={data} /></div>
+          <div id="kpi-row"><SectionErrorBoundary section="KPI Command Row"><KpiRow data={data} /></SectionErrorBoundary></div>
 
+          <SectionErrorBoundary section="Overview">
           <section aria-label="Overview" className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="mb-1 text-sm font-semibold text-slate-800">Health — {data.health.label}</h2>
@@ -219,12 +221,13 @@ export default function OrgConsolePage() {
               </div>
             </div>
           </section>
+          </SectionErrorBoundary>
 
-          <div id="branch-matrix"><BranchMatrix data={data} onToast={onToast} /></div>
-          <div id="experts"><ExpertModules data={data} onToast={onToast} /></div>
-          <div id="decision"><DecisionSupport data={data} onToast={onToast} /></div>
-          <div id="timeline"><ActivityTimeline items={data.activity} /></div>
-          <div id="live-feed"><LiveFeed refreshKey={refreshKey} /></div>
+          <div id="branch-matrix"><SectionErrorBoundary section="Branch Intelligence Matrix"><BranchMatrix data={data} onToast={onToast} /></SectionErrorBoundary></div>
+          <div id="experts"><SectionErrorBoundary section="Domain Expert Modules"><ExpertModules data={data} onToast={onToast} /></SectionErrorBoundary></div>
+          <div id="decision"><SectionErrorBoundary section="Decision Support"><DecisionSupport data={data} onToast={onToast} /></SectionErrorBoundary></div>
+          <div id="timeline"><SectionErrorBoundary section="Recent Activity Timeline"><ActivityTimeline items={data.activity} /></SectionErrorBoundary></div>
+          <div id="live-feed"><SectionErrorBoundary section="Live Feed"><LiveFeed refreshKey={refreshKey} /></SectionErrorBoundary></div>
         </main>
       </div>
 

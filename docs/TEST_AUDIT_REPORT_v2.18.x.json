@@ -72,5 +72,27 @@
     "Demo chat POST open in dev only; production requires session",
     "password123 seeded accounts — rotate before production"
   ],
-  "verdict": "PASS — release v2.18.2 accepted"
+  "recheck": {
+    "release": "2.18.2.1",
+    "type": "CORRECTION (docs completion + SectionErrorBoundary hardening; no data/API/schema changes)",
+    "checkedAt": "2026-10-14",
+    "results": [
+      { "id": "RC-01", "name": "/ renders; zero page errors; zero console errors/warnings", "pass": true },
+      { "id": "RC-02", "name": "Health 87 + KPIs 48,270/1/1/1/437,479 (aging 180k/97.5k/80k/80k)/0", "pass": true },
+      { "id": "RC-03", "name": "Branch strip 5 chips per-branch revenue + open/closed", "pass": true },
+      { "id": "RC-04", "name": "All 9 expert tabs live data", "pass": true },
+      { "id": "RC-05", "name": "cmd+K palette actions + 5 branch workspaces", "pass": true },
+      { "id": "RC-06", "name": "Chat drawer send E2E stored + rendered", "pass": true },
+      { "id": "RC-07", "name": "Session persists (SUPER_ADMIN badge)", "pass": true },
+      { "id": "RC-08", "name": "Workspaces juja-main/thika/nakuru 200", "pass": true },
+      { "id": "RC-09", "name": "Unknown + reserved workspace codes 404", "pass": true },
+      { "id": "RC-10", "name": "Subdomain rewrite nakuru.mbumah.co.ke 200", "pass": true },
+      { "id": "RC-11", "name": "Workspace footer sticks", "pass": true },
+      { "id": "RC-12", "name": "Mobile 390px no horizontal overflow", "pass": true },
+      { "id": "RC-13", "name": "SectionErrorBoundary wraps all 6 console sections", "pass": true },
+      { "id": "RC-14", "name": "/api/dashboard release identity 2.18.2.1", "pass": true }
+    ],
+    "verdict": "PASS"
+  },
+  "verdict": "PASS — release v2.18.2 accepted; correction v2.18.2.1 re-certified PASS"
 }

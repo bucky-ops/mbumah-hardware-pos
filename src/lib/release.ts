@@ -1,16 +1,16 @@
-// Single source of truth for release identity (v2.18.2).
+// Single source of truth for release identity (v2.18.2.1).
 // The console footer, /api/health and /api/dashboard all read from here.
 
 export const RELEASE = {
-  version: "2.18.2",
-  label: process.env.NODE_ENV === "production" ? "v2.18.2" : "v2.18.x-dev",
+  version: "2.18.2.1",
+  label: process.env.NODE_ENV === "production" ? "v2.18.2.1" : "v2.18.x-dev",
   commit: "e49f48ec8f1119d71cde324d4453f2cc8b927b0b",
   commitShort: "e49f48ec",
   commits: 282,
   releases: 55,
   tags: 58,
   channel: "stable",
-  base: "v2.18.1",
+  base: "v2.18.2",
 } as const;
 
 export const ORG = {
