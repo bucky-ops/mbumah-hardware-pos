@@ -1672,3 +1672,35 @@
 .dark .product-card-lift:hover {
   box-shadow: 0 12px 32px oklch(1 0 0 / 0.06), 0 4px 12px oklch(1 0 0 / 0.04);
 }
+
+/* ── Mbumah Organization Console (v2.18.3) - design system ─────────────── */
+.mbumah-console {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-feature-settings: "tnum" 1;
+}
+.mbumah-console ::-webkit-scrollbar { width: 6px; height: 6px; }
+.mbumah-console ::-webkit-scrollbar-track { background: transparent; }
+.mbumah-console ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+.mbumah-console ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+@keyframes console-pulse-dot {0%,100%{opacity:1; transform:scale(1)}50%{opacity:.5; transform:scale(.85)}}
+@keyframes console-shake {0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-2px)}40%,80%{transform:translateX(2px)}}
+@keyframes console-pop-in {0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes console-drop {0%{transform:translateY(-8px) scale(.5); opacity:0}60%{opacity:1}100%{transform:translateY(0) scale(1); opacity:1}}
+@keyframes console-count-glow {0%{text-shadow:0 0 0 rgba(255,140,0,0)}50%{text-shadow:0 0 12px rgba(255,140,0,.35)}100%{text-shadow:0 0 0 rgba(255,140,0,0)}}
+@keyframes console-slide-fade {from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:translateY(0)}}
+@keyframes console-live-pulse {0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.55)}70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}}
+.anim-pulse-dot { animation: console-pulse-dot 2s ease-in-out infinite; }
+.anim-shake { animation: console-shake 0.5s ease-in-out infinite; }
+.anim-pop-in { animation: console-pop-in 0.25s ease-out both; }
+.anim-drop { animation: console-drop 0.5s ease-out both; }
+.anim-count-glow { animation: console-count-glow 1s ease-out 1; }
+.anim-slide-fade { animation: console-slide-fade 0.3s ease-out both; }
+.anim-live { animation: console-live-pulse 2s ease-out infinite; }
+.new-row-flash { animation: console-slide-fade 0.3s ease-out both, console-count-glow 1s ease-out 1; }
+/* Console-scoped focus ring: overrides the app-wide blue ring only inside
+   .mbumah-console so the tabs POS app keeps its original focus styling. */
+.mbumah-console .focus-ring:focus-visible { outline: 2px solid #FF8C00; outline-offset: 2px; border-radius: 8px; }
+@media print {
+  .mbumah-console header, .mbumah-console footer, .no-print { display: none !important; }
+}

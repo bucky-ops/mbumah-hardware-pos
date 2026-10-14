@@ -79,6 +79,16 @@ export function buildOrgConsoleUrl(): string {
   return '/org/dashboard';
 }
 
+/**
+ * Expert Information System console URL (v2.18.3). The full expert console
+ * (KPI row, Store Intelligence Matrix, 9 expert modules, Decision Support,
+ * Activity Timeline, Global Chat, Live Feed) lives at /console on the root
+ * domain; /org/dashboard stays the compact per-store summary.
+ */
+export function buildExpertConsoleUrl(): string {
+  return '/console';
+}
+
 /** Branch selector URL (warehouse managers with multiple stores). */
 export function buildBranchSelectorUrl(): string {
   return '/branches/select';
