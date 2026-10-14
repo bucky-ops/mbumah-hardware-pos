@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 // v2.14.0: fire-and-forget self-heal of the engraved bootstrap admin.
 import { ensureEngravedAdminExists } from '@/lib/engraved-admin';
+// v2.18.1: workspaceModeHint alias source (pure, env-derived).
+import { resolveWorkspaceModeHint } from '@/lib/workspace/links';
 
 // Force this route to be dynamically rendered at request time.
 // This prevents Next.js from attempting to collect page data / statically
@@ -104,7 +106,14 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
         slug: user.store.slug,
         subdomain: user.store.subdomain,
         brandingColor: user.store.brandingColor,
+        status: user.store.status,
       } : null,
+      // v2.18.1 (branch-manager binding): flat session aliases so clients
+      // can read the branch binding without reaching into the nested store
+      // object, plus a workspace-mode hint for the login redirect helper.
+      storeSlug: user.store?.slug ?? null,
+      storeName: user.store?.name ?? null,
+      workspaceModeHint: resolveWorkspaceModeHint(),
       memberships: membershipStoreIds,
     },
   });

@@ -1,11 +1,11 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.18.0",
+  "version": "2.18.1",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.0.3",
-    "baseVersion": "2.18.0",
-    "hotfix": 3
+    "releaseVersion": "2.18.1",
+    "baseVersion": "2.18.1",
+    "hotfix": 0
   },
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -37,8 +37,11 @@
     "db:verify": "node scripts/setup-prisma-provider.mjs && prisma validate",
     "db:preflight": "node scripts/preflight-schema.mjs",
     "db:repair": "node scripts/repair-db.mjs",
+    "db:repair-workspace": "node scripts/repair-branch-workspace-store-schema.mjs",
+    "db:repair-branch-managers": "node scripts/repair-branch-manager-schema.mjs",
     "domains:write-hosts": "node scripts/domains/write-hosts.mjs",
     "verify:branch-workspace": "node scripts/verify-branch-workspace.mjs",
+    "verify:branch-manager-users": "node scripts/verify-branch-manager-users.mjs",
     "verify:release-selection": "node scripts/verify-release-selection.mjs",
     "verify:prisma-config": "node scripts/verify-prisma-config.mjs",
     "verify:windows-build": "node scripts/verify-windows-build-safety.mjs"

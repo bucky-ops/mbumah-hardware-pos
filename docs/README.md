@@ -15,6 +15,7 @@ Documentation for Mbumah Hardware POS. Start with the [README](../README.md) for
 | [Multi-tenant architecture](multi-tenant-architecture.md) | Store isolation, tenant enforcement, store seeding |
 | [Subdomain workspaces](subdomain-workspaces.md) | Master reference for v2.16.0 branch workspaces: modes, routing, authorization, security, adding stores |
 | [Multi-store workspaces](multi-store-workspaces.md) | Organization console, branch selector, workspace UI, memberships, cart isolation |
+| [Branch manager users](branch-manager-users.md) | Per-branch manager accounts, the User.storeId binding, seeded credentials, login redirects, repair and verification scripts |
 | [Global chat](global-chat.md) | GLOBAL channel, store threads, origin badges, endpoints, polling, security |
 | [Configuration](configuration.md) | Environment variables, M-Pesa Daraja, optional services |
 | [Deployment](deployment.md) | Vercel, Docker Compose, self-hosting, SSL, backups, provider switching |

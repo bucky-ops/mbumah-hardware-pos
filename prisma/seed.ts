@@ -36,6 +36,158 @@ function stage(n: number, total: number, name: string): (status: 'ok' | 'skipped
 
 const TOTAL_STAGES = 24;
 
+// Canonical demo email domain (v2.18.1 branch-manager binding): the seed is
+// the source of truth for local demo login, and every demo address in this
+// file uses mbumahhardware.co.ke. README and docs match this decision; the
+// workspace root domain (mbumah.co.ke) is a separate hosting concern and is
+// NOT the login domain.
+const CANONICAL_DEMO_DOMAIN = 'mbumahhardware.co.ke';
+
+// One branch manager per store, bound to the branch through the database
+// User.storeId relation (plus an ACTIVE StoreMembership row for the
+// workspace layer). Deterministic emails follow the existing
+// {town}.manager@{canonical domain} convention so repeated seeds and the
+// ensure-pass on existing databases never create duplicates.
+const BRANCH_MANAGER_SEEDS: {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  storeId: string;
+  storeLabel: string;
+}[] = [
+  {
+    id: 'user_juja_manager',
+    email: `juja.manager@${CANONICAL_DEMO_DOMAIN}`,
+    name: 'John Mwangi',
+    phone: '0756789012',
+    storeId: 'store_juja_main',
+    storeLabel: 'Juja Main',
+  },
+  {
+    id: 'user_thika_manager',
+    email: `thika.manager@${CANONICAL_DEMO_DOMAIN}`,
+    name: 'David Njoroge',
+    phone: '0712345678',
+    storeId: 'store_thika',
+    storeLabel: 'Thika',
+  },
+  {
+    id: 'user_ruiru_manager',
+    email: `ruiru.manager@${CANONICAL_DEMO_DOMAIN}`,
+    name: 'Samuel Kibet',
+    phone: '0723456789',
+    storeId: 'store_ruiru',
+    storeLabel: 'Ruiru',
+  },
+  {
+    id: 'user_nairobi_manager',
+    email: `nairobi.manager@${CANONICAL_DEMO_DOMAIN}`,
+    name: 'Mary Akinyi',
+    phone: '0734567890',
+    storeId: 'store_nairobi_cbd',
+    storeLabel: 'Nairobi CBD',
+  },
+  {
+    id: 'user_nakuru_manager',
+    email: `nakuru.manager@${CANONICAL_DEMO_DOMAIN}`,
+    name: 'Peter Ruto',
+    phone: '0745678901',
+    storeId: 'store_nakuru',
+    storeLabel: 'Nakuru',
+  },
+];
+
+/**
+ * Idempotently create or re-bind one BRANCH_MANAGER per store (v2.18.1).
+ *
+ * - Upsert by email: repeated runs never duplicate users.
+ * - The update branch only re-asserts role, storeId and isActive; names,
+ *   phone numbers and passwords of existing users are never overwritten.
+ * - An existing user with the same email but a different role is a conflict:
+ *   it is reported and left untouched (spec rule: stop and report, never
+ *   repurpose or delete).
+ * - Every manager also gets an ACTIVE StoreMembership row so the workspace
+ *   layer (branch selector, store context resolver) recognizes the binding.
+ */
+async function upsertBranchManagers(passwordHash: string, organizationId: string): Promise<number> {
+  let wired = 0;
+  for (const seed of BRANCH_MANAGER_SEEDS) {
+    const existing = await prisma.user.findUnique({ where: { email: seed.email } });
+    if (existing && existing.role !== 'BRANCH_MANAGER') {
+      console.warn(
+        `   Branch manager seed conflict: ${seed.email} exists with role ${existing.role}; left untouched.`,
+      );
+      continue;
+    }
+    const manager = await prisma.user.upsert({
+      where: { email: seed.email },
+      update: { role: 'BRANCH_MANAGER', storeId: seed.storeId, isActive: true },
+      create: {
+        id: seed.id,
+        organizationId,
+        storeId: seed.storeId,
+        email: seed.email,
+        name: seed.name,
+        passwordHash,
+        role: 'BRANCH_MANAGER',
+        phone: seed.phone,
+        isActive: true,
+      },
+    });
+    await prisma.storeMembership.upsert({
+      where: { userId_storeId: { userId: manager.id, storeId: seed.storeId } },
+      update: { status: 'ACTIVE', role: 'BRANCH_MANAGER' },
+      create: {
+        userId: manager.id,
+        storeId: seed.storeId,
+        role: 'BRANCH_MANAGER',
+        status: 'ACTIVE',
+        note: `Branch manager of ${seed.storeLabel} (seed demo)`,
+      },
+    });
+    wired += 1;
+  }
+  return wired;
+}
+
+/**
+ * Ensure branch manager wiring on ALREADY-INITIALIZED databases (v2.18.1).
+ * The first-boot seed skips itself when users exist, so databases created
+ * before a store had its manager (for example the Juja Main manager) would
+ * never receive one. This pass runs on every seed invocation before the
+ * skip decision, is fully idempotent, and never touches non-demo data.
+ */
+async function ensureBranchManagerWiring(): Promise<void> {
+  try {
+    const stores = await prisma.store.findMany({ select: { id: true } });
+    if (stores.length === 0) return;
+    const knownStoreIds = new Set(stores.map((s) => s.id));
+    const targets = BRANCH_MANAGER_SEEDS.filter((s) => knownStoreIds.has(s.storeId));
+    if (targets.length === 0) return;
+    const organizationRecord =
+      (await prisma.user.findFirst({
+        where: { email: `admin@${CANONICAL_DEMO_DOMAIN}` },
+        select: { organizationId: true },
+      })) ??
+      (await prisma.organization.findFirst({ select: { id: true } }));
+    if (!organizationRecord) return;
+    const organizationId =
+      'organizationId' in organizationRecord ? organizationRecord.organizationId : organizationRecord.id;
+    const passwordHash = await bcrypt.hash('password123', 12);
+    const wired = await upsertBranchManagers(passwordHash, organizationId);
+    if (wired > 0) {
+      console.info(`   Branch manager wiring ensured: ${wired} manager(s) verified or created.`);
+    }
+  } catch (error) {
+    // The ensure-pass must never break an existing deployment's boot.
+    console.warn(
+      '   Warning: branch manager wiring pass failed (existing data left untouched):',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 // Generate date N days ago
 function daysAgo(n: number): Date {
   const d = new Date();
@@ -73,6 +225,10 @@ async function main() {
 
   if (userCount > 0) {
     console.log(`Database already initialized (${userCount} users found). Skipping seed.`);
+    // v2.18.1: already-initialized databases still receive per-branch
+    // manager wiring (for example the Juja Main manager on databases that
+    // predate it). Idempotent; never touches non-demo users.
+    await ensureBranchManagerWiring();
     return;
   }
 
@@ -264,7 +420,7 @@ async function seedBody() {
   done3('ok', superAdmin.id);
 
   // 4. Seed additional demo users
-  const done4 = stage(4, TOTAL_STAGES, 'Seed demo users (11)');
+  const done4 = stage(4, TOTAL_STAGES, 'Seed demo users (12)');
   const _cashier = await prisma.user.create({
     data: {
       id: 'user_cashier_1',
@@ -293,62 +449,10 @@ async function seedBody() {
     },
   });
 
-  // 4b. Seed Branch Managers
-  const _thikaManager = await prisma.user.create({
-    data: {
-      id: 'user_thika_manager',
-      organizationId: org.id,
-      storeId: storeThika.id,
-      email: 'thika.manager@mbumahhardware.co.ke',
-      name: 'David Njoroge',
-      passwordHash: adminPasswordHash,
-      role: 'BRANCH_MANAGER',
-      phone: '0712345678',
-      isActive: true,
-    },
-  });
-
-  const _ruiruManager = await prisma.user.create({
-    data: {
-      id: 'user_ruiru_manager',
-      organizationId: org.id,
-      storeId: storeRuiru.id,
-      email: 'ruiru.manager@mbumahhardware.co.ke',
-      name: 'Samuel Kibet',
-      passwordHash: adminPasswordHash,
-      role: 'BRANCH_MANAGER',
-      phone: '0723456789',
-      isActive: true,
-    },
-  });
-
-  const _nairobiManager = await prisma.user.create({
-    data: {
-      id: 'user_nairobi_manager',
-      organizationId: org.id,
-      storeId: storeNairobiCbd.id,
-      email: 'nairobi.manager@mbumahhardware.co.ke',
-      name: 'Mary Akinyi',
-      passwordHash: adminPasswordHash,
-      role: 'BRANCH_MANAGER',
-      phone: '0734567890',
-      isActive: true,
-    },
-  });
-
-  const _nakuruManager = await prisma.user.create({
-    data: {
-      id: 'user_nakuru_manager',
-      organizationId: org.id,
-      storeId: storeNakuru.id,
-      email: 'nakuru.manager@mbumahhardware.co.ke',
-      name: 'Peter Ruto',
-      passwordHash: adminPasswordHash,
-      role: 'BRANCH_MANAGER',
-      phone: '0745678901',
-      isActive: true,
-    },
-  });
+  // 4b. Seed Branch Managers: one per store, upsert by email (idempotent),
+  // each bound to the branch via User.storeId plus an ACTIVE StoreMembership
+  // (v2.18.1: includes the Juja Main manager that older databases missed).
+  const managersWired = await upsertBranchManagers(adminPasswordHash, org.id);
 
   // 4c. Seed Branch Cashiers
   const _thikaCashier = await prisma.user.create({
@@ -440,7 +544,7 @@ async function seedBody() {
       isActive: true,
     },
   });
-  done4('ok', '11 demo users');
+  done4('ok', `12 demo users (${managersWired} branch managers wired)`);
 
   // 5. Seed RBAC Permissions
   const done5 = stage(5, TOTAL_STAGES, 'Seed RBAC permissions (236)');
@@ -2138,7 +2242,7 @@ async function seedBody() {
   console.log('   Super Admin: admin@mbumahhardware.co.ke');
   console.log('   Store Owner: owner@mbumahhardware.co.ke');
   console.log('   Stores: 5 branches (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
-  console.log('   Branch Managers: 4 (Thika, Ruiru, Nairobi CBD, Nakuru)');
+  console.log('   Branch Managers: 5 (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru) - one per store, bound via User.storeId');
   console.log('   Branch Cashiers: 5 (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru)');
   console.log('   Products seeded: ' + (products.length + 1) + ' (Juja Main) + ' + (thkProducts.length + ruiruProducts.length + nbiProducts.length + nkrProducts.length) + ' (branches)');
   console.log('   Customers seeded: ' + customers.length + ' (Juja Main) + ' + (thkCustomers.length + ruiruCustomers.length + nbiCustomers.length + nkrCustomers.length) + ' (branches)');
@@ -2195,31 +2299,35 @@ async function seedBody() {
   });
   const existingGlobalMessages = await prisma.conversationMessage.count({ where: { conversationId: 'conv_global' } });
   if (existingGlobalMessages === 0) {
-    await prisma.conversationMessage.createMany({
-      data: [
-        {
-          conversationId: 'conv_global',
-          senderId: superAdmin.id,
-          storeId: 'store_juja_main',
-          content: 'Global channel is live. All branches and the organization console share this room.',
-          sentAt: new Date(Date.now() - 30 * 60 * 1000),
-        },
-        {
-          conversationId: 'conv_global',
-          senderId: 'user_thika_manager',
-          storeId: 'store_thika',
-          content: 'Thika here: cement restock confirmed for tomorrow morning.',
-          sentAt: new Date(Date.now() - 20 * 60 * 1000),
-        },
-        {
-          conversationId: 'conv_global',
-          senderId: 'user_store_owner',
-          storeId: null,
-          content: 'Reminder: end-of-day reports are due before 9pm for every branch.',
-          sentAt: new Date(Date.now() - 10 * 60 * 1000),
-        },
-      ],
-      skipDuplicates: true,
+    // Insert the origin-badged messages one-by-one with try/catch for
+    // idempotency (SQLite does not support skipDuplicates in createMany;
+    // v2.18.1: this stage used to fail silently on every local database).
+    await prisma.conversationMessage.create({
+      data: {
+        conversationId: 'conv_global',
+        senderId: superAdmin.id,
+        storeId: 'store_juja_main',
+        content: 'Global channel is live. All branches and the organization console share this room.',
+        sentAt: new Date(Date.now() - 30 * 60 * 1000),
+      },
+    });
+    await prisma.conversationMessage.create({
+      data: {
+        conversationId: 'conv_global',
+        senderId: 'user_thika_manager',
+        storeId: 'store_thika',
+        content: 'Thika here: cement restock confirmed for tomorrow morning.',
+        sentAt: new Date(Date.now() - 20 * 60 * 1000),
+      },
+    });
+    await prisma.conversationMessage.create({
+      data: {
+        conversationId: 'conv_global',
+        senderId: 'user_store_owner',
+        storeId: null,
+        content: 'Reminder: end-of-day reports are due before 9pm for every branch.',
+        sentAt: new Date(Date.now() - 10 * 60 * 1000),
+      },
     });
   }
   done24('ok', '2 memberships + global channel');
