@@ -11,10 +11,18 @@
 
 | Artifact | Where | State |
 |---|---|---|
-| Release commit (FEATURE v2.18.2) | `07b30a4` | tagged `v2.18.2` (local) |
-| Release commit (CORRECTION v2.18.2.1) | `133cba7` | tagged `v2.18.2.1` (local) |
+| Release commit (FEATURE v2.18.2) | `4de987b` | tagged `v2.18.2` (local) |
+| Release commit (CORRECTION v2.18.2.1) | `c1e7ecf` | tagged `v2.18.2.1` (local) |
 | Full QA | `docs/TEST_AUDIT_REPORT_v2.18.x.{md,json}` | 25/25 E2E + 14/14 re-check PASS |
 | Git bundle (offline transport) | `download/mbumah-v2.18.2.1-release.bundle` | main + both tags |
+
+> **History scrubbed before handoff:** the sandbox lineage originally tracked `.env`,
+> `.github-token`, `.neon-token`, `.vercel-usage-token`, `db/stress.db` (122 MB), `db/custom.db`,
+> `upload/` and a script containing an embedded token (`scripts/fix_malnutrition_build.py`).
+> The entire lineage was rewritten with `git filter-branch` to drop them from **every** commit
+> (verified: 0 hits across `8dc005f..main`; blob store pruned). Hashes above are the
+> post-scrub values. Pre-rewrite copies of the runtime files live in `/home/z/release-backup/`
+> (outside the repo, never commit them). `.gitignore` now forbids all of these paths.
 
 ## 2. ⚠️ Integration risk — read before merging to main
 
