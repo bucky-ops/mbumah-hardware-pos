@@ -9,9 +9,11 @@ import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { requireAuth, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
-import { createUserSchema, validateInput } from '@/lib/validations';
+import { createUserSchema, validateInput, STORE_BOUND_ROLES } from '@/lib/validations';
 // v2.12.2 (PR B - RBAC): feature-level role-management gate.
 import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
+// v2.18.1 (branch-manager binding): tamper-evident audit entry on create.
+import { auditTrail } from '@/lib/audit-trail';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,6 +168,39 @@ async function createUserHandler(
   const targetStoreId =
     session.role === 'SUPER_ADMIN' ? (storeId || null) : session.storeId;
 
+  // v2.18.1 (branch-manager binding): branch-bound roles must be created
+  // against a REAL, ACTIVE branch in the caller's organization. The binding
+  // lives in the database (User.storeId), never in client state, so an
+  // unassigned BRANCH_MANAGER/CASHIER account can no longer be minted.
+  if (targetStoreId) {
+    const targetStore = await db.store.findUnique({
+      where: { id: targetStoreId },
+      select: { id: true, name: true, status: true, organizationId: true },
+    });
+    if (!targetStore || targetStore.organizationId !== session.organizationId) {
+      return Response.json(
+        { success: false, error: 'The assigned branch was not found in this organization.' },
+        { status: 400 }
+      );
+    }
+    if (targetStore.status !== 'ACTIVE') {
+      return Response.json(
+        {
+          success: false,
+          error: `The branch "${targetStore.name}" is currently ${targetStore.status.toLowerCase()}; assign the user to an active branch.`,
+        },
+        { status: 400 }
+      );
+    }
+  } else if ((STORE_BOUND_ROLES as readonly string[]).includes(role)) {
+    // Defense in depth beyond the Zod refine: the schema already rejects
+    // this shape, so reaching here means an unvalidated caller.
+    return Response.json(
+      { success: false, error: `A ${role} must be assigned to a branch (storeId is required).` },
+      { status: 400 }
+    );
+  }
+
   const user = await db.user.create({
     data: {
       name,
@@ -210,6 +245,29 @@ async function createUserHandler(
     storeId: targetStoreId || undefined,
     metadata: { targetUserId: user.id, targetEmail: email, assignedRole: role, assignedBy: session.email, actorRole: session.role },
   });
+
+  // v2.18.1 (branch-manager binding): tamper-evident audit-trail entry for
+  // every user creation, including the branch binding, so staff provisioning
+  // is provable after the fact (hash-chained AuditLog row).
+  await auditTrail
+    .log({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: 'CREATE',
+      resourceType: 'User',
+      resourceId: user.id,
+      reason: `User created with role ${role}${targetStoreId ? ' and bound to branch ' + targetStoreId : ''}`,
+      storeId: targetStoreId || undefined,
+      newValues: {
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        storeId: user.storeId,
+      },
+    })
+    .catch(() => {
+      // Audit logging must never block the creation response.
+    });
 
   return Response.json(
     {

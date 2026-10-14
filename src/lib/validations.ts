@@ -12,16 +12,31 @@ export const loginSchema = z.object({
 // requires ZERO prisma/schema.prisma changes.
 export const ASSIGNABLE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT', 'INVENTORY_MANAGER'] as const;
 
+// v2.18.1 (branch-manager binding): roles that MUST be bound to one branch
+// at creation time. The binding lives in the database (User.storeId), never
+// in client input, so an account of these roles cannot exist unassigned.
+export const STORE_BOUND_ROLES = ['BRANCH_MANAGER', 'CASHIER'] as const;
+
 // User schemas
-export const createUserSchema = z.object({
-  name: z.string().min(2).max(100),
-  email: z.string().email(),
-  role: z.enum(ASSIGNABLE_ROLES),
-  password: z.string().min(6, 'Password must be at least 6 characters').max(128),
-  phone: z.string().optional(),
-  storeId: z.string().optional(),
-  organizationId: z.string().optional(),
-});
+export const createUserSchema = z
+  .object({
+    name: z.string().min(2).max(100),
+    email: z.string().email(),
+    role: z.enum(ASSIGNABLE_ROLES),
+    password: z.string().min(6, 'Password must be at least 6 characters').max(128),
+    phone: z.string().optional(),
+    storeId: z.string().optional(),
+    organizationId: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if ((STORE_BOUND_ROLES as readonly string[]).includes(data.role) && !data.storeId?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['storeId'],
+        message: `A ${data.role} must be assigned to a branch (storeId is required).`,
+      });
+    }
+  });
 
 export const updateUserSchema = z.object({
   name: z.string().min(2).max(100).optional(),

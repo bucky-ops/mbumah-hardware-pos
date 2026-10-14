@@ -83,10 +83,13 @@ describe('loginSchema', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('createUserSchema', () => {
+  // Base fixture uses an organization-wide role: branch-bound roles
+  // (BRANCH_MANAGER, CASHIER) REQUIRE a storeId since v2.18.1 and have
+  // their own dedicated cases below.
   const validUser = {
     name: 'John Doe',
     email: 'john@example.com',
-    role: 'CASHIER',
+    role: 'STORE_OWNER',
     password: 'securePass123',
   };
 
@@ -110,10 +113,15 @@ describe('createUserSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts all valid roles', () => {
+  it('accepts all valid roles (branch-bound roles carry a storeId)', () => {
     const roles = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHIER', 'ACCOUNTANT'];
     for (const role of roles) {
-      const result = createUserSchema.safeParse({ ...validUser, role });
+      const needsStore = role === 'BRANCH_MANAGER' || role === 'CASHIER';
+      const result = createUserSchema.safeParse({
+        ...validUser,
+        role,
+        ...(needsStore ? { storeId: 'store_123' } : {}),
+      });
       expect(result.success, `role ${role} should be valid`).toBe(true);
     }
   });
@@ -125,6 +133,48 @@ describe('createUserSchema', () => {
       storeId: 'store_123',
     });
     expect(result.success).toBe(true);
+  });
+
+  // v2.18.1 (branch-manager binding): branch-bound roles REQUIRE a storeId
+  // at creation time; the binding lives in the database, never in client
+  // state, so an unassigned BRANCH_MANAGER/CASHIER cannot be minted.
+  it('rejects a BRANCH_MANAGER without storeId', () => {
+    const result = createUserSchema.safeParse({ ...validUser, role: 'BRANCH_MANAGER' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('storeId');
+    }
+  });
+
+  it('rejects a CASHIER without storeId', () => {
+    const result = createUserSchema.safeParse({ ...validUser, role: 'CASHIER' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('storeId');
+    }
+  });
+
+  it('rejects a BRANCH_MANAGER with a whitespace-only storeId', () => {
+    const result = createUserSchema.safeParse({ ...validUser, role: 'BRANCH_MANAGER', storeId: '   ' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts a BRANCH_MANAGER with a storeId', () => {
+    const result = createUserSchema.safeParse({
+      ...validUser,
+      role: 'BRANCH_MANAGER',
+      storeId: 'store_juja_main',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('still accepts organization-wide roles without a storeId', () => {
+    for (const role of ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT']) {
+      const result = createUserSchema.safeParse({ ...validUser, role });
+      expect(result.success, `role ${role} should not require storeId`).toBe(true);
+    }
   });
 });
 

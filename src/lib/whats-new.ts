@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.18.1',
+    title: 'Every branch has its own manager account, wired to its own workspace',
+    bullets: [
+      'Each branch now ships with a dedicated branch manager sign-in (juja.manager@, thika.manager@, ruiru.manager@, nairobi.manager@, nakuru.manager@mbumahhardware.co.ke), and signing in lands directly in that branch\'s workspace.',
+      'The branch a manager works in comes from their account record in the database, never from the email address or anything the browser sends.',
+      'Accounts that are not assigned to a branch yet now see a clear "not assigned to a branch yet" page instead of an empty console.',
+      'New staff accounts of branch-bound roles must be assigned to an active branch when they are created, and every account creation is written to the tamper-evident audit trail.',
+      'Older databases pick up the missing branch manager automatically on the next update; the repair and verification scripts are available for a manual check.',
+    ],
+  },
+  {
     version: '2.18.0.2',
     title: 'Safer updates: the right release, a verified build, and honest results',
     bullets: [

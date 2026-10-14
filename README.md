@@ -72,7 +72,7 @@ The seed script creates the following accounts. They are for local development a
 | SUPER_ADMIN | admin@mbumahhardware.co.ke | password123 |
 | System service user | system@mbumahhardware.co.ke | random UUID (not sign-in capable) |
 
-Demo staff accounts for other roles (cashier, accountant, inventory manager, branch manager) are created by the demo-data population scripts with the password `password123`.
+Demo staff accounts for other roles (cashier, accountant, inventory manager, branch manager) are created by the demo-data population scripts with the password `password123`. Since v2.18.1 the seed also creates one branch manager per branch (`juja.manager@`, `thika.manager@`, `ruiru.manager@`, `nairobi.manager@`, `nakuru.manager@mbumahhardware.co.ke`); each signs in straight into their own branch workspace. See [Branch manager users](docs/branch-manager-users.md).
 
 ## Documentation
 

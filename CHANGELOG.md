@@ -2,6 +2,48 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.1] Branch manager user-store binding
+
+Feature release binding every branch to its own manager account. Each branch manager signs in with a unique email and lands directly in their own branch workspace; the branch is determined by the database relation (User.storeId plus an ACTIVE StoreMembership row), never by client input, email parsing, cookies, headers, or URLs.
+
+### Added
+- **One branch manager per store in the seed (including Juja Main)**: the seed now upserts five branch managers (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru) by email, so repeated seeding never duplicates users and never overwrites existing names, phones or passwords. Each manager also receives an ACTIVE StoreMembership row for the workspace layer. The Juja Main manager (juja.manager@mbumahhardware.co.ke) closes the one-store gap in the previous seed.
+- **Ensure-pass on already-initialized databases**: the seed's first-boot guard previously skipped databases that already had users, so older installations never received the Juja Main manager. A new idempotent ensure-pass runs on every seed invocation and creates any missing manager and membership without touching other data; failures are logged and never break boot.
+- **Post-login redirect for branch-bound roles**: BRANCH_MANAGER and CASHIER sign-ins now land in their own branch workspace (subdomain URL when the current host is subdomain-capable, otherwise /stores/{slug}/dashboard). The target comes from the database relation through the login response's store summary (slug, subdomain and status added to it). Accounts with no branch assignment are sent to the new /account/pending-branch page instead of the organization console; accounts whose store has no slug configured stay on the pinned root app. The /api/auth/me response gained flat storeSlug / storeName / workspaceModeHint aliases.
+- **User-creation hardening**: BRANCH_MANAGER and CASHIER require a storeId at creation time, enforced in the Zod schema and again in the route handler; the assigned store must exist, be ACTIVE, and belong to the caller's organization. Every user creation now also writes a tamper-evident, hash-chained AuditLog entry next to the existing SystemLog rows.
+- **Branch manager schema repair (scripts/repair-branch-manager-schema.mjs, npm run db:repair-branch-managers)**: raw-SQL additive repair for users.storeId / users.isActive, deterministic storeId backfill for branch-bound users from the {town} email convention, duplicate email detection before the unique index, backup-first with automatic restore, idempotent no-op on healthy databases, and a hard refusal for PostgreSQL with migration guidance.
+- **Branch manager verification (scripts/verify-branch-manager-users.mjs, npm run verify:branch-manager-users)**: read-only proof that every store has exactly one bound manager, emails are unique, bindings resolve, memberships are ACTIVE, and no account stores a plaintext or missing password value.
+- **Documentation**: docs/branch-manager-users.md (binding rules, seeded credentials, canonical demo email domain decision, repair and verification), a README credentials pointer, and a What's New entry.
+
+### Fixed
+- **Seed stage 24 no longer fails silently on SQLite**: the global-chat createMany used skipDuplicates, which the SQLite connector does not support; every local database skipped the global chat messages. The messages are now inserted idempotently behind the existing count guard.
+
+### Security
+- Branch-bound roles cannot exist unassigned: the API rejects the shape at two layers, and an unassigned account is redirected away from the organization console at sign-in.
+- Cross-branch access remains blocked server-side (403 or safe 404) with SecurityEvent audit rows; this release adds no new access surface and changes no tenancy behavior.
+- Demo passwords remain bcrypt hashes (cost 12); no plaintext credential storage anywhere.
+
+## [2.18.1] Branch manager user-store binding
+
+Feature release binding every branch to its own manager account. Each branch manager signs in with a unique email and lands directly in their own branch workspace; the branch is determined by the database relation (User.storeId plus an ACTIVE StoreMembership row), never by client input, email parsing, cookies, headers, or URLs.
+
+### Added
+- **One branch manager per store in the seed (including Juja Main)**: the seed now upserts five branch managers (Juja Main, Thika, Ruiru, Nairobi CBD, Nakuru) by email, so repeated seeding never duplicates users and never overwrites existing names, phones or passwords. Each manager also receives an ACTIVE StoreMembership row for the workspace layer. The Juja Main manager (juja.manager@mbumahhardware.co.ke) closes the one-store gap in the previous seed.
+- **Ensure-pass on already-initialized databases**: the seed's first-boot guard previously skipped databases that already had users, so older installations never received the Juja Main manager. A new idempotent ensure-pass runs on every seed invocation and creates any missing manager and membership without touching other data; failures are logged and never break boot.
+- **Post-login redirect for branch-bound roles**: BRANCH_MANAGER and CASHIER sign-ins now land in their own branch workspace (subdomain URL when the current host is subdomain-capable, otherwise /stores/{slug}/dashboard). The target comes from the database relation through the login response's store summary (slug, subdomain and status added to it). Accounts with no branch assignment are sent to the new /account/pending-branch page instead of the organization console; accounts whose store has no slug configured stay on the pinned root app. The /api/auth/me response gained flat storeSlug / storeName / workspaceModeHint aliases.
+- **User-creation hardening**: BRANCH_MANAGER and CASHIER require a storeId at creation time, enforced in the Zod schema and again in the route handler; the assigned store must exist, be ACTIVE, and belong to the caller's organization. Every user creation now also writes a tamper-evident, hash-chained AuditLog entry next to the existing SystemLog rows.
+- **Branch manager schema repair (scripts/repair-branch-manager-schema.mjs, npm run db:repair-branch-managers)**: raw-SQL additive repair for users.storeId / users.isActive, deterministic storeId backfill for branch-bound users from the {town} email convention, duplicate email detection before the unique index, backup-first with automatic restore, idempotent no-op on healthy databases, and a hard refusal for PostgreSQL with migration guidance.
+- **Branch manager verification (scripts/verify-branch-manager-users.mjs, npm run verify:branch-manager-users)**: read-only proof that every store has exactly one bound manager, emails are unique, bindings resolve, memberships are ACTIVE, and no account stores a plaintext or missing password value.
+- **Documentation**: docs/branch-manager-users.md (binding rules, seeded credentials, canonical demo email domain decision, repair and verification), a README credentials pointer, and a What's New entry.
+
+### Fixed
+- **Seed stage 24 no longer fails silently on SQLite**: the global-chat createMany used skipDuplicates, which the SQLite connector does not support; every local database skipped the global chat messages. The messages are now inserted idempotently behind the existing count guard.
+
+### Security
+- Branch-bound roles cannot exist unassigned: the API rejects the shape at two layers, and an unassigned account is redirected away from the organization console at sign-in.
+- Cross-branch access remains blocked server-side (403 or safe 404) with SecurityEvent audit rows; this release adds no new access surface and changes no tenancy behavior.
+- Demo passwords remain bcrypt hashes (cost 12); no plaintext credential storage anywhere.
+
 ## [2.18.0.3] Branch workspace store-context and repair correction
 
 Correction release completing the branch workspace unavailable diagnosis: the store context resolver now derives the branch slug from the `/stores/{slug}/...` pathname itself, the proxy publishes resolved workspace context headers, and a safe raw-SQL repair script restores the store workspace columns on drifted local SQLite databases. package.json keeps the valid semver `2.18.0`; the full correction version `2.18.0.3` lives in the `mbumah.releaseVersion` metadata block, the root `VERSION` file and every app-reported version surface.

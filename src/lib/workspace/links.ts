@@ -84,10 +84,32 @@ export function buildBranchSelectorUrl(): string {
   return '/branches/select';
 }
 
+/**
+ * The configured workspace mode as a safe hint string (v2.18.1). Pure and
+ * env-derived: 'path' | 'subdomain' | 'auto' | 'off'. The actual per-request
+ * decision (path fallback on localhost and raw IPs) always happens in the
+ * link builder and the server-side resolver; this hint is informational.
+ */
+export function resolveWorkspaceModeHint(): 'auto' | 'path' | 'subdomain' | 'off' {
+  const raw = (process.env.NEXT_PUBLIC_STORE_WORKSPACE_MODE || 'auto').toLowerCase();
+  return raw === 'path' || raw === 'subdomain' || raw === 'off' ? raw : 'auto';
+}
+
 export interface PostLoginUser {
   role: string;
   storeId?: string | null;
   memberships?: string[] | null;
+  /**
+   * The signed-in user's primary store summary (v2.18.1). The login response
+   * includes it from the User.store relation; slug/subdomain drive the
+   * branch workspace redirect for branch-bound roles.
+   */
+  store?: {
+    id?: string;
+    slug?: string | null;
+    subdomain?: string | null;
+    status?: string | null;
+  } | null;
 }
 
 /**
@@ -98,7 +120,12 @@ export interface PostLoginUser {
  *   SUPER_ADMIN / STORE_OWNER / ACCOUNTANT -> /org/dashboard
  *   WAREHOUSE_MANAGER (multiple stores)    -> /branches/select
  *   WAREHOUSE_MANAGER (one store)          -> that store's workspace
- *   CASHIER / BRANCH_MANAGER               -> null (root SPA, pinned store)
+ *   CASHIER / BRANCH_MANAGER (v2.18.1)     -> their own branch workspace
+ *                                             (subdomain URL when the current
+ *                                             host is subdomain-capable, else
+ *                                             /stores/{slug}/dashboard);
+ *                                             unassigned accounts go to
+ *                                             /account/pending-branch
  */
 export function postLoginRedirect(user: PostLoginUser | null | undefined): string | null {
   if (!user) return null;
@@ -111,6 +138,7 @@ export function postLoginRedirect(user: PostLoginUser | null | undefined): strin
       path.startsWith('/stores/') ||
       path.startsWith('/org/') ||
       path.startsWith('/branches/') ||
+      path.startsWith('/account/') ||
       path.startsWith('/chat');
     const onSubdomain = resolveWorkspaceHostMode(parseHost(window.location.host)) === 'subdomain';
     if (inWorkspace || onSubdomain) return null;
@@ -127,6 +155,35 @@ export function postLoginRedirect(user: PostLoginUser | null | undefined): strin
     // from /api/stores, auto-redirects single-store members, and shows a calm
     // empty state for unassigned managers.
     return buildBranchSelectorUrl();
+  }
+
+  // v2.18.1 branch-manager binding: branch-bound roles land in their own
+  // branch workspace, decided by the DATABASE relation (User.storeId ->
+  // Store.slug), never by email parsing or client-supplied input.
+  if (role === 'BRANCH_MANAGER' || role === 'CASHIER') {
+    if (!user.storeId && !user.store?.slug) {
+      // No branch assignment in the database: never fall through to the
+      // organization console or the all-stores view. The pending-branch page
+      // explains the situation calmly.
+      return '/account/pending-branch';
+    }
+    const storeRef = {
+      id: user.store?.id ?? user.storeId ?? '',
+      slug: user.store?.slug ?? null,
+      subdomain: user.store?.subdomain ?? null,
+    };
+    if (!storeRef.slug) {
+      // Store assigned but its slug is not configured: the workspace gateway
+      // would show "Store slug is not configured", so keep the branch-bound
+      // user on the root SPA, which stays pinned to their store via the
+      // server-side session and remains fully usable.
+      return null;
+    }
+    // buildStoreWorkspaceUrl applies the full safety matrix itself: path
+    // mode on localhost / raw IPs / disabled subdomains, subdomain URL only
+    // when the current host is subdomain-capable and the label is valid and
+    // non-reserved.
+    return buildStoreWorkspaceUrl(storeRef, { page: 'dashboard' });
   }
 
   return null;

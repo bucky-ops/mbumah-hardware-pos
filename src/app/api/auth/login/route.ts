@@ -339,6 +339,13 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
         id: user.store.id,
         name: user.store.name,
         location: user.store.location,
+        // v2.18.1 (branch-manager binding): workspace identifiers so the
+        // post-login redirect can send branch-bound roles to their own
+        // workspace (path mode or subdomain mode) using the DATABASE
+        // relation, never client input.
+        slug: user.store.slug,
+        subdomain: user.store.subdomain,
+        status: user.store.status,
       } : null,
       // v2.16.0 (subdomain workspaces): workspace memberships so the client
       // can route multi-store users to /branches/select right after login.
