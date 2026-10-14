@@ -1080,3 +1080,26 @@ Stage Summary:
 - Artifacts: README.md, docs/TEST_AUDIT_REPORT_v2.18.x.{md,json(recheck)}, docs/screenshots/{console,workspace,mobile}.png, src/components/org/error-boundary.tsx, release identity v2.18.2.1 everywhere.
 - Baselines for next session: main @ 133cba7, tags 59 total (58+v2.18.2.1), lint 0 errors, zero page errors, health 87.
 - Next candidates: POS terminal page inside workspace (cart→checkout via /api/transactions with idempotencyKey); eTIMS retry → real queue table; production Windows updater build for v2.18.2.1; per-section Suspense streaming for initial paint.
+---
+Task ID: 46
+Agent: Z.ai Code (main)
+Task: "Push the release to the latest" — ship v2.18.2/v2.18.2.1 to GitHub (bucky-ops/mbumah-hardware-pos).
+
+Work Log:
+- Surveyed push topology: NO git remote configured locally; canonical repo identified as github.com/bucky-ops/mbumah-hardware-pos (worklog refs); added as origin; anonymous fetch OK (repo publicly readable).
+- KEY FINDING 1 — lineage: sandbox main (36 commits from a Next.js template "Initial commit") does NOT descend from origin/main e49f48ec (v2.18.1, 282 commits). Direct push of main would be non-fast-forward/destructive; tags v2.18.2/v2.18.2.1 point into the sandbox lineage only.
+- KEY FINDING 2 — divergence: sandbox release is a parallel implementation vs origin/main: Branch/Transaction vs Store/SalesTransaction models, 43-model SQLite schema vs 88-model PostgreSQL-canonical schema + provider-flip, 12-line db.ts vs 758-line, scrypt standalone auth vs 1,226-line auth.ts. A file-overlay graft is impossible; true integration = re-platforming project (owner decision).
+- KEY FINDING 3 — SECRETS IN HISTORY: sandbox lineage tracked .env, .github-token (live ghp_ token), .neon-token, .vercel-usage-token, db/stress.db (122.7MB), db/custom.db, upload/ (files matching secret patterns), scripts/fix_malnutrition_build.py (embedded GH token var). Pushing/bundling as-is would leak live credentials to a publicly readable repo.
+- Scrub: backed up runtime files to /home/z/release-backup/ (outside repo); git filter-branch --index-filter removed the secret/runtime paths from EVERY commit (--prune-empty --tag-name-filter cat); restored refs/original-free state via update-ref -d + reflog expire + gc --prune=now --aggressive; re-fetched origin tags --force to restore pristine origin-lineage tags (filter had rewritten them locally).
+- Verified: 8dc005f..main has 0 commits touching any secret path; tip tree 0 secret files; git rev-list --all --objects has 0 secret blobs; pack size 42.9MiB; release tags re-pointed to scrubbed hashes v2.18.2→4de987b, v2.18.2.1→c1e7ecf; origin/main still e49f48ec.
+- Hardened .gitignore (committed 91295cd): forbids .env/.env.*(!examples kept), *.token, db/*.db, /upload/, /tool-results/, /skills/, /release-backup/.
+- docs/PUSH_RELEASE_INSTRUCTIONS.md created + updated (ea31d2e): what's ready, integration-risk table (Branch→Store etc.), ship path A (bundle→branch, never main), ship path B (owner token from sandbox), 6-point reconciliation checklist before tagging real v2.18.x from main lineage.
+- Handoff bundle: download/mbumah-v2.18.2.1-release.bundle (10.0MB, complete history, main + both tags; bundle verify OK). Down from 48MB pre-scrub.
+- Push ATTEMPTED: `git push origin main:refs/heads/release/v2.18.2.1-org-console` → fatal: could not read Username (no credentials in sandbox; terminal prompts disabled). Confirmed auth is the sole remaining blocker.
+- Post-surgery health: dev server 200 on /, /stores/juja-main/dashboard, /api/dashboard; agent-browser: Health Good, debt 437,479, matrix present, ZERO page errors; lint untouched; .env + db/custom.db restored on disk (untracked).
+
+Stage Summary:
+- Release lineage is scrubbed, tagged (v2.18.2→4de987b, v2.18.2.1→c1e7ecf), bundled (10MB) and PUSH-READY; only missing ingredient is owner credentials (GH_TOKEN) or owner-side push of the bundle.
+- DO NOT fast-forward origin/main to this lineage — see docs/PUSH_RELEASE_INSTRUCTIONS.md §2 (Branch/Store re-platforming required first); publish as release/v2.18.2.1-org-console branch instead.
+- Traps for next agents: filter-branch rewrites fetched origin tags too (re-fetch --tags --force after); filter-branch updates the working tree (runtime files vanish → restore from backup); never reset --hard after scrub; token files live ONLY in /home/z/release-backup/.
+- Owner next actions: (1) provide GH_TOKEN in a future session → run Ship path B; or (2) download the bundle and run Ship path A locally; (3) schedule the Branch→Store reconciliation before any updater-visible tag on main lineage.
