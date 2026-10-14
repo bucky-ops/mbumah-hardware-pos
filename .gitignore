@@ -58,3 +58,21 @@ tool-results/
 
 # Skills are local dev tooling
 /skills/
+
+# ── Secret & runtime material — NEVER commit (v2.18.2.1 scrub) ──────────────
+.env
+.env.*
+!.env.example
+!.env.lan.example
+!.env.local-offline.example
+!.env.online.example
+.github-token
+.neon-token
+.vercel-usage-token
+*.token
+db/*.db
+db/*.db-journal
+/upload/
+/tool-results/
+/skills/
+/release-backup/
