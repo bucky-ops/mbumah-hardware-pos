@@ -2,6 +2,11 @@
   "name": "mbumah-hardware-pos",
   "version": "2.18.2.1",
   "private": true,
+  "mbumah": {
+    "releaseVersion": "2.18.2.1",
+    "baseVersion": "2.18.2",
+    "hotfix": 1
+  },
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
