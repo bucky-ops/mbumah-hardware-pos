@@ -2,6 +2,25 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.3] Organization Console — Expert Information System on the unified lineage
+
+Feature release completing the reconciliation promised by the v2.18.2 sandbox branch (`release/v2.18.2.1-org-console`): the org-console **product work** now runs natively on the 88-model PostgreSQL-canonical lineage with multi-tenant auth, instead of the parallel 43-model SQLite implementation. The sandbox branch remains archived as a prerelease; this release supersedes it.
+
+### Added
+- **Expert console at `/console`** (`src/app/console/` + `src/components/org/{chrome,kpi-row,store-matrix,experts,panels,primitives}.tsx`): dark glassmorphism chrome with official brand logo, health gauge, KPI command row, **Store Intelligence Matrix** (rendered from the real `Store` rows via `/api/stores`), Decision Support, Recent Activity, Global Chat, Live Feed, and the 9 domain expert modules (Inventory, Debt/Mkopo, Rentals, Financials, Suppliers, M-Pesa, eTIMS, Audit, System). Every figure comes from live main-lineage APIs; sections whose endpoint denies the caller degrade to an explicit "unavailable" state — never a fake number.
+- **`/api/org/kpi-summary`**: org-level KPI aggregate (revenue, transactions, low stock, overdue, debt, pending, health breakdown) computed with `runWithoutTenant` and role-gated (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER / ACCOUNTANT / INVENTORY_MANAGER).
+- **`SectionErrorBoundary`** wraps every console section: a crash in one panel degrades to a styled retry card instead of blanking the console.
+- **Sidebar entry point**: org-wide roles get an "Expert console" link in the app sidebar workspace links (`buildExpertConsoleUrl`).
+- **Official brand assets**: vector logo master (`public/logo.svg`), PNG/WebP renditions, favicon/icon marks and `docs/BRAND.md` guide.
+
+### Reconciliation notes (per docs/PUSH_RELEASE_INSTRUCTIONS.md §5, closed by this release)
+- Console product work re-targeted from `Branch`→`Store`, `Transaction`→`SalesTransaction` data surfaces; no new data models were required — the unified schema already covers every expert domain.
+- Console data flows through the lineage's real auth (`requireAuth`/`requireRole` + store-scope guards) — no standalone scrypt sessions.
+- Multi-branch workspaces and subdomain routing remain the lineage's existing, authoritative implementation.
+
+### Quality
+- `eslint`: 0 errors (401 pre-existing warnings unchanged). `tsc --strict`: 0 errors in all ported files (471-error baseline on pre-existing lineage files unchanged). `vitest`: 551 passed / 16 failed / 20 skipped — identical to the pre-port baseline (no regressions introduced).
+
 ## [2.18.1] Branch manager user-store binding
 
 Feature release binding every branch to its own manager account. Each branch manager signs in with a unique email and lands directly in their own branch workspace; the branch is determined by the database relation (User.storeId plus an ACTIVE StoreMembership row), never by client input, email parsing, cookies, headers, or URLs.

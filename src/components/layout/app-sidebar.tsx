@@ -21,9 +21,11 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import {
   Store, LogOut, Sun, Moon, Bell, X, ChevronDown, ChevronLeft, ChevronRight,
   ChevronsRight, Keyboard, ShieldCheck, CheckCircle, Lock, Maximize2, MessagesSquare,
+  Gauge,
 } from 'lucide-react';
 // v2.16.0 (subdomain workspaces): pinned-branch awareness for the selector.
 import { useWorkspaceStore } from '@/lib/workspace/workspace-store';
+import { buildExpertConsoleUrl } from '@/lib/workspace/links';
 
 // v2.14.1 (fullscreen autohide): keyboard shortcut hints surfaced in
 // icon-mode tooltips (spec: "tooltip on hover label + shortcut F2 F3 F4 F5").
@@ -691,6 +693,20 @@ function WorkspaceLinks({ collapsed }: { collapsed: boolean }) {
             <TooltipContent side="right" sideOffset={8}>Organization console</TooltipContent>
           </Tooltip>
         )}
+        {isOrgWide && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href={buildExpertConsoleUrl()}
+                className="w-full flex items-center justify-center px-2 py-2 rounded-lg text-slate-300 hover:bg-white/10 transition-colors"
+                aria-label="Expert console"
+              >
+                <Gauge className="h-3.5 w-3.5" />
+              </a>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>Expert console (v2.18.3)</TooltipContent>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <a
@@ -725,6 +741,15 @@ function WorkspaceLinks({ collapsed }: { collapsed: boolean }) {
         >
           <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
           <span>Organization Console</span>
+        </a>
+      )}
+      {isOrgWide && (
+        <a
+          href={buildExpertConsoleUrl()}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 transition-colors"
+        >
+          <Gauge className="h-3.5 w-3.5 shrink-0" />
+          <span>Expert Console</span>
         </a>
       )}
       <a
