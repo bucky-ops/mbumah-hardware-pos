@@ -77,6 +77,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 # Copy package.json for `npx prisma` commands in entrypoint
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
+# v2.18.0.2: the Prisma seed command moved from package.json#prisma (deprecated,
+# removed in Prisma 7) to prisma.config.ts. The entrypoint's `npx prisma db seed`
+# and `npx prisma generate` read that file, so the runner image needs it.
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+
 # Copy the Docker entrypoint script
 COPY --from=builder --chown=nextjs:nodejs /app/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh

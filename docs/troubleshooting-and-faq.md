@@ -269,6 +269,16 @@ git commit -m "db: add your_change_description migration"
 
 **Root causes fixed in v2.18.0.0:** missing `Store.slug`/`subdomain` data, subdomain URLs generated on localhost or raw IPs, a resolver without a slug fallback, and broken `/stores/undefined`-style links. The safe link builder is `getBranchWorkspaceHref` in `src/lib/branch-workspace.ts`; see [Branch workspaces](branch-workspaces.md).
 
+## Windows updates: EINVAL and build output warnings
+
+**Symptom:** During a Windows update, the build log shows `Failed to copy traced files ... EINVAL` or `invalid argument, copyfile`, or the updater prints `[INFO] Ignored invalid release tag: <tag>` lines, or an older release ends with "Build output missing (.next/standalone/server.js)".
+
+**Cause:** Turbopack names the chunks of asynchronously imported Node builtins after the specifier, for example `[externals]_node:inspector_7a4283c6._.js`. Linux accepts colons in file names; NTFS does not. When Windows laptops still built standalone output (before v2.18.0.2), the standalone trace-copy phase hit those names, failed with EINVAL, and the affected routes lost their chunks. The "Ignored invalid release tag" lines are different and harmless: the release selector refused a tag that breaks the release rules (a four-part tag without its three-part base, a hotfix number above `.5`, or a prerelease suffix) and did NOT download it. The reason is printed under the tag.
+
+**Fix:** v2.18.0.2 changes the policy at the root: Windows installs no longer build standalone output at all. They build a normal production build and start it with `next start`, so the trace-copy phase (and with it the EINVAL failure class) cannot occur, and the launcher no longer depends on `.next/standalone/server.js` existing. The updater also deletes stale `.next\standalone` leftovers from older releases and verifies the build output before declaring success, rolling back automatically when the output is incomplete. Details: [Windows local builds](windows-local-builds.md) and [Updater release channels](updater-release-channels.md).
+
+**Where the build logs live:** `%USERPROFILE%\mbumah-pos-data\logs\build-{version}-{timestamp}.log` (Linux: `~/mbumah-pos-data/logs/`). When an update fails, the updater prints the last log lines and keeps the file for support.
+
 ## Still stuck?
 
 - Read [Deployment](deployment.md) for setup-oriented guidance, and the archived [Vercel recovery guide](archive/VERCEL_RECOVERY.md) for the historical incident notes.

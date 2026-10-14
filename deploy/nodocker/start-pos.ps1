@@ -21,14 +21,17 @@ try {
   $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
   Set-Location $root
 
-  # Refresh standalone static/public copies (idempotent, cheap - needed after rebuilds)
+  # Refresh standalone static/public copies (idempotent, cheap - needed after
+  # rebuilds). v2.18.0.2: only relevant when a standalone output exists
+  # (Docker / Linux). Windows laptops build NORMAL output (started via
+  # `next start` by start-server.mjs), so a .next/BUILD_ID is enough here.
   if (Test-Path '.next\standalone') {
     if (Test-Path '.next\static') {
       New-Item -ItemType Directory -Force -Path '.next\standalone\.next' | Out-Null
       Copy-Item '.next\static' '.next\standalone\.next\' -Recurse -Force
     }
     if (Test-Path 'public') { Copy-Item 'public' '.next\standalone\' -Recurse -Force }
-  } else {
+  } elseif (-not (Test-Path '.next\BUILD_ID')) {
     Write-Host '[FAIL] No build found. Run the installer first:' -ForegroundColor Red
     Write-Host '       powershell -ExecutionPolicy Bypass -File deploy\nodocker\install-nodocker.ps1'
     Read-Host 'Press Enter to close'

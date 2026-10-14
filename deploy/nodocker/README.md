@@ -203,6 +203,12 @@ Safety rails:
   health step fails, the previous version is re-installed and health-checked.
   Your data is never touched; schema changes are forward-compatible, and the
   pre-update backup is always kept.
+- **Releases are validated before install (v2.18.0.2).** The updater picks the
+  target through `scripts/release/select-release.mjs`: the stable channel takes
+  three-part releases only, correction hotfixes (four-part tags) install only
+  for the version family already on the machine, invalid tags are ignored and
+  reported. Set `UPDATE_CHANNEL=hotfix` or preview with `UPDATE_DRY_RUN=1`
+  (see docs/updater-release-channels.md).
 - **Every decision is recorded** in the update ledger:
   `%USERPROFILE%\mbumah-pos-data\update-ledger.jsonl` (one JSON line per
   event: `UP_TO_DATE`, `BACKUP`, `UPDATE_SUCCESS`, `UPDATE_FAILED`,

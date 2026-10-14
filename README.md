@@ -92,6 +92,8 @@ Deep-dive documentation lives in the `docs/` directory:
 | [Contributing](CONTRIBUTING.md) | Development workflow, commit convention, code style |
 | [Security policy](SECURITY.md) | Reporting vulnerabilities, credential handling |
 
+Self-hosting the POS on a Windows laptop or maintaining its automatic updates? Start with [Windows local builds](docs/windows-local-builds.md) and [updater release channels](docs/updater-release-channels.md).
+
 ## Support
 
 See [SUPPORT.md](SUPPORT.md) for help channels and how to report a problem. Security issues are handled privately through [SECURITY.md](SECURITY.md).
