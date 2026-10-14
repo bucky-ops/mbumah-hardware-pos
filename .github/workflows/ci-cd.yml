@@ -161,6 +161,20 @@ jobs:
           bun run prisma:validate
           echo "Prisma schema is valid."
 
+      # v2.18.0.2: release safety guards. The Prisma configuration check
+      # blocks the deprecated package.json#prisma block and any accidental
+      # Prisma prerelease/major drift; the release-selection check proves the
+      # updater still follows the release rules (stable = three-part only,
+      # four-part tags are hotfixes that need their base); the build safety
+      # check proves the deploy scripts keep the Windows/Linux build-mode
+      # wiring intact. See docs/release-versioning.md and
+      # docs/updater-release-channels.md.
+      - name: Verify release safety (Prisma config, release selection, build wiring)
+        run: |
+          bun run verify:prisma-config
+          bun run verify:release-selection
+          bun run verify:windows-build
+
       - name: Check for hardcoded secrets
         run: |
           echo "Scanning for potential hardcoded secrets..."

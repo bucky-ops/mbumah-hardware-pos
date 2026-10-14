@@ -28,6 +28,11 @@ Documentation for Mbumah Hardware POS. Start with the [README](../README.md) for
 | [Hosting readiness audit](hosting-readiness-audit.md) | External hosting spec and guide reviewed against the repo: phase status, corrections, gap register |
 | [Offline mode](offline-mode.md) | Offline sales queue, idempotent replay, top-bar indicator, testing |
 | [Release process](release-process.md) | Versioning, changelog, release automation |
+| [Release versioning](release-versioning.md) | Version sources and precedence, three-part versus four-part releases, the version decision block, tag rules |
+| [Windows local builds](windows-local-builds.md) | Normal builds on Windows laptops, the EINVAL failure class, sharp probe and fallback, install locations, build verification and logs |
+| [Standalone output](standalone-output.md) | Opt-in standalone policy, Docker and Linux usage, launcher start modes, node-builtin alias defense |
+| [Prisma config](prisma-config.md) | prisma.config.ts after the package.json deprecation, env loading, command matrix, Prisma version policy |
+| [Updater release channels](updater-release-channels.md) | stable/hotfix/manual channels, four-part correction rules, dry runs, update state file, build verification and rollback |
 
 ## Operations
 

@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.18.0.2',
+    title: 'Safer updates: the right release, a verified build, and honest results',
+    bullets: [
+      'The updater now picks releases by the project release rules: normal updates take stable releases only, and correction hotfixes install only for the version family your store is already on.',
+      'Invalid or incomplete release tags (for example a hotfix whose base release is missing) are ignored and reported instead of being installed.',
+      'Windows laptops now run a normal production build started the standard way, which removes the file-copy warnings some machines saw during updates.',
+      'Every update verifies the build result and the database before announcing success, and rolls itself back to the previous version if anything does not add up.',
+      'UPDATE_DRY_RUN=1 shows exactly what an update would do (current version, available releases, choice, reason) without changing anything.',
+    ],
+  },
+  {
     version: '2.18.0.1',
     title: 'Windows laptops: updates now verify themselves before restarting',
     bullets: [

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { resolveStandaloneOutput } from "./src/lib/build-mode";
 
 // ---------------------------------------------------------------------------
 // v2.18.0.1 (correction): Windows laptop builds could not ship working
@@ -38,14 +39,29 @@ const nodeBuiltinAlias = Object.fromEntries(
 );
 
 // ---------------------------------------------------------------------------
-// v2.18.0.1 (correction): next/image optimization needs sharp's NATIVE
-// binary for the exact platform. Laptop installs build and run on the same
-// Windows machine, so we can know at BUILD time whether that binary is
-// usable (require("sharp") dlopens it). If it is not, bake `unoptimized`
-// into the build instead of shipping a server whose image optimizer 500s
-// on every product photo (the v2.17.1 field failure). Vercel builds never
-// set BUILD_STANDALONE and always keep optimization (Vercel has its own
-// image pipeline).
+// v2.18.0.2 (correction): standalone output policy.
+//
+// The policy lives in src/lib/build-mode.ts (pure, unit-tested) so the
+// launcher, the verifiers and the test suite cannot drift from this config:
+//
+//   BUILD_STANDALONE unset              -> normal output (Windows laptops,
+//                                          Vercel, plain builds)
+//   BUILD_STANDALONE=1 on Windows       -> normal output + WARNING (never
+//                                          builds standalone; Windows has no
+//                                          standalone deployment target)
+//   BUILD_STANDALONE=1 on Linux/Docker  -> standalone output (unchanged)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// v2.18.0.1 (correction), extended in v2.18.0.2: next/image optimization needs
+// sharp's NATIVE binary for the exact platform. Laptop installs build and run
+// on the same Windows machine, so we can know at BUILD time whether that
+// binary is usable (require("sharp") dlopens it). If it is not, bake
+// `unoptimized` into the build instead of shipping a server whose image
+// optimizer 500s on every product photo (the v2.17.1 field failure). This
+// now applies to EVERY Windows build (standalone was already covered; since
+// v2.18.0.2 Windows uses normal builds, the probe follows the platform).
+// Vercel and Docker build on Linux with a working sharp and keep optimization.
 // ---------------------------------------------------------------------------
 function sharpUsableForBuild(): boolean {
   try {
@@ -57,18 +73,21 @@ function sharpUsableForBuild(): boolean {
   }
 }
 
-const imageOptimizationDisabledForStandalone =
-  process.env.BUILD_STANDALONE === "1" && !sharpUsableForBuild();
+const standaloneDecision = resolveStandaloneOutput(process.env, process.platform);
+if (standaloneDecision.warning) {
+  console.warn(`[next.config] WARNING: ${standaloneDecision.warning}`);
+}
+
+const imageOptimizationDisabledForLaptopBuild =
+  (process.env.BUILD_STANDALONE === "1" || process.platform === "win32") &&
+  !sharpUsableForBuild();
 
 const nextConfig: NextConfig = {
-  // Standalone output produces a self-contained build in .next/standalone/
-  // that includes only the server code needed to run without node_modules.
-  // It is OPT-IN (BUILD_STANDALONE=1): the Docker image and the no-Docker
-  // installers/updaters set it because their launchers run
-  // .next/standalone/server.js. Plain `next build` (and Vercel, which uses
-  // its own output format) builds without it, which also avoids the Windows
-  // EINVAL copyfile errors the standalone file walk can trigger.
-  output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
+  // Standalone output policy - see resolveStandaloneOutput above. Plain
+  // `next build` (and Vercel, which uses its own output format) builds
+  // without it; Docker and Linux no-Docker installs opt in with
+  // BUILD_STANDALONE=1; Windows never builds standalone.
+  output: standaloneDecision.output,
 
   reactStrictMode: true,
 
@@ -114,11 +133,11 @@ const nextConfig: NextConfig = {
   ],
 
   // Image optimization config - restrict to specific domains instead of wildcard.
-  // v2.18.0.1: unoptimized turns itself on at build time when a standalone
-  // (laptop) build's machine has no usable sharp native binary (see the
-  // helper above); it stays undefined (optimization on) for Vercel/Docker.
+  // v2.18.0.2: unoptimized turns itself on at build time when the building
+  // machine has no usable sharp native binary (Windows laptop builds - see
+  // the helper above); it stays undefined (optimization on) for Vercel/Docker.
   images: {
-    unoptimized: imageOptimizationDisabledForStandalone || undefined,
+    unoptimized: imageOptimizationDisabledForLaptopBuild || undefined,
     remotePatterns: [
       {
         protocol: "https",

@@ -103,8 +103,13 @@ npm run db:push
 echo "[BUILD 3/4] Seeding the database (admin + demo data)..."
 npm run db:seed
 
+# Linux no-docker installs keep standalone output (Docker parity; no NTFS
+# restrictions here). Exported for the REST of the install so the
+# verify-build-output.mjs child runs in the same mode as the build.
+export BUILD_STANDALONE=1
+
 echo "[BUILD 4/4] Building the production app (3-8 min)..."
-BUILD_STANDALONE=1 npm run build
+npm run build
 
 # ── 6b. Verify the database is REALLY usable (tables + seeded admin) ─────
 # A silent failure in db push/seed used to produce an install that
@@ -118,12 +123,14 @@ mkdir -p .next/standalone/.next
 cp -r .next/static .next/standalone/.next/
 cp -r public .next/standalone/
 
-# ── 7b. Verify the standalone build is complete (v2.18.0.1) ──────────
-# Fails the INSTALL (not the first start) when the standalone output is
-# incomplete, instead of shipping a server that cannot boot.
-echo "[BUILD 6/6] Verifying the standalone build (server + all chunks)..."
-if ! node scripts/verify-standalone.mjs; then
-  echo "[FAIL] Standalone build verification failed - see above."
+# ── 7b. Verify the build output is complete (v2.18.0.2) ──────────────
+# Fails the INSTALL (not the first start) when the output is incomplete:
+# verify-build-output.mjs delegates to the chunk-level standalone verifier
+# AND scans the build for real errors, instead of shipping a server that
+# cannot boot.
+echo "[BUILD 6/6] Verifying the build output (standalone server, chunks)..."
+if ! node scripts/verify-build-output.mjs; then
+  echo "[FAIL] Build output verification failed - see above."
   exit 1
 fi
 

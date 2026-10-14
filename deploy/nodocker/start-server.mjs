@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 // ============================================================================
-// MBUMAH HARDWARE POS - standalone server launcher (no-Docker installs)
-// Loads <repo>/.env into the environment, then runs the Next.js standalone
-// server (.next/standalone/server.js). The standalone server does not read
-// .env by itself, which is why this launcher exists.
+// MBUMAH HARDWARE POS - server launcher (no-Docker installs)
+// Loads <repo>/.env into the environment, then starts the production server
+// for the build mode this release was built with (v2.18.0.2):
+//
+//   1. STANDALONE (Docker images and Linux no-Docker installs, built with
+//      BUILD_STANDALONE=1): runs .next/standalone/server.js directly. The
+//      standalone server does not read .env by itself, which is why this
+//      launcher exists.
+//   2. NORMAL (Windows laptops, v2.18.0.2 policy: Windows never builds
+//      standalone): runs `next start` from node_modules against the plain
+//      .next output. node_modules is present on every laptop install, so
+//      no standalone bundle is needed - and the Windows EINVAL trace-copy
+//      failure class cannot occur at all.
 //
 // PRECEDENCE (IMPORTANT - this caused the "backend unavailable / empty DB"
 // class of failures): values from <repo>/.env OVERRIDE any DATABASE_URL etc.
@@ -43,15 +52,38 @@ process.env.NODE_ENV = 'production';
 process.env.PORT = process.env.PORT || process.env.APP_PORT || '3000';
 process.env.HOSTNAME = '0.0.0.0';
 
-const server = join(root, '.next', 'standalone', 'server.js');
-if (!existsSync(server)) {
-  console.error('✗ Build output missing (.next/standalone/server.js). Run the installer first.');
+const port = process.env.PORT;
+
+// ---------------------------------------------------------------------------
+// Build-mode detection (must match next.config.ts resolveStandaloneOutput).
+// ---------------------------------------------------------------------------
+const standaloneServer = join(root, '.next', 'standalone', 'server.js');
+const nextCli = join(root, 'node_modules', 'next', 'dist', 'bin', 'next');
+
+let startArgs = null;
+let startLabel = '';
+if (existsSync(standaloneServer)) {
+  startArgs = [standaloneServer];
+  startLabel = 'standalone server (.next/standalone/server.js)';
+} else if (existsSync(join(root, '.next', 'BUILD_ID'))) {
+  if (!existsSync(nextCli)) {
+    console.error('✗ Build output present but the Next.js CLI is missing (node_modules incomplete).');
+    console.error('  Run the installer or updater once with internet to reinstall dependencies.');
+    process.exit(1);
+  }
+  startArgs = [nextCli, 'start', '-p', String(port), '-H', '0.0.0.0'];
+  startLabel = 'Next.js production server (next start)';
+} else {
+  console.error('✗ Build output missing (.next/standalone/server.js and .next/BUILD_ID).');
+  console.error('  Run the installer first, or run Update-Mbumah-POS.bat once with internet.');
   process.exit(1);
 }
 
 console.log('──────────────────────────────────────────────────');
 console.log('  MBUMAH HARDWARE POS');
-console.log(`  →  http://localhost:${process.env.PORT}   (keep this window open)`);
+console.log(`  →  http://localhost:${port}   (keep this window open)`);
+// console.info is in the lint-allowed set (warn, error, info).
+console.info(`  Server mode: ${startLabel}`);
 // Show WHICH database file this server will use - makes the "wrong/empty
 // database" class of failures visible at a glance in the support photo.
 if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('file:')) {
@@ -96,5 +128,11 @@ if (skipHeal) {
   }
 }
 
-const child = spawn(process.execPath, [server], { stdio: 'inherit', env: process.env });
+// ---------------------------------------------------------------------------
+// v2.18.0.2: in `next start` mode the CLI process is a CHILD of this
+// launcher. The updater stops this launcher with a process-tree kill
+// (taskkill /T on Windows), which removes the child too - do not detach,
+// or stopped-but-still-listening orphans would hold port 3000.
+// ---------------------------------------------------------------------------
+const child = spawn(process.execPath, startArgs, { stdio: 'inherit', env: process.env });
 child.on('exit', (code) => process.exit(code ?? 0));

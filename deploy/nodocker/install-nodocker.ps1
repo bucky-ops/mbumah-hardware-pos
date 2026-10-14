@@ -145,8 +145,11 @@ if ($envLine -match '^DATABASE_URL=(.+)$') { $env:DATABASE_URL = $Matches[1].Tri
 $dLine = (Get-Content ".env" | Where-Object { $_ -match '^DIRECT_URL=(.+)$' } | Select-Object -First 1)
 if ($dLine -match '^DIRECT_URL=(.+)$') { $env:DIRECT_URL = $Matches[1].Trim('"') }
 $env:SKIP_ENV_VALIDATION = '1'
-# The launcher runs .next/standalone/server.js - opt into the standalone output.
-$env:BUILD_STANDALONE = '1'
+# v2.18.0.2: Windows NO LONGER builds standalone output. The launcher
+# (start-server.mjs) starts the plain build with `next start`; standalone
+# output is only produced for Docker and Linux deployments
+# (next.config.ts resolveStandaloneOutput). This removes the entire Windows
+# trace-copy/EINVAL failure class from the install path.
 
 # -- 6. Install -> schema -> seed -> build (each step FAILS HARD on error) -------
 # NOTE: `npm install` (not `npm ci`) - the repo is developed with bun, so the
@@ -179,16 +182,17 @@ Run-Step "[BUILD 4/4] Building the production app (3-8 min)..." "npm run build"
 # This step makes that state an INSTALL FAILURE instead of a support call.
 Run-Step "[BUILD 5/5] Verifying the database (tables + admin account)..." "node deploy\nodocker\verify-db.mjs"
 
-# -- 7. Assemble the standalone server ------------------------------------
-New-Item -ItemType Directory -Force -Path ".next\standalone\.next" | Out-Null
-Copy-Item ".next\static" ".next\standalone\.next\" -Recurse -Force
-Copy-Item "public" ".next\standalone\" -Recurse -Force
-
-# -- 7b. Verify the standalone build is complete (v2.18.0.1) ---------------
-# Fails the INSTALL (not the first start) when the standalone output is
-# incomplete - e.g. the Windows EINVAL colon-chunk class of trace-copy
-# failures - instead of shipping a server that cannot boot.
-Run-Step "[BUILD 6/6] Verifying the standalone build (server + all chunks)..." "node scripts\verify-standalone.mjs"
+# -- 6c. Verify the build output is complete (v2.18.0.2) ---------------------
+# On Windows this is a NORMAL build (no standalone output since v2.18.0.2);
+# the verifier proves BUILD_ID + server output exist and would flag any
+# accidentally-enabled standalone output (the Windows EINVAL trace-copy
+# class) as a hard failure instead of shipping a server that cannot boot.
+if (Test-Path ".next\standalone") {
+  # A stale standalone output from a pre-2.18.0.2 release would be started
+  # INSTEAD of this new build (the launcher prefers standalone when present).
+  try { Remove-Item ".next\standalone" -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+}
+Run-Step "[BUILD 6/6] Verifying the build output..." "node scripts\verify-build-output.mjs"
 
 # -- 8. Scheduled tasks: nightly update (23:00) + nightly backup (02:30) ---
 # The updater only acts inside the dormant window (22:00-06:00) and skips
