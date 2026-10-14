@@ -1,8 +1,23 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// ─────────────────────────────────────────────────────────────────────────────
+// Mbumah Hardware POS & ERP — unified schema (v2.18.2)
+//
+// Reconstructed in three strata:
+//   1. POS CORE (legacy, byte-compatible with the shipped v1/v2 schema —
+//      recovered from the stress-test DB so every existing route compiles):
+//      Branch, User, Product, Customer, CreditAccount, DebtPlan,
+//      DebtInstallment, CreditLedger, Guarantor, SmsLog, Transaction,
+//      TransactionItem, Payment, MpesaTransaction, StockAdjustment,
+//      CashDrawerSession, DrawerMovement, AuditLog, Stocktake, StocktakeItem.
+//   2. CREDIT ENGINE (Customer Credit Engine demo — /api/seed, /api/invoices):
+//      Invoice, InvoiceItem, CreditLedgerEntry, CreditLimitChange,
+//      PaymentReminder.
+//   3. ORG CONSOLE EXPERT MODULES (v2.18.2): Supplier, PurchaseOrder,
+//      PurchaseOrderItem, Expense, Rental, GiftCard, Receipt, StockMovement,
+//      Category, Bundle, BundleItem, JournalEntry, JournalLine, Shift,
+//      Notification, ChatMessage, SystemLog, SystemConfig.
+//
+// SQLite provider. Decimal for money (Prisma stores DECIMAL exactly).
+// ─────────────────────────────────────────────────────────────────────────────
 
 generator client {
   provider = "prisma-client-js"
@@ -13,20 +28,769 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ── 1. POS CORE ──────────────────────────────────────────────────────────────
+
+model Branch {
+  id          String  @id @default(cuid())
+  code        String  @unique // juja-main | thika | ruiru | nairobi-cbd | nakuru (legacy: HQ | WS)
+  name        String
+  location    String?
+  kraPin      String?
+  // v2.18.2 workspace extensions
+  slug        String? @unique
+  subdomain   String? @unique
+  town        String?
+  brandColor  String?
+  sizeSqm     Int?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  users              User[]
+  products           Product[]
+  customers          Customer[]
+  transactions       Transaction[]
+  creditAccounts     CreditAccount[]
+  debtPlans          DebtPlan[]
+  stockAdjustments   StockAdjustment[]
+  drawerSessions     CashDrawerSession[]
+  stocktakes         Stocktake[]
+  invoices           Invoice[]
+  creditLedgerEntries CreditLedgerEntry[]
+  paymentReminders   PaymentReminder[]
+  rentals            Rental[]
+  giftCards          GiftCard[]
+  receipts           Receipt[]
+  stockMovements     StockMovement[]
+  purchaseOrders     PurchaseOrder[]
+  expenses           Expense[]
+  journalEntries     JournalEntry[]
+  shifts             Shift[]
+  notifications      Notification[]
+  payments           Payment[]
+  mpesaTransactions  MpesaTransaction[]
 }
 
-model Post {
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         String   @default("CASHIER") // SUPER_ADMIN | STORE_OWNER | BRANCH_MANAGER | MANAGER | ACCOUNTANT | INVENTORY_MANAGER | CASHIER
+  passwordHash String? // nullable — Credit-Engine demo users are provisioned passwordless
+  branchId     String
+  isActive     Boolean  @default(true)
+  // v2.18.2 engraved-admin + profile extensions
+  isEngraved   Boolean  @default(false)
+  isSystem     Boolean  @default(false)
+  phone        String?
+  avatarUrl    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  transactions             Transaction[]
+  stockAdjustments         StockAdjustment[]
+  drawerSessions           CashDrawerSession[]
+  stocktakesCreated        Stocktake[]         @relation("StocktakeCreatedBy")
+  stocktakesClosed         Stocktake[]         @relation("StocktakeClosedBy")
+  stocktakeItemsCounted    StocktakeItem[]     @relation("StocktakeItemCountedBy")
+  creditLedgerEntries      CreditLedger[]      @relation("CreditLedgerPerformedBy")
+  auditLogs                AuditLog[]
+  chatMessages             ChatMessage[]
+  shifts                   Shift[]
+  stockMovements           StockMovement[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  sku          String   @unique
+  barcode      String?
+  name         String
+  category     String
+  unit         String   @default("PCS")
+  buyingPrice  Decimal  @default(0)
+  sellingPrice Decimal 
+  stockQty     Decimal  @default(0)
+  reorderLevel Decimal  @default(5)
+  hsCode       String?
+  taxCategory  String   @default("B") // A = exempt/zero-rated flags, B = standard 16%
+  isTaxExempt  Boolean  @default(false)
+  branchId     String
+  description  String?
+  isActive     Boolean  @default(true)
+  deletedAt    DateTime? // soft delete
+  createdAt    DateTime @default(now())
+
+  branch            Branch             @relation(fields: [branchId], references: [id])
+  transactionItems  TransactionItem[]
+  stockAdjustments  StockAdjustment[]
+  stocktakeItems    StocktakeItem[]
+  stockMovements    StockMovement[]
+  purchaseOrderItems PurchaseOrderItem[]
+  bundleItems       BundleItem[]
+  rentals           Rental[]
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  name           String
+  // legacy encrypted PII (AES-256-GCM) — v1 credit core
+  phoneEnc       String?
+  emailEnc       String?
+  nationalIdEnc  String?
+  kraPinEnc      String?
+  kraPinHash     String?
+  // plaintext profile — Credit Engine (v2) + console
+  type           String   @default("INDIVIDUAL") // INDIVIDUAL | COMPANY
+  phone          String?
+  email          String?
+  nationalId     String?
+  kraPin         String?
+  address        String?
+  creditLimit    Decimal  @default(0)
+  currentBalance Decimal  @default(0)
+  outstanding    Decimal  @default(0)
+  creditStatus   String   @default("ACTIVE") // ACTIVE | SUSPENDED | DEFAULTED
+  riskScore      Int      @default(50)
+  lifetimeSpend  Decimal  @default(0)
+  onTimePayments Int      @default(0)
+  branchId       String
+  approvedById   String?
+  approvedByName String?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  branch             Branch              @relation(fields: [branchId], references: [id])
+  transactions       Transaction[]
+  creditAccount      CreditAccount?
+  invoices           Invoice[]
+  payments           Payment[]
+  creditLedgerEntries CreditLedgerEntry[]
+  creditLimitChanges CreditLimitChange[]
+  paymentReminders   PaymentReminder[]
+  rentals            Rental[]
+  smsLogs            SmsLog[]
+}
+
+model CreditAccount {
+  id          String  @id @default(cuid())
+  customerId  String  @unique
+  branchId    String
+  creditLimit Decimal @default(0)
+  totalDebt   Decimal @default(0)
+  status      String  @default("ACTIVE")
+  createdAt   DateTime @default(now())
+
+  customer       Customer       @relation(fields: [customerId], references: [id])
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  debtPlans      DebtPlan[]
+  ledgerEntries  CreditLedger[]
+  guarantors     Guarantor[]
+}
+
+model DebtPlan {
+  id                   String  @id @default(cuid())
+  creditAccountId      String
+  saleId               String?
+  branchId             String
+  totalAmount          Decimal
+  downPayment          Decimal @default(0)
+  balanceRemaining     Decimal
+  installmentFrequency String  @default("MONTHLY")
+  interestRate         Decimal @default(0)
+  lateFeeRate          Decimal @default(0)
+  lateFeeFlat          Decimal @default(0)
+  gracePeriodDays      Int     @default(3)
+  status               String  @default("ACTIVE") // PENDING_APPROVAL | ACTIVE | COMPLETED | DEFAULTED
+  startDate            DateTime
+  dueDate              DateTime
+  notes                String?
+  createdAt            DateTime @default(now())
+
+  creditAccount CreditAccount     @relation(fields: [creditAccountId], references: [id])
+  branch        Branch            @relation(fields: [branchId], references: [id])
+  installments  DebtInstallment[]
+  mpesaTxns     MpesaTransaction[]
+}
+
+model DebtInstallment {
+  id             String    @id @default(cuid())
+  debtPlanId     String
+  seq            Int
+  dueDate        DateTime
+  amountDue      Decimal  
+  amountPaid     Decimal   @default(0)
+  status         String    @default("PENDING") // PENDING | PAID | PARTIAL | OVERDUE
+  penaltyApplied Decimal   @default(0)
+  penalizedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  debtPlan DebtPlan @relation(fields: [debtPlanId], references: [id], onDelete: Cascade)
+}
+
+model CreditLedger {
+  id              String  @id @default(cuid())
+  creditAccountId String
+  transactionType String // CHARGE | PAYMENT | PENALTY | ADJUSTMENT
+  amount          Decimal
+  previousBalance Decimal
+  newBalance      Decimal
+  referenceId     String?
+  note            String?
+  performedBy     String?
+  createdAt       DateTime @default(now())
+
+  creditAccount CreditAccount @relation(fields: [creditAccountId], references: [id])
+  performer     User?         @relation("CreditLedgerPerformedBy", fields: [performedBy], references: [id])
+}
+
+model Guarantor {
+  id               String  @id @default(cuid())
+  creditAccountId  String
+  name             String
+  phoneEnc         String?
+  nationalIdEnc    String?
+  guaranteedAmount Decimal
+  createdAt        DateTime @default(now())
+
+  creditAccount CreditAccount @relation(fields: [creditAccountId], references: [id], onDelete: Cascade)
+}
+
+model SmsLog {
+  id         String   @id @default(cuid())
+  customerId String?
+  planId     String?
+  phone      String
+  message    String
+  provider   String   @default("africastalking")
+  status     String   @default("QUEUED")
+  createdAt  DateTime @default(now())
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+}
+
+model Transaction {
+  id             String   @id @default(cuid())
+  ref            String
+  type           String   @default("SALE") // SALE | QUOTATION | RENTAL | CREDIT_SALE
+  status         String   @default("COMPLETED") // COMPLETED | PENDING | CREDIT | VOID
+  branchId       String
+  userId         String
+  customerId     String?
+  subtotal       Decimal 
+  discountAmount Decimal  @default(0)
+  vatAmount      Decimal  @default(0)
+  totalAmount    Decimal 
+  amountPaid     Decimal  @default(0)
+  balanceDue     Decimal  @default(0)
+  vatInclusive   Boolean  @default(false)
+  notes          String?
+  validUntil     DateTime?
+  convertedFromId String?
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+
+  branch      Branch          @relation(fields: [branchId], references: [id])
+  user        User            @relation(fields: [userId], references: [id])
+  customer    Customer?       @relation(fields: [customerId], references: [id])
+  convertedFrom Transaction?  @relation("TxnConversion", fields: [convertedFromId], references: [id])
+  conversions Transaction[]   @relation("TxnConversion")
+  items       TransactionItem[]
+  payments    Payment[]
+  receipts    Receipt[]
+  mpesaTxns   MpesaTransaction[]
+}
+
+model TransactionItem {
+  id           String  @id @default(cuid())
+  transactionId String
+  productId    String?
+  description  String
+  uom          String  @default("PCS")
+  qty          Decimal
+  unitPrice    Decimal
+  discountPct  Decimal @default(0)
+  lineDiscount Decimal @default(0)
+  lineNet      Decimal
+  vatAmount    Decimal @default(0)
+  lineTotal    Decimal
+  taxCategory  String  @default("B")
+  unitCost     Decimal @default(0)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product     Product?    @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  transactionId String?
+  branchId      String
+  method        String // CASH | MPESA | BANK_TRANSFER | BANK | CHEQUE | CARD | STORE_CREDIT | GIFT_CARD
+  amount        Decimal 
+  reference     String?
+  status        String   @default("COMPLETED")
+  receivedAt    DateTime @default(now())
+  // Credit Engine extensions (invoice repayments)
+  invoiceId       String?
+  customerId      String?
+  receivedById    String?
+  receivedByName  String?
+
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+  branch      Branch       @relation(fields: [branchId], references: [id])
+  invoice     Invoice?     @relation(fields: [invoiceId], references: [id])
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+}
+
+model MpesaTransaction {
+  id                String   @id @default(cuid())
+  checkoutRequestId String   @unique
+  merchantRequestId String?
+  phone             String
+  amount            Decimal 
+  purpose           String   @default("SALE") // SALE | DEBT_REPAY | RENTAL_DEPOSIT
+  planId            String?
+  branchId          String?
+  status            String   @default("INITIATED") // INITIATED | PENDING | SUCCESS | FAILED | TIMEOUT
+  resultCode        Int?
+  resultDesc        String?
+  mpesaReceipt      String?
+  verified          Boolean  @default(false)
+  transactionId     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+  plan        DebtPlan?    @relation(fields: [planId], references: [id])
+  branch      Branch?      @relation(fields: [branchId], references: [id])
+}
+
+model StockAdjustment {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+  productId String
+  branchId  String
+  type      String // RESTOCK | WRITE_OFF | REORDER | ADJUST
+  quantity  Decimal 
+  unitCost  Decimal?
+  reason    String?
+  reference String?
+  userId    String
   createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  branch  Branch  @relation(fields: [branchId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+}
+
+model CashDrawerSession {
+  id            String    @id @default(cuid())
+  branchId      String
+  userId        String
+  openingFloat  Decimal  
+  status        String    @default("OPEN") // OPEN | CLOSED
+  countedAmount Decimal? 
+  variance      Decimal? 
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+
+  branch    Branch           @relation(fields: [branchId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+  movements DrawerMovement[]
+}
+
+model DrawerMovement {
+  id        String   @id @default(cuid())
+  sessionId String
+  type      String // FLOAT_IN | PAYOUT | DROP | PICKUP
+  amount    Decimal 
+  note      String?
+  createdAt DateTime @default(now())
+
+  session CashDrawerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  meta      String?
+  ip        String?
+  userName  String?
+  role      String?
+  storeId   String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model Stocktake {
+  id          String    @id @default(cuid())
+  branchId    String
+  ref         String
+  status      String    @default("OPEN") // OPEN | COUNTING | CLOSED
+  note        String?
+  category    String?
+  createdById String
+  closedById  String?
+  closedAt    DateTime?
+  countedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  branch    Branch          @relation(fields: [branchId], references: [id])
+  createdBy User            @relation("StocktakeCreatedBy", fields: [createdById], references: [id])
+  closedBy  User?           @relation("StocktakeClosedBy", fields: [closedById], references: [id])
+  items     StocktakeItem[]
+}
+
+model StocktakeItem {
+  id          String    @id @default(cuid())
+  stocktakeId String
+  productId   String
+  systemQty   Decimal  
+  countedQty  Decimal? 
+  varianceQty Decimal? 
+  unitCost    Decimal? 
+  countedById String?
+  countedAt   DateTime?
+  note        String?
+  applied     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  stocktake Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id])
+  countedBy User?     @relation("StocktakeItemCountedBy", fields: [countedById], references: [id])
+}
+
+// ── 2. CREDIT ENGINE ─────────────────────────────────────────────────────────
+
+model Invoice {
+  id          String   @id @default(cuid())
+  branchId    String
+  customerId  String
+  number      String   @unique
+  subtotal    Decimal 
+  vatAmount   Decimal  @default(0)
+  total       Decimal 
+  amountPaid  Decimal  @default(0)
+  status      String   @default("UNPAID") // UNPAID | PARTIAL | PAID
+  termsDays   Int      @default(30)
+  issuedAt    DateTime
+  dueDate     DateTime
+  etimsStatus String   @default("PENDING") // PENDING | COMPLIANT | FLAGGED
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  branch   Branch        @relation(fields: [branchId], references: [id])
+  customer Customer      @relation(fields: [customerId], references: [id])
+  items    InvoiceItem[]
+  payments Payment[]
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  sku         String?
+  qty         Decimal
+  unitPrice   Decimal
+  lineTotal   Decimal
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model CreditLedgerEntry {
+  id           String   @id @default(cuid())
+  branchId     String
+  customerId   String
+  type         String // CHARGE | PAYMENT | PENALTY | ADJUSTMENT
+  amount       Decimal 
+  balanceAfter Decimal 
+  refType      String? // INVOICE | PAYMENT | MANUAL
+  refId        String?
+  note         String?
+  createdById  String
+  createdByName String?
+  createdAt    DateTime @default(now())
+
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+}
+
+model CreditLimitChange {
+  id              String   @id @default(cuid())
+  customerId      String
+  oldLimit        Decimal 
+  newLimit        Decimal 
+  reason          String
+  requestedById   String?
+  requestedByName String?
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+}
+
+model PaymentReminder {
+  id          String    @id @default(cuid())
+  branchId    String
+  customerId  String
+  channel     String    @default("SMS") // SMS | WHATSAPP | EMAIL
+  message     String
+  status      String    @default("QUEUED") // QUEUED | SENT | SIMULATED | FAILED
+  providerRef String?
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+}
+
+// ── 3. ORG CONSOLE EXPERT MODULES (v2.18.2) ──────────────────────────────────
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  icon        String?
+  sortOrder   Int     @default(0)
+}
+
+model Bundle {
+  id          String  @id @default(cuid())
+  name        String
+  sku         String? @unique
+  description String?
+  price       Decimal
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+
+  items BundleItem[]
+}
+
+model BundleItem {
+  id        String  @id @default(cuid())
+  bundleId  String
+  productId String
+  qty       Decimal @default(1)
+
+  bundle  Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Supplier {
+  id               String  @id @default(cuid())
+  name             String  @unique
+  contactName      String?
+  phone            String?
+  email            String?
+  category         String?
+  leadTimeDays     Int     @default(7)
+  onTimeRate       Int     @default(90) // %
+  fulfillmentScore Int     @default(85) // 0-100
+  isActive         Boolean @default(true)
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id         String    @id @default(cuid())
+  branchId   String
+  supplierId String
+  number     String    @unique
+  status     String    @default("DRAFT") // DRAFT | SENT | PARTIAL | RECEIVED | CANCELLED
+  total      Decimal   @default(0)
+  expectedAt DateTime?
+  receivedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  branch   Branch              @relation(fields: [branchId], references: [id])
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id          String  @id @default(cuid())
+  poId        String
+  productId   String?
+  description String
+  qty         Decimal
+  unitCost    Decimal
+  receivedQty Decimal @default(0)
+
+  po      PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  product Product?      @relation(fields: [productId], references: [id])
+}
+
+model Expense {
+  id              String    @id @default(cuid())
+  branchId        String
+  category        String // RENT | SALARIES | UTILITIES | TRANSPORT | MAINTENANCE | OTHER
+  description     String
+  amount          Decimal  
+  method          String    @default("CASH")
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  requestedByName String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  branch Branch @relation(fields: [branchId], references: [id])
+}
+
+model Rental {
+  id              String    @id @default(cuid())
+  branchId        String
+  customerId      String?
+  productId       String?
+  itemDescription String
+  qty             Int       @default(1)
+  dailyRate       Decimal  
+  deposit         Decimal   @default(0)
+  damageFee       Decimal   @default(0)
+  status          String    @default("ACTIVE") // ACTIVE | OVERDUE | RETURNED
+  rentOutAt       DateTime  @default(now())
+  expectedReturnAt DateTime
+  returnedAt      DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  branch   Branch    @relation(fields: [branchId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+  product  Product?  @relation(fields: [productId], references: [id])
+}
+
+model GiftCard {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  branchId      String
+  initialAmount Decimal  
+  balance       Decimal  
+  status        String    @default("ACTIVE") // ACTIVE | REDEEMED | EXPIRED | BLOCKED
+  issuedByName  String?
+  issuedAt      DateTime  @default(now())
+  redeemedAt    DateTime?
+  expiresAt     DateTime?
+
+  branch Branch @relation(fields: [branchId], references: [id])
+}
+
+model Receipt {
+  id           String   @id @default(cuid())
+  branchId     String
+  number       String   @unique
+  transactionId String?
+  customerName String?
+  total        Decimal 
+  smsStatus    String?  // SENT | SIMULATED | FAILED | null
+  pdfGenerated Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  branch      Branch       @relation(fields: [branchId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+}
+
+model StockMovement {
+  id           String   @id @default(cuid())
+  branchId     String
+  productId    String
+  type         String // IN | OUT | ADJUST | SALE | PURCHASE | RETURN | WRITE_OFF
+  qty          Decimal 
+  balanceAfter Decimal?
+  reason       String?
+  userId       String?
+  userName     String?
+  referenceId  String?
+  createdAt    DateTime @default(now())
+
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+  user     User?    @relation(fields: [userId], references: [id])
+}
+
+model JournalEntry {
+  id       String   @id @default(cuid())
+  branchId String?
+  date     DateTime
+  memo     String
+  refType  String?
+  refId    String?
+  createdAt DateTime @default(now())
+
+  branch Branch?        @relation(fields: [branchId], references: [id])
+  lines  JournalLine[]
+}
+
+model JournalLine {
+  id       String  @id @default(cuid())
+  entryId  String
+  account  String // 1000 Cash | 1100 M-Pesa | 1200 Inventory | 1300 AR | 2000 AP | 2100 VAT | 4000 Sales | 5000 COGS | 6xxx Expenses
+  debit    Decimal @default(0)
+  credit   Decimal @default(0)
+
+  entry JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+}
+
+model Shift {
+  id           String    @id @default(cuid())
+  branchId     String
+  userId       String
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  startingCash Decimal   @default(0)
+  endingCash   Decimal? 
+  expectedCash Decimal? 
+  status       String    @default("OPEN") // OPEN | CLOSED
+
+  branch Branch @relation(fields: [branchId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  branchId  String?
+  type      String // STOCK_LOW | RENTAL_OVERDUE | DEBT_LARGE | MPESA_MISMATCH | ETIMS_PENDING | SUPPLIER_DELAY | SYSTEM
+  title     String
+  body      String
+  severity  String   @default("info") // critical | warning | info
+  dedupeKey String?  @unique
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  branch Branch? @relation(fields: [branchId], references: [id])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  branchId  String? // null = org-wide
+  userId    String?
+  userName  String
+  userRole  String?
+  content   String
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String   @default("INFO") // INFO | WARN | ERROR
+  component String
+  message   String
+  metadata  String?
+  createdAt DateTime @default(now())
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
   updatedAt DateTime @updatedAt
 }

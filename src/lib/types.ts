@@ -2,9 +2,19 @@
 // Decimal values arrive over the wire as strings (Prisma Decimal JSON
 // serialization) — always route them through src/lib/format.ts helpers.
 
-export type Role = "OWNER" | "MANAGER" | "CASHIER";
+export type Role =
+  | "SUPER_ADMIN"
+  | "STORE_OWNER"
+  | "OWNER"
+  | "BRANCH_MANAGER"
+  | "MANAGER"
+  | "ACCOUNTANT"
+  | "INVENTORY_MANAGER"
+  | "CASHIER";
 
-export const ROLES: Role[] = ["OWNER", "MANAGER", "CASHIER"];
+export const ROLES: Role[] = [
+  "SUPER_ADMIN", "STORE_OWNER", "OWNER", "BRANCH_MANAGER", "MANAGER", "ACCOUNTANT", "INVENTORY_MANAGER", "CASHIER",
+];
 
 /** Route-prefix RBAC policy enforced in src/proxy.ts (Next 16 edge proxy —
  *  defense layer 1) and re-verified per-route (defense layer 2).
@@ -38,7 +48,16 @@ export const ROLE_ROUTE_POLICY: Array<{
   { prefix: "/api/v1/credit/customers", minRole: "MANAGER" }, // statements
 ];
 
-const RANK: Record<Role, number> = { CASHIER: 0, MANAGER: 1, OWNER: 2 };
+const RANK: Record<Role, number> = {
+  CASHIER: 0,
+  ACCOUNTANT: 1,
+  INVENTORY_MANAGER: 1,
+  MANAGER: 2,
+  BRANCH_MANAGER: 2,
+  OWNER: 3,
+  STORE_OWNER: 3,
+  SUPER_ADMIN: 4,
+};
 export function roleAtLeast(role: Role, min: Role): boolean {
   return RANK[role] >= RANK[min];
 }

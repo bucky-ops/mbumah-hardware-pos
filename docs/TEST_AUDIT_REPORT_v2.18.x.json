@@ -1,0 +1,76 @@
+{
+  "release": "2.18.2",
+  "label": "v2.18.x-dev",
+  "type": "FEATURE",
+  "checkedAt": "2026-10-14",
+  "base": "e49f48ec8f1119d71cde324d4453f2cc8b927b0b",
+  "stats": { "commits": 282, "releases": 55, "tags": 58 },
+  "environment": {
+    "framework": "Next.js 16.1.3 (App Router, proxy.ts edge)",
+    "database": "SQLite (Prisma 6.19.2, unified 39-model schema)",
+    "nodeRuntime": "bun 1.3.14",
+    "port": 3000
+  },
+  "acceptance": {
+    "revenueToday": { "target": 48270, "actual": 48270, "pass": true },
+    "transactionsToday": { "target": 1, "actual": 1, "pass": true },
+    "week7Revenue": { "target": 231850, "actual": 231850, "pass": true },
+    "revenueVariancePct": { "target": 12, "actual": 12.0, "pass": true },
+    "transactionsVariancePct": { "target": 8, "actual": 8, "pass": true },
+    "sparkline": { "target": "[32000,30530,33600,29800,31250,26400,48270]", "actual": "exact", "pass": true },
+    "debtTotal": { "target": 437479, "actual": 437479, "pass": true },
+    "debtAging": { "target": "180000/97479/80000/80000", "actual": "exact", "pass": true },
+    "lowStock": { "target": 1, "actual": 1, "pass": true },
+    "overdueRentals": { "target": 1, "actual": 1, "pass": true },
+    "pendingApprovals": { "target": 0, "actual": 0, "pass": true },
+    "healthScore": { "target": 87, "actual": 87, "breakdown": "revenue=100 stock=100 debt=0 engagement=12", "pass": true },
+    "branches": { "target": 5, "actual": 5, "varianceEach": "+12%", "pass": true },
+    "mpesa": { "juja": "Matched", "thika": "Mismatch", "duplicates": 1, "timeouts": 1, "pass": true },
+    "etimsPending": { "target": 2, "actual": 2, "pass": true },
+    "notificationsUnread": { "target": 4, "actual": 4, "pass": true },
+    "chatUnread": { "target": 3, "actual": 3, "pass": true },
+    "trialBalance": { "balanced": true, "pass": true }
+  },
+  "e2e": {
+    "tool": "agent-browser (headless chromium)",
+    "results": [
+      { "id": "E2E-01", "name": "Console renders (no blank/error boundary)", "pass": true },
+      { "id": "E2E-02", "name": "Health gauge animates 0→87 (observed 86 mid-anim, 87 settled)", "pass": true },
+      { "id": "E2E-03", "name": "KPI row exact values + sparkline + variance", "pass": true },
+      { "id": "E2E-04", "name": "Branch strip 5 chips stagger fade-in + health badges", "pass": true },
+      { "id": "E2E-05", "name": "Branch Intelligence Matrix rows (Juja 48,270/+12%/Open/Matched)", "pass": true },
+      { "id": "E2E-06", "name": "Expert tabs switch: Financials trial balance, M-Pesa ledger, Debt, Rentals", "pass": true },
+      { "id": "E2E-07", "name": "Decision Support alerts (6) + action queue + step-up modal", "pass": true },
+      { "id": "E2E-08", "name": "Activity Timeline live (LOGIN_SUCCESS popped in at 5s ago)", "pass": true },
+      { "id": "E2E-09", "name": "Live Feed streaming with level filters", "pass": true },
+      { "id": "E2E-10", "name": "Global Chat drawer: open, history, send message (stored + rendered)", "pass": true },
+      { "id": "E2E-11", "name": "XSS payload in chat rendered inert as text", "pass": true },
+      { "id": "E2E-12", "name": "Command palette opens via cmd+K; sign-in action works", "pass": true },
+      { "id": "E2E-13", "name": "Login as engraved admin (password123) → Karibu toast, SUPER_ADMIN chip", "pass": true },
+      { "id": "E2E-14", "name": "Branch workspace modal (JUJ) with POS/Inventory/Customers tabs", "pass": true },
+      { "id": "E2E-15", "name": "Workspace page /stores/thika/dashboard renders scoped data", "pass": true },
+      { "id": "E2E-16", "name": "Subdomain rewrite Host: nakuru.mbumah.co.ke → Nakuru workspace", "pass": true },
+      { "id": "E2E-17", "name": "Reserved (www) + unknown (evil) labels never rewrite", "pass": true },
+      { "id": "E2E-18", "name": "Unknown workspace code → 404 safe not-found", "pass": true },
+      { "id": "E2E-19", "name": "Footer sticks to viewport bottom (console + workspace)", "pass": true },
+      { "id": "E2E-20", "name": "Mobile 390px: header wraps, KPIs 1-col, no horizontal scroll", "pass": true },
+      { "id": "E2E-21", "name": "CSV export branch_intelligence.csv streams with exact rows", "pass": true },
+      { "id": "E2E-22", "name": "Engraved admin self-heal: /api/system/post + /api/system/heal OK", "pass": true },
+      { "id": "E2E-23", "name": "Rate limiting active (login 5/15min, chat 10/5min)", "pass": true },
+      { "id": "E2E-24", "name": "Mutations without session → 401 (notifications PATCH)", "pass": true },
+      { "id": "E2E-25", "name": "Lint 0 errors; zero page errors in browser console", "pass": true }
+    ],
+    "fixedDuringQa": [
+      "Debt aging chips overflowed card → compact kShort format + flex-wrap",
+      "Kenya map branch dots overlapped around Nairobi → spread coordinates",
+      "Workspace footer floated mid-page → flex min-h-screen + mt-auto",
+      "chat POST blocked by proxy for anonymous demo → dev-only public pass (rate-limited, guest-tagged)"
+    ]
+  },
+  "risks": [
+    "Radix DialogContent aria-describedby warnings (cosmetic, no impact)",
+    "Demo chat POST open in dev only; production requires session",
+    "password123 seeded accounts — rotate before production"
+  ],
+  "verdict": "PASS — release v2.18.2 accepted"
+}

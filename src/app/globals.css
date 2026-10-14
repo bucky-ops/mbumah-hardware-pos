@@ -120,3 +120,35 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Mbumah Organization Console (v2.18.2) — design system ─────────────── */
+.mbumah-console {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-feature-settings: "tnum" 1;
+}
+.mbumah-console ::-webkit-scrollbar { width: 6px; height: 6px; }
+.mbumah-console ::-webkit-scrollbar-track { background: transparent; }
+.mbumah-console ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+.mbumah-console ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+@keyframes pulse-dot {0%,100%{opacity:1; transform:scale(1)}50%{opacity:.5; transform:scale(.85)}}
+@keyframes shake {0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-2px)}40%,80%{transform:translateX(2px)}}
+@keyframes pop-in {0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes drop-pulse {0%{transform:translateY(-8px) scale(.5); opacity:0}60%{opacity:1}100%{transform:translateY(0) scale(1); opacity:1}}
+@keyframes count-glow {0%{text-shadow:0 0 0 rgba(255,140,0,0)}50%{text-shadow:0 0 12px rgba(255,140,0,.35)}100%{text-shadow:0 0 0 rgba(255,140,0,0)}}
+@keyframes slide-fade {from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:translateY(0)}}
+@keyframes live-pulse {0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.55)}70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}}
+.anim-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+.anim-shake { animation: shake 0.5s ease-in-out infinite; }
+.anim-pop-in { animation: pop-in 0.25s ease-out both; }
+.anim-drop { animation: drop-pulse 0.5s ease-out both; }
+.anim-count-glow { animation: count-glow 1s ease-out 1; }
+.anim-slide-fade { animation: slide-fade 0.3s ease-out both; }
+.anim-live { animation: live-pulse 2s ease-out infinite; }
+.new-row-flash { animation: slide-fade 0.3s ease-out both, count-glow 1s ease-out 1; }
+.focus-ring:focus-visible { outline: 2px solid #FF8C00; outline-offset: 2px; border-radius: 8px; }
+@media print {
+  .mbumah-console header, .mbumah-console footer, .no-print { display: none !important; }
+  .print-only { display: block !important; }
+}
+.print-only { display: none; }
