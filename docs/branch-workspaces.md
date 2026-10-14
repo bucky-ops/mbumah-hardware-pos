@@ -33,7 +33,7 @@ The organization console opens each branch in a **new tab** (`target="_blank" re
 - If no safe URL can be built (the store has no slug configured, or the store is inactive), no tab is opened. The button is replaced by a calm inline message: "Branch workspace unavailable" (hover the text for the exact cause).
 - Inactive stores can never be opened from the console; the workspace gateway also blocks them server-side.
 
-A **missing store slug is a configuration error**, not a crash: fix the store's slug (organization settings or the database seed) and the button comes back.
+A **missing store slug is a configuration error**, not a crash: fix the store's slug (organization settings or the database seed) and the button comes back. On a local SQLite database whose stores table predates the workspace columns, `node scripts/repair-branch-workspace-store-schema.mjs` repairs the missing `slug` / `subdomain` / `status` columns additively and idempotently (backup first, raw SQL only, duplicates stop the repair instead of being forced); `node scripts/verify-branch-workspace.mjs` checks the same columns read-only. See [Store context resolution](store-context-resolution.md).
 
 ## Subdomain requirements
 

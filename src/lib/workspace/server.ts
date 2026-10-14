@@ -16,7 +16,7 @@
 import { db } from '@/lib/db';
 import type { AuthSession } from '@/lib/auth';
 import { getRequestId } from '@/lib/request-context';
-import { extractSubdomain, parseHost, resolveWorkspaceHostMode } from './config';
+import { extractSlugFromPathname, extractSubdomain, parseHost, resolveWorkspaceHostMode } from './config';
 
 export interface StoreSummary {
   id: string;
@@ -182,8 +182,13 @@ async function logDeniedWorkspaceAccess(
  * Resolve + authorize the workspace store.
  *
  * @param input.host        request Host header (subdomain detection)
- * @param input.slug        explicit slug from the path (/stores/{slug}/...)
- * @param input.pathname    optional request pathname (denial-log detail only)
+ * @param input.slug        explicit slug from the path (/stores/{slug}/...).
+ *                          When omitted, the slug is derived from
+ *                          input.pathname (/stores/{slug}/...) so path-mode
+ *                          workspaces resolve with the same code path
+ *                          (v2.18.0.3 store-context correction).
+ * @param input.pathname    request pathname; used for slug derivation and
+ *                          denial-log detail
  * @param input.session     authenticated session or null (unauthenticated)
  * @param input.auditDenials set false only for pre-auth probes that must not
  *                          write audit rows (e.g. the login page bootstrap)
@@ -200,11 +205,18 @@ export async function resolveStoreContext(input: {
   const hostMode = resolveWorkspaceHostMode(host);
   const audit = input.auditDenials !== false;
   const extras = { host, pathname: input.pathname ?? null };
+  // v2.18.0.3: a bare /stores/{slug}/... pathname is enough to resolve the
+  // store. An explicit non-empty slug always wins; the pathname is the
+  // fallback. (Subdomain still wins over both further down.)
+  const pathnameSlug = extractSlugFromPathname(input.pathname);
+  const explicitSlug =
+    typeof input.slug === 'string' && input.slug.trim() !== '' ? input.slug.trim() : null;
 
   // 1. A slug that is present but empty/whitespace is a configuration or
   //    link-building bug, not a database question: answer calmly WITHOUT a
-  //    DB call (v2.18.0.0 missing-slug detection).
-  if (typeof input.slug === 'string' && input.slug.trim() === '' && !subdomain) {
+  //    DB call (v2.18.0.0 missing-slug detection). The short-circuit only
+  //    fires when the pathname cannot supply a slug either.
+  if (typeof input.slug === 'string' && input.slug.trim() === '' && !subdomain && !pathnameSlug) {
     return {
       mode: 'not-found',
       allowed: false,
@@ -214,7 +226,7 @@ export async function resolveStoreContext(input: {
       subdomain,
     };
   }
-  const requestedSlug = typeof input.slug === 'string' ? input.slug.trim() : '';
+  const requestedSlug = explicitSlug ?? pathnameSlug ?? '';
 
   // 1b. Nothing to resolve: root-domain request (or subdomains disabled).
   if (!subdomain && !requestedSlug) {

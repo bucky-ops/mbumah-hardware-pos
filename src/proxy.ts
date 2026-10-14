@@ -271,6 +271,12 @@ export async function proxy(request: NextRequest) {
   //    the visible URL. /api, /_next, and the public receipt route /r are
   //    excluded (matcher already excludes _next/static assets).
   // 3. Workspace identity headers (x-store-subdomain / x-store-slug).
+  // 4. v2.18.0.3: the resolved-context aliases required by the branch
+  //    workspace correction spec (x-resolved-store-slug / x-resolved-store-
+  //    subdomain / x-resolved-workspace-mode). Advisory only: API routes and
+  //    server components MUST re-resolve via resolveStoreContext, and the
+  //    store ID itself is never trusted from headers (it is resolved
+  //    server-side from the DB).
   // ------------------------------------------------------------------
   if (!pathname.startsWith('/api/')) {
     if (!isHostAllowed(requestHost)) {
@@ -288,6 +294,9 @@ export async function proxy(request: NextRequest) {
         const headers = new Headers(request.headers);
         headers.set('x-store-subdomain', subdomain);
         headers.set('x-store-slug', subdomain);
+        headers.set('x-resolved-store-subdomain', subdomain);
+        headers.set('x-resolved-store-slug', subdomain);
+        headers.set('x-resolved-workspace-mode', 'subdomain');
         return NextResponse.rewrite(url, { request: { headers } });
       }
     }
@@ -295,6 +304,12 @@ export async function proxy(request: NextRequest) {
     const pageResponse = NextResponse.next();
     for (const [key, value] of Object.entries(withWorkspaceHeaders(subdomain))) {
       pageResponse.headers.set(key, value);
+    }
+    // Path-mode workspaces (/stores/{slug}/...) carry their slug in the URL;
+    // mark the resolved mode so downstream tooling can distinguish the two
+    // workspace transports without re-parsing the pathname.
+    if (mode !== 'subdomain' && /^\/stores\/[A-Za-z0-9-]+(\/|$)/.test(pathname)) {
+      pageResponse.headers.set('x-resolved-workspace-mode', 'path');
     }
     return pageResponse;
   }

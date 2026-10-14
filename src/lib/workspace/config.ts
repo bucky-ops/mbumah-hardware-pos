@@ -317,3 +317,24 @@ export function buildInternalPath(subdomain: string, path: string): string | nul
   if (cleanPath === '/') return `/stores/${subdomain}`;
   return `/stores/${subdomain}${cleanPath}`;
 }
+
+/**
+ * Extract the store slug from a path-mode workspace pathname
+ * (v2.18.0.3 store-context correction).
+ *
+ *   /stores/juja-main/dashboard          -> juja-main
+ *   /stores/thika                        -> thika
+ *   /stores/nairobi-cbd/reports/export   -> nairobi-cbd
+ *   /dashboard, /, null, /stores/        -> null
+ *
+ * Pure and edge-safe: lets resolveStoreContext accept a bare pathname
+ * (spec behavior) instead of requiring the caller to pre-parse ?slug=.
+ * The label must be a plausible slug (letters, digits, hyphens); anything
+ * else (ids, "undefined", "null") is returned as-is for the caller to
+ * treat as an unknown store, NOT silently rewritten.
+ */
+export function extractSlugFromPathname(pathname: string | null | undefined): string | null {
+  if (!pathname) return null;
+  const match = /^\/stores\/([A-Za-z0-9-]+)(?:\/|$)/i.exec(pathname);
+  return match ? match[1].toLowerCase() : null;
+}

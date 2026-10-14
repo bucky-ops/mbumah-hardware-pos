@@ -124,7 +124,7 @@ function sweepWithNode(targets, extensions) {
   return { findings, ok: findings.length === 0 };
 }
 
-function main() {
+async function main() {
   console.log('MBUMAH HARDWARE POS - branch workspace verification');
   console.log('');
 
@@ -160,7 +160,23 @@ function main() {
   console.log('   labels never become branch subdomains (path fallback instead).');
   console.log('');
 
-  console.log('3. Deep logic tests (vitest; not re-run here)');
+  console.log('3. Local database preflight (read-only, SQLite only)');
+  const dbStatus = await preflightDatabase();
+  if (dbStatus.skipped) {
+    console.log(`   SKIP: ${dbStatus.reason}`);
+  } else if (dbStatus.ok) {
+    console.log(`   PASS: stores table ${dbStatus.table} has slug, subdomain and status;`);
+    console.log(`   ${dbStatus.storeCount} store(s), ${dbStatus.activeCount} ACTIVE, 0 duplicate slugs/subdomains.`);
+    if (dbStatus.warnings.length > 0) {
+      for (const w of dbStatus.warnings) console.log(`   WARN: ${w}`);
+    }
+  } else {
+    for (const f of dbStatus.failures) console.log(`   FAIL: ${f}`);
+    console.log('   Run: node scripts/repair-branch-workspace-store-schema.mjs --check');
+  }
+  console.log('');
+
+  console.log('4. Deep logic tests (vitest; not re-run here)');
   console.log('   Full suite:        bun run test');
   console.log('   Targeted run:      bunx vitest run src/tests/lib/branch-workspace.test.ts');
   console.log('   Covers: link builder safety checks (localhost / raw IP / reserved');
@@ -173,7 +189,105 @@ function main() {
     console.log('RESULT: hygiene findings above need attention (exit 1).');
     process.exit(1);
   }
+  if (!dbStatus.skipped && !dbStatus.ok) {
+    console.log('RESULT: local database preflight failed (exit 1); see the repair command above.');
+    process.exit(1);
+  }
   console.log('RESULT: clean (exit 0).');
+}
+
+/**
+ * Read-only preflight of the local SQLite store workspace columns
+ * (v2.18.0.3): missing slug/subdomain/status columns, stores without a
+ * slug, and duplicate slugs/subdomains. Never writes; skips cleanly for
+ * PostgreSQL URLs, missing databases or unavailable node:sqlite.
+ */
+async function preflightDatabase() {
+  let databaseUrl = process.env.DATABASE_URL || null;
+  if (!databaseUrl) {
+    const envPath = join(repoRoot, '.env');
+    if (existsSync(envPath)) {
+      try {
+        for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+          const line = rawLine.trim();
+          if (!line || line.startsWith('#')) continue;
+          const eq = line.indexOf('=');
+          if (eq === -1) continue;
+          if (line.slice(0, eq).trim() === 'DATABASE_URL') {
+            databaseUrl = line.slice(eq + 1).trim().replace(/^"|"$/g, '');
+            break;
+          }
+        }
+      } catch {
+        // Unreadable .env: treated as no URL below.
+      }
+    }
+  }
+  if (!databaseUrl) return { skipped: true, reason: 'DATABASE_URL is not set' };
+  if (!databaseUrl.startsWith('file:')) {
+    return { skipped: true, reason: 'non-SQLite DATABASE_URL (PostgreSQL preflight runs server-side)' };
+  }
+  let dbPath = databaseUrl.slice('file:'.length).replace(/\?.*$/, '');
+  if (/^\/[A-Za-z]:/.test(dbPath)) dbPath = dbPath.slice(1);
+  dbPath = dbPath.replace(/\\/g, '/');
+  try {
+    dbPath = decodeURIComponent(dbPath);
+  } catch {
+    // Keep the raw path when percent-decoding fails.
+  }
+  if (!existsSync(dbPath)) return { skipped: true, reason: `database file not found: ${dbPath}` };
+
+  let DatabaseSync;
+  try {
+    // node:sqlite needs Node >= 22.5; older runtimes skip this section.
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    return { skipped: true, reason: 'node:sqlite unavailable in this runtime' };
+  }
+
+  const failures = [];
+  const warnings = [];
+  try {
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    const tableRow = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND lower(name)='stores'")
+      .get();
+    if (!tableRow) {
+      db.close();
+      return { skipped: true, reason: 'no stores table yet (first boot not run)' };
+    }
+    const table = tableRow.name;
+    const columns = db.prepare(`PRAGMA table_info("${table}")`).all().map((c) => c.name.toLowerCase());
+    for (const col of ['slug', 'subdomain', 'status']) {
+      if (!columns.includes(col)) failures.push(`column missing on ${table}: ${col}`);
+    }
+    const storeCount = db.prepare(`SELECT COUNT(*) AS n FROM "${table}"`).get().n;
+    let activeCount = 0;
+    if (columns.includes('status')) {
+      activeCount = db.prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE status = 'ACTIVE'`).get().n;
+      const inactive = db.prepare(`SELECT name FROM "${table}" WHERE status IS NOT NULL AND status <> 'ACTIVE'`).all();
+      for (const row of inactive) warnings.push(`store not ACTIVE: "${row.name}"`);
+    }
+    if (columns.includes('slug')) {
+      const noSlug = db.prepare(`SELECT name FROM "${table}" WHERE slug IS NULL OR slug = ''`).all();
+      for (const row of noSlug) failures.push(`store without slug: "${row.name}"`);
+      const dupSlugs = db
+        .prepare(`SELECT slug, COUNT(*) AS n FROM "${table}" WHERE slug IS NOT NULL AND slug <> '' GROUP BY slug HAVING COUNT(*) > 1`)
+        .all();
+      for (const row of dupSlugs) failures.push(`duplicate slug "${row.slug}" on ${row.n} rows`);
+    }
+    if (columns.includes('subdomain')) {
+      const dupSubs = db
+        .prepare(`SELECT subdomain, COUNT(*) AS n FROM "${table}" WHERE subdomain IS NOT NULL AND subdomain <> '' GROUP BY subdomain HAVING COUNT(*) > 1`)
+        .all();
+      for (const row of dupSubs) failures.push(`duplicate subdomain "${row.subdomain}" on ${row.n} rows`);
+    }
+    db.close();
+    return { ok: failures.length === 0, table, storeCount, activeCount, failures, warnings };
+  } catch (error) {
+    failures.push(`preflight could not read the database: ${error instanceof Error ? error.message : String(error)}`);
+    return { ok: false, failures, warnings };
+  }
 }
 
 main();
