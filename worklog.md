@@ -1059,3 +1059,24 @@ Stage Summary:
 - Credentials (demo): admin@mbumahhardware.co.ke / password123 (engraved SUPER_ADMIN); juja.manager@… / password123; all seeded accounts password123. Login rate-limit 5/15min.
 - Traps for next agents: Next 16 = proxy.ts ONLY (middleware.ts crashes boot); SQLite prisma = NO @db.Decimal annotations; dev server caches generated Prisma client → RESTART after db:push; agent-browser sticky header covers buttons when scrolling (scrollBy +120 or JS click); Radix DialogContent aria-describedby warnings = cosmetic.
 - Next candidates: React ErrorBoundary per section; POS terminal page inside workspace (cart→checkout via /api/transactions with idempotencyKey); FR techno attachment; eTIMS retry → real queue table; production channel build of the Windows updater for v2.18.2.
+---
+Task ID: 45
+Agent: Z.ai Code (main)
+Task: Complete v2.18.x Task C fully with every detail — verify all v2.18.2 deliverables, fill gaps, harden, re-certify and ship v2.18.2.1.
+
+Work Log:
+- State recovery: HEAD was 07b30a4 (v2.18.2 shipped + tagged). Inventoried every Task C deliverable against the spec: STEP 0 docs ✓, STEP 1 logo assets ✓, STEP 2 console ✓, STEP 3 workspaces+proxy ✓, STEP 4 POS/engraved-admin ✓, STEP 5 report — but TEST_AUDIT_REPORT_v2.18.x.md was MISSING (only .json, yet CHANGELOG referenced the .md), and NO README existed.
+- Full agent-browser QA re-verification of v2.18.2: console renders w/ zero page errors + zero console warnings; KPIs exact (48,270/1/1/1/437,479 aging 180k/97.5k/80k/80k/0); branch strip 5; all 9 expert tabs live (Debt 437,479, Rentals 3/1, Financials 90,859, Suppliers 6/1, M-Pesa 2/1, eTIMS 2/10, Audit, System 87); cmd+K palette (actions + 5 workspaces); chat send E2E ("Final QA verification v2.18.2 — all systems nominal" stored + rendered); SUPER_ADMIN session persists; workspaces juja-main/thika/nakuru 200; evil-code + www 404; Host: nakuru.mbumah.co.ke 200; workspace footer sticks 800/800; mobile 390px no horizontal overflow, footer pushed naturally (5411px doc).
+- VERSION DECISION BLOCK honored: deliverable completion + client hardening, no data/API/schema changes → CORRECTION v2.18.2.1 (four-segment).
+- Added src/components/org/error-boundary.tsx (SectionErrorBoundary): wraps all six console sections in page.tsx (KPI row, Overview, Matrix, Experts, Decision, Activity, Live Feed); styled retry card per BRAND.md palette (navy button, orange alert border, 44px target); console.error breadcrumb with component stack.
+- Created docs/TEST_AUDIT_REPORT_v2.18.x.md: full markdown certification (acceptance 18/18 table, E2E 25/25, role×module coverage matrix, v2.18.2.1 re-check RC-01..RC-14, fixes-during-QA, risks, sign-off). Updated .json with recheck block (verdict: v2.18.2 accepted; v2.18.2.1 re-certified PASS).
+- Created README.md: official logo, hero console screenshot + workspace + mobile (docs/screenshots/), feature map, POS-core protection list, getting started, demo credentials, version policy, docs index.
+- Bumped identity in lockstep: VERSION=v2.18.2.1, package.json 2.18.2.1, src/lib/release.ts (version 2.18.2.1, base v2.18.2), CHANGELOG [2.18.2.1] entry. /api/health live-reports 2.18.2.1.
+- Repo hygiene: removed previously-committed tool-results junk from history (git rm --cached + gitignore tool-results/ + /skills/), amended so the release stays a SINGLE commit; re-pointed tag.
+- Final: commit 133cba7 "fix: complete v2.18.2 deliverables + console hardening (v2.18.2.1)" + tag v2.18.2.1; working tree clean; lint 0 errors; dev.log clean; console 200.
+
+Stage Summary:
+- Task C is now 100% complete with every detail: all STEP 0-5 deliverables on disk and verified, gaps closed, ErrorBoundary hardening shipped, README+screenshots added, re-certified PASS.
+- Artifacts: README.md, docs/TEST_AUDIT_REPORT_v2.18.x.{md,json(recheck)}, docs/screenshots/{console,workspace,mobile}.png, src/components/org/error-boundary.tsx, release identity v2.18.2.1 everywhere.
+- Baselines for next session: main @ 133cba7, tags 59 total (58+v2.18.2.1), lint 0 errors, zero page errors, health 87.
+- Next candidates: POS terminal page inside workspace (cart→checkout via /api/transactions with idempotencyKey); eTIMS retry → real queue table; production Windows updater build for v2.18.2.1; per-section Suspense streaming for initial paint.
