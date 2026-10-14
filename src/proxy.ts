@@ -435,6 +435,6 @@ export const config = {
   // pipeline never runs in front of them.
   matcher: [
     '/api/:path*',
-    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|logo.png|logo.svg|logo3d-120.webp|logo3d-200.webp|logo3d-gear-256.png|manifest.json|manifest.webmanifest|sw.js|offline.html|robots.txt|sitemap.xml|icons/|sounds/|screenshots/).*)',
+    '/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|logo.png|logo.svg|logo.webp|icon.svg|logo3d-120.webp|logo3d-200.webp|logo3d-gear-256.png|manifest.json|manifest.webmanifest|sw.js|offline.html|robots.txt|sitemap.xml|icons/|sounds/|screenshots/).*)',
   ],
 };
