@@ -31,19 +31,30 @@ The gateway additionally accepts `subdomain-unavailable` ("Subdomain workspace i
 
 ## Detection order
 
-1. A slug that is present but empty/whitespace short-circuits to `missing-slug` without touching the database.
-2. The branch is resolved from the host subdomain first, then the explicit slug (the proxy rewrites `{sub}.root/x` to `/stores/{sub}/x`, so both point at the same store). A database query failing with a Prisma known request error is answered as `schema-drift`; other errors re-throw to the route's error boundary.
+1. A slug that is present but empty/whitespace short-circuits to `missing-slug` without touching the database. Since v2.18.0.3 the pathname is consulted first: a request to `/stores/{slug}/...` whose caller did not pass an explicit slug (or passed an empty one) still resolves the branch from the URL, so path-mode workspaces need no separate slug plumbing.
+2. The branch is resolved from the host subdomain first, then the explicit slug or the pathname-derived slug (the proxy rewrites `{sub}.root/x` to `/stores/{sub}/x`, so both point at the same store). A database query failing with a Prisma known request error is answered as `schema-drift`; other errors re-throw to the route's error boundary.
 3. An unauthenticated request returns the branch summary with `allowed: false` so the login screen can render on the same origin.
 4. Inactive stores are denied for everyone except SUPER_ADMIN (diagnostic view).
 5. Authorization: SUPER_ADMIN and STORE_OWNER reach every active store; ACCOUNTANT gets a read-only view; a matching `User.storeId` passes; everyone else needs an ACTIVE `StoreMembership` row.
 
 ## Security properties
 
-- **Re-derived server-side, never from client input.** The store is resolved from the Host header (host allowlist applies) or the URL slug. The `x-store-id` / `x-store-slug` headers set by the proxy are advisory hints only; client-supplied storeIds are never used for resolution here.
+- **Re-derived server-side, never from client input.** The store is resolved from the Host header (host allowlist applies) or the URL slug. The `x-store-id` / `x-store-slug` headers set by the proxy are advisory hints only; client-supplied storeIds are never used for resolution here. Since v2.18.0.3 the proxy also sets the resolved-context aliases `x-resolved-store-slug`, `x-resolved-store-subdomain` and `x-resolved-workspace-mode` (`subdomain` on rewritten subdomain requests, `path` on `/stores/{slug}/...` pages); they are advisory too, and the store ID itself is never transported in a header because it is resolved from the database on every request.
 - **Forwarded host is opt-in.** `x-forwarded-host` is honored only when `TRUST_X_FORWARDED_HOST` is truthy, and then only behind a proxy that overwrites the header on every request (see `src/lib/workspace/config.ts`).
 - **Authorization on every call.** Role rules and active memberships are checked inside the resolver, not in the UI.
 - **Audit logging.** Denied attempts are written to the `SecurityEvent` feed with the internal reason, attempted subdomain/slug, role and email, plus the request host, pathname and request id for correlation (added in v2.18.0.0). Audit failures never change the access decision.
 - **Calm failures.** Schema drift and missing slugs answer as ordinary not-found results without leaking error text or stack traces.
+
+## Local database repair (v2.18.0.3)
+
+A local SQLite database that predates the workspace columns (no `slug`, `subdomain` or `status` on the stores table) is repaired with a safe, additive, idempotent script:
+
+```bash
+node scripts/repair-branch-workspace-store-schema.mjs --check   # report only
+node scripts/repair-branch-workspace-store-schema.mjs           # backup + repair
+```
+
+The script uses raw SQL only (never Prisma model queries, which fail on drifted databases), backs the database up first, rehearses the repair on a scratch copy, backfills deterministic slugs from the branch names (tolerating the "MBUMAH HARDWARE - " display prefix), stops instead of forcing unique indexes when duplicate values exist, restores the backup on any failure, and refuses to touch PostgreSQL (print the drift and migrate explicitly instead). `node scripts/verify-branch-workspace.mjs` runs the same preflight read-only and is safe for scheduled checks.
 
 ## Related
 

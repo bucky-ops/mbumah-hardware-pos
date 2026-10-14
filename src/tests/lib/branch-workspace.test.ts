@@ -31,6 +31,7 @@ vi.mock('@/lib/db', () => ({
 
 import { getBranchWorkspaceHref, isRawIpHost } from '@/lib/branch-workspace';
 import { resolveStoreContext } from '@/lib/workspace/server';
+import { extractSlugFromPathname } from '@/lib/workspace/config';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -453,5 +454,86 @@ describe('resolveStoreContext - reasonCode + new detections (v2.18.0.0)', () => 
     expect(details.host).toBe('mbumah.test');
     expect(details.pathname).toBe('/stores/ghost/dashboard');
     expect(typeof details.requestId).toBe('string');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. Pathname slug derivation (v2.18.0.3 store-context correction)
+// ---------------------------------------------------------------------------
+
+describe('extractSlugFromPathname (v2.18.0.3)', () => {
+  it('extracts the slug from path-mode workspace pathnames', () => {
+    expect(extractSlugFromPathname('/stores/juja-main/dashboard')).toBe('juja-main');
+    expect(extractSlugFromPathname('/stores/thika')).toBe('thika');
+    expect(extractSlugFromPathname('/stores/nairobi-cbd/reports/export')).toBe('nairobi-cbd');
+    expect(extractSlugFromPathname('/STORES/NAKURU/dashboard')).toBe('nakuru');
+  });
+
+  it('returns null for non-workspace or unterminated pathnames', () => {
+    expect(extractSlugFromPathname('/dashboard')).toBeNull();
+    expect(extractSlugFromPathname('/')).toBeNull();
+    expect(extractSlugFromPathname('/stores/')).toBeNull();
+    expect(extractSlugFromPathname('/stores')).toBeNull();
+    expect(extractSlugFromPathname('')).toBeNull();
+    expect(extractSlugFromPathname(null)).toBeNull();
+    expect(extractSlugFromPathname(undefined)).toBeNull();
+  });
+});
+
+describe('resolveStoreContext - pathname slug derivation (v2.18.0.3)', () => {
+  it('resolves the store from a bare /stores/{slug}/... pathname without an explicit slug', async () => {
+    storeFindFirst.mockResolvedValue(activeStore());
+    const result = await resolveStoreContext({
+      host: 'localhost:3000',
+      pathname: '/stores/thika/dashboard',
+      session: sessionFor(),
+    });
+    expect(storeFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { slug: 'thika' } }),
+    );
+    expect(result.allowed).toBe(true);
+    expect(result.mode).toBe('path');
+    expect(result.store?.slug).toBe('thika');
+  });
+
+  it('prefers the explicit slug over the pathname slug', async () => {
+    storeFindFirst.mockResolvedValue(
+      activeStore({ id: 'store_nakuru', name: 'MBUMAH HARDWARE - Nakuru', slug: 'nakuru' }),
+    );
+    const result = await resolveStoreContext({
+      host: 'localhost:3000',
+      slug: 'nakuru',
+      pathname: '/stores/thika/dashboard',
+      session: sessionFor(),
+    });
+    expect(storeFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { slug: 'nakuru' } }),
+    );
+    expect(result.store?.slug).toBe('nakuru');
+  });
+
+  it('does not short-circuit to missing-slug when the pathname carries the slug', async () => {
+    storeFindFirst.mockResolvedValue(activeStore());
+    const result = await resolveStoreContext({
+      host: 'localhost:3000',
+      slug: '',
+      pathname: '/stores/thika/dashboard',
+      session: sessionFor(),
+    });
+    expect(storeFindFirst).toHaveBeenCalled();
+    expect(result.allowed).toBe(true);
+    expect(result.store?.slug).toBe('thika');
+  });
+
+  it('still answers missing-slug with no DB call when neither slug nor pathname can resolve', async () => {
+    const result = await resolveStoreContext({
+      host: 'localhost:3000',
+      slug: '   ',
+      pathname: '/dashboard',
+      session: sessionFor(),
+    });
+    expect(storeFindFirst).not.toHaveBeenCalled();
+    expect(result.mode).toBe('not-found');
+    expect(result.reasonCode).toBe('missing-slug');
   });
 });

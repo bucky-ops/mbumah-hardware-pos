@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.0.3] Branch workspace store-context and repair correction
+
+Correction release completing the branch workspace unavailable diagnosis: the store context resolver now derives the branch slug from the `/stores/{slug}/...` pathname itself, the proxy publishes resolved workspace context headers, and a safe raw-SQL repair script restores the store workspace columns on drifted local SQLite databases. package.json keeps the valid semver `2.18.0`; the full correction version `2.18.0.3` lives in the `mbumah.releaseVersion` metadata block, the root `VERSION` file and every app-reported version surface.
+
+### Added
+- **Pathname slug derivation (`extractSlugFromPathname`)**: `resolveStoreContext` resolves path-mode workspaces from a bare `/stores/{slug}/...` pathname when the caller passes no explicit slug, so a request to `/stores/thika/dashboard` needs no separate slug plumbing. An explicit non-empty slug still wins; the missing-slug short-circuit only fires when neither source can resolve (unit tested).
+- **Resolved workspace context headers**: the proxy sets `x-resolved-store-slug`, `x-resolved-store-subdomain` and `x-resolved-workspace-mode` (`subdomain` on rewritten subdomain requests, `path` on `/stores/{slug}/...` pages). Advisory only; API routes and server components keep re-resolving server-side and the store ID is never transported in a header.
+- **Safe store workspace schema repair (`scripts/repair-branch-workspace-store-schema.mjs`)**: adds missing `slug` / `subdomain` / `status` columns to the stores table of a local SQLite database, backfills deterministic slugs from the branch names (case-insensitive, tolerant of the "MBUMAH HARDWARE - " display prefix), derives subdomains from slugs, and creates the unique indexes only after duplicate checks pass. The script uses raw SQL only (no Prisma model queries), backs the database up first, rehearses on a scratch copy, is idempotent, restores the backup on any failure, and refuses PostgreSQL with migration guidance instead.
+- **Database preflight in `scripts/verify-branch-workspace.mjs`**: a read-only check of the local SQLite stores table (missing columns, stores without slug, duplicate slugs/subdomains, non-ACTIVE stores) with a pointer to the repair script; skips cleanly for PostgreSQL URLs, missing databases and runtimes without node:sqlite.
+- **Documentation**: store-context-resolution.md gains the pathname derivation, resolved-context headers and the local database repair walkthrough; branch-workspaces.md links the repair path.
+
+### Fixed
+- **Path-mode store resolution no longer depends on callers pre-parsing the URL slug**: empty explicit slugs with a resolvable `/stores/{slug}/...` pathname resolve the branch instead of answering missing-slug (the short-circuit remains for genuinely unresolvable requests and still makes no database call).
+
 ## [2.18.0.2] Updater release selection, Windows build mode and Prisma config correction
 
 Correction release covering the defects visible in the field report of a Windows laptop updating from 2.17.7 straight to v2.18.0.0: the updater treated a four-part correction tag as the next normal release, the build ran with standalone output it did not need on Windows, and the Prisma CLI warned about the deprecated package.json configuration block. package.json keeps the valid semver `2.18.0`; the full correction version `2.18.0.2` lives in the `mbumah.releaseVersion` metadata block, the root `VERSION` file and every app-reported version surface.
