@@ -1144,3 +1144,23 @@ Stage Summary:
 - Bundle now current (includes release-state audit + metadata sync); old pre-audit bundle replaced in place.
 - Ship paths unchanged: (A) owner pushes bundle branch release/v2.18.2.1-org-console, (B) owner provides GH_TOKEN in session; lineage reconciliation (Branch->Store) required before any main-lineage tag.
 - Next version slots: CORRECTION 2.18.2.2 (health commit-constant fix, typecheck baseline), FEATURE 2.18.3 (reconciliation).
+---
+Task ID: 49
+Agent: Z.ai Code (main)
+Task: Execute Ship path B with owner-provided credentials — push release branch + tags, create GitHub Release, manage repo. Tokens: GitHub + Vercel + Supabase + Neon (all stored outside repo, 0600).
+
+Work Log:
+- SECURITY: stored all 4 owner tokens in /home/z/release-backup/tokens.env (0600, outside repo, gitignored path); NEVER written to any tracked file or worklog; masked everywhere in outputs. Rotation recommended post-use (shared via chat).
+- Verified GH token via API: bucky-ops/mbumah-hardware-pos, permissions admin/maintain/push TRUE.
+- Read PUSH_RELEASE_INSTRUCTIONS.md — honored §3 guardrail: did NOT push bare v2.18.2* tags (Windows updater selects by semver); used sandbox/ prefix instead.
+- Pushed: main(9999925) -> refs/heads/release/v2.18.2.1-org-console [new branch]; local annotated tags renamed via refspec -> refs/tags/sandbox/v2.18.2, refs/tags/sandbox/v2.18.2.1 [new tags].
+- Scrubbed token from .git/config immediately after push (verified zero residue).
+- Created GitHub Release id 412739125 on tag sandbox/v2.18.2.1, prerelease=true (double updater guardrail), full notes (highlights, QA 25/25+14/14, reconciliation checklist); URL https://github.com/bucky-ops/mbumah-hardware-pos/releases/tag/sandbox/v2.18.2.1
+- Uploaded asset mbumah-v2.18.2.1-release.bundle (20.1MB, complete history) to the release.
+- Appended §6 execution record to docs/PUSH_RELEASE_INSTRUCTIONS.md; committed docs + pushed branch update.
+- Remaining (owner decision): lineage reconciliation per §5 checklist before any bare tag on main lineage; v2.18.3 FEATURE slot reserved.
+
+Stage Summary:
+- RELEASE IS PUBLISHED: branch release/v2.18.2.1-org-console + sandbox-prefixed annotated tags + prerelease GitHub Release + offline bundle asset — all live on GitHub.
+- Updater safety preserved: bare tags withheld, prerelease flag set.
+- Next slots: CORRECTION 2.18.2.2 (health commit-constant, typecheck baseline), FEATURE 2.18.3 (Branch->Store reconciliation; Neon token now available for the Postgres pass).

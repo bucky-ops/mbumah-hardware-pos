@@ -81,3 +81,20 @@ git remote set-url origin https://github.com/bucky-ops/mbumah-hardware-pos.git  
 - [ ] Reconcile `src/proxy.ts` (origin 440-line version is authoritative; fold in subdomain rewrite)
 - [ ] Re-run `docs/TEST_AUDIT_REPORT_v2.18.x.md` acceptance numbers against the reconciled schema
 - [ ] Only then tag the reconciled commit `v2.18.3` (or `v2.18.2` on main lineage) for the updater
+
+## 6. Execution record — Ship path B executed (2026-10-14)
+
+Executed with the owner-provided token (fine-grained PAT, admin/maintain/push verified via API).
+Token used ephemerally in the remote URL and scrubbed from `.git/config` immediately after push;
+stored only outside the repo (`/home/z/release-backup/`, 0600). **Never commit tokens.**
+
+| Action | Result |
+|---|---|
+| `main` → `refs/heads/release/v2.18.2.1-org-console` | ✅ new branch (tip `9999925` + docs record commit) |
+| `v2.18.2` → `refs/tags/sandbox/v2.18.2` | ✅ annotated, namespace-safe |
+| `v2.18.2.1` → `refs/tags/sandbox/v2.18.2.1` | ✅ annotated, namespace-safe |
+| GitHub Release on `sandbox/v2.18.2.1` | ✅ **prerelease** — updater cannot select it |
+| Release asset | ✅ `mbumah-v2.18.2.1-release.bundle` (20.1 MB, complete history) |
+| Bare tags `v2.18.2*` on remote | ⛔ intentionally withheld (§3 updater guardrail) until reconciliation (§5) |
+
+Release: `https://github.com/bucky-ops/mbumah-hardware-pos/releases/tag/sandbox/v2.18.2.1`
