@@ -1103,3 +1103,26 @@ Stage Summary:
 - DO NOT fast-forward origin/main to this lineage — see docs/PUSH_RELEASE_INSTRUCTIONS.md §2 (Branch/Store re-platforming required first); publish as release/v2.18.2.1-org-console branch instead.
 - Traps for next agents: filter-branch rewrites fetched origin tags too (re-fetch --tags --force after); filter-branch updates the working tree (runtime files vanish → restore from backup); never reset --hard after scrub; token files live ONLY in /home/z/release-backup/.
 - Owner next actions: (1) provide GH_TOKEN in a future session → run Ship path B; or (2) download the bundle and run Ship path A locally; (3) schedule the Branch→Store reconciliation before any updater-visible tag on main lineage.
+---
+Task ID: 47
+Agent: Z.ai Code (main)
+Task: Execute the uploaded 12-phase Release Integrity Audit protocol against v2.18.2.1 (release verification and synchronization, evidence-first, non-destructive).
+
+Work Log:
+- VERSION DECISION BLOCK: detected 2.18.2.1; base 2.18.2; hotfix .1 (limit .5); classification MAINTENANCE (no user-facing behavior change); no new version proposed (maintenance bundles into next release).
+- PHASE 1 baseline: main @ 5b6bfa1 (auto-checkpoint atop release lineage), tree clean; local tags 60 (58 origin + 2 release); latest local tag v2.18.2.1; remote latest v2.18.1; gh CLI unavailable (GitHub release verification via tags; commands provided). Divergence CONFIRMED: local main and origin/main have NO common ancestor (parallel lineages) -> protocol stop condition honored: no merge/rebase/force attempted.
+- PHASE 2: authoritative version 2.18.2.1; every four-part tag checked for base validity (v2.18.0.0/.1/.2/.3 all have v2.18.0 -> valid; v2.18.2.1 base v2.18.2 local-only). docs/RELEASE_STATE_AUDIT.md written with all 17 required items.
+- PHASE 3: package.json was missing mbumah hotfix metadata -> ADDED {releaseVersion:2.18.2.1, baseVersion:2.18.2, hotfix:1}. All other sources already agreed (VERSION, CHANGELOG [2.18.2.1], src/lib/release.ts, footer, /api/health live 2.18.2.1).
+- PHASE 4: secret scan (values redacted): templates safe (placeholders), route files match env-var names only, vercel_*.py scripts read token from file at runtime (no embedded secret) but contain personal paths -> residual risk documented with safe-removal commands, not acted on (authorization boundary). Tracked forbidden files: NONE.
+- PHASE 5 gates: lint PASS (0 errors); prisma validate PASS; prisma generate PASS (6.19.2, no package.json#prisma deprecation block); typecheck = 41 PRE-EXISTING strict-mode errors documented (no typecheck script in lineage; closest-safe tsc --noEmit); tests = no script (gap documented); build = BLOCKED by sandbox policy (compensating evidence: dev compile + zero runtime page errors). No new tag rides on this pass, so gate failures affect no release action.
+- PHASE 6: both release tags were LIGHTWEIGHT (protocol violation) -> recreated as ANNOTATED tags pointing at identical commits (v2.18.2 -> 4de987b, v2.18.2.1 -> c1e7ecf); both local-only, never pushed; no published tag touched. Remote push + gh release creation BLOCKED (no credentials) -> exact commands in RELEASE_STATE_AUDIT.md section 7 + PUSH_RELEASE_INSTRUCTIONS.md.
+- PHASE 8: README demo table fixed to Role|Email|Password with "local only" label; env templates verified placeholder-only; release-safety variables not referenced by this lineage (documented as lineage difference).
+- PHASE 9 live: /api/health 2.18.2.1 stable; /api/health/db-schema EXISTS and 401-protects anonymous (correct); footer/header show v2.18.x-dev in dev (v2.18.2.1 in prod via release.ts); console + workspace verified live, zero page errors. Health field-shape difference documented (cosmetic; not changed in maintenance pass).
+- PHASE 10: two conventional commits: 4e5cbbd chore: synchronize release metadata for v2.18.2.1; 1599b26 docs: add release state audit for v2.18.2.1 (+ README hygiene). Staged files only; tree clean after.
+- PHASE 12 final: version sources ALL AGREE (VERSION/pkg/mbumah/tag/CHANGELOG = 2.18.2.1); stores/undefined scan clean; engraved-admin artifacts present; next.config clean of EINVAL/standalone regressions.
+- Verdict recorded: B (safely updated within sandbox authority); push/release blocked solely by credentials; blockers + human commands documented.
+
+Stage Summary:
+- Deliverables: docs/RELEASE_STATE_AUDIT.md (17-item audit), package.json mbumah metadata, annotated release tags, README demo-table hygiene, two conventional commits (4e5cbbd, 1599b26), tree clean.
+- Authoritative version stands at 2.18.2.1; next slots: CORRECTION 2.18.2.2, FEATURE 2.18.3.
+- Open items for humans: (1) push branch+tags via bundle or token (commands ready), (2) create GitHub release v2.18.2.1 after tags land, (3) lineage reconciliation before any main-branch tagging, (4) optional: typecheck-baseline CORRECTION 2.18.2.2, (5) optional removal of scripts/vercel_*.py from index.
