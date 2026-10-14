@@ -67,15 +67,15 @@ bun run dev                     # http://localhost:3000
 
 Health probe: `GET /api/health` → release identity (version/commit/channel/org).
 
-### Demo credentials (seeded, scrypt-hashed)
+### Demo credentials (local only, seeded, scrypt-hashed)
 
-| Account | Password | Role |
+| Role | Email | Password |
 |---|---|---|
-| `admin@mbumahhardware.co.ke` | `password123` | SUPER_ADMIN (engraved) |
-| `juja.manager@mbumahhardware.co.ke` (+ thika/ruiru/nairobi/nakuru) | `password123` | BRANCH_MANAGER |
-| `owner@mbumah.co.ke` · `manager@…` · `cashier@…` | `Mbumah@2025` | POS demo accounts |
+| SUPER_ADMIN (engraved) | `admin@mbumahhardware.co.ke` | `password123` |
+| BRANCH_MANAGER | `juja.manager@mbumahhardware.co.ke` (+ thika/ruiru/nairobi/nakuru) | `password123` |
+| POS demo accounts (OWNER/MANAGER/CASHIER) | `owner@mbumah.co.ke` · `manager@…` · `cashier@…` | `Mbumah@2025` |
 
-> Rotate all seeded passwords before production.
+> These accounts are seeded for local development only. Rotate all seeded passwords before production.
 
 ## Version policy
 
