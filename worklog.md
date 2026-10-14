@@ -1126,3 +1126,21 @@ Stage Summary:
 - Deliverables: docs/RELEASE_STATE_AUDIT.md (17-item audit), package.json mbumah metadata, annotated release tags, README demo-table hygiene, two conventional commits (4e5cbbd, 1599b26), tree clean.
 - Authoritative version stands at 2.18.2.1; next slots: CORRECTION 2.18.2.2, FEATURE 2.18.3.
 - Open items for humans: (1) push branch+tags via bundle or token (commands ready), (2) create GitHub release v2.18.2.1 after tags land, (3) lineage reconciliation before any main-branch tagging, (4) optional: typecheck-baseline CORRECTION 2.18.2.2, (5) optional removal of scripts/vercel_*.py from index.
+---
+Task ID: 48
+Agent: Z.ai Code (main)
+Task: Answer "What's hindering the release?" with evidence; refresh stale release bundle; verify release surface intact.
+
+Work Log:
+- Re-verified release state at HEAD 9029279: tree clean; /api/health 200 {version 2.18.2.1, db up}; dev server HTTP 200.
+- Credentials check: gh CLI absent, no GH_/GITHUB_* env vars, git push still blocked (no credentials) -> confirmed sole hard blocker unchanged.
+- Remote tag check: `git ls-remote --tags origin` has NO v2.18.2.x -> both release tags remain local-only, as expected.
+- Found release bundle STALE: created 12:09 (main@705a245) BEFORE audit commits 4e5cbbd/1599b26 and checkpoints -> REFRESHED via `git bundle create download/mbumah-v2.18.2.1-release.bundle main v2.18.2 v2.18.2.1`; verify OK, complete history, 21M; now contains main@9029279 + annotated tags v2.18.2(ff7506f->4de987b) and v2.18.2.1(d63f910->c1e7ecf).
+- Confirmed annotated tag mapping intact after refresh (same target commits 4de987b / c1e7ecf as recorded in audit).
+- Identified minor cosmetic discrepancy for next CORRECTION candidate (2.18.2.2): src/lib/release.ts hardcodes commit e49f48ec/282 -> /api/health reports origin/main hash on sandbox builds instead of actual lineage tip (c1e7ecf lineage). Non-blocking.
+
+Stage Summary:
+- Answer delivered: release v2.18.2.1 is blocked SOLELY by missing GitHub credentials; everything else scrubbed/tagged/bundled/verified.
+- Bundle now current (includes release-state audit + metadata sync); old pre-audit bundle replaced in place.
+- Ship paths unchanged: (A) owner pushes bundle branch release/v2.18.2.1-org-console, (B) owner provides GH_TOKEN in session; lineage reconciliation (Branch->Store) required before any main-lineage tag.
+- Next version slots: CORRECTION 2.18.2.2 (health commit-constant fix, typecheck baseline), FEATURE 2.18.3 (reconciliation).
