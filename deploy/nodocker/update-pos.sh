@@ -147,7 +147,9 @@ run_rebuild() { # mirrors install-nodocker.sh steps 5-7 (minus seeding)
   stop_app
   set_build_env
   echo "[BUILD 1/4] Installing dependencies (needs internet)..."
-  if ! npm install; then echo "[FAIL] npm install failed"; return 1; fi
+  # --include=optional (v2.18.0.1): sharp's platform binary ships as an
+  # optional dependency; never let a machine-level npm config skip it.
+  if ! npm install --include=optional; then echo "[FAIL] npm install failed"; return 1; fi
   echo "[BUILD 2/4] Applying the database schema..."
   if ! npm run db:push; then echo "[FAIL] db:push failed"; return 1; fi
   echo "[BUILD 3/4] Building the production app..."
@@ -168,6 +170,14 @@ run_rebuild() { # mirrors install-nodocker.sh steps 5-7 (minus seeding)
   if ! mkdir -p .next/standalone/.next; then echo "[FAIL] assemble failed"; return 1; fi
   if ! cp -r .next/static .next/standalone/.next/; then echo "[FAIL] assemble failed"; return 1; fi
   if ! cp -r public .next/standalone/; then echo "[FAIL] assemble failed"; return 1; fi
+  # v2.18.0.1: prove the standalone output is COMPLETE before declaring the
+  # update successful (missing server.js or chunks -> rollback, not a
+  # restart into a broken server).
+  echo "[BUILD] Verifying the standalone build (server + all chunks)..."
+  if ! node scripts/verify-standalone.mjs; then
+    echo "[FAIL] Standalone build verification failed - see above."
+    return 1
+  fi
   return 0
 }
 
@@ -249,7 +259,11 @@ if [ ! -f "$DB_FILE" ]; then
   exit 0
 fi
 
-CURRENT_VERSION="$(node -p "require('$ROOT/package.json').version" 2>/dev/null || echo "")"
+# v2.18.0.1: prefer the four-part correction version from the mbumah metadata
+# block (package.json "version" stays three-part semver) so "already up to
+# date" matches correction release tags exactly - otherwise a machine on
+# v2.18.0.0 (reported as "2.18.0") rebuilds v2.18.0.0 on every start.
+CURRENT_VERSION="$(node -p "const p=require('$ROOT/package.json'); (p.mbumah && p.mbumah.releaseVersion) || p.version" 2>/dev/null || echo "")"
 FROM_VERSION="$CURRENT_VERSION"
 echo "[INFO] App folder : $ROOT"
 echo "[INFO] Current version: $CURRENT_VERSION"

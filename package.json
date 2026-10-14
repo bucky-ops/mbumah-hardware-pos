@@ -3,9 +3,9 @@
   "version": "2.18.0",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.0.0",
+    "releaseVersion": "2.18.0.1",
     "baseVersion": "2.18.0",
-    "hotfix": 0
+    "hotfix": 1
   },
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",

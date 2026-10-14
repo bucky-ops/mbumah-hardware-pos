@@ -55,7 +55,12 @@ try {
     }
     if ($updateOnStart) {
       $pkgBefore = ""
-      try { $pkgBefore = (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version } catch { }
+      try {
+        # v2.18.0.1: prefer the four-part correction version so the
+        # "was updated to vX.Y.Z.W" message is accurate for hotfix releases.
+        $p = Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json
+        $pkgBefore = if ($p.mbumah -and $p.mbumah.releaseVersion) { "$($p.mbumah.releaseVersion)" } else { "$($p.version)" }
+      } catch { }
       Write-Host ''
       Write-Host 'Checking for updates... (disable with UPDATE_ON_START=0 in .env)'
       try {
@@ -67,7 +72,10 @@ try {
         Write-Host '       Starting the POS anyway.'
       }
       $pkgAfter = ""
-      try { $pkgAfter = (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version } catch { }
+      try {
+        $p2 = Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json
+        $pkgAfter = if ($p2.mbumah -and $p2.mbumah.releaseVersion) { "$($p2.mbumah.releaseVersion)" } else { "$($p2.version)" }
+      } catch { }
       if ($pkgAfter -and $pkgBefore -and ($pkgAfter -ne $pkgBefore)) {
         Write-Host "[OK] Mbumah POS was updated to v$pkgAfter." -ForegroundColor Green
       }
@@ -138,8 +146,19 @@ try {
     Write-Host "You can also open http://localhost:$port manually in a moment."
   }
 
-  # Keep this window open while the server runs
-  Wait-Process -Id $server.Id
+  # Keep this window open while the server runs. v2.18.0.1: if the server
+  # process already exited (it printed a startup error and quit), plain
+  # Wait-Process used to throw the scary red "[ERROR] Cannot find a process
+  # with the process identifier ..." line - explain calmly instead.
+  try {
+    Wait-Process -Id $server.Id -ErrorAction Stop
+  } catch {
+    Write-Host ''
+    Write-Host 'The POS server process exited early. Scroll up for the reason' -ForegroundColor Yellow
+    Write-Host '(a line starting with an X or a WARNING). Most common fixes:'
+    Write-Host '  - "Build output missing": run Update-Mbumah-POS.bat once with internet'
+    Write-Host '  - database problems:   node deploy\nodocker\verify-db.mjs'
+  }
 } catch {
   Write-Host ''
   Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red

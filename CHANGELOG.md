@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.0.1] Windows standalone build correction (EINVAL chunks, sharp, updater)
+
+Field-report correction release for Windows laptop installs (ZIP, no git), covering the three defects visible in the v2.17.6/v2.17.7 update logs: "Failed to copy traced files ... EINVAL" build warnings, "Could not load the sharp module using the win32-x64 runtime" image errors, and an "UPDATE COMPLETE" banner followed by a start failure ("Build output missing (.next/standalone/server.js)").
+
+### Added
+- **Standalone build verifier (`scripts/verify-standalone.mjs`)**: after every installer/updater build, proves that `.next/standalone/server.js` exists, the client static assets were assembled, and EVERY server chunk referenced by any route or runtime file is actually present in the standalone output. An incomplete build is now a hard failure that triggers the updater's automatic rollback (and stops the installer with a clear message) instead of a restart into a broken server.
+
+### Fixed
+- **Windows EINVAL chunk loss (field log: `/api/batch`, `/api/cron/nightly`)**: Turbopack emits asynchronously imported node builtins as chunk files named after the specifier, e.g. `[externals]_node:inspector_7a4283c6._.js`. NTFS forbids colons in file names, so Windows standalone builds dropped those chunks with EINVAL copyfile warnings and the affected routes (batch operations, the nightly maintenance cron and everything sharing their chunks) broke at runtime while Linux and Vercel builds worked. Every `node:*` builtin is now aliased to its identical bare specifier (`turbopack.resolveAlias` in `next.config.ts`), so Turbopack's chunk file names never contain a colon on any platform - the runtime modules are byte-for-byte the same Node builtins.
+- **`node:fs/promises` dynamic import in `src/lib/data-retention.ts`** converted to a static import: static built-in imports are inlined by the bundler and produce no chunk file at all (this was the nightly-cron half of the EINVAL pair).
+- **sharp win32-x64 missing** (the "Could not load the sharp module" 500s on every optimized image): installers and updaters now install with `npm install --include=optional` so a machine-level npm config can never skip sharp's platform binary, repair a missing win32-x64 binary automatically (`npm install --no-save --os=win32 --cpu=x64 sharp`), and - as the final safety net - `next.config.ts` probes sharp at BUILD time and bakes `images.unoptimized` into standalone laptop builds whose machine has no usable binary, so product photos always serve (without resizing) instead of erroring.
+- **Update loop on correction releases**: the updater compared `package.json` "version" (three-part, "2.18.0") against the release tag (four-part, "v2.18.0.0"), which can never match - a machine that installed v2.18.0.0 would download and rebuild it again on EVERY start. The Windows and macOS/Linux updaters now prefer the `mbumah.releaseVersion` metadata when comparing, so correction releases settle to "Already up to date" like every other release; the Start POS "was updated to" message reads the same field.
+- **Scary-but-harmless stop error**: `Start POS` no longer prints the red "[ERROR] Cannot find a process with the process identifier ..." line when the server process exited early; it points at the reason printed above it and the two most common fixes instead.
+
+### Security
+- No authorization, tenancy or data-handling changes; the verifier only reads build output and the sharp repair only runs npm install scoped to the sharp package.
+
 ## [2.18.0.0] Branch workspace path fallback correction
 
 Correction release for the "This branch workspace does not exist or is no longer available" error when opening a branch workspace from the organization console. package.json keeps the valid semver `2.18.0`; the full correction version `2.18.0.0` lives in the `mbumah.releaseVersion` metadata block, a new root `VERSION` file, and every app-reported version surface (footer, login screen, `/api/health`, openapi.json).

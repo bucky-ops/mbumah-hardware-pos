@@ -200,6 +200,31 @@ function Set-BuildEnvironment {
   $env:BUILD_STANDALONE = '1'
 }
 
+function Repair-SharpBinary {
+  # v2.18.0.1: next/image optimization needs sharp's NATIVE binary for this
+  # exact platform. Some Windows machines end up without it (optional deps
+  # skipped by an npm config, antivirus interference, a bad cache), which
+  # made every optimized image 500 at runtime - the "Could not load the
+  # sharp module using the win32-x64 runtime" field report. Best effort:
+  # if the win32-x64 binary is missing, run the documented sharp repair once.
+  # If it is STILL missing afterwards, next.config.ts bakes
+  # images.unoptimized=true into this standalone build (build-time probe),
+  # so product photos keep working - just without resizing.
+  if ($env:OS -ne 'Windows_NT') { return }
+  $sharpBin = Join-Path $root 'node_modules\@img\sharp-win32-x64\lib\sharp-win32-x64.node'
+  if (Test-Path $sharpBin) { return }
+  Write-Host '[WARN] sharp image library is missing its Windows binary - repairing...' -ForegroundColor Yellow
+  Write-Ledger 'SHARP_REPAIR' '' '' 'sharp-win32-x64 binary missing; running npm repair'
+  cmd /c 'npm install --no-save --os=win32 --cpu=x64 sharp' | Out-Null
+  if (Test-Path $sharpBin) {
+    Write-Host '[OK] sharp Windows binary installed.'
+  } else {
+    Write-Host '[WARN] sharp binary still missing - product photos will be served' -ForegroundColor Yellow
+    Write-Host '       unoptimized (this build bakes that in automatically). The POS'
+    Write-Host '       works normally; only image resizing is skipped.'
+  }
+}
+
 function Invoke-RebuildAndAssemble {
   # Mirrors install-nodocker.ps1 steps 5-7 EXACTLY (minus seeding).
   # NOTE: the app is stopped FIRST - `next build` replaces .next (including
@@ -208,7 +233,8 @@ function Invoke-RebuildAndAssemble {
   Write-Host '[BUILD 0/4] Stopping the running POS for the rebuild...'
   Stop-AppProcs
   Set-BuildEnvironment
-  if (-not (Invoke-Checked "[BUILD 1/4] Installing dependencies (needs internet)..." 'npm install')) { return $false }
+  if (-not (Invoke-Checked "[BUILD 1/4] Installing dependencies (needs internet)..." 'npm install --include=optional')) { return $false }
+  Repair-SharpBinary
   if (-not (Invoke-Checked "[BUILD 2/4] Applying the database schema..." 'npm run db:push')) { return $false }
   if (-not (Invoke-Checked "[BUILD 3/4] Building the production app..." 'npm run build')) { return $false }
 
@@ -231,6 +257,18 @@ function Invoke-RebuildAndAssemble {
     Copy-Item "public" ".next\standalone\" -Recurse -Force
   } catch {
     Write-Host "[FAIL] Could not assemble the standalone server: $($_.Exception.Message)" -ForegroundColor Red
+    return $false
+  }
+  # v2.18.0.1: prove the standalone output is COMPLETE before declaring the
+  # update successful. The v2.17.6 field failure printed "UPDATE COMPLETE"
+  # and then could not start because .next\standalone\server.js did not
+  # exist; the v2.17.7 build silently lost chunks whose names NTFS cannot
+  # hold ("[externals]_node:..." - EINVAL copyfile). Both are now hard
+  # failures that trigger the automatic rollback instead.
+  Write-Host "[BUILD] Verifying the standalone build (server + all chunks)..."
+  node scripts\verify-standalone.mjs
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[FAIL] Standalone build verification failed - see above." -ForegroundColor Red
     return $false
   }
   return $true
@@ -323,7 +361,17 @@ if (-not (Test-Path $dbFile)) {
 }
 
 $currentVersion = ""
-try { $currentVersion = (Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).version } catch { }
+try {
+  $pkg = Get-Content (Join-Path $root 'package.json') -Raw | ConvertFrom-Json
+  $currentVersion = "$($pkg.version)"
+  # v2.18.0.1: correction releases carry the full four-part version in the
+  # "mbumah" metadata block (package.json "version" stays three-part semver).
+  # The comparison below needs THAT version to match the release tag - with
+  # the old package.json-only comparison, a machine on v2.18.0.0 (reported
+  # as "2.18.0") saw latest release v2.18.0.0 as "newer" forever and rebuilt
+  # it on EVERY start.
+  if ($pkg.mbumah -and $pkg.mbumah.releaseVersion) { $currentVersion = "$($pkg.mbumah.releaseVersion)" }
+} catch { }
 $fromVersion = "$currentVersion"
 Write-Host "[INFO] App folder : $root"
 Write-Host "[INFO] Current version: $currentVersion"
