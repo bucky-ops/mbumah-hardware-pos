@@ -1,5 +1,65 @@
 import type { NextConfig } from "next";
 
+// ---------------------------------------------------------------------------
+// v2.18.0.1 (correction): Windows laptop builds could not ship working
+// standalone output because Turbopack gives ASYNC-imported node builtins
+// their own chunk file named after the specifier, e.g.
+//   [externals]_node:inspector_7a4283c6._.js
+// NTFS forbids colons in file names, so `next build` emitted EINVAL
+// copyfile errors and the affected routes (api/batch, api/cron/nightly)
+// lost their chunks in .next/standalone - the module loaded fine in dev
+// and on Linux, then broke only on Windows laptops.
+//
+// Observed async import sites: @sentry/node-core's ANR integration
+// (`await import('node:inspector')`) and our own data-retention module
+// (`await import('node:fs/promises')`, now a static import).
+//
+// FIX: alias every node: builtin to its identical bare specifier. Node
+// treats require("node:fs") and require("fs") as the SAME module, so this
+// is a pure rename at the bundler level - and the chunk names lose the
+// colon ([externals]_inspector_7a4283c6._.js), which every filesystem
+// accepts. The list is the full stable builtin surface so future dynamic
+// imports in dependencies cannot reintroduce the failure class.
+// ---------------------------------------------------------------------------
+const NODE_BUILTINS = [
+  "assert", "async_hooks", "buffer", "child_process", "cluster",
+  "console", "constants", "crypto", "dgram", "diagnostics_channel",
+  "dns", "domain", "events", "fs", "fs/promises", "http", "http2",
+  "https", "inspector", "module", "net", "os", "path", "path/posix",
+  "path/win32", "perf_hooks", "process", "punycode", "querystring",
+  "readline", "repl", "stream", "stream/consumers", "stream/promises",
+  "stream/web", "string_decoder", "sys", "timers", "timers/promises",
+  "tls", "trace_events", "tty", "url", "util", "util/types", "v8",
+  "vm", "wasi", "worker_threads", "zlib",
+];
+
+const nodeBuiltinAlias = Object.fromEntries(
+  NODE_BUILTINS.map((name) => [`node:${name}`, name]),
+);
+
+// ---------------------------------------------------------------------------
+// v2.18.0.1 (correction): next/image optimization needs sharp's NATIVE
+// binary for the exact platform. Laptop installs build and run on the same
+// Windows machine, so we can know at BUILD time whether that binary is
+// usable (require("sharp") dlopens it). If it is not, bake `unoptimized`
+// into the build instead of shipping a server whose image optimizer 500s
+// on every product photo (the v2.17.1 field failure). Vercel builds never
+// set BUILD_STANDALONE and always keep optimization (Vercel has its own
+// image pipeline).
+// ---------------------------------------------------------------------------
+function sharpUsableForBuild(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require("sharp");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const imageOptimizationDisabledForStandalone =
+  process.env.BUILD_STANDALONE === "1" && !sharpUsableForBuild();
+
 const nextConfig: NextConfig = {
   // Standalone output produces a self-contained build in .next/standalone/
   // that includes only the server code needed to run without node_modules.
@@ -32,6 +92,13 @@ const nextConfig: NextConfig = {
   // Ensure Prisma Client is bundled correctly for serverless (Vercel)
   serverExternalPackages: ["@prisma/client"],
 
+  // v2.18.0.1: rename node: builtin externals so Turbopack chunk file names
+  // never contain a colon (NTFS cannot create/copy them - see the long
+  // comment above NODE_BUILTINS).
+  turbopack: {
+    resolveAlias: nodeBuiltinAlias,
+  },
+
   // Allow dev requests from gateway proxy
   allowedDevOrigins: [
     "http://0.0.0.0:81",
@@ -46,8 +113,12 @@ const nextConfig: NextConfig = {
     "http://127.0.0.1:3000",
   ],
 
-  // Image optimization config - restrict to specific domains instead of wildcard
+  // Image optimization config - restrict to specific domains instead of wildcard.
+  // v2.18.0.1: unoptimized turns itself on at build time when a standalone
+  // (laptop) build's machine has no usable sharp native binary (see the
+  // helper above); it stays undefined (optimization on) for Vercel/Docker.
   images: {
+    unoptimized: imageOptimizationDisabledForStandalone || undefined,
     remotePatterns: [
       {
         protocol: "https",

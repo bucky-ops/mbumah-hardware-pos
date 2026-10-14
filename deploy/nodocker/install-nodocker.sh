@@ -93,7 +93,9 @@ export SKIP_ENV_VALIDATION=1
 # NOTE: `npm install` (not `npm ci`) - the repo is developed with bun, so the
 # npm lockfile can drift from package.json; `npm ci` would hard-fail on that.
 echo "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..."
-npm install
+# --include=optional (v2.18.0.1): sharp's platform binary ships as an
+# optional dependency; never let a machine-level npm config skip it.
+npm install --include=optional
 
 echo "[BUILD 2/4] Creating the database schema..."
 npm run db:push
@@ -115,6 +117,15 @@ node deploy/nodocker/verify-db.mjs
 mkdir -p .next/standalone/.next
 cp -r .next/static .next/standalone/.next/
 cp -r public .next/standalone/
+
+# ── 7b. Verify the standalone build is complete (v2.18.0.1) ──────────
+# Fails the INSTALL (not the first start) when the standalone output is
+# incomplete, instead of shipping a server that cannot boot.
+echo "[BUILD 6/6] Verifying the standalone build (server + all chunks)..."
+if ! node scripts/verify-standalone.mjs; then
+  echo "[FAIL] Standalone build verification failed - see above."
+  exit 1
+fi
 
 echo ""
 echo "=============================================================="

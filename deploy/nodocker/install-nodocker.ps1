@@ -152,7 +152,19 @@ $env:BUILD_STANDALONE = '1'
 # NOTE: `npm install` (not `npm ci`) - the repo is developed with bun, so the
 # npm lockfile can drift from package.json; `npm ci` would hard-fail on that.
 # `npm install` reconciles the lockfile and always succeeds.
-Run-Step "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..." "npm install"
+Run-Step "[BUILD 1/4] Installing dependencies (2-5 min, needs internet)..." "npm install --include=optional"
+
+# v2.18.0.1: make sure sharp's Windows binary is present (some machines skip
+# optional dependencies via npm config or antivirus interference, which made
+# every optimized image 500 at runtime). If it cannot be repaired here,
+# next.config.ts bakes images.unoptimized=true into this standalone build.
+$sharpBin = Join-Path (Get-Location) 'node_modules\@img\sharp-win32-x64\lib\sharp-win32-x64.node'
+if (-not (Test-Path $sharpBin)) {
+  Write-Host "[WARN] sharp Windows binary missing - repairing..." -ForegroundColor Yellow
+  cmd /c "npm install --no-save --os=win32 --cpu=x64 sharp" | Out-Null
+  if (Test-Path $sharpBin) { Write-Host "[OK] sharp Windows binary installed." }
+  else { Write-Host "[WARN] sharp binary still missing - images will be served unoptimized." -ForegroundColor Yellow }
+}
 
 Run-Step "[BUILD 2/4] Creating the database schema..." "npm run db:push"
 
@@ -171,6 +183,12 @@ Run-Step "[BUILD 5/5] Verifying the database (tables + admin account)..." "node 
 New-Item -ItemType Directory -Force -Path ".next\standalone\.next" | Out-Null
 Copy-Item ".next\static" ".next\standalone\.next\" -Recurse -Force
 Copy-Item "public" ".next\standalone\" -Recurse -Force
+
+# -- 7b. Verify the standalone build is complete (v2.18.0.1) ---------------
+# Fails the INSTALL (not the first start) when the standalone output is
+# incomplete - e.g. the Windows EINVAL colon-chunk class of trace-copy
+# failures - instead of shipping a server that cannot boot.
+Run-Step "[BUILD 6/6] Verifying the standalone build (server + all chunks)..." "node scripts\verify-standalone.mjs"
 
 # -- 8. Scheduled tasks: nightly update (23:00) + nightly backup (02:30) ---
 # The updater only acts inside the dormant window (22:00-06:00) and skips

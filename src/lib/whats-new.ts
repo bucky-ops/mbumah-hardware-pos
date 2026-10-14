@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.18.0.1',
+    title: 'Windows laptops: updates now verify themselves before restarting',
+    bullets: [
+      'Updates on Windows laptops no longer lose invisible pieces of the build (the "EINVAL / Failed to copy traced files" warnings) - batch operations and the nightly cleanup keep working.',
+      'Product photos keep loading even on machines where the image library is broken: the build now checks it and serves pictures without resizing instead of with errors.',
+      'An update that did not build completely is rolled back automatically instead of announcing "update complete" and then failing to start.',
+      'Closing and reopening the POS no longer repeats the same update forever, and the start window explains calmly what to check when the server exits early.',
+    ],
+  },
+  {
     version: '2.18.0.0',
     title: 'Calmer branch links: the workspace button never opens a dead end',
     bullets: [

@@ -21,6 +21,8 @@
 //   • isoReference - the ISO clause that mandates this period
 //
 
+import { unlink } from 'node:fs/promises';
+
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
@@ -321,7 +323,12 @@ export const dataRetention = {
           take: 500,
         });
         if (doomed.length > 0) {
-          const { unlink } = await import('node:fs/promises');
+          // STATIC import (v2.18.0.1): a dynamic import() of a node: builtin
+          // makes Turbopack emit a separate "[externals]_node:..." chunk file.
+          // That filename contains a colon, which NTFS forbids, so Windows
+          // standalone builds could not copy it (EINVAL) and the nightly
+          // cron route lost the chunk at runtime. A static import is inlined
+          // by the bundler and produces no chunk file at all.
           await Promise.all(
             doomed.map(async (row) => {
               if (!row.filePath) return;
