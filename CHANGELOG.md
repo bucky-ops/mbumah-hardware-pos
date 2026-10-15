@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.7] EMS attendance and leave: replay-safe punches, timesheet gating, idempotent balances
+
+Feature release (Stage E of the EMS implementation protocol, Phase 4.4). Extends the existing AttendanceRecord, LeaveRequest, and EmployeeLeaveBalance models additively and reuses the Shift system as the source of truth for till duty.
+
+### Added
+- **Attendance punch (/api/attendance/punch)**: server time is authoritative (client timestamps ignored), duplicate punch IN is suppressed per day, and punches carry an optional idempotencyKey so an offline replay returns the existing record unchanged (AttendanceRecord.idempotencyKey unique, nullable).
+- **Timesheet approval (/api/attendance/timesheets/approve)**: approves a day range per employee; hasUnapprovedTimesheet() is the payroll gate implementing the TIMESHEET_NOT_APPROVED guardrail, and attendanceShiftVariance() surfaces attendance/Shift mismatches without mutating either system (ghost-shift logic remains canonical in the Shift API).
+- **Leave (/api/leave/)**: balance-checked request submission (INSUFFICIENT_LEAVE_BALANCE and PERIOD_MISMATCH guardrails), approve and reject with optional delegation (LeaveRequest.delegateApproverUserId), balance grants that never overwrite usage aggregates, and recomputeBalances() deriving used/pending entirely from the request table so repeated runs are drift-free. Month-end spanning ranges recompute per leave year.
+- **Schema extensions**: AttendanceRecord gains idempotencyKey, timesheetApprovedByUserId/At, sourceDevice; LeaveRequest gains delegateApproverUserId.
+- **Tests**: punch replay, duplicate suppression, first-punch creation, punch-out refusal, recompute idempotency (two runs identical), and balance-row creation (8 cases in src/tests/lib/hr-attendance-leave.test.ts).
+
 ## [2.18.6] EMS recruitment, onboarding, and till access gating
 
 Feature release (Stage D of the EMS implementation protocol, Phase 4.3). Builds on the 2.18.5 foundations. Additive schema only.
