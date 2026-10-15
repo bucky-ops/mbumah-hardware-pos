@@ -61,6 +61,9 @@ export const HR_PERMISSIONS: Record<string, readonly PlatformRole[]> = {
   'hr.asset.manage': ['HR_MANAGER', 'STORE_OWNER'],
   'hr.discipline.manage': ['HR_MANAGER', 'STORE_OWNER'],
 
+  // Self-service own documents (v2.19.0, additive key - spec Phase 4.7)
+  'hr.documents.read.own': ['CASHIER', 'EMPLOYEE', 'BRANCH_MANAGER', 'ACCOUNTANT', 'HR_MANAGER', 'STORE_OWNER'],
+
   // Reports, settings, rate tables
   'hr.report.branch': ['HR_MANAGER', 'BRANCH_MANAGER'],
   'hr.report.all': ['HR_MANAGER', 'ACCOUNTANT', 'STORE_OWNER'],

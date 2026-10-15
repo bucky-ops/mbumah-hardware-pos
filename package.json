@@ -1,10 +1,10 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.18.9",
+  "version": "2.19.0",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.9",
-    "baseVersion": "2.18.9",
+    "releaseVersion": "2.19.0",
+    "baseVersion": "2.19.0",
     "hotfix": 0
   },
   "scripts": {
@@ -46,7 +46,8 @@
     "verify:prisma-config": "node scripts/verify-prisma-config.mjs",
     "verify:windows-build": "node scripts/verify-windows-build-safety.mjs",
     "verify:org-console-expert": "node scripts/verify-org-console-expert-info.mjs",
-    "verify:payroll-lifecycle": "node scripts/verify-payroll-lifecycle.mjs"
+    "verify:payroll-lifecycle": "node scripts/verify-payroll-lifecycle.mjs",
+    "verify:stage-g": "node scripts/verify-stage-g.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
