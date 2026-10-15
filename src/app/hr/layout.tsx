@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/hr/performance', label: 'Performance' },
   { href: '/hr/assets', label: 'Assets' },
   { href: '/hr/discipline', label: 'Discipline' },
+  { href: '/hr/reports', label: 'Reports' },
 ];
 
 export default function HrLayout({ children }: { children: React.ReactNode }) {

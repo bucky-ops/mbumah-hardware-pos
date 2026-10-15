@@ -160,6 +160,16 @@ function createBaseClient(): PrismaClient {
   const resolvedUrl = DATABASE_URL ? appendConnectTimeout(DATABASE_URL) : undefined;
   return new PrismaClient({
     datasourceUrl: resolvedUrl,
+    // v2.20.0 CI reliability fix: SQLite tests share ONE file across the
+    // suite. With pool > 1, a query issued inside an interactive transaction
+    // could grab a SECOND pool connection and wait on the file's write lock —
+    // a deadlock that surfaced as random "Socket timeout" flakes (and 30s
+    // test hangs once socket_timeout was raised). connection_limit=1 makes
+    // nested queries reuse the transaction's connection; the raised
+    // interactive transaction timeout then absorbs the serialised work
+    // (observed: a large goods-receipt transaction at ~5.0s vs the 5s
+    // default). Harmless-but-beneficial for production Postgres too.
+    transactionOptions: { maxWait: 10000, timeout: 15000 },
     // In production (Vercel serverless) keep logs to `error` only to avoid
     // cold-start log spam and Lambda log volume charges. In dev we surface
     // `warn` too so we catch N+1 / missing-index issues locally.

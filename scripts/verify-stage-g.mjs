@@ -142,10 +142,16 @@ for (const doc of ['docs/hr/performance.md', 'docs/hr/assets-and-discipline.md',
 
 const pkg = JSON.parse(read('package.json'));
 check('verify:stage-g npm script wired', Boolean(pkg.scripts?.['verify:stage-g']));
-check('package version is 2.19.0', pkg.version === '2.19.0', pkg.version);
+function semverAtLeast(version, minimum) {
+  const [a, b, c] = String(version).split('.').map((n) => Number(n) || 0);
+  const [x, y, z] = minimum.split('.').map((n) => Number(n) || 0);
+  return a > x || (a === x && (b > y || (b === y && c >= z)));
+}
+
+check('package version >= 2.19.0 (Stage G baseline)', semverAtLeast(pkg.version, '2.19.0'), pkg.version);
 check(
-  'mbumah.releaseVersion is 2.19.0',
-  pkg.mbumah?.releaseVersion === '2.19.0',
+  'mbumah.releaseVersion >= 2.19.0 (Stage G baseline)',
+  semverAtLeast(String(pkg.mbumah?.releaseVersion), '2.19.0'),
   String(pkg.mbumah?.releaseVersion),
 );
 

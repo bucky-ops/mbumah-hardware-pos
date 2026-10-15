@@ -78,3 +78,15 @@ rings on interactive cards, `role="progressbar"` with aria-valuenow on
 progress meters, icon-only affordances carry aria-labels, and every colour
 pairing has dark-mode variants. Lighthouse target: ≥ 90 on the portal
 (reported at Stage H compliance pass).
+
+## Lighthouse (spec acceptance 10)
+
+Target: Lighthouse ≥ 90 on the self-service portal. Measurements must run
+against a **production build** (`next build && next start`) — the dev server
+(unminified bundles, HMR, on-demand compilation) produces non-representative
+scores and is therefore not a valid measurement surface. The portal keeps the
+budget-friendly baseline: a single client shell per page, Skeleton loading
+states, system-adjacent font stack, no heavy client libraries beyond the
+shared shadcn/ui set, and offline caching that avoids refetch loops. If a
+production measurement lands below 90, the blocker and remediation are to be
+recorded here per the spec's "documented blocker" clause.

@@ -15,6 +15,7 @@ import Link from 'next/link';
 import {
   ArrowUpRight,
   Building2,
+  CalendarClock,
   CircleDollarSign,
   Clock,
   LayoutDashboard,
@@ -22,6 +23,8 @@ import {
   PackageOpen,
   ReceiptText,
   ShieldAlert,
+  Users,
+  Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -74,6 +77,14 @@ interface OrgSummary {
     pendingMpesa: number;
   };
   stores: OrgSummaryStore[];
+  hr: {
+    scope: string;
+    headcountActive: number;
+    monthEmploymentCost: number;
+    monthAbsenceRatePct: number;
+    latestPayroll: { periodName: string; status: string; createdAt: string } | null;
+    expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
+  } | null;
   recentAudit: Array<{
     id: string;
     storeId: string | null;
@@ -404,6 +415,43 @@ export function OrgConsole() {
             <StatCard icon={<Clock className="h-4 w-4" aria-hidden="true" />} label="Pending M-Pesa" value={String(summary.totals.pendingMpesa)} />
           </div>
         </section>
+
+        {/* EMS v2.20.0: HR tiles (spec Phase 4.8) — rendered only when the
+            API included the hr block (HR module on + report permission). */}
+        {summary.hr ? (
+          <section aria-label="HR summary tiles">
+            <h2 className="mb-2 text-sm font-semibold text-muted-foreground">People &amp; payroll</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+              <StatCard icon={<Users className="h-4 w-4" aria-hidden="true" />} label="Active headcount" value={String(summary.hr.headcountActive)} />
+              <StatCard icon={<Wallet className="h-4 w-4" aria-hidden="true" />} label="Employment cost (month)" value={formatKES(summary.hr.monthEmploymentCost)} />
+              <StatCard
+                icon={<CalendarClock className="h-4 w-4" aria-hidden="true" />}
+                label="Absence rate (month)"
+                value={`${summary.hr.monthAbsenceRatePct}%`}
+                tone={summary.hr.monthAbsenceRatePct >= 10 ? 'warn' : undefined}
+              />
+              <StatCard
+                icon={<ReceiptText className="h-4 w-4" aria-hidden="true" />}
+                label={summary.hr.latestPayroll ? `Payroll — ${summary.hr.latestPayroll.periodName}` : 'Payroll'}
+                value={summary.hr.latestPayroll ? summary.hr.latestPayroll.status.toLowerCase() : 'no runs yet'}
+                tone={summary.hr.latestPayroll && ['APPROVED', 'PENDING_APPROVAL'].includes(summary.hr.latestPayroll.status) ? 'warn' : undefined}
+              />
+              <StatCard
+                icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />}
+                label="Expiry alerts (90d + overdue assets)"
+                value={String(summary.hr.expiryAlerts.documentsExpiring90Days + summary.hr.expiryAlerts.assetsOverdue)}
+                tone={summary.hr.expiryAlerts.documentsExpiring90Days + summary.hr.expiryAlerts.assetsOverdue > 0 ? 'warn' : undefined}
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              HR details live in the{' '}
+              <Link href="/hr/reports" className="underline underline-offset-2 hover:text-foreground">
+                HR reports
+              </Link>{' '}
+              workspace.
+            </p>
+          </section>
+        ) : null}
 
         {/* Store performance table */}
         <section aria-label="Store performance" className="border rounded-lg bg-card overflow-hidden">

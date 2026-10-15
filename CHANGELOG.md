@@ -2,6 +2,31 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.20.0] EMS HR reporting, P10, org-console tiles, retention & erasure
+
+Feature release (Stage H, EMS Phase 4.8 — final EMS phase). Completes the module with the six governed HR reports, the P10 statutory register reproduced from stored payroll lines, five HR tiles in the organization console, per-record-type retention with legal hold, and Data Protection Act erasure handling with recorded decisions.
+
+### Added
+- **Six HR reports** (`/api/hr/reports/{headcount,employment-cost,absence,turnover,time-to-hire,statutory-liability}`): aggregates only — per-employee rows carry employeeCode + job title, never names, national IDs, or raw ids. Scope model: STORE_OWNER/HR_MANAGER/ACCOUNTANT see the organization (hr.report.all), BRANCH_MANAGER sees their own branch (session-resolved), everyone else is denied fail-closed. Employment cost mirrors the engine's employer match (NSSF + AHL). All reports accept `?from=&to=`.
+- **P10 statutory register** (`/api/hr/reports/p10?year=&format=csv|json`): **reproduces from stored posted payroll lines** — every figure reads the immutable PayrollDetail columns of POSTED/LOCKED runs in the tax year; nothing is recomputed, so the register always matches the journals and payslips. Groups by employeeCode with months + TOTAL row; CSV follows the repo export conventions and every export writes a `P10_EXPORTED` DATA_EXPORT audit event.
+- **/hr/reports workspace**: dense tables with sticky headers, per-table column-visibility toggles, CSV export, print-to-PDF (dedicated print styles), no horizontal scroll on supported viewports (vertical scroll containers with max height), no badge overlap, no raw ids. Tabs: Headcount · Employment cost · Absence · Turnover · Time to hire · Statutory · P10 · Privacy.
+- **Organization console HR tiles** (spec: headcount, employment cost, absence, payroll status, expiry alerts): `GET /api/org/summary` now embeds an `hr` block computed when the HR module is on and the caller holds an hr report permission; the console renders a five-tile "People & payroll" section (additive — an HR failure never breaks the console) linking to /hr/reports.
+- **Retention per record type + legal hold**: `HR_RETENTION_POLICIES` (applicant rejection data per its own dataRetentionUntil; closed disciplinary cases 3y; attendance device data 2y — all documented, reviewable defaults, not legal advice). The nightly `GET /api/cron/retention` now also runs the per-organization HR sweep, which **anonymises in place** (`REDACTED (retention)`) so foreign keys and audit history stay intact, and **skips scopes under legal hold** (`HrSetting legalHold:<scope>=true`). Batch audit events per scope.
+- **Erasure requests (Data Protection Act posture)**: additive `ErasureRequest` model + `/api/hr/privacy/erasure-requests` family. Opening is one-PENDING-per-employee; **execution erases non-statutory personal data only** (document files + notes, review narratives, contact fields) and lands `PARTIALLY_EXECUTED` with `retentionApplies=true` because payroll/audit rows keep statutory retention; rejection requires a decision reason and a legal basis; both are recorded with the decider id. Decisions reserved to `hr.settings.manage` (SUPER_ADMIN). Full audit coverage.
+- **Ride-along**: `scripts/qa-seed-stage-g-dev.mjs` committed (Stage G hermetic QA seed, previously local-only).
+- **Tests**: 16 new cases (report scoping incl. fail-closed roles, aggregate/no-raw-id payloads, employer-match math, P10 grouping/CSV/year filtering from stored lines, org tiles math, retention windows + legal hold + anonymisation, erasure execution/partial-execution/rejection contracts). Suite: **760 tests / 39 files**.
+- **scripts/verify-stage-h.mjs** (`npm run verify:stage-h`): 50+ static checks over report routes/guard composition, P10 stored-lines contract, dense-table acceptance contract, tile payloads, retention/legal-hold wiring, erasure decision recording, docs, and version.
+- **Docs**: docs/hr/reporting.md, docs/hr/data-protection.md, docs/hr/documents-and-retention.md.
+
+### Security
+- Reports and P10 are permission-gated with deny logging; aggregate payloads carry no names or raw identifiers; the P10 export is audit logged as DATA_EXPORT.
+- Erasure decisions are SUPER_ADMIN-only with the decision, legal basis, and decider recorded; statutory records are never erased.
+- Retention sweeps anonymise instead of hard-deleting and honour legal holds; each scope outcome (held/anonymised count) is audit logged.
+- Security headers and rate limiting remain the platform-layer controls documented in docs/hr/data-protection.md (CSP/HSTS/COOP/CORP via the proxy; login rate limiting via x-ratelimit-*).
+
+### Note
+This completes the EMS implementation phases (4.1–4.8, Stages A–H). Remaining non-code items: statutory rate tables keep verifyWithCounsel=true pending owner review; Lighthouse ≥90 on /employees/me is scheduled against the production build in the next maintenance window (dev-mode scores are not representative — documented in docs/hr/self-service.md).
+
 ## [2.19.0] EMS performance, goals, assets, discipline, and employee self-service
 
 Feature release (Stage G, EMS Phase 4.7). Adds the performance console (review cycles, reviews, calibration, POS-computed goals), asset assignments with authorization-gated recovery, disciplinary cases with automatic warning expiry and grievance confidentiality, and the mobile-first employee self-service portal at /employees/me.

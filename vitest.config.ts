@@ -23,6 +23,13 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     reporters: ['default'],
+    // CI reliability fix (v2.20.0): all tests share one SQLite file
+    // (prisma/prisma/dev.db). Parallel test FILES contend on the same
+    // database across worker processes — on slow CI runner disks this
+    // surfaced as random "Socket timeout" errors and 30s hangs in different
+    // suites on every run. File-level serialisation removes the contention
+    // (suite runtime grows from ~30s to ~1-2min, correctness first).
+    fileParallelism: false,
     // AUDIT FIX (Finding 4.1 - no coverage measurement): wire the v8
     // coverage provider so `vitest run --coverage` produces text/lcov
     // reports over first-party source. Thresholds are INTENTIONALLY not
