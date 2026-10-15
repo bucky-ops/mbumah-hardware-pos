@@ -9,7 +9,8 @@ export const metadata: Metadata = {
 const NAV_ITEMS = [
   { href: '/hr', label: 'Overview' },
   { href: '/hr/employees', label: 'Employees' },
-  { href: '/hr/employees?view=documents', label: 'Documents' },
+  { href: '/hr/recruitment', label: 'Recruitment' },
+  { href: '/hr/onboarding', label: 'Onboarding' },
 ];
 
 export default function HrLayout({ children }: { children: React.ReactNode }) {

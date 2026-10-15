@@ -1,10 +1,10 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.18.5",
+  "version": "2.18.6",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.5",
-    "baseVersion": "2.18.5",
+    "releaseVersion": "2.18.6",
+    "baseVersion": "2.18.6",
     "hotfix": 0
   },
   "scripts": {
