@@ -1757,6 +1757,7 @@ model LeaveRequest {
 
   // Approval chain
   approvedBy String? // User ID of approver
+  delegateApproverUserId String? // EMS v2.18.7: approver delegation
   approvedAt DateTime?
 
   // Emergency contact during leave (optional)
@@ -1801,6 +1802,12 @@ model AttendanceRecord {
   workingHours  Decimal @default(0) // (checkOut - checkIn) - breakHours
   overtimeHours Decimal @default(0) // Hours beyond the standard shift
   expectedHours Decimal @default(8) // Standard shift length
+
+  // EMS v2.18.7: replay-safe punch capture and timesheet approval fields.
+  idempotencyKey    String? @unique
+  timesheetApprovedByUserId String?
+  timesheetApprovedAt       DateTime?
+  sourceDevice      String?
 
   status            String @default("PRESENT") // PRESENT, ABSENT, LATE, HALF_DAY, LEAVE, HOLIDAY, WEEKEND, REMOTE
   lateMinutes       Int    @default(0) // Minutes late past shift start

@@ -22,7 +22,7 @@
 // this environment's postinstall) is what the tests actually import.
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -66,6 +66,20 @@ function run(cmd, args, extraEnv = {}) {
   }
 }
 
+// When a schema delta adds a unique constraint (for example the v2.18.7
+// attendance idempotency key), Prisma db push refuses to apply it to an
+// existing database that contains rows and asks for --accept-data-loss.
+// Rule: never use --accept-data-loss. The hermetic test database is a
+// throwaway fixture (regenerated from the seed, never pos.db), so the safe
+// path is to rebuild it from scratch when a normal push is refused.
+function rebuildTestDb(cli, cliArgs) {
+  console.log('prepare-test-db: rebuilding the hermetic test database from scratch ...');
+  if (existsSync(dbPath)) unlinkSync(dbPath);
+  if (existsSync(`${dbPath}-wal`)) unlinkSync(`${dbPath}-wal`);
+  if (existsSync(`${dbPath}-shm`)) unlinkSync(`${dbPath}-shm`);
+  run(cli || 'npx', cliArgs(['db', 'push', '--skip-generate']));
+}
+
 // 1. Ensure the database directory exists (gitignored, never committed).
 mkdirSync(dbDir, { recursive: true });
 
@@ -82,7 +96,15 @@ try {
   //    the npx fallback keeps it.
   const cli = prismaCliPath();
   const cliArgs = (rest) => (cli ? rest : ['prisma', ...rest]);
-  run(cli || 'npx', cliArgs(['db', 'push', '--skip-generate']));
+  // Capture the push result without exiting so the guarded rebuild can run.
+  const pushResult = spawnSync(cli || 'npx', cliArgs(['db', 'push', '--skip-generate']), {
+    stdio: 'inherit',
+    cwd: root,
+    env: { ...process.env, DATABASE_URL: `file:${dbPath}`, DIRECT_URL: `file:${dbPath}` },
+  });
+  if (pushResult.status !== 0) {
+    rebuildTestDb(cli, cliArgs);
+  }
 
   // 4b. The generated client must match the sqlite flip. A client generated
   //     against the postgres schema (for example after a local vercel-build
