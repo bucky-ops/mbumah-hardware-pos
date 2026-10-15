@@ -26,13 +26,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // (also relative to schema dir, but can differ based on how the
 // process was launched). An absolute path is always unambiguous.
 const DB_PATH = resolve(__dirname, '../../prisma/prisma/dev.db');
-// socket_timeout=60: the default query-engine timeout (a few seconds) can
-// trip on slow CI runner disks when parallel vitest workers share the SQLite
-// file (observed as "Socket timeout" flakes in the CI Test job). 60s keeps
-// the suite hermetic while tolerating I/O stalls. (connection_limit is left
-// at its default: serialising connections slows interactive transactions
-// past their own 5s budget.)
-const DB_URL = `file:${DB_PATH}?socket_timeout=60`;
+// socket_timeout=60 + connection_limit=1 (v2.20.0 CI reliability fix): all
+// tests share ONE SQLite file. With pool > 1, a query inside an interactive
+// transaction could deadlock on a second pool connection waiting for the
+// file's write lock — random "Socket timeout" flakes / 30s hangs in CI.
+// One connection serialises everything through the transaction's own
+// connection; db.ts raises the interactive transaction timeout to 15s so
+// larger transactions still fit.
+const DB_URL = `file:${DB_PATH}?socket_timeout=60&connection_limit=1`;
 
 // Always force-set DATABASE_URL and DIRECT_URL for tests, regardless
 // of what .env or the shell environment provides. This ensures the

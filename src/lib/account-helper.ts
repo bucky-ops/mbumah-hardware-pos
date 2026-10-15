@@ -111,8 +111,15 @@ export async function getAccountId(organizationId: string, code: AccountCode): P
 
 export async function getAccountIds(
   organizationId: string,
-  codes: AccountCode[]
+  codes: AccountCode[],
+  tx?: Prisma.TransactionClient,
 ): Promise<Record<string, string>> {
+  // v2.20.0 correctness fix: when called inside a caller's transaction,
+  // reads/writes MUST go through that transaction's connection. Using the
+  // root client here opened a second SQLite connection inside the caller's
+  // write lock -> SQLITE_BUSY waits (surfacing as random "Socket timeout"
+  // flakes in CI) and, worse, read data outside the caller's transaction
+  // isolation. Callers that have a tx pass it; standalone callers omit it.
   const result: Record<string, string> = {};
 
   const uncachedCodes: AccountCode[] = [];
@@ -131,7 +138,8 @@ export async function getAccountIds(
   }
 
   if (uncachedCodes.length > 0) {
-    const accounts = await db.account.findMany({
+    const client = tx ?? db;
+    const accounts = await client.account.findMany({
       where: { organizationId, code: { in: uncachedCodes } },
       select: { id: true, code: true },
     });
@@ -152,7 +160,7 @@ export async function getAccountIds(
       const defaults = ACCOUNT_DEFAULTS[code];
       if (defaults) {
         try {
-          const newAccount = await db.account.create({
+          const newAccount = await client.account.create({
             data: {
               organizationId,
               code,
@@ -397,7 +405,7 @@ export async function recordSaleJournalEntry(
     ACCOUNT_CODES.COST_OF_GOODS_SOLD,
     ACCOUNT_CODES.INVENTORY,
   ];
-  const accounts = await getAccountIds(organizationId, needed);
+  const accounts = await getAccountIds(organizationId, needed, tx);
 
   const jeNumber = generateJournalEntryNumber();
   const lines: Prisma.JournalEntryLineCreateManyJournalEntryInput[] = [];
@@ -554,7 +562,7 @@ export async function recordGiftCardIssuance(
     ACCOUNT_CODES.CASH_ON_HAND,
     ACCOUNT_CODES.MPESA_ACCOUNT,
     ACCOUNT_CODES.GIFT_CARD_LIABILITY,
-  ]);
+  ], tx);
   const debitAccount = paymentMethod === 'CASH' ? accounts.CASH_ON_HAND : accounts.MPESA_ACCOUNT;
   const jeNumber = generateJournalEntryNumber();
 
@@ -641,7 +649,7 @@ export async function recordGoodsReceiptEntry(
     ACCOUNT_CODES.INVENTORY,
     ACCOUNT_CODES.ACCOUNTS_PAYABLE,
     ACCOUNT_CODES.VAT_PAYABLE,
-  ]);
+  ], tx);
 
   // VAT-EXCLUSIVE B2B treatment (FINANCIAL MATH AUDIT §2 - aligned with
   // the PO module, which adds VAT on top of net unit costs): the passed
