@@ -20,6 +20,7 @@ import path from 'path';
 import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { withFinancialAuth, getSessionFromRequest } from '@/lib/auth';
+import { auditTrail } from '@/lib/audit-trail';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import {
   runExportGenerator,
@@ -193,6 +194,15 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
     );
   }
 
+  // Privacy: statutory identifiers and bank details in employee exports are
+  // masked unless the acting role may unmask PII. Every employee export is
+  // audit logged with whether unmasked data was included (field names only,
+  // never values).
+  const PII_UNMASK_ROLES = ['SUPER_ADMIN', 'STORE_OWNER'] as const;
+  const includeSensitivePii =
+    exportType === 'EMPLOYEES' &&
+    PII_UNMASK_ROLES.includes((session?.role ?? '') as (typeof PII_UNMASK_ROLES)[number]);
+
   // 1. Create the row as PROCESSING.
   const exportRow = await db.dataExport.create({
     data: {
@@ -216,7 +226,27 @@ async function createExportHandler(...args: unknown[]): Promise<Response> {
       parsedFilters,
       parsedDateFrom,
       parsedDateTo,
+      { includeSensitivePii },
     );
+
+    if (exportType === 'EMPLOYEES') {
+      await auditTrail.log({
+        actorId: createdById,
+        actorRole: session?.role ?? null,
+        action: 'EXPORT',
+        resourceType: 'DataExport',
+        resourceId: exportRow.id,
+        storeId,
+        reason: includeSensitivePii
+          ? 'Employee export with unmasked statutory identifiers (permitted role).'
+          : 'Employee export with masked statutory identifiers.',
+        metadata: {
+          exportType,
+          format,
+          piiIncluded: includeSensitivePii,
+        },
+      });
+    }
 
     // 3. Build the file content (CSV or JSON-wrapped CSV).
     const fileContent = format === 'JSON' ? csvToJson(result.csv) : result.csv;

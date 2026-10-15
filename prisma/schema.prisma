@@ -27,7 +27,7 @@ datasource db {
   // Committed as "postgresql" for Vercel. Auto-switched to "sqlite" by
   // scripts/setup-prisma-provider.mjs during postinstall when DATABASE_URL
   // starts with "file:" (local dev). Do not edit manually.
-  provider = "postgresql"
+  provider = "sqlite"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -748,9 +748,13 @@ model JournalEntry {
   id            String    @id @default(cuid())
   storeId       String
   entryNumber   String    @unique
+  // Replay-safe posting: callers may pass a stable key (e.g. payroll run id).
+  // A repeated create with the same key returns the existing entry instead of
+  // double posting. Nullable so all pre-existing entries remain valid.
+  idempotencyKey String?  @unique
   entryDate     DateTime  @default(now())
   description   String
-  referenceType String? // SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT
+  referenceType String? // SALE, PAYMENT, REFUND, RENTAL, ADJUSTMENT, PAYROLL
   referenceId   String? // Transaction ID, Payment ID, etc.
   totalDebit    Decimal
   totalCredit   Decimal
