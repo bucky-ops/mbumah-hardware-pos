@@ -121,6 +121,7 @@ model Store {
   payrollPeriods       PayrollPeriod[]
   payrollRuns          PayrollRun[]
   payrollDetails       PayrollDetail[]
+  payrollCorrections   PayrollCorrection[]
   leaveRequests        LeaveRequest[]
   attendanceRecords    AttendanceRecord[]
   // ── EMS v2.18.5 relations ──────────────────────────────────────────
@@ -814,6 +815,7 @@ model JournalEntry {
   reversingEntry   JournalEntry?     @relation("ReversingEntry", fields: [reversingEntryId], references: [id])
   reversedBy       JournalEntry?     @relation("ReversingEntry")
   lines            JournalEntryLine[]
+  payrollRuns      PayrollRun[] // v2.18.9: runs posted through createJournalEntry
 
   // ISO 9001: Indexes for common accounting query patterns
   @@index([storeId])
@@ -1510,6 +1512,7 @@ model Employee {
   store             Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
   user              User?                  @relation(fields: [userId], references: [id])
   payrollDetails    PayrollDetail[]
+  payrollCorrections PayrollCorrection[]
   leaveBalances     EmployeeLeaveBalance[]
   leaveRequests     LeaveRequest[]
   attendanceRecords AttendanceRecord[]
@@ -1578,10 +1581,29 @@ model PayrollRun {
   storeId         String // Denormalised from PayrollPeriod for tenant-scoping
 
   runType     String    @default("REGULAR") // REGULAR, SUPPLEMENTARY, OFF_CYCLE, BONUS
-  status      String    @default("DRAFT") // DRAFT, PROCESSING, COMPLETED, PAID, VOIDED, FAILED
+  status      String    @default("DRAFT") // v2.18.9 lifecycle: DRAFT, PENDING_APPROVAL, APPROVED, POSTED, LOCKED, REJECTED, VOIDED, FAILED
   initiatedBy String? // User ID of the manager who initiated the run
   processedAt DateTime?
   paidAt      DateTime?
+
+  // ── v2.18.9 run lifecycle (state machine + maker-checker) ────────────────
+  // DRAFT → PENDING_APPROVAL → APPROVED → POSTED → LOCKED, with REJECTED
+  // (approver sends back), VOIDED (pre-post cancellation), FAILED.
+  // MAKER-CHECKER: preparedByUserId must differ from approvedByUserId —
+  // enforced server-side regardless of role (spec rule 21).
+  idempotencyKey    String? @unique // Natural key per EMS data model delta
+  preparedByUserId  String?
+  preparedAt        DateTime?
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  rejectedByUserId  String?
+  rejectionReason   String?
+  postedAt          DateTime?
+  postedByUserId    String?
+  lockedAt          DateTime?
+  lockedByUserId    String?
+  journalEntryId    String? // Posted combined journal (idempotencyKey = payroll-run:{id})
+  journalEntry      JournalEntry? @relation(fields: [journalEntryId], references: [id])
 
   // Aggregate totals for THIS run (sum of PayrollDetail rows)
   totalGross      Decimal @default(0)
@@ -1598,12 +1620,15 @@ model PayrollRun {
   payrollPeriod PayrollPeriod   @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
   store         Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
   details       PayrollDetail[]
+  corrections             PayrollCorrection[] @relation("CorrectionTargetRun")
+  replacementCorrections  PayrollCorrection[] @relation("CorrectionReplacementRun")
 
   @@index([payrollPeriodId])
   @@index([storeId])
   @@index([status])
   @@index([createdAt])
   @@index([storeId, status])
+  @@index([payrollPeriodId, status])
   @@map("payroll_runs")
 }
 
@@ -1657,12 +1682,23 @@ model PayrollDetail {
   paymentDate   DateTime?
   payslipPdfUrl String? // Generated PDF path (S3/Vercel Blob)
 
+  // ── v2.18.9 payslip issuance ──────────────────────────────────────────
+  // Human-readable payslip number (PS-YYYYMMDD-NNNN via sequence.ts),
+  // assigned at POST time. Payslips are append-only; corrections go through
+  // PayrollCorrection (reverse and replace), never by editing these rows.
+  payslipNumber           String? @unique
+  payslipIssuedAt         DateTime?
+  rateTableIds            String? // JSON array of RateTable ids used (traceability)
+  roundingAdjustmentCents Int     @default(0) // Engine residual so net identity holds exactly
+  computationTrace        String? // JSON: PayslipResult trace + lines (plain-language rendering)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  store      Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  payrollRun  PayrollRun          @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee    Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  store       Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  corrections PayrollCorrection[]
 
   @@unique([payrollRunId, employeeId])
   @@index([payrollRunId])
@@ -1671,6 +1707,48 @@ model PayrollDetail {
   @@index([paymentStatus])
   @@index([storeId, paymentStatus])
   @@map("payroll_details")
+}
+
+/// v2.18.9 - A correction request against an immutable posted payslip.
+/// Corrections REVERSE and REPLACE: approval posts a balanced adjusting
+/// journal entry (idempotencyKey = payroll-correction:{id}) and, for
+/// amount-affecting types, links a replacement SUPPLEMENTARY run whose
+/// corrected payslip goes through the normal lifecycle. PayrollDetail rows
+/// themselves are never edited.
+model PayrollCorrection {
+  id               String @id @default(cuid())
+  storeId          String
+  payrollRunId     String // Run that contains the affected payslip
+  employeeId       String
+  originalDetailId String // Affected PayrollDetail (immutable original)
+
+  correctionType String // UNDERPAYMENT, OVERPAYMENT, REVERSAL
+  amountCents    Int    // Signed: positive = company owes employee; negative = employee owes company (REVERSAL ignores)
+  reason         String
+
+  status            String    @default("PENDING") // PENDING, APPROVED, REJECTED, APPLIED
+  requestedByUserId String
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  rejectedByUserId  String?
+  rejectionReason   String?
+  appliedAt         DateTime?
+  journalEntryId    String?   // Adjusting entry (idempotencyKey = payroll-correction:{id})
+  replacementRunId  String?   // Replacement SUPPLEMENTARY run (UNDER/OVERPAYMENT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  run             PayrollRun     @relation("CorrectionTargetRun", fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee        Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  store           Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  originalDetail  PayrollDetail  @relation(fields: [originalDetailId], references: [id])
+  replacementRun  PayrollRun?    @relation("CorrectionReplacementRun", fields: [replacementRunId], references: [id])
+
+  @@index([storeId, status])
+  @@index([payrollRunId])
+  @@index([employeeId])
+  @@map("payroll_corrections")
 }
 
 /// Organisation-wide leave policy types. NOT store-scoped (a leave type is a
