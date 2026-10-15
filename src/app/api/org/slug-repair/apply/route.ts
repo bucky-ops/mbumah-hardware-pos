@@ -25,6 +25,7 @@
 
 import { type NextRequest } from 'next/server';
 import { spawnSync } from 'node:child_process';
+import { join as joinPath } from 'node:path';
 import { db, runWithoutTenant } from '@/lib/db';
 import { requireAuth, requireRole, type AuthSession } from '@/lib/auth';
 import { isRateLimited } from '@/lib/rate-limit';
@@ -122,7 +123,10 @@ async function slugRepairApplyHandler(
 
     // Rule 5: backup-first. The backup script is the same one the updater
     // and the repair scripts use; a failed backup aborts everything.
-    const backup = spawnSync('node', ['scripts/backup-db.mjs'], {
+    // The script path is computed at runtime (join, not a literal) so the
+    // bundler never tries to resolve it as a module dependency.
+    const backupScript = joinPath('scripts', 'backup-db' + '.mjs');
+    const backup = spawnSync(process.execPath, [backupScript], {
       cwd: process.cwd(),
       stdio: 'inherit',
     });

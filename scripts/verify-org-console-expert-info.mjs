@@ -121,8 +121,12 @@ check(
   `expected a "file:" DATABASE_URL check referencing database-migration-policy in ${applyPath}`,
 );
 
+// The route computes the script path at runtime (join + concatenation) so the
+// bundler never tries to resolve it as a module; accept both spellings.
 const backupFirst =
-  applyRoute !== null && applyRoute.includes('backup-db.mjs');
+  applyRoute !== null &&
+  applyRoute.includes('spawnSync') &&
+  (applyRoute.includes('backup-db.mjs') || applyRoute.includes("backup-db' + '.mjs"));
 check(
   'slug-repair apply is backup-first (scripts/backup-db.mjs)',
   backupFirst,
