@@ -26,10 +26,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { LoginScreen } from '@/components/login-screen';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
+// Type-only import: erased at compile time, so the server-only diagnostics
+// data layer never enters the client bundle.
+import type { BranchDiagnostic } from '@/lib/org/diagnostics';
 import {
   getWorkspaceUnavailableReason,
   isLocalWorkspaceHost,
@@ -116,6 +126,13 @@ function WorkspaceUnavailableBadge({
   );
 }
 
+/**
+ * Expert diagnostics dialog state machine (v2.18.4). The diagnostics list is
+ * lazily fetched from GET /api/org/branch-diagnostics on the first Expert
+ * open, cached in component state for the session, and re-fetched (bypassing
+ * the cache) by the Refresh action. Loading, error-with-retry and copy
+ * confirmation are always plain text; status is never conveyed by color.
+ */
 function formatKES(amount: number): string {
   return new Intl.NumberFormat('en-KE', {
     style: 'currency',
@@ -164,6 +181,85 @@ export function OrgConsole() {
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  // v2.18.4 expert diagnostics (per-row Expert affordance in the Branches table).
+  const [expertStore, setExpertStore] = useState<OrgSummaryStore | null>(null);
+  const [expertDiagnostic, setExpertDiagnostic] = useState<BranchDiagnostic | null>(null);
+  const [expertPhase, setExpertPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [expertError, setExpertError] = useState('');
+  const [expertList, setExpertList] = useState<BranchDiagnostic[] | null>(null);
+  const [copyConfirmation, setCopyConfirmation] = useState('');
+
+  function findDiagnosticFor(
+    list: BranchDiagnostic[],
+    store: OrgSummaryStore,
+  ): BranchDiagnostic | null {
+    return list.find((b) => b.storeId === store.id) ?? null;
+  }
+
+  async function fetchDiagnostics(force: boolean): Promise<BranchDiagnostic[] | null> {
+    if (!force && expertList) return expertList;
+    const res = await authorizedFetchJson('/api/org/branch-diagnostics');
+    if (res.status === 401) {
+      setExpertPhase('error');
+      setExpertError('Your session has expired. Refresh the page to sign in again.');
+      return null;
+    }
+    if (res.status === 403) {
+      setExpertPhase('error');
+      setExpertError('Your role cannot view branch diagnostics. This attempt has been logged.');
+      return null;
+    }
+    const data = res.json?.data as { branches?: unknown } | undefined;
+    if (!res.ok || !res.json?.success || !data || !Array.isArray(data.branches)) {
+      setExpertPhase('error');
+      setExpertError(res.json?.error || 'Branch diagnostics could not be loaded.');
+      return null;
+    }
+    const branches = data.branches as BranchDiagnostic[];
+    setExpertList(branches);
+    return branches;
+  }
+
+  async function openExpertDiagnostics(store: OrgSummaryStore, force: boolean) {
+    setExpertStore(store);
+    setCopyConfirmation('');
+    setExpertPhase('loading');
+    setExpertError('');
+    const cached = !force && expertList ? findDiagnosticFor(expertList, store) : null;
+    if (cached) {
+      setExpertDiagnostic(cached);
+      setExpertPhase('ready');
+      return;
+    }
+    const list = await fetchDiagnostics(force);
+    if (!list) {
+      setExpertDiagnostic(null);
+      return;
+    }
+    const match = findDiagnosticFor(list, store);
+    setExpertDiagnostic(match);
+    if (match) {
+      setExpertPhase('ready');
+    } else {
+      setExpertPhase('error');
+      setExpertError('No diagnostic was returned for this branch. Refresh to retry.');
+    }
+  }
+
+  async function copyExpertDiagnostics() {
+    if (!expertDiagnostic) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(expertDiagnostic, null, 2));
+      setCopyConfirmation('Diagnostics copied.');
+    } catch {
+      setCopyConfirmation('Copying was blocked by the browser. Select the text and copy it manually.');
+    }
+  }
+
+  function closeExpertDiagnostics() {
+    setExpertStore(null);
+    setCopyConfirmation('');
+  }
 
   useEffect(() => {
     setOrganizationMode({ store: null, hostMode: 'organization' });
@@ -381,28 +477,38 @@ export function OrgConsole() {
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.debtOutstanding)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{store.pendingMpesa}</td>
                       <td className="px-4 py-3 text-right">
-                        {href ? (
-                          <div className="inline-flex flex-col items-end gap-1">
-                            <Button asChild size="sm" variant="outline" disabled={inactive}>
-                              <a href={href} target="_blank" rel="noopener noreferrer">
-                                <Building2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
-                                Open branch workspace
-                                <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
-                              </a>
-                            </Button>
-                            {showPathChip ? (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] font-normal text-muted-foreground"
-                                title="Branch subdomains are not available for this host. The path workspace /stores/{slug}/dashboard is ready."
-                              >
-                                Path fallback ready
-                              </Badge>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <WorkspaceUnavailableBadge reason={unavailableReason} inactive={inactive} />
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {href ? (
+                            <div className="inline-flex flex-col items-end gap-1">
+                              <Button asChild size="sm" variant="outline" disabled={inactive}>
+                                <a href={href} target="_blank" rel="noopener noreferrer">
+                                  <Building2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                                  Open branch workspace
+                                  <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
+                                </a>
+                              </Button>
+                              {showPathChip ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] font-normal text-muted-foreground"
+                                  title="Branch subdomains are not available for this host. The path workspace /stores/{slug}/dashboard is ready."
+                                >
+                                  Path fallback ready
+                                </Badge>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <WorkspaceUnavailableBadge reason={unavailableReason} inactive={inactive} />
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Expert diagnostics for ${store.name}`}
+                            onClick={() => openExpertDiagnostics(store, false)}
+                          >
+                            Expert
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -432,6 +538,108 @@ export function OrgConsole() {
           )}
         </section>
       </main>
+
+      {/* v2.18.4 per-branch Expert diagnostics dialog. Radix provides the
+          Escape-to-close and focus management; no manual focus trap. */}
+      <Dialog
+        open={expertStore !== null}
+        onOpenChange={(open) => {
+          if (!open) closeExpertDiagnostics();
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Expert diagnostics{expertStore ? ` - ${expertStore.name}` : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Server-verified workspace, schema and operational state for this branch.
+            </DialogDescription>
+          </DialogHeader>
+          {expertPhase === 'loading' ? (
+            <p className="text-sm text-muted-foreground">Loading diagnostics...</p>
+          ) : null}
+          {expertPhase === 'error' ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{expertError}</p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (expertStore) openExpertDiagnostics(expertStore, true);
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : null}
+          {expertPhase === 'ready' && expertDiagnostic ? (
+            <div className="space-y-4">
+              <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Slug</dt>
+                <dd className="break-all font-mono text-xs">
+                  {expertDiagnostic.slug || 'Not set'}
+                </dd>
+                <dt className="text-muted-foreground">Subdomain</dt>
+                <dd className="break-all font-mono text-xs">
+                  {expertDiagnostic.subdomain || 'Not set'}
+                </dd>
+                <dt className="text-muted-foreground">Status</dt>
+                <dd>{expertDiagnostic.status}</dd>
+                <dt className="text-muted-foreground">Reason code</dt>
+                <dd>
+                  <Badge variant="outline" className="font-mono text-[11px] font-normal">
+                    {expertDiagnostic.reasonCode}
+                  </Badge>
+                </dd>
+                <dt className="text-muted-foreground">Remediation</dt>
+                <dd className="text-muted-foreground">{expertDiagnostic.remediation}</dd>
+                <dt className="text-muted-foreground">Schema</dt>
+                <dd>
+                  {expertDiagnostic.schemaStatus}
+                  {expertDiagnostic.missingColumns.length > 0 ? (
+                    <span className="block font-mono text-xs text-amber-700 dark:text-amber-400">
+                      Missing: {expertDiagnostic.missingColumns.join(', ')}
+                    </span>
+                  ) : null}
+                </dd>
+                <dt className="text-muted-foreground">Checked</dt>
+                <dd className="text-xs">
+                  {new Date(expertDiagnostic.lastCheckedAt).toLocaleString()}
+                </dd>
+              </dl>
+              <p aria-live="polite" className="text-xs text-muted-foreground">
+                {copyConfirmation}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={copyExpertDiagnostics}>
+                  Copy diagnostics
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (expertStore) openExpertDiagnostics(expertStore, true);
+                  }}
+                >
+                  Refresh
+                </Button>
+                {expertDiagnostic.slug ? (
+                  <Button asChild size="sm" variant="outline">
+                    <a
+                      href={`/stores/${expertDiagnostic.slug}/dashboard`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open path workspace
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.18.3",
+  "version": "2.18.4",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.3.2",
-    "baseVersion": "2.18.3",
-    "hotfix": 2
+    "releaseVersion": "2.18.4",
+    "baseVersion": "2.18.4",
+    "hotfix": 0
   },
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -44,7 +44,8 @@
     "verify:branch-manager-users": "node scripts/verify-branch-manager-users.mjs",
     "verify:release-selection": "node scripts/verify-release-selection.mjs",
     "verify:prisma-config": "node scripts/verify-prisma-config.mjs",
-    "verify:windows-build": "node scripts/verify-windows-build-safety.mjs"
+    "verify:windows-build": "node scripts/verify-windows-build-safety.mjs",
+    "verify:org-console-expert": "node scripts/verify-org-console-expert-info.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

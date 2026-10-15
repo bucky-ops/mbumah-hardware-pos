@@ -1,0 +1,96 @@
+{
+  "report": "TEST_AUDIT_REPORT",
+  "release": "2.18.4",
+  "scope": "Every file matching src/tests/** and src/**/__tests__/** with coverage taken from header comments, role and module matrices, risk register, and the v2.18.4 acceptance checklist.",
+  "recommendation": "Run the full vitest suite as a required CI check on every pull request. Triage the 16 pre-existing failures in the next correction release so the CI gate starts from a green baseline.",
+  "inventory": {
+    "src/__tests__": [
+      { "file": "src/__tests__/api-helpers.test.ts", "coverage": "Audit-remediation API helpers: pagination parse and meta build (api-pagination), the canonical 400 validation response (validations), and rate limit tier enforcement including the WEBHOOK tier." },
+      { "file": "src/__tests__/api/transactions.test.ts", "coverage": "Transactions API integration tests: the financial invariants of the POS checkout flow." },
+      { "file": "src/__tests__/lib/error-normaliser.test.ts", "coverage": "normaliseError truthfulness: real HTTP status preserved in normalised errors and friendly branch-blocked lookup messages (v2.5 R2/R8 fixes)." },
+      { "file": "src/__tests__/lib/financial-math.test.ts", "coverage": "financialMath audit spec: the uniform formula chain (line subtotal, line discount, net, VAT inclusive and exclusive)." },
+      { "file": "src/__tests__/lib/money.test.ts", "coverage": "Money class financial-correctness guarantees (currency arithmetic)." },
+      { "file": "src/__tests__/lib/payroll-math.test.ts", "coverage": "calculatePayForPeriod against hand-computed Kenya 2024/2025 statutory values (PAYE, NSSF, SHIF, housing levy)." },
+      { "file": "src/__tests__/lib/tenant-scoping.test.ts", "coverage": "ORM-level tenant scoping (injectTenant) security regressions: client-supplied where.storeId can never weaken scoping." },
+      { "file": "src/__tests__/lib/transfer-sku.test.ts", "coverage": "Transfer SKU derivation, branch code normalization, employee code formatting, SKU generation." }
+    ],
+    "src/tests/lib": [
+      { "file": "src/tests/lib/account-helper.test.ts", "coverage": "recordSaleJournalEntry double-entry bookkeeping invariants the POS checkout relies on (ISO 9001 / GAAP)." },
+      { "file": "src/tests/lib/auth-redirect.test.ts", "coverage": "v2.18.1 post-login redirect matrix for branch-bound roles (workspace links)." },
+      { "file": "src/tests/lib/branch-workspace.test.ts", "coverage": "v2.18.0.0 / v2.18.3.0: the safe workspace link builder (href, usedMode, precise unavailable reasons) and resolveStoreContext with a mocked database (43 cases)." },
+      { "file": "src/tests/lib/build-output-policy.test.ts", "coverage": "v2.18.0.2 / v2.18.3.1: the build log fatal-pattern scan (compile, module-not-found, P2022, prisma:error, standalone trace copy) and the dual-mode start contract." },
+      { "file": "src/tests/lib/compliance.test.ts", "coverage": "Compliance helpers." },
+      { "file": "src/tests/lib/currency-utils.test.ts", "coverage": "Currency utilities." },
+      { "file": "src/tests/lib/debt-helpers.test.ts", "coverage": "Debt management helpers." },
+      { "file": "src/tests/lib/financial-remediations.test.ts", "coverage": "Financial-remediation regression tests pinning the remediated behaviors from the financial module audit." },
+      { "file": "src/tests/lib/immutability.test.ts", "coverage": "Hardened Prisma client extension immutability guards fire for JournalEntry, JournalEntryLine and SystemLog." },
+      { "file": "src/tests/lib/mpesa-idempotency.test.ts", "coverage": "v2.18.3.2: findInFlightStkPush natural-window dedupe query (match, miss, phone normalization, store scoping, status restriction)." },
+      { "file": "src/tests/lib/org-diagnostics.test.ts", "coverage": "v2.18.4 (new): deriveSlugFromStoreName canonical mappings and edge cases; computeBranchDiagnostics classification, schema probe caching and drift, batched aggregates and degradation, with the database mocked. 15 cases." },
+      { "file": "src/tests/lib/receipt-format.test.ts", "coverage": "v2.14.0 receipt-rendering formatting helpers (money never wraps, canonical KES formatter reuse)." },
+      { "file": "src/tests/lib/release-version.test.ts", "coverage": "v2.18.0.2: release version parser, comparator and tag validator (the real modules the updaters use)." },
+      { "file": "src/tests/lib/store-guard.test.ts", "coverage": "v2.17.8: store-scope authorization helpers (requireStoreAccess, assertStoreScope)." },
+      { "file": "src/tests/lib/updater-state.test.ts", "coverage": "v2.17.9: staged updater state store defensive reads (pure filesystem, fresh temp dir per test)." },
+      { "file": "src/tests/lib/validations.test.ts", "coverage": "Zod validation schemas." },
+      { "file": "src/tests/lib/wac.test.ts", "coverage": "Weighted average cost calculation (IAS 2 layers, hermetic pure function)." },
+      { "file": "src/tests/lib/workspace-domain.test.ts", "coverage": "v2.16.0 / v2.17.7: Edge-safe domain helpers consumed by the proxy and workspace resolver, including resolveRequestHost forwarded-host trust." },
+      { "file": "src/tests/lib/workspace-stores.test.ts", "coverage": "v2.16.0: consistency between the three places that define branch workspaces (seed, client store-info, domains tooling)." }
+    ]
+  },
+  "roleMatrix": {
+    "legend": "Direct: tests pin the behavior for this role. Indirect: covered through shared helpers this role depends on. None: no test in the suite; guarded by route-level auth gates and lint. Blocked by design: the role is denied the capability and no test asserts the denial.",
+    "capabilityAreas": [
+      { "area": "Authentication and session", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "Indirect", "CASHIER": "Indirect (auth-redirect)", "ACCOUNTANT": "Indirect", "Unauthenticated": "None" },
+      { "area": "Tenant isolation (injectTenant)", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "Indirect", "CASHIER": "Indirect", "ACCOUNTANT": "Indirect", "Unauthenticated": "None" },
+      { "area": "Store-scope authorization (requireStoreAccess, assertStoreScope)", "SUPER_ADMIN": "Indirect (store-guard)", "STORE_OWNER": "Indirect (store-guard)", "BRANCH_MANAGER": "Indirect (store-guard)", "CASHIER": "Indirect (store-guard)", "ACCOUNTANT": "Indirect (store-guard)", "Unauthenticated": "None" },
+      { "area": "POS checkout financial invariants", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "Indirect", "CASHIER": "Indirect", "ACCOUNTANT": "Indirect", "Unauthenticated": "None" },
+      { "area": "Journal entries and financial math", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "Indirect", "Unauthenticated": "None" },
+      { "area": "Payroll calculation", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "Indirect", "Unauthenticated": "None" },
+      { "area": "Debt management", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "Indirect (debt-helpers)", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "Rentals", "SUPER_ADMIN": "None", "STORE_OWNER": "None", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "Inventory (WAC)", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "M-Pesa STK push idempotency", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "M-Pesa callback settlement", "SUPER_ADMIN": "None (route-level)", "STORE_OWNER": "None (route-level)", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "eTIMS", "SUPER_ADMIN": "None", "STORE_OWNER": "None", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "Workspace routing and link safety", "SUPER_ADMIN": "Direct (branch-workspace, workspace-domain)", "STORE_OWNER": "Direct (branch-workspace)", "BRANCH_MANAGER": "Indirect", "CASHIER": "Indirect", "ACCOUNTANT": "Indirect", "Unauthenticated": "Direct (unauthenticated fallbacks)" },
+      { "area": "Organization console diagnostics (v2.18.4)", "SUPER_ADMIN": "Indirect (data layer is role-agnostic; routes gate)", "STORE_OWNER": "Indirect (routes gate)", "BRANCH_MANAGER": "Blocked by design", "CASHIER": "Blocked by design", "ACCOUNTANT": "Blocked by design", "Unauthenticated": "Blocked by design" },
+      { "area": "User management", "SUPER_ADMIN": "None (route-level)", "STORE_OWNER": "None (route-level)", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "Build and updater safety", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "None", "CASHIER": "None", "ACCOUNTANT": "None", "Unauthenticated": "None" },
+      { "area": "Receipts", "SUPER_ADMIN": "Indirect", "STORE_OWNER": "Indirect", "BRANCH_MANAGER": "Indirect", "CASHIER": "Indirect", "ACCOUNTANT": "None", "Unauthenticated": "None" }
+    ],
+    "honestGaps": "Route-level behavior (role gates, rate limits, 401/403 responses) is guarded by the in-route patterns and the static verification scripts, not by route integration tests in this repository. The rentals, eTIMS, M-Pesa callback, and user management areas have no dedicated test file."
+  },
+  "moduleMatrix": [
+    { "module": "Auth, session and redirects", "testFiles": ["src/tests/lib/auth-redirect.test.ts", "src/tests/lib/store-guard.test.ts"], "notes": "Redirect matrix and store-scope helpers." },
+    { "module": "Workspace routing", "testFiles": ["src/tests/lib/branch-workspace.test.ts", "src/tests/lib/workspace-domain.test.ts", "src/tests/lib/workspace-stores.test.ts"], "notes": "Link builder, domain helpers, cross-file consistency." },
+    { "module": "Tenant scoping", "testFiles": ["src/__tests__/lib/tenant-scoping.test.ts"], "notes": "ORM-level regression tests." },
+    { "module": "Financial math and money", "testFiles": ["src/__tests__/lib/financial-math.test.ts", "src/__tests__/lib/money.test.ts", "src/tests/lib/account-helper.test.ts", "src/tests/lib/financial-remediations.test.ts", "src/tests/lib/wac.test.ts"], "notes": "The strongest-covered area in the suite." },
+    { "module": "Payroll", "testFiles": ["src/__tests__/lib/payroll-math.test.ts"], "notes": "Kenya statutory rules." },
+    { "module": "Debt", "testFiles": ["src/tests/lib/debt-helpers.test.ts"], "notes": "Helper level." },
+    { "module": "M-Pesa", "testFiles": ["src/tests/lib/mpesa-idempotency.test.ts"], "notes": "Dedupe query; callback route itself untested (route-level)." },
+    { "module": "Receipts", "testFiles": ["src/tests/lib/receipt-format.test.ts"], "notes": "Formatting contracts." },
+    { "module": "API infrastructure", "testFiles": ["src/__tests__/api-helpers.test.ts", "src/__tests__/lib/error-normaliser.test.ts", "src/tests/lib/validations.test.ts"], "notes": "Pagination, rate limit tiers, error normalization, Zod schemas." },
+    { "module": "Build and release tooling", "testFiles": ["src/tests/lib/build-output-policy.test.ts", "src/tests/lib/release-version.test.ts", "src/tests/lib/updater-state.test.ts"], "notes": "Updater and release safety." },
+    { "module": "Organization diagnostics (v2.18.4)", "testFiles": ["src/tests/lib/org-diagnostics.test.ts"], "notes": "Slug derivation and the diagnostics classifier with a mocked database." },
+    { "module": "Compliance and currency", "testFiles": ["src/tests/lib/compliance.test.ts", "src/tests/lib/currency-utils.test.ts"], "notes": "Helper level." },
+    { "module": "Transactions API", "testFiles": ["src/__tests__/api/transactions.test.ts"], "notes": "Checkout invariants." }
+  ],
+  "riskRegister": [
+    { "id": "R1", "risk": "471 strict-typecheck errors on pre-existing lineage files (the documented baseline since the v2.18.3 reconciliation; CI runs Type Check as advisory).", "status": "Accepted baseline, not a v2.18.4 regression.", "mitigation": "v2.18.4 contributes zero new strict errors (gate below). Future releases chip away at the baseline; the advisory CI check keeps it visible." },
+    { "id": "R2", "risk": "16 pre-existing vitest failures (551 passed / 16 failed / 20 skipped at the v2.18.3 baseline).", "status": "Accepted baseline, not a v2.18.4 regression.", "mitigation": "Run the full vitest suite in CI so the count is enforced on every pull request." },
+    { "id": "R3", "risk": "Route-level behavior (auth gates, rate limits, status codes) has no integration tests in the repository.", "status": "Open.", "mitigation": "Compensating controls: the uniform requireAuth/requireRole patterns, the static verify scripts, and lint. Route tests are the first candidate after the CI gate lands." },
+    { "id": "R4", "risk": "computeBranchDiagnostics tests run against a mocked database; a real-database exercise happens later in CI (prepare-test-db) and on live deployments.", "status": "Open, by design for v2.18.4.", "mitigation": "The data layer degrades on every failure mode; the schema drift probe reports drift or unknown rather than throwing." },
+    { "id": "R5", "risk": "Release verification in some environments cannot trust rendered terminal output for content patterns.", "status": "Process risk, handled.", "mitigation": "Verification uses base64 encoding, YES/NO boolean checks, and git object-store reads in single processes." }
+  ],
+  "acceptanceChecklist": [
+    { "item": "New diagnostics data layer with documented reason-code vocabulary", "result": "Pass", "evidence": "src/lib/org/diagnostics.ts; vocabulary contract checked by scripts/verify-org-console-expert-info.mjs" },
+    { "item": "Expert console and diagnostics API routes role-gated and rate-limited", "result": "Pass", "evidence": "requireRole('SUPER_ADMIN', 'STORE_OWNER') pattern in all routes; verified by scripts/verify-org-console-expert-info.mjs" },
+    { "item": "Slug repair preview non-mutating, apply confirm-gated, SQLite-only, backup-first, duplicate-refusing, idempotent, audited", "result": "Pass", "evidence": "Route guards in src/app/api/org/slug-repair/*; static checks in the verify script" },
+    { "item": "Unit tests for slug derivation and diagnostics classification", "result": "Pass", "evidence": "src/tests/lib/org-diagnostics.test.ts: 15 cases green (vitest run)" },
+    { "item": "Regression selection stays green (branch-workspace, mpesa-idempotency, build-output-policy)", "result": "Pass", "evidence": "vitest run of the four selected files, all passing at release time" },
+    { "item": "ESLint clean on all touched files", "result": "Pass", "evidence": "bunx eslint on the touched file list: 0 errors" },
+    { "item": "Zero new strict-typecheck errors in touched files", "result": "Pass", "evidence": "bunx tsc --noEmit --strict filtered to touched files: 0 hits (baseline R1 unchanged)" },
+    { "item": "Full vitest suite green in CI", "result": "Blocked", "evidence": "Blocked on the CI job landing (recommendation above); local baseline 551/16/20 documented as risk R2" },
+    { "item": "Full strict-typecheck baseline zero", "result": "Blocked", "evidence": "Blocked on the 471-error lineage baseline (risk R1); tracked for future correction releases" },
+    { "item": "Documentation set present", "result": "Pass", "evidence": "docs/org-console-expert-information.md, docs/org-console-roadmap.md, docs/database-migration-policy.md, this report (md and json)" }
+  ]
+}
