@@ -401,16 +401,28 @@ export async function proxy(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some(p => pathname.startsWith(p));
 
   if (!isPublicPath) {
+    // v2.18.9 CORRECTION: accept the v2.16.0 workspace session cookie
+    // (mbt_token) as well as the Authorization header. getSessionFromRequest
+    // already resolves "header wins, cookie is a bootstrap fallback", but
+    // this edge gate only checked the header - which 401'd every cookie-
+    // authenticated page fetch (the /hr workspace pages use plain fetch with
+    // credentials: 'include' and never attach Authorization headers).
+    // The cookie path is safe at this edge: mutations already passed the
+    // Layer 3 CSRF gate (Origin/Referer exact-host or CSRF header pair), and
+    // the route guards still validate the token against the DB session.
     const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return Response.json(
-        { success: false, error: 'Authentication required.' },
-        { status: 401 }
-      );
-    }
+    const cookieToken = request.cookies.get('mbt_token')?.value ?? null;
+    const hasCookieToken = typeof cookieToken === 'string' && cookieToken.trim().length > 0;
 
-    const token = authHeader.slice(7);
-    if (!token || token.trim().length === 0) {
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      if (!token || token.trim().length === 0) {
+        return Response.json(
+          { success: false, error: 'Authentication required.' },
+          { status: 401 }
+        );
+      }
+    } else if (!hasCookieToken) {
       return Response.json(
         { success: false, error: 'Authentication required.' },
         { status: 401 }

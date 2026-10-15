@@ -1,56 +1,52 @@
-// GET/POST /api/payroll/runs
+// GET  /api/payroll/runs - list runs (optionally ?periodId=)
+// POST /api/payroll/runs - create a run (hr.payroll.prepare)
 //
-// Manage payroll runs.
-//   GET - list runs for a store or period
-//   POST - initiate a new payroll run (DRAFT status) and optionally process it
-//          immediately (when ?process=true is passed)
+// v2.18.9: this endpoint now drives the EMS run lifecycle. The list keeps the
+// legacy tab contract (periodName, numeric money fields, detailCount) so the
+// existing POS Payroll tab keeps rendering; new consumers read the same
+// payload plus the lifecycle fields.
+//
+// ?process=true (legacy tab "run payroll now"): the governed lifecycle never
+// auto-posts (spec rule 21 - the preparer cannot approve, and posting needs a
+// maker-checked approval). The flag now maps to prepare + submit-for-approval:
+// payslips are computed and the run lands in PENDING_APPROVAL instead of
+// silently ignoring the flag.
 
-import { type NextRequest } from 'next/server';
+import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
-import { systemLog, withErrorBoundary } from '@/lib/logger';
-import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireStoreAccess } from '@/lib/auth';
-import { processPayrollRun } from '@/lib/payroll-helpers';
+import {
+  createPayrollRun,
+  preparePayrollRun,
+  submitPayrollRun,
+  payrollActorContext,
+  PayrollLifecycleError,
+} from '@/lib/hr/payroll/run-service';
+import { payrollErrorResponse, readJson } from '@/lib/hr/payroll/route-helpers';
 
 export const dynamic = 'force-dynamic';
 
-// GET: List payroll runs
-async function listRunsHandler(
-  request: NextRequest,
-  session: { userId: string; role: string; storeId: string | null }
-): Promise<Response> {
-  const { searchParams } = new URL(request.url);
-  const storeId = searchParams.get('storeId') || session.storeId;
-  const payrollPeriodId = searchParams.get('payrollPeriodId') || undefined;
-  const status = searchParams.get('status') || undefined;
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+const READ_ROLES = ['HR_MANAGER', 'BRANCH_MANAGER', 'STORE_OWNER', 'ACCOUNTANT'] as const;
+const PREPARE_ROLES = ['HR_MANAGER', 'STORE_OWNER'] as const;
 
-  if (!storeId && !payrollPeriodId) {
-    return Response.json({ success: true, data: [] });
-  }
+const toMoney = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
 
-  const where: Record<string, unknown> = {};
-  if (storeId) where.storeId = storeId;
-  if (payrollPeriodId) where.payrollPeriodId = payrollPeriodId;
-  if (status) where.status = status;
-
+export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, session) => {
+  const url = new URL(request.url);
+  const periodId = url.searchParams.get('periodId') ?? url.searchParams.get('payrollPeriodId') ?? undefined;
+  const status = url.searchParams.get('status') || undefined;
   const runs = await db.payrollRun.findMany({
-    where,
-    include: {
-      payrollPeriod: {
-        select: { id: true, name: true, startDate: true, endDate: true, status: true },
-      },
-      _count: { select: { details: true } },
+    where: {
+      storeId: session.storeId || '',
+      ...(periodId ? { payrollPeriodId: periodId } : {}),
+      ...(status ? { status } : {}),
     },
     orderBy: { createdAt: 'desc' },
-    take: limit,
+    take: 60,
+    include: {
+      payrollPeriod: { select: { name: true, payDate: true, startDate: true, endDate: true } },
+      _count: { select: { details: true } },
+    },
   });
-
-  // MONEY FIX (v2.3.1): serialize Prisma Decimal totals as numbers at the API
-  // boundary (Response.json would deliver decimal.js values as strings and the
-  // frontend period reducer would string-concatenate them).
-  const toMoney = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
-
   const data = runs.map((r) => ({
     id: r.id,
     payrollPeriodId: r.payrollPeriodId,
@@ -66,146 +62,62 @@ async function listRunsHandler(
     employeeCount: r.employeeCount,
     errorMessage: r.errorMessage,
     detailCount: r._count.details,
+    journalEntryId: r.journalEntryId,
+    preparedByUserId: r.preparedByUserId,
+    approvedByUserId: r.approvedByUserId,
     periodName: r.payrollPeriod.name,
     periodStartDate: r.payrollPeriod.startDate.toISOString(),
     periodEndDate: r.payrollPeriod.endDate.toISOString(),
-    periodStatus: r.payrollPeriod.status,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    payrollPeriod: r.payrollPeriod,
   }));
-
   return Response.json({ success: true, data });
-}
+});
 
-export const GET = withErrorBoundary(
-  requireStoreAccess(listRunsHandler),
-  'PAYROLL_RUNS_LIST'
-);
-
-// POST: Initiate (and optionally process) a payroll run
-async function createRunHandler(
-  request: NextRequest,
-  session: { userId: string; role: string; storeId: string | null; email: string }
-): Promise<Response> {
-  const { searchParams } = new URL(request.url);
-  const shouldProcess = searchParams.get('process') === 'true';
-
-  const body = await request.json();
-
-  const { payrollPeriodId, storeId, runType } = body;
-
-  if (!payrollPeriodId) {
+export const POST = hrGuard('hr.payroll.prepare', PREPARE_ROLES)(async (request, session) => {
+  const body = await readJson(request);
+  const process = new URL(request.url).searchParams.get('process') === 'true';
+  if (typeof body.payrollPeriodId !== 'string') {
     return Response.json(
       { success: false, error: 'payrollPeriodId is required.' },
-      { status: 400 }
+      { status: 400 },
     );
   }
-  if (!storeId) {
-    return Response.json(
-      { success: false, error: 'storeId is required.' },
-      { status: 400 }
-    );
-  }
+  try {
+    const ctx = payrollActorContext(session);
+    const { run, replay } = await createPayrollRun(ctx, {
+      payrollPeriodId: body.payrollPeriodId,
+      runType: typeof body.runType === 'string' ? body.runType : undefined,
+      idempotencyKey: typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined,
+    });
 
-  // Verify the period exists and belongs to the store
-  const period = await db.payrollPeriod.findFirst({
-    where: { id: payrollPeriodId, storeId },
-  });
-  if (!period) {
-    return Response.json(
-      { success: false, error: 'Payroll period not found for this store.' },
-      { status: 404 }
-    );
-  }
-
-  // Check for an existing non-voided run for this period (avoid duplicates)
-  const existingRun = await db.payrollRun.findFirst({
-    where: {
-      payrollPeriodId,
-      status: { in: ['DRAFT', 'PROCESSING', 'COMPLETED', 'PAID'] },
-    },
-    select: { id: true, status: true },
-  });
-  if (existingRun) {
-    return Response.json(
-      {
-        success: false,
-        error: `An active payroll run already exists for period "${period.name}" (status: ${existingRun.status}). Void it first to create a new run.`,
-        code: 'RUN_EXISTS',
-        existingRunId: existingRun.id,
-      },
-      { status: 409 }
-    );
-  }
-
-  // Create the run (DRAFT status)
-  const run = await db.payrollRun.create({
-    data: {
-      payrollPeriodId,
-      storeId,
-      runType: runType || 'REGULAR',
-      status: 'DRAFT',
-      initiatedBy: session.userId,
-    },
-  });
-
-  await systemLog({
-    action: 'PAYROLL_RUN_INITIATED',
-    component: LogComponent.FINANCIAL,
-    severity: LogSeverity.INFO,
-    message: `Payroll run initiated for period "${period.name}" (${run.runType})`,
-    storeId,
-    userId: session.userId,
-    metadata: { runId: run.id, periodId: payrollPeriodId, runType: run.runType },
-  });
-
-  // If ?process=true, immediately process the run
-  if (shouldProcess) {
-    try {
-      const result = await processPayrollRun(run.id, session.userId);
-
-      return Response.json({
-        success: true,
-        data: {
-          id: run.id,
-          payrollPeriodId: run.payrollPeriodId,
-          storeId: run.storeId,
-          runType: run.runType,
-          status: result.errors.length === 0 ? 'COMPLETED' : 'COMPLETED_WITH_ERRORS',
-          employeeCount: result.employeeCount,
-          totalGross: result.totalGross,
-          totalDeductions: result.totalDeductions,
-          totalNet: result.totalNet,
-          errors: result.errors,
-          processed: true,
-        },
-      }, { status: 201 });
-    } catch (err) {
-      // Processing failed - return the run ID so the user can retry
-      return Response.json({
-        success: false,
-        error: 'Payroll run created but processing failed.',
-        detail: err instanceof Error ? err.message : 'Unknown error',
-        runId: run.id,
-      }, { status: 500 });
+    let finalRun = run;
+    if (process && !replay) {
+      // Legacy "run payroll now" → governed lifecycle: compute payslips and
+      // submit for maker-checked approval. Posting still requires a
+      // different approver; nothing can auto-post through this route.
+      await preparePayrollRun(ctx, run.id);
+      finalRun = await submitPayrollRun(ctx, run.id);
     }
+    return Response.json(
+      { success: true, data: finalRun, replay },
+      { status: replay ? 200 : 201 },
+    );
+  } catch (error) {
+    if (error instanceof PayrollLifecycleError && error.issues) {
+      return Response.json(
+        {
+          success: false,
+          error: error.message.replace(/^[A-Z_]+: /, ''),
+          code: error.code,
+          issues: error.issues,
+        },
+        { status: error.status },
+      );
+    }
+    const mapped = payrollErrorResponse(error);
+    if (mapped) return mapped;
+    throw error;
   }
-
-  // Return the DRAFT run (user will call /api/payroll/runs/[id]/process to process it)
-  return Response.json({
-    success: true,
-    data: {
-      id: run.id,
-      payrollPeriodId: run.payrollPeriodId,
-      storeId: run.storeId,
-      runType: run.runType,
-      status: run.status,
-      processed: false,
-    },
-  }, { status: 201 });
-}
-
-export const POST = withErrorBoundary(
-  requireStoreAccess(createRunHandler),
-  'PAYROLL_RUNS_CREATE'
-);
+});

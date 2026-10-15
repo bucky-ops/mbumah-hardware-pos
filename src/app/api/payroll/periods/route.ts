@@ -1,172 +1,81 @@
-// GET/POST /api/payroll/periods
-//
-// Manage payroll periods (cycles) for a store.
-//   GET - list periods for a store (optionally filtered by status)
-//   POST - create a new payroll period (DRAFT status)
+// GET  /api/payroll/periods - list payroll periods for the store
+// POST /api/payroll/periods - create a period (hr.payroll.prepare)
 
-import { type NextRequest } from 'next/server';
+import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
-import { systemLog, withErrorBoundary } from '@/lib/logger';
-import { LogSeverity, LogComponent } from '@/lib/types';
-import { requireStoreAccess } from '@/lib/auth';
+import { hrAudit, HrEntityType } from '@/lib/hr/audit';
+import { payrollErrorResponse, readJson } from '@/lib/hr/payroll/route-helpers';
+import { PayrollLifecycleError } from '@/lib/hr/payroll/run-service';
 
 export const dynamic = 'force-dynamic';
 
-// GET: List payroll periods for a store
-async function listPeriodsHandler(
-  request: NextRequest,
-  session: { userId: string; role: string; storeId: string | null }
-): Promise<Response> {
-  const { searchParams } = new URL(request.url);
-  const storeId = searchParams.get('storeId') || session.storeId;
+const READ_ROLES = ['HR_MANAGER', 'BRANCH_MANAGER', 'STORE_OWNER', 'ACCOUNTANT'] as const;
+const MANAGE_ROLES = ['HR_MANAGER', 'STORE_OWNER'] as const;
 
-  if (!storeId) {
-    return Response.json({ success: true, data: [] });
-  }
-
-  const status = searchParams.get('status') || undefined;
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
-
-  const where: Record<string, unknown> = { storeId };
-  if (status) {
-    where.status = status;
-  }
-
+export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (_request, session) => {
   const periods = await db.payrollPeriod.findMany({
-    where,
-    include: {
-      _count: { select: { runs: true } },
-    },
+    where: { storeId: session.storeId || '' },
     orderBy: { startDate: 'desc' },
-    take: limit,
+    take: 60,
   });
+  return Response.json({ success: true, data: periods });
+});
 
-  const data = periods.map((p) => ({
-    id: p.id,
-    storeId: p.storeId,
-    name: p.name,
-    startDate: p.startDate.toISOString(),
-    endDate: p.endDate.toISOString(),
-    payDate: p.payDate?.toISOString() ?? null,
-    status: p.status,
-    periodType: p.periodType,
-    totalGross: p.totalGross,
-    totalDeductions: p.totalDeductions,
-    totalNet: p.totalNet,
-    employeeCount: p.employeeCount,
-    runCount: p._count.runs,
-    notes: p.notes,
-    createdAt: p.createdAt.toISOString(),
-    updatedAt: p.updatedAt.toISOString(),
-  }));
+export const POST = hrGuard('hr.payroll.prepare', MANAGE_ROLES)(async (request, session) => {
+  const body = await readJson(request);
+  const storeId = session.storeId || '';
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  const startDate = typeof body.startDate === 'string' ? new Date(body.startDate) : null;
+  const endDate = typeof body.endDate === 'string' ? new Date(body.endDate) : null;
+  const periodType = typeof body.periodType === 'string' ? body.periodType : 'MONTHLY';
+  const payDate = typeof body.payDate === 'string' ? new Date(body.payDate) : null;
 
-  return Response.json({ success: true, data });
-}
-
-export const GET = withErrorBoundary(
-  requireStoreAccess(listPeriodsHandler),
-  'PAYROLL_PERIODS_LIST'
-);
-
-// POST: Create a new payroll period
-async function createPeriodHandler(
-  request: NextRequest,
-  session: { userId: string; role: string; storeId: string | null; email: string }
-): Promise<Response> {
-  const body = await request.json();
-
-  const { storeId, name, startDate, endDate, payDate, periodType, notes } = body;
-
-  // Validation
-  if (!storeId) {
+  if (!name || !startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return Response.json(
-      { success: false, error: 'storeId is required.' },
-      { status: 400 }
+      { success: false, error: 'name, startDate, and endDate (ISO) are required.' },
+      { status: 400 },
     );
   }
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+  if (endDate < startDate) {
     return Response.json(
-      { success: false, error: 'Period name is required (e.g. "January 2026").' },
-      { status: 400 }
+      { success: false, error: 'endDate must be on or after startDate.', code: 'PERIOD_MISMATCH' },
+      { status: 400 },
     );
   }
-  if (!startDate || !endDate) {
-    return Response.json(
-      { success: false, error: 'startDate and endDate are required.' },
-      { status: 400 }
-    );
-  }
-
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    return Response.json(
-      { success: false, error: 'Invalid date format. Use ISO 8601 (YYYY-MM-DD).' },
-      { status: 400 }
-    );
-  }
-  if (start > end) {
-    return Response.json(
-      { success: false, error: 'startDate must be before or equal to endDate.' },
-      { status: 400 }
-    );
-  }
-
-  // Check for duplicate period name within the store
-  const existing = await db.payrollPeriod.findUnique({
-    where: { storeId_name: { storeId, name: name.trim() } },
-    select: { id: true },
-  });
-  if (existing) {
-    return Response.json(
-      { success: false, error: `A payroll period named "${name}" already exists for this store.` },
-      { status: 409 }
-    );
-  }
-
-  const period = await db.payrollPeriod.create({
-    data: {
+  try {
+    const existing = await db.payrollPeriod.findFirst({
+      where: { storeId, name },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new PayrollLifecycleError(
+        'PERIOD_EXISTS',
+        `A payroll period named "${name}" already exists for this store.`,
+      );
+    }
+    const period = await db.payrollPeriod.create({
+      data: {
+        storeId,
+        name,
+        startDate,
+        endDate,
+        payDate,
+        periodType,
+      },
+    });
+    await hrAudit({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: 'CREATE',
+      resourceType: HrEntityType.PAYROLL_RUN,
+      resourceId: period.id,
       storeId,
-      name: name.trim(),
-      startDate: start,
-      endDate: end,
-      payDate: payDate ? new Date(payDate) : null,
-      periodType: periodType || 'MONTHLY',
-      status: 'DRAFT',
-      notes: notes || null,
-    },
-  });
-
-  await systemLog({
-    action: 'PAYROLL_PERIOD_CREATED',
-    component: LogComponent.FINANCIAL,
-    severity: LogSeverity.INFO,
-    message: `Payroll period "${period.name}" created (${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)})`,
-    storeId,
-    userId: session.userId,
-    metadata: { periodId: period.id, name: period.name },
-  });
-
-  return Response.json({
-    success: true,
-    data: {
-      id: period.id,
-      storeId: period.storeId,
-      name: period.name,
-      startDate: period.startDate.toISOString(),
-      endDate: period.endDate.toISOString(),
-      payDate: period.payDate?.toISOString() ?? null,
-      status: period.status,
-      periodType: period.periodType,
-      notes: period.notes,
-      createdAt: period.createdAt.toISOString(),
-      updatedAt: period.updatedAt.toISOString(),
-    },
-  }, { status: 201 });
-}
-
-export const POST = withErrorBoundary(
-  requireStoreAccess(createPeriodHandler),
-  'PAYROLL_PERIODS_CREATE'
-);
+      metadata: { kind: 'PayrollPeriod', name, periodType },
+    });
+    return Response.json({ success: true, data: period });
+  } catch (error) {
+    const mapped = payrollErrorResponse(error);
+    if (mapped) return mapped;
+    throw error;
+  }
+});

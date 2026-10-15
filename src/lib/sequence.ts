@@ -84,6 +84,7 @@ const SEQUENCE_TABLES: Record<string, string> = {
   RCPT: 'receipts',
   INV: 'invoices',
   TXN: 'sales_transactions',
+  PS: 'payroll_details', // v2.18.9 payslip numbers
 };
 
 /** Compose `PREFIX-YYYYMMDD-NNNN` from a sequence number. */
