@@ -13,7 +13,7 @@ const findMany = vi.fn();
 vi.mock('@/lib/db', () => ({
   db: {
     employee: {
-      findMany: (...args) => findMany(...args),
+      findMany: (...args: unknown[]) => findMany(...args),
     },
   },
 }));
@@ -83,7 +83,9 @@ describe('employee export privacy masking', () => {
   it('never masks empty PII cells into noise', async () => {
     findMany.mockResolvedValue([{ ...sampleEmployee, nationalId: null, kraPin: null }]);
     const result = await generateEmployeesCsv('store-1');
-    const rowLine = result.csv.split('\n').find((line) => line.includes('Jane'));
+    const rowLine: string | undefined = result.csv.split('\n').find((line) => line.includes('Jane'));
+    expect(rowLine).toBeDefined();
+    if (!rowLine) return;
     const nationalIdCell = rowLine.split(',')[5];
     const kraPinCell = rowLine.split(',')[6];
     expect(nationalIdCell).toBe('');
