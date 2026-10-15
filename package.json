@@ -3,8 +3,8 @@
   "version": "2.18.9",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.8",
-    "baseVersion": "2.18.8",
+    "releaseVersion": "2.18.9",
+    "baseVersion": "2.18.9",
     "hotfix": 0
   },
   "scripts": {
