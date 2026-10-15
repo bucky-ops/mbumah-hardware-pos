@@ -61,3 +61,13 @@ The script uses raw SQL only (never Prisma model queries, which fail on drifted 
 - [Branch workspaces](branch-workspaces.md) - hosting modes, the safe link builder, local/online setup
 - [Subdomain workspaces](subdomain-workspaces.md) - the master routing reference
 - [Troubleshooting and FAQ](troubleshooting-and-faq.md) - user-facing causes and fixes
+
+## Route-level guard (v2.18.3.0)
+
+`src/app/stores/[slug]/layout.tsx` runs before the workspace gateway on every
+path-mode request. It rejects placeholder slugs ("undefined", "null") with a
+calm message before any database query, and for valid slugs it resolves the
+store record server-side to announce the branch identity (name and location)
+to screen readers through a polite live region. The layout is deliberately
+not an authorization boundary: the gateway, the store-context API and every
+API route keep re-validating access server-side.

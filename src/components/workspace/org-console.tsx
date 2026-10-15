@@ -30,7 +30,12 @@ import { LoginScreen } from '@/components/login-screen';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
-import { getBranchWorkspaceHref } from '@/lib/branch-workspace';
+import {
+  getWorkspaceUnavailableReason,
+  isLocalWorkspaceHost,
+  resolveBranchWorkspace,
+  type WorkspaceUnavailableReason,
+} from '@/lib/branch-workspace';
 import { useWorkspaceAuthBoot } from '@/lib/workspace/workspace-store';
 import { useWorkspaceStore, type WorkspaceStoreRef } from '@/lib/workspace/workspace-store';
 
@@ -68,6 +73,47 @@ interface OrgSummary {
     userId: string | null;
     timestamp: string;
   }>;
+}
+
+/**
+ * Precise, calm badge for a branch whose workspace link cannot be built
+ * (v2.18.3.0). Replaces the generic "Branch workspace unavailable" message
+ * with the exact reason and a remediation hint in the tooltip. Text always
+ * carries the meaning; color never does (accessibility).
+ */
+const WORKSPACE_REASON_LABELS: Record<WorkspaceUnavailableReason, string> = {
+  'missing-slug': 'Missing branch slug',
+  'store-inactive': 'Branch inactive',
+  'workspace-disabled': 'Workspace disabled',
+};
+
+const WORKSPACE_REASON_HINTS: Record<WorkspaceUnavailableReason, string> = {
+  'missing-slug':
+    'This branch has no URL slug configured yet. Run the slug backfill (npm run db:backfill-slugs) or set the slug on the store record, then refresh diagnostics.',
+  'store-inactive':
+    'This branch is currently inactive, so its workspace cannot be opened. Reactivate the store record to restore access.',
+  'workspace-disabled':
+    'Branch workspace routing is disabled by configuration (NEXT_PUBLIC_STORE_WORKSPACE_MODE=off). Enable path or subdomain mode to restore workspaces.',
+};
+
+function WorkspaceUnavailableBadge({
+  reason,
+  inactive,
+}: {
+  reason: WorkspaceUnavailableReason | null;
+  inactive: boolean;
+}) {
+  const code: WorkspaceUnavailableReason = reason ?? (inactive ? 'store-inactive' : 'missing-slug');
+  return (
+    <Badge
+      variant="outline"
+      className="max-w-[10rem] text-[11px] font-normal text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800"
+      title={WORKSPACE_REASON_HINTS[code]}
+      aria-label={`Branch workspace unavailable: ${WORKSPACE_REASON_LABELS[code]}`}
+    >
+      {WORKSPACE_REASON_LABELS[code]}
+    </Badge>
+  );
 }
 
 function formatKES(amount: number): string {
@@ -286,14 +332,29 @@ export function OrgConsole() {
               <tbody>
                 {summary.stores.map((store) => {
                   const inactive = store.status !== 'ACTIVE';
-                  // Safe v2.18.0.0 builder: path URL on localhost / raw IPs,
-                  // subdomain URL only when every safety check passes, null
-                  // for inactive stores or a missing slug (never a broken
-                  // placeholder path).
-                  const href = getBranchWorkspaceHref({
+                  // Safe v2.18.0.0 builder with v2.18.3.0 precise reasons:
+                  // path URL on localhost / raw IPs, subdomain URL only when
+                  // every safety check passes, null for inactive stores or a
+                  // missing slug (never a broken placeholder path).
+                  const currentHost = typeof window !== 'undefined' ? window.location.host : '';
+                  const protocol = typeof window !== 'undefined' ? window.location.protocol : undefined;
+                  const resolution = resolveBranchWorkspace({
                     store: { slug: store.slug, subdomain: store.subdomain, isActive: !inactive },
-                    currentHost: typeof window !== 'undefined' ? window.location.host : '',
-                    protocol: typeof window !== 'undefined' ? window.location.protocol : undefined,
+                    currentHost,
+                    protocol,
+                  });
+                  const href = resolution.href;
+                  // On local hosts path mode IS the designed mode, so only
+                  // surface a path chip when subdomains were expected but a
+                  // fallback occurred (public host, subdomains enabled).
+                  const showPathChip =
+                    href !== null &&
+                    resolution.usedMode === 'path' &&
+                    !isLocalWorkspaceHost(currentHost);
+                  const unavailableReason = getWorkspaceUnavailableReason({
+                    store: { slug: store.slug, subdomain: store.subdomain, isActive: !inactive },
+                    currentHost,
+                    protocol,
                   });
                   return (
                     <tr key={store.id} className="border-b last:border-0 hover:bg-muted/40">
@@ -321,24 +382,26 @@ export function OrgConsole() {
                       <td className="px-4 py-3 text-right tabular-nums">{store.pendingMpesa}</td>
                       <td className="px-4 py-3 text-right">
                         {href ? (
-                          <Button asChild size="sm" variant="outline" disabled={inactive}>
-                            <a href={href} target="_blank" rel="noopener noreferrer">
-                              <Building2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
-                              Open branch workspace
-                              <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
-                            </a>
-                          </Button>
+                          <div className="inline-flex flex-col items-end gap-1">
+                            <Button asChild size="sm" variant="outline" disabled={inactive}>
+                              <a href={href} target="_blank" rel="noopener noreferrer">
+                                <Building2 className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                                Open branch workspace
+                                <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
+                              </a>
+                            </Button>
+                            {showPathChip ? (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] font-normal text-muted-foreground"
+                                title="Branch subdomains are not available for this host. The path workspace /stores/{slug}/dashboard is ready."
+                              >
+                                Path fallback ready
+                              </Badge>
+                            ) : null}
+                          </div>
                         ) : (
-                          <span
-                            className="inline-block max-w-[10rem] text-xs text-muted-foreground"
-                            title={
-                              inactive
-                                ? 'This branch is currently inactive. The workspace cannot be opened.'
-                                : 'Branch workspace unavailable. Store slug is not configured.'
-                            }
-                          >
-                            Branch workspace unavailable
-                          </span>
+                          <WorkspaceUnavailableBadge reason={unavailableReason} inactive={inactive} />
                         )}
                       </td>
                     </tr>
