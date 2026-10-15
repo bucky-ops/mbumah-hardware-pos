@@ -3,7 +3,7 @@
   "version": "2.18.3",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.3",
+    "releaseVersion": "2.18.3.0",
     "baseVersion": "2.18.3",
     "hotfix": 0
   },

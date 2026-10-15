@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.3.0] Branch workspace reason codes in the organization console
+
+Correction release completing the branch workspace foundation residuals found by the release integrity audit (Findings 1 and 7, re-verified with evidence against the unified lineage): the org console Workspace column now states the precise reason a workspace cannot open instead of a generic unavailable message, and the branch workspace route gained a server-side layout guard.
+
+### Fixed
+- **Precise Workspace badges (`src/components/workspace/org-console.tsx`)**: the Workspace column now renders "Missing branch slug", "Branch inactive", or "Workspace disabled" with a remediation hint in the tooltip, replacing the single generic "Branch workspace unavailable" text. A "Path fallback ready" chip appears when a public host had to fall back from a branch subdomain to the path workspace. Text always carries the meaning; color never does.
+- **Reason-code resolver (`src/lib/branch-workspace.ts`)**: new pure `resolveBranchWorkspace` exposes `href`, `usedMode` (subdomain or path) and `unavailableReason` (`missing-slug`, `store-inactive`, `workspace-disabled`) from the exact same rules the href builder has used since v2.18.0.0; `getBranchWorkspaceHref` remains a thin wrapper with an unchanged contract, plus `isLocalWorkspaceHost` for callers that must tell local path mode from a fallback.
+- **Workspace route layout guard (`src/app/stores/[slug]/layout.tsx`)**: placeholder slugs ("undefined"/"null") are rejected server-side with a calm message before any database query, valid requests get a server-resolved screen-reader status region with the store name and location, and raw database errors never surface. The layout is not an authorization boundary: the gateway and every API route keep re-validating access.
+- **VERSION file alignment**: the root VERSION file had drifted to 2.18.1 while package.json and the running app reported 2.18.3; the file is restored as the single full-version surface (2.18.3.0) with package.json keeping the three-part base 2.18.3 per the release versioning policy.
+
+### Tests
+- 15 new unit cases cover the precise reason codes, the used-mode classification, placeholder-slug handling and host classification (`src/tests/lib/branch-workspace.test.ts`, 43 cases green).
+
 ## [2.18.3] Organization Console — Expert Information System on the unified lineage
 
 Feature release completing the reconciliation promised by the v2.18.2 sandbox branch (`release/v2.18.2.1-org-console`): the org-console **product work** now runs natively on the 88-model PostgreSQL-canonical lineage with multi-tenant auth, instead of the parallel 43-model SQLite implementation. The sandbox branch remains archived as a prerelease; this release supersedes it.

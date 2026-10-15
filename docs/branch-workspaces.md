@@ -93,3 +93,21 @@ Demo credentials shipped in the seed are for LOCAL/OFFLINE use only - never reus
 - [Subdomain workspaces](subdomain-workspaces.md) - the master routing reference
 - [Multi-store workspaces](multi-store-workspaces.md) - the org console and branch selector surfaces
 - [Troubleshooting and FAQ](troubleshooting-and-faq.md) - the "branch workspace does not exist" entry
+
+## Precise reason badges (v2.18.3.0)
+
+When the console cannot build a safe workspace link for a branch, the
+Workspace column states the exact reason instead of a generic message:
+
+| Badge | Reason code | Meaning |
+|-------|-------------|---------|
+| Missing branch slug | `missing-slug` | The store record has no URL slug configured yet |
+| Branch inactive | `store-inactive` | The store record is not ACTIVE |
+| Workspace disabled | `workspace-disabled` | `NEXT_PUBLIC_STORE_WORKSPACE_MODE=off` |
+| Path fallback ready | (link renders) | Subdomains are unavailable for the current host; the path workspace works |
+
+Each badge carries a remediation hint in its tooltip (backfill the slug,
+reactivate the store, or change the workspace mode). The codes come from the
+pure `resolveBranchWorkspace` helper in `src/lib/branch-workspace.ts`, which
+applies the exact same rules as `getBranchWorkspaceHref`, so a badge and a
+link can never disagree.

@@ -29,7 +29,13 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { getBranchWorkspaceHref, isRawIpHost } from '@/lib/branch-workspace';
+import {
+  getBranchWorkspaceHref,
+  getWorkspaceUnavailableReason,
+  isLocalWorkspaceHost,
+  isRawIpHost,
+  resolveBranchWorkspace,
+} from '@/lib/branch-workspace';
 import { resolveStoreContext } from '@/lib/workspace/server';
 import { extractSlugFromPathname } from '@/lib/workspace/config';
 
@@ -535,5 +541,121 @@ describe('resolveStoreContext - pathname slug derivation (v2.18.0.3)', () => {
     expect(storeFindFirst).not.toHaveBeenCalled();
     expect(result.mode).toBe('not-found');
     expect(result.reasonCode).toBe('missing-slug');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. resolveBranchWorkspace + getWorkspaceUnavailableReason (v2.18.3.0)
+//    Precise reason codes behind the org console Workspace column badges.
+// ---------------------------------------------------------------------------
+
+describe('resolveBranchWorkspace - precise reasons (v2.18.3.0)', () => {
+  const subdomainSafe = {
+    mode: 'auto' as const,
+    rootDomain: 'mbumah.co.ke',
+    useSubdomains: true,
+  };
+
+  it('reports missing-slug and returns no href for a slugless store', () => {
+    const result = resolveBranchWorkspace({
+      store: { slug: null, subdomain: 'juja-main' },
+      currentHost: 'app.mbumah.co.ke',
+      ...subdomainSafe,
+    });
+    expect(result.href).toBeNull();
+    expect(result.usedMode).toBeNull();
+    expect(result.unavailableReason).toBe('missing-slug');
+  });
+
+  it('reports missing-slug for placeholder slugs (undefined/null strings)', () => {
+    for (const slug of ['undefined', 'null']) {
+      const result = resolveBranchWorkspace({
+        store: { slug, subdomain: null },
+        currentHost: 'app.mbumah.co.ke',
+        ...subdomainSafe,
+      });
+      expect(result.href).toBeNull();
+      expect(result.unavailableReason).toBe('missing-slug');
+    }
+  });
+
+  it('reports store-inactive for an inactive store even with a valid slug', () => {
+    const result = resolveBranchWorkspace({
+      store: { slug: 'thika', subdomain: 'thika', isActive: false },
+      currentHost: 'app.mbumah.co.ke',
+      ...subdomainSafe,
+    });
+    expect(result.href).toBeNull();
+    expect(result.unavailableReason).toBe('store-inactive');
+  });
+
+  it('reports workspace-disabled when mode is off', () => {
+    const result = resolveBranchWorkspace({
+      store: { slug: 'ruiru', subdomain: 'ruiru', isActive: true },
+      currentHost: 'app.mbumah.co.ke',
+      mode: 'off',
+    });
+    expect(result.href).toBeNull();
+    expect(result.unavailableReason).toBe('workspace-disabled');
+  });
+
+  it('marks subdomain mode when the safe subdomain URL is produced', () => {
+    const result = resolveBranchWorkspace({
+      store: { slug: 'juja-main', subdomain: 'juja-main', isActive: true },
+      currentHost: 'app.mbumah.co.ke',
+      protocol: 'https:',
+      ...subdomainSafe,
+    });
+    expect(result.href).toBe('https://juja-main.mbumah.co.ke/dashboard');
+    expect(result.usedMode).toBe('subdomain');
+    expect(result.unavailableReason).toBeNull();
+  });
+
+  it('marks path mode for the localhost fallback (never a subdomain URL)', () => {
+    const result = resolveBranchWorkspace({
+      store: { slug: 'nakuru', subdomain: 'nakuru', isActive: true },
+      currentHost: 'localhost:3000',
+      ...subdomainSafe,
+    });
+    expect(result.href).toBe('/stores/nakuru/dashboard');
+    expect(result.usedMode).toBe('path');
+    expect(result.unavailableReason).toBeNull();
+  });
+});
+
+describe('getWorkspaceUnavailableReason - badge codes (v2.18.3.0)', () => {
+  it('returns null when a safe href exists', () => {
+    expect(
+      getWorkspaceUnavailableReason({
+        store: { slug: 'thika', subdomain: 'thika', isActive: true },
+        currentHost: 'localhost:3000',
+      }),
+    ).toBeNull();
+  });
+
+  it('agrees with getBranchWorkspaceHref null results in every null case', () => {
+    const cases: Array<Parameters<typeof getBranchWorkspaceHref>[0]> = [
+      { store: { slug: null }, currentHost: 'app.mbumah.co.ke' },
+      { store: { slug: 'thika', isActive: false }, currentHost: 'app.mbumah.co.ke' },
+      { store: { slug: 'thika', isActive: true }, currentHost: 'app.mbumah.co.ke', mode: 'off' },
+    ];
+    for (const input of cases) {
+      expect(getBranchWorkspaceHref(input)).toBeNull();
+      expect(getWorkspaceUnavailableReason(input)).not.toBeNull();
+    }
+  });
+});
+
+describe('isLocalWorkspaceHost (v2.18.3.0)', () => {
+  it('classifies local and raw-IP hosts as local', () => {
+    for (const host of ['localhost:3000', 'localhost', '127.0.0.1:3000', '[::1]:3000', '192.168.1.20']) {
+      expect(isLocalWorkspaceHost(host)).toBe(true);
+    }
+  });
+
+  it('classifies public hosts as non-local', () => {
+    for (const host of ['app.mbumah.co.ke', 'app.mbumah.co.ke:443', 'mbumahhardware.co.ke']) {
+      expect(isLocalWorkspaceHost(host)).toBe(false);
+    }
   });
 });

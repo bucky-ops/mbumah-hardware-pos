@@ -104,42 +104,118 @@ function cleanSlug(value: string | null | undefined): string {
 }
 
 /**
- * Safe URL for opening a branch workspace in a new tab. Returns null when
- * no safe URL can be built (missing slug, inactive store, mode off); the
- * caller renders a calm inline message instead of a broken link.
+ * Precise reason a branch workspace link cannot be built (v2.18.3.0).
+ *
+ * Mirrors the getBranchWorkspaceHref short-circuits one-to-one so the
+ * organization console can replace the generic "Branch workspace
+ * unavailable" message with a precise, actionable badge. Status text is
+ * always rendered alongside any color so the reason is never conveyed by
+ * color alone.
  */
-export function getBranchWorkspaceHref(input: BranchWorkspaceHrefInput): string | null {
+export type WorkspaceUnavailableReason =
+  | 'missing-slug'
+  | 'store-inactive'
+  | 'workspace-disabled';
+
+export interface BranchWorkspaceResolution {
+  /** Safe URL, or null when no workspace link can be built. */
+  href: string | null;
+  /** How the href serves the workspace: absolute subdomain or path fallback. */
+  usedMode: 'subdomain' | 'path' | null;
+  /** Precise reason code when href is null; null when a link exists. */
+  unavailableReason: WorkspaceUnavailableReason | null;
+}
+
+/**
+ * Full workspace link resolution. Pure and deterministic: same inputs,
+ * same resolution. getBranchWorkspaceHref stays the canonical thin wrapper
+ * so every existing caller and test keeps its exact contract.
+ */
+export function resolveBranchWorkspace(input: BranchWorkspaceHrefInput): BranchWorkspaceResolution {
   const slug = cleanSlug(input?.store?.slug);
-  if (!slug) return null;
-  if (input.store.isActive === false) return null;
+  if (!slug) return { href: null, usedMode: null, unavailableReason: 'missing-slug' };
+  if (input.store.isActive === false) {
+    return { href: null, usedMode: null, unavailableReason: 'store-inactive' };
+  }
 
   const envMode = (envStr('NEXT_PUBLIC_STORE_WORKSPACE_MODE') || 'auto').toLowerCase();
   const mode = input.mode || (envMode as BranchWorkspaceHrefInput['mode']);
-  if (mode === 'off') return null;
-  if (mode === 'path') return `/stores/${slug}/dashboard`;
+  if (mode === 'off') {
+    return { href: null, usedMode: null, unavailableReason: 'workspace-disabled' };
+  }
+  if (mode === 'path') return { href: `/stores/${slug}/dashboard`, usedMode: 'path', unavailableReason: null };
 
   const host = parseHost(input.currentHost);
   // Unknown host (server render, empty currentHost): never guess an absolute
   // subdomain URL - fall back to the relative path workspace.
-  if (!host) return `/stores/${slug}/dashboard`;
+  if (!host) return { href: `/stores/${slug}/dashboard`, usedMode: 'path', unavailableReason: null };
   // localhost, *.localhost, 127.0.0.1, ::1 and raw IPs always use path mode:
   // subdomain URLs cannot resolve there even when the env asks for them.
-  if (isLocalOfflineHost(host)) return `/stores/${slug}/dashboard`;
+  if (isLocalOfflineHost(host)) {
+    return { href: `/stores/${slug}/dashboard`, usedMode: 'path', unavailableReason: null };
+  }
 
   const useSubdomains = input.useSubdomains ?? parseUseSubdomainsFlag();
   const rootDomain = (input.rootDomain ?? envStr('NEXT_PUBLIC_ROOT_DOMAIN') ?? '')
     .toLowerCase()
     .replace(/\.$/, '');
   if (!useSubdomains || !rootDomain || !ROOT_DOMAIN_PATTERN.test(rootDomain)) {
-    return `/stores/${slug}/dashboard`;
+    return { href: `/stores/${slug}/dashboard`, usedMode: 'path', unavailableReason: null };
   }
 
   const sub = cleanSlug(input.store.subdomain) || slug;
   // Reserved labels (admin, api, www, ...) must never become branch
   // subdomains; a non-RFC1123 label cannot either.
   if (!RFC1123_LABEL_PATTERN.test(sub) || isReservedSubdomain(sub)) {
-    return `/stores/${slug}/dashboard`;
+    return { href: `/stores/${slug}/dashboard`, usedMode: 'path', unavailableReason: null };
   }
 
-  return `${normalizedProtocol(input.protocol, host)}//${sub}.${rootDomain}/dashboard`;
+  return {
+    href: `${normalizedProtocol(input.protocol, host)}//${sub}.${rootDomain}/dashboard`,
+    usedMode: 'subdomain',
+    unavailableReason: null,
+  };
+}
+
+/**
+ * Precise reason code for a store whose workspace link cannot be built.
+ * Returns null when a safe href exists (the caller renders the link).
+ */
+export function getWorkspaceUnavailableReason(
+  input: BranchWorkspaceHrefInput
+): WorkspaceUnavailableReason | null {
+  return resolveBranchWorkspace(input).unavailableReason;
+}
+
+/**
+ * Which transport the resolved href uses: an absolute subdomain origin or
+ * the path fallback. Null when no href exists.
+ */
+export function getBranchWorkspaceUsedMode(
+  input: BranchWorkspaceHrefInput
+): 'subdomain' | 'path' | null {
+  return resolveBranchWorkspace(input).usedMode;
+}
+
+/**
+ * True for hosts where branch subdomains can never resolve (localhost,
+ * *.localhost, 127.0.0.1, ::1, raw IPv4/IPv6). The org console uses this to
+ * decide whether a path-mode link is the normal local behavior or a
+ * fallback worth surfacing.
+ */
+export function isLocalWorkspaceHost(host: string): boolean {
+  const parsed = parseHost(host);
+  if (!parsed) return true;
+  return isLocalOfflineHost(parsed);
+}
+
+/**
+ * Safe URL for opening a branch workspace in a new tab. Returns null when
+ * no safe URL can be built (missing slug, inactive store, mode off); the
+ * caller renders a calm inline message instead of a broken link. Use
+ * resolveBranchWorkspace / getWorkspaceUnavailableReason when the caller
+ * also needs the precise reason code.
+ */
+export function getBranchWorkspaceHref(input: BranchWorkspaceHrefInput): string | null {
+  return resolveBranchWorkspace(input).href;
 }
