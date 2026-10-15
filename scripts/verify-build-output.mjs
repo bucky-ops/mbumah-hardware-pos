@@ -49,10 +49,18 @@ export function resolveBuildMode(env, platform) {
 }
 
 // -- Build log scanning ------------------------------------------------------
+// v2.18.3.1: FATAL_EVERYWHERE also covers the failure classes the release
+// integrity audit requires the updater to catch before activation:
+// missing modules, webpack module resolution failures, and Prisma drift or
+// runtime errors (P2022 "column does not exist", prisma:error log lines).
 export const FATAL_EVERYWHERE = [
   /Failed to compile/,
   /> Build error occurred/,
   /^Type error:/m,
+  /Cannot find module/,
+  /Module not found/,
+  /\bP2022\b/,
+  /prisma:error/,
 ];
 export const FATAL_STANDALONE_ONLY = [
   /Failed to copy traced files/i,

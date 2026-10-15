@@ -90,6 +90,28 @@ describe('build log scanner', () => {
     }
   });
 
+  it('fails on missing-module and module-resolution errors in every mode (v2.18.3.1)', () => {
+    for (const mode of ['standalone', 'normal']) {
+      expect(scanBuildLog("Error: Cannot find module 'next'", mode).fatal).toBeTruthy();
+      expect(scanBuildLog('Module not found: Error: Can not resolve ./missing', mode).fatal).toBeTruthy();
+    }
+  });
+
+  it('fails on Prisma drift and prisma error lines in every mode (v2.18.3.1)', () => {
+    for (const mode of ['standalone', 'normal']) {
+      expect(
+        scanBuildLog('Error: P2022: The column `stores.slug` does not exist in the current database.', mode).fatal,
+      ).toBeTruthy();
+      expect(scanBuildLog('prisma:error Invalid `prisma.store.findMany()` invocation', mode).fatal).toBeTruthy();
+    }
+  });
+
+  it('does not treat the P2022 digit sequence inside unrelated identifiers as fatal', () => {
+    // \b guard: a hex id like "a1p2022x" or a plain number 2022 must not trip the scanner
+    expect(scanBuildLog('digest 2022 recorded', 'normal').fatal).toBeNull();
+    expect(scanBuildLog('commit 5p2022z ok', 'normal').fatal).toBeNull();
+  });
+
   it('passes a clean build log', () => {
     const res = scanBuildLog('Compiled successfully\nRoute (app)                    Size\n', 'normal');
     expect(res.fatal).toBeNull();

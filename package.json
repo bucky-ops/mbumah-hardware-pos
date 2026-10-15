@@ -3,15 +3,15 @@
   "version": "2.18.3",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.3.0",
+    "releaseVersion": "2.18.3.1",
     "baseVersion": "2.18.3",
-    "hotfix": 0
+    "hotfix": 1
   },
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "next build",
     "postinstall": "node scripts/setup-prisma-provider.mjs && prisma generate",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "start": "NODE_ENV=production node deploy/nodocker/start-server.mjs 2>&1 | tee server.log",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prisma:validate": "prisma validate",
