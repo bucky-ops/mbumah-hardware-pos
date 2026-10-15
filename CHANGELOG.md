@@ -2,6 +2,25 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.4.0] EMS infrastructure corrections: payroll accounting readiness and employee PII masking
+
+Correction release required by the EMS implementation gate (docs/EMS_IMPLEMENTATION_GATE.md). Fixes the two P0 blockers that prevented the Employee Management System from building on a safe foundation. All changes are additive; no existing flow, route, or record is altered destructively.
+
+### Fixed
+- **Employee PII export masking (P0-1)**: the employee CSV export (Data Exports dashboard) now masks national ID, KRA PIN, NSSF number, NHIF number, and bank account name by default for every role. Unmasked output requires the acting user to be SUPER_ADMIN or STORE_OWNER (PII unmask permission), and every employee export writes a hash-chained audit event (action EXPORT, metadata piiIncluded, reason string; field names only, never values). Names, contacts, job data, and salary figures remain readable as before.
+- **Gift card liability account mapping**: the account helper mapped GIFT_CARD_LIABILITY to code 2300, which the seeded chart of accounts defines as a supplier payable, so gift card journal movements could post against a supplier account. Gift card liability now resolves to 2400 (Gift Cards Outstanding), matching the seed and the auto-create default.
+- **Rental deposits account classification**: the helper's auto-create default for 1400 disagreed with the seeded chart (LIABILITY versus ASSET). The default now matches the seeded reality; posting directions were always explicit at call sites and are unchanged.
+- **Idempotent account seeding**: the seed created accounts with bare create calls, crashing on partially initialized databases. Both account loops now upsert by (organizationId, code) and never overwrite an operator-modified row.
+
+### Security
+- **JournalEntry.idempotencyKey (nullable, unique)**: createJournalEntry performs a replay lookup when a key is provided and returns the existing entry instead of creating a duplicate, so a retried payroll post can never double journal. This is the posting-safety prerequisite for EMS payroll.
+- **Payroll chart of accounts**: seed adds ten reserved accounts: 2210 PAYE Payable, 2215 NSSF Payable, 2220 SHIF Payable, 2225 Housing Levy Payable, 2230 HELB Payable, 2240 Net Pay Payable, 2250 Other Deductions Payable, 2260 Payroll Clearing, 5210 Employer NSSF Expense, 5215 Employer Housing Levy Expense.
+- **Payroll account healing script**: scripts/seed-payroll-accounts.mjs idempotently upserts the payroll accounts for every organization on existing databases (wired into vercel-build after sync-db-schema; safe to run manually on desktop installs). It never modifies existing rows and reports present/expected counts.
+
+### Documentation
+- Added the twelve EMS audit deliverables on docs/ems-infrastructure-audit (audit, evidence, gate, risk register, data model delta, integration map, RBAC matrix, migration plan, test plan, environment notes, security and privacy notes, README hygiene findings).
+- Added scripts/verify-hr-privacy.mjs and scripts/verify-hr-schema.mjs plus a masking unit test (src/__tests__/lib/hr-privacy.test.ts).
+
 ## [2.18.4] Organization console expert diagnostics and branch slug repair
 
 Feature release completing the expert information minimum from the release integrity audit (Finding 3) and bundling the planned maintenance residuals of the audit sequence (Findings 15, 16, 19, 20, 23, 25 hygiene documentation and test visibility). This release supersedes no one: it stacks directly on v2.18.3.2, keeps every existing route and contract intact, and the maintenance residuals land as documentation and test-report hygiene rather than behavior changes.

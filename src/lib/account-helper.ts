@@ -15,7 +15,10 @@ const ACCOUNT_CODES = {
   ACCOUNTS_PAYABLE: '2000',
   VAT_PAYABLE: '2100',
   CUSTOMER_DEPOSITS: '2200',
-  GIFT_CARD_LIABILITY: '2300', // Unearned revenue - credited when a gift card is sold, debited when redeemed.
+  // 2400 matches the seeded "Gift Cards Outstanding" account. 2300 is a
+  // supplier payable in the seed chart, so gift card liability must not
+  // resolve to it (that would post gift card movements against a supplier).
+  GIFT_CARD_LIABILITY: '2400', // Unearned revenue - credited when a gift card is sold, debited when redeemed.
   OWNER_EQUITY: '3000',
   RETAINED_EARNINGS: '3100',
   SALES_REVENUE: '4000',
@@ -47,12 +50,16 @@ const ACCOUNT_DEFAULTS: Record<string, {
   '1100': { name: 'M-Pesa Account',          type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
   '1200': { name: 'Accounts Receivable',     type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
   '1300': { name: 'Inventory',               type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
-  '1400': { name: 'Rental Deposits Held',    type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  // Type aligned with the seeded chart (see prisma/seed.ts): 1400 is created
+  // as an ASSET there. Classification follows the database reality; posting
+  // directions are explicit at call sites and unaffected by this metadata.
+  '1400': { name: 'Rental Deposits Held',    type: 'ASSET',     subType: 'CURRENT_ASSET',     normalBalance: 'DEBIT'  },
   '2000': { name: 'Accounts Payable',        type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
   '2100': { name: 'VAT Payable',             type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
   '2200': { name: 'Customer Deposits',       type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
-  '2300': { name: 'Gift Card Liability',     type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
-  '3000': { name: 'Owner Equity',            type: 'EQUITY',    subType: 'OWNER_EQUITY',      normalBalance: 'CREDIT' },
+  '2300': { name: 'Supplier Payable',        type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  '2400': { name: 'Gift Cards Outstanding',  type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+  '3000': { name: 'Owner Equity',            type: 'EQUITY',    subType: 'OWNERS_EQUITY',     normalBalance: 'CREDIT' },
   '3100': { name: 'Retained Earnings',       type: 'EQUITY',    subType: 'RETAINED_EARNINGS', normalBalance: 'CREDIT' },
   '4000': { name: 'Sales Revenue',           type: 'REVENUE',   subType: 'OPERATING_REVENUE', normalBalance: 'CREDIT' },
   '4100': { name: 'Rental Revenue',          type: 'REVENUE',   subType: 'OPERATING_REVENUE', normalBalance: 'CREDIT' },

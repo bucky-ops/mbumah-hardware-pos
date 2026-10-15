@@ -476,6 +476,12 @@ export interface CreateJournalEntryInput {
   /** Explicit period; if omitted, the period containing entryDate is auto-resolved. */
   financialPeriodId?: string;
   /**
+   * Replay-safety key (for example a payroll run id). When provided and an
+   * entry already exists with the same key, the existing entry is returned
+   * and nothing is created, so a retried post cannot double journal.
+   */
+  idempotencyKey?: string;
+  /**
    * Post immediately after creation. Requires `bypassApproval` semantics -
    * use ONLY for system-generated entries (sales, M-Pesa callbacks) where the
    * entry is balanced by construction and segregation-of-duties does not apply.
@@ -513,10 +519,24 @@ export async function createJournalEntry(
     referenceDocumentType,
     referenceDocumentId,
     financialPeriodId,
+    idempotencyKey,
     postImmediately = false,
     ipAddress,
     userAgent,
   } = input;
+
+  // 0. Idempotent replay: an entry with this key already exists, return it.
+  if (idempotencyKey) {
+    const existing = await db.journalEntry.findUnique({
+      where: { idempotencyKey },
+      include: {
+        lines: { select: { id: true, accountId: true, debit: true, credit: true } },
+      },
+    });
+    if (existing) {
+      return existing;
+    }
+  }
 
   if (!description || description.trim().length < 3) {
     throw APIError.badRequest(
@@ -566,6 +586,7 @@ export async function createJournalEntry(
         entryNumber,
         entryDate,
         description,
+        idempotencyKey: idempotencyKey ?? null,
         referenceType: referenceType ?? null,
         referenceId: referenceId ?? null,
         totalDebit: totals.totalDebit.toDecimal(),
