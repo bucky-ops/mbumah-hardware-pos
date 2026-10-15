@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.8] EMS payroll engine: the hard gate
+
+Feature release (Stage F of the EMS implementation protocol, Phase 4.5). Ships the pure computation engine and passes the payroll hard gate: golden fixtures and property tests green before any payroll UI exists. The run lifecycle with maker-checker and journal posting lands next (Phase 4.6).
+
+### Added
+- **Pure payroll engine (src/lib/hr/payroll/)**: integer-cents computation with no Prisma, React, or Next imports. Rate resolution from versioned tables (RATE_TABLE_MISSING and OVERLAPPING_RATE_TABLES guardrails), progressive PAYE bands with personal relief, NSSF Tier I and II on pensionable basic with employer match, SHIF with minimum contribution, Affordable Housing Levy with employer match, proration for unpaid leave, per-line-floored overtime, casual day rates, commission, and other deductions. NEGATIVE_NET blocks any run whose deductions exceed gross. Consent is a guardrail (MISSING_CONSENT).
+- **Balanced journal construction**: buildPayrollJournal maps the computed payslip onto the reserved payroll chart (5200, 5210, 5215, 2210, 2215, 2220, 2225, 2250, 2240) and asserts debits equal credits before returning; JOURNAL_IMBALANCE is unreachable by construction but enforced. The idempotencyKey flows from the caller for replay-safe posting in the lifecycle release.
+- **Golden fixtures**: ten hand-verified cases (below-band, band boundary, top band, NSSF exemption, Tier II slice, casual day rates, unpaid-leave proration, overtime, commission, other deductions) with frozen integer-cent expectations, plus the zero-gross minimum-SHIF case as a guardrail assertion. Property tests: net identity (net = gross - deductions exactly), journal balance, replay determinism, integer-only money, monotonic net across gross, rateTableId on every statutory line, and historical recompute equality.
+- **docs/hr/payroll-worked-examples.md**: five hand-checkable worked examples an accountant can verify manually.
+- **scripts/verify-payroll-engine.mjs**: source guarantees (no float, no server imports, complete guardrail vocabulary, frozen fixtures).
+- **Tests**: 23 cases in src/tests/lib/payroll-engine.test.ts.
+
+### Note
+Rates remain versioned data with verifyWithCounsel=true. The engine consumes resolved tables as plain data; the run lifecycle (Phase 4.6: state machine, maker-checker, journal posting through createJournalEntry, payslip issuance) follows as the next EMS release.
+
 ## [2.18.7] EMS attendance and leave: replay-safe punches, timesheet gating, idempotent balances
 
 Feature release (Stage E of the EMS implementation protocol, Phase 4.4). Extends the existing AttendanceRecord, LeaveRequest, and EmployeeLeaveBalance models additively and reuses the Shift system as the source of truth for till duty.
