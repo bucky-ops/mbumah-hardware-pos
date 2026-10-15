@@ -1,0 +1,537 @@
+{
+  "rateTables": {
+    "PAYE": {
+      "id": "rt-paye-2024",
+      "type": "PAYE",
+      "code": "PAYE-MONTHLY-2024",
+      "label": "PAYE monthly",
+      "basis": "MONTHLY",
+      "effectiveFrom": "2024-12-01T00:00:00.000Z",
+      "effectiveTo": null,
+      "rows": [
+        {
+          "order": 0,
+          "lowerBoundCents": 0,
+          "upperBoundCents": 2400000,
+          "rateBps": 1000
+        },
+        {
+          "order": 1,
+          "lowerBoundCents": 2400000,
+          "upperBoundCents": 3233300,
+          "rateBps": 2500
+        },
+        {
+          "order": 2,
+          "lowerBoundCents": 3233300,
+          "upperBoundCents": 50000000,
+          "rateBps": 3000
+        },
+        {
+          "order": 3,
+          "lowerBoundCents": 50000000,
+          "upperBoundCents": 80000000,
+          "rateBps": 3250
+        },
+        {
+          "order": 4,
+          "lowerBoundCents": 80000000,
+          "upperBoundCents": null,
+          "rateBps": 3500
+        }
+      ]
+    },
+    "PERSONAL_RELIEF": {
+      "id": "rt-relief-2024",
+      "type": "PERSONAL_RELIEF",
+      "code": "RELIEF-MONTHLY-2024",
+      "label": "Personal relief",
+      "basis": "MONTHLY",
+      "effectiveFrom": "2024-12-01T00:00:00.000Z",
+      "effectiveTo": null,
+      "rows": [
+        {
+          "order": 0,
+          "lowerBoundCents": 0,
+          "upperBoundCents": null,
+          "rateBps": null,
+          "flatAmountCents": null,
+          "reliefCents": 240000
+        }
+      ]
+    },
+    "NSSF_TIER1": {
+      "id": "rt-nssf1-2024",
+      "type": "NSSF_TIER1",
+      "code": "NSSF-T1-2024",
+      "label": "NSSF Tier I",
+      "basis": "MONTHLY",
+      "effectiveFrom": "2024-12-01T00:00:00.000Z",
+      "effectiveTo": null,
+      "rows": [
+        {
+          "order": 0,
+          "lowerBoundCents": 0,
+          "upperBoundCents": 800000,
+          "rateBps": 600,
+          "employerMatchBps": 600
+        }
+      ]
+    },
+    "NSSF_TIER2": {
+      "id": "rt-nssf2-2024",
+      "type": "NSSF_TIER2",
+      "code": "NSSF-T2-2024",
+      "label": "NSSF Tier II",
+      "basis": "MONTHLY",
+      "effectiveFrom": "2024-12-01T00:00:00.000Z",
+      "effectiveTo": null,
+      "rows": [
+        {
+          "order": 0,
+          "lowerBoundCents": 800000,
+          "upperBoundCents": 7200000,
+          "rateBps": 600,
+          "employerMatchBps": 600
+        }
+      ]
+    },
+    "SHIF": {
+      "id": "rt-shif-2024",
+      "type": "SHIF",
+      "code": "SHIF-2024",
+      "label": "SHIF",
+      "basis": "MONTHLY",
+      "effectiveFrom": "2024-12-01T00:00:00.000Z",
+      "effectiveTo": null,
+      "rows": [
+        {
+          "order": 0,
+          "lowerBoundCents": 0,
+          "upperBoundCents": null,
+          "rateBps": 250,
+          "flatAmountCents": 30000
+        }
+      ]
+    },
+    "HOUSING_LEVY": {
+      "id": "rt-ahl-2024",
+      "type": "HOUSING_LEVY",
+      "code": "AHL-2024",
+      "label": "Housing Levy",
+      "basis": "MONTHLY",
+      "effectiveFrom": "2024-12-01T00:00:00.000Z",
+      "effectiveTo": null,
+      "rows": [
+        {
+          "order": 0,
+          "lowerBoundCents": 0,
+          "upperBoundCents": null,
+          "rateBps": 150,
+          "employerMatchBps": 150
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "below first PAYE band",
+      "expect": {
+        "gross": 3000000,
+        "paye": 120000,
+        "nssf": 120000,
+        "shif": 75000,
+        "ahl": 45000,
+        "net": 2640000
+      },
+      "employee": {
+        "employeeId": "e1",
+        "employeeCode": "EMP-0001",
+        "fullName": "Below Band",
+        "basicSalaryCents": 2000000,
+        "houseAllowanceCents": 1000000,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "band boundary plus one cent",
+      "expect": {
+        "gross": 2400001,
+        "paye": 0,
+        "nssf": 144000,
+        "shif": 60000,
+        "ahl": 36000,
+        "net": 2160001
+      },
+      "employee": {
+        "employeeId": "e2",
+        "employeeCode": "EMP-0002",
+        "fullName": "Boundary One",
+        "basicSalaryCents": 2400001,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "top band salary",
+      "expect": {
+        "gross": 10000000,
+        "paye": 2108735,
+        "nssf": 432000,
+        "shif": 250000,
+        "ahl": 150000,
+        "net": 7059265
+      },
+      "employee": {
+        "employeeId": "e3",
+        "employeeCode": "EMP-0003",
+        "fullName": "Top Band",
+        "basicSalaryCents": 10000000,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "nssf exempt employee pays no NSSF",
+      "expect": {
+        "gross": 5000000,
+        "paye": 738335,
+        "nssf": 0,
+        "shif": 125000,
+        "ahl": 75000,
+        "net": 4061665
+      },
+      "employee": {
+        "employeeId": "e4",
+        "employeeCode": "EMP-0004",
+        "fullName": "NSSF Exempt",
+        "basicSalaryCents": 5000000,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": true,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "tier two slice on high basic",
+      "expect": {
+        "gross": 8000000,
+        "paye": 1508735,
+        "nssf": 432000,
+        "shif": 200000,
+        "ahl": 120000,
+        "net": 5739265
+      },
+      "employee": {
+        "employeeId": "e5",
+        "employeeCode": "EMP-0005",
+        "fullName": "Tier Two",
+        "basicSalaryCents": 8000000,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "casual worker day rates",
+      "expect": {
+        "gross": 350000,
+        "paye": 0,
+        "nssf": 0,
+        "shif": 30000,
+        "ahl": 5250,
+        "net": 314750
+      },
+      "employee": {
+        "employeeId": "e6",
+        "employeeCode": "EMP-0006",
+        "fullName": "Casual Worker",
+        "basicSalaryCents": 0,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 5,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 5,
+        "casualDayRateCents": 70000,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "unpaid leave prorates basic",
+      "expect": {
+        "gross": 1636363,
+        "paye": 0,
+        "nssf": 98181,
+        "shif": 40909,
+        "ahl": 24545,
+        "net": 1472728
+      },
+      "employee": {
+        "employeeId": "e7",
+        "employeeCode": "EMP-0007",
+        "fullName": "Unpaid Leave",
+        "basicSalaryCents": 2000000,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 18,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 4,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "overtime weekday one point five",
+      "expect": {
+        "gross": 4037500,
+        "paye": 377585,
+        "nssf": 240000,
+        "shif": 100937,
+        "ahl": 60562,
+        "net": 3258416,
+        "overtime": 37500
+      },
+      "employee": {
+        "employeeId": "e8",
+        "employeeCode": "EMP-0008",
+        "fullName": "Overtime Worker",
+        "basicSalaryCents": 4000000,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": 25000,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [
+          {
+            "kind": "WEEKDAY",
+            "hours": 1,
+            "multiplierBps": 15000
+          }
+        ],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "commission earning",
+      "expect": {
+        "gross": 5200000,
+        "paye": 726335,
+        "nssf": 240000,
+        "shif": 130000,
+        "ahl": 78000,
+        "net": 4025665,
+        "commission": 1200000
+      },
+      "employee": {
+        "employeeId": "e9",
+        "employeeCode": "EMP-0009",
+        "fullName": "Sales Person",
+        "basicSalaryCents": 4000000,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 1200000,
+        "otherDeductionsCents": 0,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    },
+    {
+      "name": "other deductions reduce net",
+      "expect": {
+        "gross": 3000000,
+        "paye": 105000,
+        "nssf": 180000,
+        "shif": 75000,
+        "ahl": 45000,
+        "net": 2545000,
+        "otherDeductions": 50000
+      },
+      "employee": {
+        "employeeId": "e10",
+        "employeeCode": "EMP-0010",
+        "fullName": "Union Member",
+        "basicSalaryCents": 3000000,
+        "houseAllowanceCents": 0,
+        "transportAllowanceCents": 0,
+        "medicalAllowanceCents": 0,
+        "otherAllowancesCents": 0,
+        "hourlyRateCents": null,
+        "payeExempt": false,
+        "nssfExempt": false,
+        "nhifExempt": false,
+        "housingExempt": false
+      },
+      "period": {
+        "periodYear": 2026,
+        "periodMonth": 3,
+        "workedDays": 22,
+        "standardWorkingDays": 22,
+        "overtime": [],
+        "casualDays": 0,
+        "casualDayRateCents": 0,
+        "commissionCents": 0,
+        "otherDeductionsCents": 50000,
+        "unpaidLeaveDays": 0,
+        "nightAllowanceCents": 0
+      }
+    }
+  ]
+}
