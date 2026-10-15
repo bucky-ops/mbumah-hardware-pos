@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.3.2] Tenant isolation and payment-safety corrections
+
+Correction release completing the security and tenant isolation residuals from the release integrity audit (Findings 17, 18, 21, 22): STK Push retries can no longer double prompt the customer, deleting the engraved admin is durably audited, the schema health endpoint is role-gated in production, and the heavy operational endpoints are rate limited.
+
+### Fixed
+- **STK Push idempotency (`src/lib/mpesa-idempotency.ts` + stkpush route)**: the M-Pesa callback already settles exactly once (terminal-state gate, atomic claim, one-receipt-per-store constraint); the remaining double-prompt window is now closed. Callers may send an optional `idempotencyKey`; when a matching push (same store, normalised phone and amount, status PENDING or PROCESSING) exists within a 10 minute window, the existing push is returned with `duplicate: true` and no second Daraja request is fired. Omitting the key keeps the previous behavior unchanged; the dedupe lookup is best-effort and can never block payment initiation. No schema change.
+- **Engraved admin deletion audit (`src/app/api/users/[id]/route.ts`)**: a blocked DELETE of the engraved administrator now writes a durable `USER_DELETE_BLOCKED` security log (WARN) with the acting account and target metadata before the existing 403 `ENGRAVED_ADMIN_PROTECTED` response.
+- **Schema health role gate (`src/app/api/health/schema/route.ts`)**: in production the drift picture is restricted to SUPER_ADMIN and STORE_OWNER; outside production (trusted local desktop mode) any signed-in role keeps working. Rate limited per client IP (10 per minute) because the probes run real database queries.
+- **System heal rate limit (`src/app/api/system/heal/route.ts`)**: the full repair and power-on-self-test scan is capped per client IP (5 per hour) ahead of the existing authentication and role checks.
+
+### Tests
+- 7 new unit cases cover the dedupe query: match and miss paths, phone normalisation, store scoping, the PENDING/PROCESSING restriction, the default window, and the unusable-phone guard (`src/tests/lib/mpesa-idempotency.test.ts`).
+
 ## [2.18.3.1] Updater activation guards and dual-mode start
 
 Correction release completing the updater and build safety residuals from the release integrity audit (Finding 12 detail and the start-command fallback): the build log scanner now catches the remaining fatal failure classes before an update is activated, and the package start command delegates to the dual-mode launcher instead of assuming a standalone build exists.

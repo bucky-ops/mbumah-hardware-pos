@@ -7,11 +7,16 @@
 // counts, and the resolved provider - the exact input needed to decide
 // between "run the updater" and "npm run db:repair".
 //
-// Requires authentication (any signed-in role; the response contains no
-// secrets, only schema-level facts).
+// Requires authentication. v2.18.3.2 (audit Finding 18): in production the
+// response is restricted to SUPER_ADMIN and STORE_OWNER (the schema drift
+// picture is operational data, not cashier-level data); outside production
+// (trusted local desktop mode) any signed-in role keeps working so local
+// operators can self-diagnose. Rate limited per client IP (10/min).
 
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, requireRole, type AuthSession } from '@/lib/auth';
 import { successResponse } from '@/lib/api-response';
+import { isRateLimited } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/security';
 import { db } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -26,7 +31,28 @@ const DRIFT_PROBES: Array<{ model: string; column: string; probe: () => Promise<
   { model: 'users', column: 'isEngraved', probe: () => db.user.findFirst({ select: { isEngraved: true }, take: 1 }) },
 ];
 
-export const GET = requireAuth(async (_request, _session) => {
+const requireSchemaRole = requireRole('SUPER_ADMIN', 'STORE_OWNER');
+
+export const GET = requireAuth(async (request, session: AuthSession) => {
+  if (process.env.NODE_ENV === 'production') {
+    const denied = requireSchemaRole(session);
+    if (denied) return denied;
+  }
+
+  // v2.18.3.2 (audit Finding 22): the schema probe runs real database
+  // queries; cap per-client cost (10/min) so a looping client cannot turn a
+  // diagnostic endpoint into a load tool.
+  const rl = isRateLimited(`health-schema:${getClientIp(request)}`, {
+    max: 10,
+    windowMs: 60 * 1000,
+  });
+  if (rl.limited) {
+    return Response.json(
+      { success: false, error: 'Too many schema health requests. Retry later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+    );
+  }
+
   const databaseUrl = process.env.DATABASE_URL ?? '';
   const provider = databaseUrl.startsWith('file:')
     ? 'sqlite'
