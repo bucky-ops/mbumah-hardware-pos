@@ -1526,6 +1526,7 @@ model Employee {
   disciplinaryCases DisciplinaryCase[]
   assetAssignments  AssetAssignment[]
   consentRecords    ConsentRecord[]
+  erasureRequests   ErasureRequest[]
 
   @@unique([storeId, email])
   @@index([storeId])
@@ -3638,4 +3639,31 @@ model HrSetting {
 
   @@unique([organizationId, key])
   @@map("hr_settings")
+}
+
+/// EMS v2.20.0 (spec Phase 4.8): employee data erasure requests under the
+/// Data Protection Act posture. An erasure request is honored for
+/// non-statutory records; where statutory retention applies (payroll,
+/// audit) the request is PARTIALLY_EXECUTED or REJECTED with the decision
+/// and legal basis recorded. Rows are additive and backfill-safe.
+model ErasureRequest {
+  id              String    @id @default(cuid())
+  organizationId  String
+  employeeId      String
+  requestedByUserId String
+  status          String    @default("PENDING") // PENDING, EXECUTED, PARTIALLY_EXECUTED, REJECTED
+  decision        String? // free-text decision summary (no PII values)
+  legalBasis      String? // e.g. "Statutory retention - Employment Act s.74 / Tax Procedures Act"
+  retentionApplies Boolean  @default(false)
+  executedAt      DateTime?
+  decidedByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([employeeId])
+  @@map("hr_erasure_requests")
 }

@@ -10,8 +10,12 @@
 // (spec: "Do not expose organization-wide data to branch-only users").
 
 import { db, runWithoutTenant } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, getSessionFromRequest } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
+import { hrSummaryForOrgConsole } from '@/lib/hr/reports';
+import { isHrModuleEnabled } from '@/lib/hr/feature-flag';
+import { hasHrPermission } from '@/lib/hr/permissions';
+import type { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +27,7 @@ function startOfToday(): Date {
   return d;
 }
 
-async function orgSummaryHandler(): Promise<Response> {
+async function orgSummaryHandler(request: NextRequest): Promise<Response> {
   return runWithoutTenant(async () => {
     const today = startOfToday();
 
@@ -132,11 +136,30 @@ async function orgSummaryHandler(): Promise<Response> {
       { revenue: 0, transactions: 0, lowStock: 0, overdueRentals: 0, debtOutstanding: 0, pendingMpesa: 0 },
     );
 
+    // EMS v2.20.0 (spec Phase 4.8): HR tiles for the organization console —
+    // headcount, month employment cost, absence rate, payroll status, expiry
+    // alerts. Computed only when the HR module is on and the caller holds an
+    // hr report permission; otherwise the block is omitted (tiles hidden).
+    let hr: Awaited<ReturnType<typeof hrSummaryForOrgConsole>> = null;
+    try {
+      const session = await getSessionFromRequest(request);
+      if (
+        session &&
+        (await isHrModuleEnabled(session.organizationId)) &&
+        (hasHrPermission(session.role, 'hr.report.branch') || hasHrPermission(session.role, 'hr.report.all'))
+      ) {
+        hr = await hrSummaryForOrgConsole(session);
+      }
+    } catch {
+      hr = null; // tiles are additive — never break the console payload
+    }
+
     return Response.json({
       success: true,
       data: {
         generatedAt: new Date().toISOString(),
         totals,
+        hr,
         stores: storeRows,
         recentAudit,
       },

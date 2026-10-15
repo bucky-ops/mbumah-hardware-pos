@@ -24,6 +24,7 @@
 import { runWithoutTenant } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { dataRetention } from '@/lib/data-retention';
+import { runHrRetentionSweep } from '@/lib/hr/data-protection';
 import { LogSeverity, LogComponent } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -85,10 +86,29 @@ async function retentionCronHandler(...args: unknown[]): Promise<Response> {
       }).catch(() => {});
     }
 
+    // EMS v2.20.0 (spec Phase 4.8): per-organization HR retention sweep
+    // (applicant rejections, closed discipline, attendance device data) with
+    // legal-hold support. Anonymises in place; each scope is audit logged.
+    let hrSweep: Awaited<ReturnType<typeof runHrRetentionSweep>> = [];
+    try {
+      const orgs = await (await import('@/lib/db')).db.organization.findMany({ select: { id: true } });
+      for (const org of orgs) {
+        hrSweep = hrSweep.concat(await runHrRetentionSweep(org.id, 'system'));
+      }
+    } catch (hrError) {
+      await systemLog({
+        action: 'HR_RETENTION_CRON_FAILURE',
+        component: LogComponent.SYSTEM,
+        severity: LogSeverity.WARN,
+        message: `HR retention sweep failed: ${hrError instanceof Error ? hrError.message : 'unknown'}`,
+      }).catch(() => {});
+    }
+
     return {
       totalPurged,
       categoriesProcessed: results.length,
       failures: failed.length,
+      hrRetention: hrSweep,
       results: results.map((r) => ({
         category: r.category,
         purged: r.purged,
