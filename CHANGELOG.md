@@ -2,6 +2,34 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.19.0] EMS performance, goals, assets, discipline, and employee self-service
+
+Feature release (Stage G, EMS Phase 4.7). Adds the performance console (review cycles, reviews, calibration, POS-computed goals), asset assignments with authorization-gated recovery, disciplinary cases with automatic warning expiry and grievance confidentiality, and the mobile-first employee self-service portal at /employees/me.
+
+### Added
+- **Review cycles** (`/api/hr/performance/cycles`): DRAFT → ACTIVE → CLOSED state machine — a cycle needs at least one review to activate, CLOSED is terminal, calibration happens only while ACTIVE. Duplicate names rejected per organization.
+- **Performance reviews** (`/api/hr/performance/reviews`): DRAFT → SUBMITTED → ACKNOWLEDGED → CALIBRATED. One review per (cycle, employee); ratings must be integers 1–5; only the assigned reviewer or HR edits/submit; the employee acknowledges their own review through self-service (`POST /api/self-service/me/reviews/[id]/acknowledge`); calibration is HR-only. **Ratings and narratives never appear in list payloads** (spec sensitive-data rule) — only the permission-gated single-review detail returns them.
+- **Goals with POS-sourced computation** (`/api/hr/goals`): SALES_TOTAL / SALES_COUNT goals aggregate the linked employee's completed SalesTransaction rows (cashierId ← Employee.userId, scoped to the branch and the goal window, which metricConfig can override) — the value is computed, never typed; typed writes to POS-sourced goals return 409 POS_GOAL_READONLY. ACHIEVED flips automatically at target, MISSED after the window passes without achievement. All money math on Prisma.Decimal. `/recompute` refreshes on demand; self-service recomputes read-only for display.
+- **Asset assignments** (`/api/hr/assets`): issue assets with tags/serials/condition-out and expected-return dates; RETURN records the condition back in; **LOST / DAMAGED require a named recovery authorizer** — an active user holding hr.asset.manage who must differ from the acting user (no self-authorization) — plus mandatory notes. Overdue assignments flagged in list payloads; `/api/hr/performance/authorizers` lists eligible authorizers (excluding the caller).
+- **Disciplinary cases** (`/api/hr/discipline`): WARNING / GRIEVANCE / INVESTIGATION with 1–5 severity. **Warnings expire automatically** — a lazy sweep flips OPEN warnings past their expiry to EXPIRED on list/detail reads and writes one batch audit event. **Grievance confidentiality**: grievances default to RESTRICTED; case descriptions never appear in list payloads (any confidentiality level) and RESTRICTED detail is readable only by HR_MANAGER / STORE_OWNER / SUPER_ADMIN. Resolve requires resolution notes; double-closing is a 409.
+- **Employee self-service portal** (`/employees/me` + `/api/self-service/me/*`): dashboard (profile with tenure, latest payslip, leave availability, today's attendance, goal progress), payslips (list + full breakdown dialog + plain-language stored computation), attendance (records + month summary tiles), leave (balances with availability meters, request form via the governed leave service, request history), goals (+ own reviews with acknowledge), and documents (metadata + verification status + 90-day expiry warnings). Every endpoint resolves the Employee row through the session User (`Employee.userId`) and **ignores client-supplied identity parameters entirely** — cross-employee reads are structurally impossible. Unlinked accounts get 403 NO_EMPLOYEE_PROFILE. Statutory ids stay [REDACTED] in self-view unless the caller holds hr.employee.unmask.pii.
+- **Offline payslip view**: the payslip list and each opened payslip are cached to localStorage and render with an "offline" banner when the device cannot reach the API (spec acceptance 8).
+- **Mobile-first self-service shell**: sticky header, mobile bottom tab bar (6 tabs, safe-area aware), desktop inline nav, gradient hero profile card, rounded stat tiles with icons, progress meters, and status badges with full dark-mode variants.
+- **RBAC (additive)**: new permission key `hr.documents.read.own` (all staff roles) for the self-service documents endpoint; existing hr.performance.*/hr.asset.*/hr.discipline.* keys wired through hrGuard with deny logging.
+- **HR workspace nav**: Performance, Assets, and Discipline consoles linked from the /hr header; lightweight `/api/hr/performance/people` picker endpoint returns id/name/jobTitle only (no PII-grade fields).
+- **Tests**: 50 new cases across stage-g-performance, stage-g-goals, stage-g-assets-discipline, and stage-g-self-service (state machines, maker-of-review rules, list-payload masking, POS computation with Decimal parity, recovery authorization matrix, expiry sweep, confidentiality gates, guard composition, cross-employee denial, leave error mapping). Suite: 744 tests / 37 files.
+- **scripts/verify-stage-g.mjs** (`npm run verify:stage-g`): 60+ static checks over routes, guard composition, sensitive-data rules, recovery authorization, POS-goal computation, self-service scoping, RBAC keys, UI surface, and docs.
+- **Docs**: docs/hr/performance.md, docs/hr/assets-and-discipline.md, docs/hr/self-service.md.
+
+### Security
+- Self-service endpoints compose a dedicated guard: session → HR module flag → hr.* permission (deny-logged) → employee-link resolution, in that order, with fail-closed responses.
+- Review ratings, case descriptions, and document notes are excluded from every list payload; RESTRICTED grievances additionally require elevated roles on the detail fetch.
+- Recovery authorization is enforced server-side (role + active + not-self); the UI authorizer list also excludes the caller.
+- All Stage G mutations write hash-chained audit events with field-name-only metadata.
+
+### Note
+Phase 4.8 (HR reporting/P10/org-console tiles/compliance hardening) is the next FEATURE slot: v2.20.0 per the version scheme (2.19.0 onward).
+
 ## [2.18.9] EMS payroll run lifecycle: maker-checker, idempotent posting, payslips, corrections
 
 Feature release (Stage F completion, EMS Phase 4.6). Wraps the v2.18.8 engine in the governed run lifecycle: state machine, maker-checker approvals, idempotent journal posting through the existing accounting helper, payslip issuance with zero-dependency PDFs and plain-language traces, and reverse-and-replace corrections. Issued payslips are append-only.
