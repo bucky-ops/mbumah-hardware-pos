@@ -12,6 +12,7 @@ import { type NextRequest } from 'next/server';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireAuth, assertBodyStoreScope, type StoreScopeSession } from '@/lib/auth';
 import { initiateStkPush } from '@/lib/mpesa-daraja';
+import { findInFlightStkPush } from '@/lib/mpesa-idempotency';
 import { isRateLimited } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/security';
 
@@ -25,6 +26,14 @@ interface StkPushBody {
   transactionDesc?: string;
   storeId?: string;
   transactionId?: string;
+  /**
+   * Optional client-supplied idempotency key (v2.18.3.2). When present and a
+   * matching in-flight push exists (same store, phone and amount within the
+   * dedupe window), the existing push is returned instead of firing a second
+   * Daraja request, so a retry after a network blip never double prompts the
+   * customer. Omitting the key keeps the previous behavior unchanged.
+   */
+  idempotencyKey?: string;
 }
 
 async function stkPushHandler(
@@ -66,6 +75,32 @@ async function stkPushHandler(
   // as query-param scoping). SUPER_ADMIN cross-store passes.
   const scopeDenied = await assertBodyStoreScope(request, session, body.storeId);
   if (scopeDenied) return scopeDenied;
+
+  // v2.18.3.2 (audit Finding 21): client-supplied idempotency dedupe. The
+  // callback settles exactly once (terminal gate + atomic claim + unique
+  // receipt constraint); this closes the remaining double PROMPT window.
+  const idempotencyKey =
+    typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim().slice(0, 128) : '';
+  if (idempotencyKey) {
+    try {
+      const inFlight = await findInFlightStkPush({
+        storeId: body.storeId || null,
+        phone: String(rawPhone),
+        amount,
+      });
+      if (inFlight) {
+        return Response.json({
+          success: true,
+          duplicate: true,
+          data: inFlight,
+          message: 'An STK Push for this payment is already in flight. No duplicate request was sent.',
+        });
+      }
+    } catch {
+      // Dedupe is best-effort: a lookup failure must never block payment
+      // initiation. The Daraja call below proceeds as before.
+    }
+  }
 
   const result = await initiateStkPush({
     phone: String(rawPhone),

@@ -13,10 +13,26 @@ import { getSessionFromRequest } from '@/lib/auth';
 import { ensureEngravedAdminExists } from '@/lib/engraved-admin';
 import { runPostChecks } from '@/lib/post';
 import { auditTrail, AuditAction } from '@/lib/audit-trail';
+import { isRateLimited } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/security';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  // v2.18.3.2 (audit Finding 22): system heal runs a full repair + POST scan;
+  // cap it per client IP (5/hour) so a looping client cannot turn the heal
+  // endpoint into a load tool. Auth still applies on top (production).
+  const rl = isRateLimited(`system-heal:${getClientIp(request)}`, {
+    max: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (rl.limited) {
+    return Response.json(
+      { success: false, error: 'Too many heal requests. Retry later.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 3600) } },
+    );
+  }
+
   let session: Awaited<ReturnType<typeof getSessionFromRequest>> = null;
 
   if (process.env.NODE_ENV === 'production') {

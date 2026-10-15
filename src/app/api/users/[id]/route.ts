@@ -263,7 +263,18 @@ async function deactivateUserHandler(
   const target = result.user;
 
   // v2.14.0: the engraved bootstrap admin is protected from soft delete.
+  // v2.18.3.2 (audit Finding 17): the denial is durably audited as
+  // USER_DELETE_BLOCKED (best-effort, never blocks the 403 itself).
   if (target.isEngraved) {
+    await systemLog({
+      action: 'USER_DELETE_BLOCKED',
+      component: 'AUTH',
+      severity: 'WARN',
+      message: `Deletion of the engraved system administrator was blocked (ENGRAVED_ADMIN_PROTECTED). Attempted by ${session.email}.`,
+      userId: session.userId,
+      storeId: session.storeId || undefined,
+      metadata: { targetUserId: id, targetEmail: target.email, attemptedBy: session.email },
+    }).catch(() => {});
     return engravedAdminProtected();
   }
 
