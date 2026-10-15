@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.6] EMS recruitment, onboarding, and till access gating
+
+Feature release (Stage D of the EMS implementation protocol, Phase 4.3). Builds on the 2.18.5 foundations. Additive schema only.
+
+### Added
+- **Recruitment pipeline (/api/recruitment/)**: job creation and listing, applicant registration with mandatory consent (ConsentRecord with purpose, scope, policy version, lawful basis), stage recording with outcome tracking, offer drafting in integer cents, owner-tier offer approval and send, and hiring conversion. Rejections set a 90-day data retention window (dataRetentionUntil) and hired applicants can no longer be rejected.
+- **Applicant to employee conversion**: idempotent per (storeId, applicant email); a repeat call returns the existing employee and a same-email duplicate heals the provenance link instead of creating a second row. Provenance is preserved via Applicant.convertedEmployeeId. Conversion creates the standard onboarding plan and schedules a probation-end notification (persistent Notification row with a deep link).
+- **Onboarding (/api/hr/onboarding/)**: plan creation from template, idempotent task completion with completion auditing, and sign-off that refuses while any blocksTillAccess task is open (409 TILL_ACCESS_BLOCKED with the named tasks). isTillAccessGranted() is the single gating function the POS can consult before granting till permissions to a probationary employee.
+- **HR workspace pages**: /hr/recruitment (open jobs, consent-gated applicant registration, pipeline with stage-appropriate actions) and /hr/onboarding (plan cards with task checklists, blocks-till badges, sign-off gating state).
+- **Tests**: till access gating (denies with no plan, denies with open blocking tasks, grants on completion and sign-off), conversion idempotency and duplicate healing, and the consent requirement (8 cases in src/tests/lib/hr-onboarding.test.ts).
+
 ## [2.18.5] EMS foundations: HR workspace, employee records, and versioned statutory rate tables
 
 Feature release opening the Employee Management System (Stage C of the EMS implementation protocol, Phases 4.1 and 4.2 core). Builds on the audit deliverables (docs/EMS_INFRASTRUCTURE_AUDIT.md) and the 2.18.4.0 corrections. Additive schema only; the existing POS, payroll, and attendance behavior is untouched.
