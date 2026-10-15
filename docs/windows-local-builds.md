@@ -74,3 +74,14 @@ On Linux the same logs live in `~/mbumah-pos-data/logs/`. When an update fails, 
 - [Standalone output](standalone-output.md): where standalone output is still built and why
 - [Updater release channels](updater-release-channels.md): how an update picks a release and rolls back
 - [Troubleshooting and FAQ](troubleshooting-and-faq.md): the EINVAL and build output warning entry
+
+## Start command fallback (v2.18.3.1)
+
+`npm start` / `bun start` run `deploy/nodocker/start-server.mjs`, which picks
+the right server for the build this release was built with: the standalone
+server when `.next/standalone/server.js` exists (Linux or Docker builds made
+with BUILD_STANDALONE=1), otherwise `next start` against the plain build
+output. Windows laptops, where the standalone output is disabled by policy,
+therefore start correctly with the plain command instead of failing on a
+missing standalone bundle. The launcher also applies the repo .env with
+env-wins precedence and fails fast with guidance when no build output exists.

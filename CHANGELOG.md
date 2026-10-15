@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.3.1] Updater activation guards and dual-mode start
+
+Correction release completing the updater and build safety residuals from the release integrity audit (Finding 12 detail and the start-command fallback): the build log scanner now catches the remaining fatal failure classes before an update is activated, and the package start command delegates to the dual-mode launcher instead of assuming a standalone build exists.
+
+### Fixed
+- **Build log scan coverage (`scripts/verify-build-output.mjs`)**: the fatal-everywhere scan now includes `Cannot find module`, webpack `Module not found`, Prisma drift error `P2022`, and `prisma:error` log lines, in addition to the existing compile, build-error, type-error, and standalone trace-copy checks. The updater refuses to activate a release whose build log contains any of them; the `P2022` pattern is boundary-guarded so unrelated digit sequences never trip it.
+- **Dual-mode start (`package.json`)**: `npm start` / `bun start` previously ran `.next/standalone/server.js` unconditionally, which fails on a normal (non-standalone) build, for example on Windows where BUILD_STANDALONE is ignored by policy. The start command now runs `deploy/nodocker/start-server.mjs`, the existing launcher that applies the repo .env (env-wins precedence), starts the standalone server when one was built, otherwise falls back to `next start` against the plain build output, and fails fast with clear guidance when no build output exists.
+
+### Tests
+- 6 new unit cases cover the added fatal patterns, the every-mode contract, and the boundary guard against false positives (`src/tests/lib/build-output-policy.test.ts`).
+
+## [2.18.3.0] Branch workspace reason codes in the organization console
+
 ## [2.18.3.0] Branch workspace reason codes in the organization console
 
 Correction release completing the branch workspace foundation residuals found by the release integrity audit (Findings 1 and 7, re-verified with evidence against the unified lineage): the org console Workspace column now states the precise reason a workspace cannot open instead of a generic unavailable message, and the branch workspace route gained a server-side layout guard.

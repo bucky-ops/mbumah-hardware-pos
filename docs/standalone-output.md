@@ -55,3 +55,14 @@ Check 3 is the generic safety net for the original field failure: an incomplete 
 
 - [Windows local builds](windows-local-builds.md): the normal-build policy on Windows
 - [Staged updates](staged-updates.md): the server-triggered update pipeline for self-hosted machines
+
+## Start command fallback (v2.18.3.1)
+
+`npm start` / `bun start` run `deploy/nodocker/start-server.mjs`, which picks
+the right server for the build this release was built with: the standalone
+server when `.next/standalone/server.js` exists (Linux or Docker builds made
+with BUILD_STANDALONE=1), otherwise `next start` against the plain build
+output. Windows laptops, where the standalone output is disabled by policy,
+therefore start correctly with the plain command instead of failing on a
+missing standalone bundle. The launcher also applies the repo .env with
+env-wins precedence and fails fast with guidance when no build output exists.
