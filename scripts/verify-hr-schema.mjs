@@ -39,7 +39,7 @@ check(
 const seed = read('prisma/seed.ts');
 check(
   'seed upserts accounts by organizationId_code',
-  /prisma\.account\.upsert\(\{\s*\n\s*where: \{ organizationId_code:/.test(seed),
+  /prisma\.account\.upsert\(\{\s*\n\s*where: \{\s*\n\s*organizationId_code:/.test(seed),
 );
 check('seed no longer uses bare account.create loops', !/prisma\.account\.create\(\{ data: acct \}\)/.test(seed));
 const payrollCodes = ['2210', '2215', '2220', '2225', '2230', '2240', '2250', '2260', '5210', '5215'];

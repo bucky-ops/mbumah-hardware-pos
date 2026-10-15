@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.5] EMS foundations: HR workspace, employee records, and versioned statutory rate tables
+
+Feature release opening the Employee Management System (Stage C of the EMS implementation protocol, Phases 4.1 and 4.2 core). Builds on the audit deliverables (docs/EMS_INFRASTRUCTURE_AUDIT.md) and the 2.18.4.0 corrections. Additive schema only; the existing POS, payroll, and attendance behavior is untouched.
+
+### Added
+- **EMS foundation layer (src/lib/hr/)**: typed role constants (HR_MANAGER and EMPLOYEE join the platform as data, no enum migration), the hr.* permission matrix with fail-closed checks and the maker-checker role split, the PII masking service (strip for lists, mask for details, permission-gated unmask), the HR audit service wrapping the hash-chained audit trail, and the data-driven HR_MODULE_ENABLED flag (HrSetting row, 30-second cache, default on) with a calm kill switch.
+- **HR API surface (/api/hr/)**: employees list and create (branch-resolved from the session; client storeId ignored outside the documented SUPER_ADMIN path), employee detail with masked statutory identifiers and an audit-logged unmask parameter, employee update and archive (soft delete), document registration and verification with expiry tracking, org-scoped rate table reads, and the module settings endpoint. Every route composes the shared hrGuard: feature flag, hr.* permission, store scope, and deny logging through the existing SecurityEvent path.
+- **HR workspace UI (/hr)**: overview with branch-scoped headcount, casual worker count, in-force rate tables, and module status; an employees list with sticky-header dense table, search, and inline create; an employee detail view with statutory identifier masking, permission-gated unmask (banner explains the audit trail), pay summary, and a documents list with verification badges.
+- **Versioned statutory rate tables**: hr_rate_tables and hr_rate_table_rows store PAYE bands, personal relief, NSSF Tier I and II, SHIF, and the Affordable Housing Levy as insert-only data with instrument references and verifyWithCounsel=true. Seeded idempotently by scripts/seed-rate-tables.mjs (wired into vercel-build). Rates are reviewable defaults, not legal advice.
+- **Additive schema (21 models)**: EmployeeDocument, Position, PayGrade, SalaryStructure, SalaryComponent, EmployeeSalaryComponent, RateTable, RateTableRow, RecruitmentJob, Applicant, ApplicationStage, Offer, OnboardingPlan, OnboardingTask, ReviewCycle, PerformanceReview, Goal, DisciplinaryCase, AssetAssignment, ConsentRecord, HrSetting; Employee gains reportingToId and deletedAt.
+- **Verification**: scripts/verify-ems-infrastructure-audit.mjs (audit reproducibility), scripts/verify-hr-isolation.mjs (route guard composition and safe 404s), plus unit tests for the permission matrix (fail-closed, maker-checker split) in src/tests/lib/hr-permissions.test.ts.
+
 ## [2.18.4.0] EMS infrastructure corrections: payroll accounting readiness and employee PII masking
 
 Correction release required by the EMS implementation gate (docs/EMS_IMPLEMENTATION_GATE.md). Fixes the two P0 blockers that prevented the Employee Management System from building on a safe foundation. All changes are additive; no existing flow, route, or record is altered destructively.
