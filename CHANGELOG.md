@@ -2,6 +2,30 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.18.4] Organization console expert diagnostics and branch slug repair
+
+Feature release completing the expert information minimum from the release integrity audit (Finding 3) and bundling the planned maintenance residuals of the audit sequence (Findings 15, 16, 19, 20, 23, 25 hygiene documentation and test visibility). This release supersedes no one: it stacks directly on v2.18.3.2, keeps every existing route and contract intact, and the maintenance residuals land as documentation and test-report hygiene rather than behavior changes.
+
+### Added
+- **Expert console snapshot (`/api/org/expert-console`)**: one SUPER_ADMIN/STORE_OWNER endpoint that answers the operator's three questions per branch (can the workspace open, why not, what next) plus the release identity, the workspace routing configuration as the server sees it, the acting user record, an org KPI roll-up with a documented health breakdown, and the per-branch diagnostics. Rate limited per user and client IP (30 per minute); org-wide reads follow the runWithoutTenant pattern of the existing org routes.
+- **Branch diagnostics (`/api/org/branch-diagnostics`, `/[storeCode]`, `/refresh`)**: the per-branch diagnostics list, a single-branch lookup resolved by slug, code or store id (404-safe), and a force-refresh variant that bypasses the 60 second schema-probe cache and writes an ORG_DIAGNOSTICS_REFRESH audit entry. Every operational figure comes from batched groupBy queries (about ten queries total for all stores) and degrades to zeros or unknown instead of failing the response.
+- **Diagnostics data layer (`src/lib/org/diagnostics.ts`)**: the documented reason-code vocabulary (ORG_DIAGNOSTIC_REASON_CODES), the pure slug derivation shared with the repair routes (canonical mappings: juja-main, thika, ruiru, nairobi-cbd, nakuru), the reason classifier with calm remediation text, and a 60-second cached schema drift probe running the two cheapest checks from /api/health/schema. Probe failures report drift or unknown; they never throw.
+- **Branch slug repair (`/api/org/slug-repair/preview` + `/apply`)**: a non-mutating preview that lists planned fixes and conflicts, and a guarded apply that is SUPER_ADMIN-only, confirm-gated, refuses PostgreSQL with migration guidance, runs scripts/backup-db.mjs first and aborts when the backup fails, never overwrites or renames another store, derives the subdomain only when it is empty, audits ORG_SLUG_REPAIR_APPLIED (WARN), and is idempotent (a second run reports "Nothing to repair.").
+- **Expert panel in the Branches table (`src/components/workspace/org-console.tsx`)**: a per-row Expert affordance opening a dialog with slug, subdomain, status, reason code, remediation, schema status and missing columns, and the last checked time. Copy diagnostics (with an aria-live confirmation), Refresh, and Open path workspace actions. Loading and error states are calm text with retry; Escape closes; status is always carried by text.
+
+### Fixed
+- **Maintenance residuals bundled as planned**: the hygiene items from the audit sequence land in this release as documentation rather than code changes: the database migration policy (db:push with preflight, backup and additive repair locally; prisma migrate deploy only, operator-run, in production) and the migration of slug writes for broken stores from ad-hoc scripts to an audited, confirm-gated API where a local backup is mandatory.
+
+### Docs
+- docs/org-console-expert-information.md: API shapes, the reason-code table with remediation text, the safety rules, and UI notes.
+- docs/org-console-roadmap.md: the deferred expert modules sequenced from v2.18.5 (Inventory and Debt) through v2.18.9 (operator experience groundwork), building on the existing /console modules.
+- docs/database-migration-policy.md: local SQLite convergence policy and the production PostgreSQL migration boundary (the updater never runs migrate deploy against production automatically).
+- docs/TEST_AUDIT_REPORT.md and docs/TEST_AUDIT_REPORT.json: the full test inventory (27 files), role and module matrices, risk register (including the documented 471 strict-typecheck baseline and the 16 pre-existing vitest failures, unchanged by this release), acceptance checklist, and the recommendation to run the full vitest suite in CI.
+
+### Tests
+- 15 new unit cases cover the slug derivation (canonical mappings, prefix tolerance, punctuation variants, unusable names) and the diagnostics classification (ready, missing-slug, store-inactive, workspace-disabled, schema drift and probe caching, batched aggregates, degradation) with the database mocked (`src/tests/lib/org-diagnostics.test.ts`).
+- New release verification script (`scripts/verify-org-console-expert-info.mjs`, npm run verify:org-console-expert) statically checks the role gate, the reason-code contract, the slug repair guards, and the documentation set.
+
 ## [2.18.3.2] Tenant isolation and payment-safety corrections
 
 Correction release completing the security and tenant isolation residuals from the release integrity audit (Findings 17, 18, 21, 22): STK Push retries can no longer double prompt the customer, deleting the engraved admin is durably audited, the schema health endpoint is role-gated in production, and the heavy operational endpoints are rate limited.
