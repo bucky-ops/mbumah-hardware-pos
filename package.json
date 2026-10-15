@@ -3,7 +3,7 @@
   "version": "2.18.4",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.18.4",
+    "releaseVersion": "2.18.4.0",
     "baseVersion": "2.18.4",
     "hotfix": 0
   },
@@ -32,7 +32,7 @@
     "db:reset": "prisma migrate reset",
     "audit:financial": "bun run scripts/run-financial-audit.ts",
     "health": "curl -s http://localhost:3000/api/health | bun -e 'process.stdin.on(\"data\",d=>console.log(JSON.stringify(JSON.parse(d.toString()),null,2)))'",
-    "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && node scripts/sync-db-schema.mjs && node scripts/backfill-store-slugs.mjs && next build",
+    "vercel-build": "SKIP_ENV_VALIDATION=1 node scripts/setup-prisma-provider.mjs && prisma generate && node scripts/sync-db-schema.mjs && node scripts/seed-payroll-accounts.mjs && node scripts/backfill-store-slugs.mjs && next build",
     "db:backup": "node scripts/backup-db.mjs",
     "db:verify": "node scripts/setup-prisma-provider.mjs && prisma validate",
     "db:preflight": "node scripts/preflight-schema.mjs",

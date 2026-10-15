@@ -488,8 +488,28 @@ export async function generateInventoryCsv(
 /**
  * EMPLOYEES - every employee with role, contact info, salary, and employment
  * status.
+ *
+ * Privacy: statutory identifiers (national ID, KRA PIN, NSSF number, NHIF
+ * number) and bank account details are masked unless the caller explicitly
+ * passes includeSensitivePii. Callers may only set that flag when the acting
+ * user holds the PII unmask permission (SUPER_ADMIN or STORE_OWNER today);
+ * every unmasked export is audit logged by the calling route.
  */
-export async function generateEmployeesCsv(storeId: string): Promise<GenerateResult> {
+const EMPLOYEE_PII_FIELDS = [
+  'nationalId',
+  'kraPin',
+  'nssfNumber',
+  'nhifNumber',
+  'bankAccountName',
+] as const;
+
+const PII_MASK = '[REDACTED]';
+
+export async function generateEmployeesCsv(
+  storeId: string,
+  options?: { includeSensitivePii?: boolean },
+): Promise<GenerateResult> {
+  const includeSensitivePii = options?.includeSensitivePii === true;
   const employees = await db.employee.findMany({
     where: { storeId },
     orderBy: { firstName: 'asc' },
@@ -528,7 +548,19 @@ export async function generateEmployeesCsv(storeId: string): Promise<GenerateRes
     bankAccountName: e.bankAccountName ?? '',
   }));
 
-  const csv = buildCsv(rows, [
+  const finalRows = includeSensitivePii
+    ? rows
+    : rows.map((row) => {
+        const masked = { ...row } as Record<string, string>;
+        for (const field of EMPLOYEE_PII_FIELDS) {
+          if (masked[field]) {
+            masked[field] = PII_MASK;
+          }
+        }
+        return masked;
+      });
+
+  const csv = buildCsv(finalRows, [
     { key: 'id', label: 'ID' },
     { key: 'firstName', label: 'First Name' },
     { key: 'lastName', label: 'Last Name' },

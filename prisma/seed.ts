@@ -1155,10 +1155,31 @@ async function seedBody() {
     { organizationId: org.id, code: '5200', name: 'Salaries Expense', type: 'EXPENSE', subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT' },
     { organizationId: org.id, code: '5300', name: 'Utilities Expense', type: 'EXPENSE', subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT' },
     { organizationId: org.id, code: '5400', name: 'Bad Debt Expense', type: 'EXPENSE', subType: 'OPERATING_EXPENSE', normalBalance: 'DEBIT' },
+    // Payroll statutory liabilities and employer costs (v2.18.4.0). These
+    // codes are reserved for the EMS payroll engine; see docs/EMS_MIGRATION_PLAN.md.
+    { organizationId: org.id, code: '2210', name: 'PAYE Payable', type: 'LIABILITY', subType: 'STATUTORY_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2215', name: 'NSSF Payable', type: 'LIABILITY', subType: 'STATUTORY_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2220', name: 'SHIF Payable', type: 'LIABILITY', subType: 'STATUTORY_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2225', name: 'Housing Levy Payable', type: 'LIABILITY', subType: 'STATUTORY_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2230', name: 'HELB Payable', type: 'LIABILITY', subType: 'STATUTORY_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2240', name: 'Net Pay Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2250', name: 'Other Deductions Payable', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '2260', name: 'Payroll Clearing', type: 'LIABILITY', subType: 'CURRENT_LIABILITY', normalBalance: 'CREDIT' },
+    { organizationId: org.id, code: '5210', name: 'Employer NSSF Expense', type: 'EXPENSE', subType: 'PAYROLL_EXPENSE', normalBalance: 'DEBIT' },
+    { organizationId: org.id, code: '5215', name: 'Employer Housing Levy Expense', type: 'EXPENSE', subType: 'PAYROLL_EXPENSE', normalBalance: 'DEBIT' },
   ];
 
+  // Upsert by (organizationId, code): re-running the seed on a partially
+  // initialized database must never crash and must never duplicate or
+  // overwrite an account an operator has renamed or deactivated.
   for (const acct of accounts) {
-    await prisma.account.create({ data: acct });
+    await prisma.account.upsert({
+      where: {
+        organizationId_code: { organizationId: acct.organizationId, code: acct.code },
+      },
+      create: acct,
+      update: {},
+    });
   }
 
   // ==========================================================================
@@ -1575,7 +1596,13 @@ async function seedBody() {
   ];
 
   for (const acct of supplierAccounts) {
-    await prisma.account.create({ data: acct });
+    await prisma.account.upsert({
+      where: {
+        organizationId_code: { organizationId: acct.organizationId, code: acct.code },
+      },
+      create: acct,
+      update: {},
+    });
   }
 
   // ==========================================================================
