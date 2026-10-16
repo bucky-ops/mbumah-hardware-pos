@@ -21,7 +21,8 @@
 import Link from 'next/link';
 import { Wallet } from 'lucide-react';
 import { listMyPayslips, listMyPayslipYears } from '@/lib/hr/self-service';
-import { ErrorNote, formatKes } from '@/components/hr/self-service-ui';
+import { ErrorNote } from '@/components/hr/self-service-ui';
+import { formatKes } from '@/components/hr/self-service-format';
 import { SelfPageHeader, loadSelfPortal } from '../self-portal';
 import { PayslipsView, type PayslipListItem } from './payslips-view';
 import { PayslipsCacheWriter } from './payslips-cache-writer';

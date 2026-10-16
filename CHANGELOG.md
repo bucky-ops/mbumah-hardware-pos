@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.29.1] Correction: SSR portal pages crashed when calling formatters imported from the client module
+
+Correction release. QA on the v2.29.0 production build caught `/employees/me/payslips` crashing ("Something went wrong") for every employee with payslips; the regression hunt then surfaced a second latent instance of the same bug on the documents page.
+
+### Fixed
+- **Server pages called client-module functions during the server render**: the v2.29.0 payslips page imported `formatKes` from `@/components/hr/self-service-ui` — a `'use client'` module. On the server, plain-function exports of a client module are client REFERENCES, not functions, so invoking one inside the server component threw and the whole route hit the crash boundary. The formatter was moved to the import it was architected for (`@/components/hr/self-service-format`, the directive-free pure module both graphs can import — the same one `home-view.tsx` already used). The documents page had the identical latent bug with `formatDate`: it rendered fine only because the QA account had zero documents — any employee with a dated document would have crashed that route too. Both imports now come from the pure module; no other portal page imports formatters (statically verified).
+
+### Added
+- **Regression guard** (`src/tests/lib/self-service-server-format.test.ts`, 8 cases): statically enforces that all six `/employees/me/*` server pages never import `formatKes`/`formatDate` from the client module, that the two corrected pages import them from the pure module, and that the pure module stays directive-free (`'use client'`/`server-only` free) — the boundary violation can never ship again.
+- **scripts/verify-v2-29-1.mjs** (`npm run verify:v2-29-1`): static checks over both corrected imports, the other four pages, the pure module's directives, the guard's coverage, and version metadata.
+
 ## [2.29.0] Self-service depth: SSR payslip year switcher, leave provisioned for everyone, email-log CSV export
 
 Feature release (post-EMS polish round). Deepens the just-SSR'd self-service portal (v2.28.0) with the payslip year dimension, closes the leave happy-path gap (the dev data had zero leave types, so the request form was unreachable), and gives admins the offline audit affordance carried over since v2.26.0.
