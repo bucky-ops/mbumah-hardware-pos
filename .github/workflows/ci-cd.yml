@@ -171,12 +171,18 @@ jobs:
       - name: Verify committed Prisma provider (postgresql)
         run: |
           echo "Checking the COMMITTED schema provider (git object, flip-proof)..."
-          COMMITTED=$(git show HEAD:prisma/schema.prisma | grep -oP 'provider\s*=\s*"\K\w+' | head -1)
-          if [ "$COMMITTED" != "postgresql" ]; then
-            echo "::error::prisma/schema.prisma is committed with provider = \"$COMMITTED\". The committed provider MUST be \"postgresql\"; local/dev provider flips are applied by scripts/setup-prisma-provider.mjs at install time and must never be committed."
+          # The generator block ALSO carries a provider line
+          # ("prisma-client-js") - anchor the check to the datasource
+          # provider values (postgresql/sqlite) explicitly.
+          if git show HEAD:prisma/schema.prisma | grep -qP 'provider\s*=\s*"sqlite"'; then
+            echo "::error::prisma/schema.prisma is committed with provider = \"sqlite\". The committed provider MUST be \"postgresql\" (datasource block); local/dev provider flips are applied by scripts/setup-prisma-provider.mjs at install time and must never be committed."
             exit 1
           fi
-          echo "Committed provider is postgresql."
+          if ! git show HEAD:prisma/schema.prisma | grep -qP 'provider\s*=\s*"postgresql"'; then
+            echo "::error::prisma/schema.prisma datasource provider not found (expected \"postgresql\" in the committed schema)."
+            exit 1
+          fi
+          echo "Committed datasource provider is postgresql."
 
       # v2.18.0.2: release safety guards. The Prisma configuration check
       # blocks the deprecated package.json#prisma block and any accidental
