@@ -2867,7 +2867,9 @@ export interface NotificationItem {
   // PUT /api/leaves for the employee's linked user.
   // v2.32.0: 'leave_request' - new-request rows written by POST /api/leaves
   // for the store's decision-capable users (targetTab → Payroll Leave desk).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request';
+  // v2.33.0: 'leave_cancel' - cancellation rows (either direction) with
+  // violet accents and the Cancelled chip.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -2887,7 +2889,7 @@ export interface NotificationItem {
   emailStatus?: 'SENT' | 'FAILED';
   // v2.31.0: decision status on leave_decision rows - drives the emerald
   // Approved / amber Declined rail + chip in the notification center.
-  leaveStatus?: 'APPROVED' | 'REJECTED';
+  leaveStatus?: 'APPROVED' | 'REJECTED' | 'CANCELLED';
 }
 
 export interface NotificationSummary {

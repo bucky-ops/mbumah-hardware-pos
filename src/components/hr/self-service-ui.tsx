@@ -17,7 +17,7 @@ export async function apiGet<T>(url: string): Promise<T> {
   return json.data as T;
 }
 
-export async function apiSend<T>(url: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
+export async function apiSend<T>(url: string, method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', body?: unknown): Promise<T> {
   // v2.24.0 QA fix: state-changing requests MUST always declare
   // Content-Type: application/json — the proxy's validateContentType
   // rejects a POST/PATCH with NO Content-Type (415 "Content-Type must be

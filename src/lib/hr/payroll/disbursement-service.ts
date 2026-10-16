@@ -44,6 +44,10 @@ export interface B2CDisburseSummary {
   skipped: B2CSkip[];
   failed: B2CFailure[];
   receipts: Array<{ employeeCode: string; receipt: string }>;
+  /** v2.33.0: candidates the gate blocked - backoff window still open. */
+  backoffSkipped?: number;
+  /** v2.33.0: candidates at the attempt ceiling - need human investigation. */
+  maxAttemptSkipped?: number;
 }
 
 /**
@@ -324,6 +328,85 @@ export async function settlePayrollB2CResult(payload: B2CResultPayload): Promise
 /** A PROCESSING transaction with no callback for this long is considered stuck. */
 export const B2C_STALE_PROCESSING_MS = 10 * 60 * 1000;
 
+// ── v2.33.0: retry discipline (backoff + attempt ceiling) ───────────────────
+// retryFailedPayrollB2C previously re-sent every FAILED payslip on demand
+// with no rate limit - a manager hammering "Retry failed" could fire a
+// request at Daraja every few seconds, and a payslip failing for a permanent
+// reason (closed wallet, wrong till) would be retried forever. The gate
+// below is PURE so the arithmetic is unit-testable without Daraja or DB.
+
+/** Backoff after the 1st failed attempt; doubles per subsequent failure. */
+export const B2C_RETRY_BASE_BACKOFF_MS = 2 * 60 * 1000;
+/** Longest single backoff window - after ~4 failures retries space out to
+ *  this regardless of the doubling. */
+export const B2C_RETRY_BACKOFF_CAP_MS = 30 * 60 * 1000;
+/** Attempt ceiling per payslip: past this, retrying from the UI is blocked
+ *  and the failure needs human eyes (Daraja portal / till investigation). */
+export const B2C_MAX_RETRY_ATTEMPTS = 5;
+
+/** Exponential backoff for a payslip with `failedAttempts` terminal-FAILED
+ *  attempts: base × 2^(n-1), capped. 1 fail → 2m, 2 → 4m, 3 → 8m,
+ *  4 → 16m, 5+ → 30m (cap). Inputs below 1 yield the base window. */
+export function b2cRetryBackoffMs(failedAttempts: number): number {
+  const n = Math.max(1, Math.floor(failedAttempts));
+  const doubled = B2C_RETRY_BASE_BACKOFF_MS * 2 ** (n - 1);
+  return Math.min(doubled, B2C_RETRY_BACKOFF_CAP_MS);
+}
+
+export interface B2CRetryGateResult {
+  /** true → the retry may be initiated now. */
+  allowed: boolean;
+  /** true → the attempt ceiling is reached; retrying is blocked until a
+   *  human investigates (distinct surface from the time-based backoff). */
+  maxReached: boolean;
+  /** When the gate reopens (epoch ms) for a time-blocked retry; null when
+   *  allowed or max-blocked. */
+  nextRetryAtMs: number | null;
+  /** Millis still to wait for a time-blocked retry (0 when allowed). */
+  waitMs: number;
+}
+
+/** Pure retry gate: a payslip whose latest attempt FAILED may re-initiate
+ *  only when (a) the attempt count is under the ceiling and (b) the latest
+ *  failure is older than the per-attempt backoff window. Called from the
+ *  retry service and the run summary so both agree on the same arithmetic. */
+export function evaluateB2CRetryGate(
+  failedAttempts: number,
+  lastAttemptAtMs: number | null,
+  nowMs: number,
+): B2CRetryGateResult {
+  if (failedAttempts >= B2C_MAX_RETRY_ATTEMPTS) {
+    return { allowed: false, maxReached: true, nextRetryAtMs: null, waitMs: 0 };
+  }
+  if (lastAttemptAtMs == null) {
+    return { allowed: true, maxReached: false, nextRetryAtMs: null, waitMs: 0 };
+  }
+  const windowMs = b2cRetryBackoffMs(failedAttempts);
+  const elapsed = nowMs - lastAttemptAtMs;
+  if (elapsed >= windowMs) {
+    return { allowed: true, maxReached: false, nextRetryAtMs: null, waitMs: 0 };
+  }
+  return {
+    allowed: false,
+    maxReached: false,
+    nextRetryAtMs: lastAttemptAtMs + windowMs,
+    waitMs: windowMs - elapsed,
+  };
+}
+
+/** "3m 40s" style rendering for the run-dialog countdown chips. */
+export function formatB2CRetryWait(waitMs: number): string {
+  const totalSec = Math.max(0, Math.ceil(waitMs / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min <= 0) return `${sec}s`;
+  if (min >= 60) {
+    const hr = Math.floor(min / 60);
+    return `${hr}h ${min % 60}m`;
+  }
+  return sec > 0 ? `${min}m ${sec}s` : `${min}m`;
+}
+
 export interface B2CPayslipState {
   payrollDetailId: string;
   attempts: number;
@@ -331,6 +414,15 @@ export interface B2CPayslipState {
   lastAttemptAt: string | null;
   lastResultDesc: string | null;
   settled: boolean;
+  /** v2.33.0 retry discipline: true when the latest attempt FAILED and the
+   *  gate blocks an immediate re-send (time backoff OR attempt ceiling). */
+  retryBlocked?: boolean;
+  /** When the backoff reopens (ISO) for a time-blocked retry; null when
+   *  retrying is allowed or the ceiling is hit. */
+  nextRetryAt?: string | null;
+  /** true when B2C_MAX_RETRY_ATTEMPTS is reached - the UI shows a distinct
+   *  "manual investigation" surface instead of a countdown. */
+  maxAttemptsReached?: boolean;
 }
 
 export interface B2CStateSummary {
@@ -339,6 +431,9 @@ export interface B2CStateSummary {
   staleProcessing: number;
   failed: number;
   completed: number;
+  /** v2.33.0: FAILED payslips whose retry the gate blocks right now (backoff
+   *  or ceiling) - the run dialog subtracts them from the "Retry failed" N. */
+  retryBlocked: number;
   perPayslip: B2CPayslipState[];
 }
 
@@ -392,6 +487,7 @@ export async function summariseRunB2CState(runId: string): Promise<B2CStateSumma
     staleProcessing: 0,
     failed: 0,
     completed: 0,
+    retryBlocked: 0,
     perPayslip: [],
   };
 
@@ -410,6 +506,14 @@ export async function summariseRunB2CState(runId: string): Promise<B2CStateSumma
       summary.pendingWithoutAttempt += 1;
     }
     if (txList.length > 0 || d.paymentStatus !== 'PENDING') {
+      // v2.33.0: run the shared retry gate so the per-row chips and the
+      // retry service agree on which FAILED payslips may re-send right now.
+      const failedAttempts = txList.filter((t) => t.status === 'FAILED').length;
+      const gate =
+        latest?.status === 'FAILED' && !settled
+          ? evaluateB2CRetryGate(failedAttempts, latest.createdAt.getTime(), now)
+          : null;
+      if (gate && !gate.allowed) summary.retryBlocked += 1;
       summary.perPayslip.push({
         payrollDetailId: d.id,
         attempts: txList.length,
@@ -417,6 +521,9 @@ export async function summariseRunB2CState(runId: string): Promise<B2CStateSumma
         lastAttemptAt: latest?.createdAt.toISOString() ?? null,
         lastResultDesc: latest?.resultDesc ?? null,
         settled,
+        retryBlocked: gate ? !gate.allowed : undefined,
+        nextRetryAt: gate?.nextRetryAtMs != null ? new Date(gate.nextRetryAtMs).toISOString() : null,
+        maxAttemptsReached: gate ? gate.maxReached : undefined,
       });
     }
   }
@@ -461,12 +568,20 @@ export async function retryFailedPayrollB2C(
     ? await db.mpesaTransaction.findMany({
         where: { payrollDetailId: { in: ids } },
         orderBy: { createdAt: 'asc' },
-        select: { payrollDetailId: true, status: true },
+        // v2.33.0: createdAt feeds the per-payslip backoff gate below.
+        select: { payrollDetailId: true, status: true, createdAt: true },
       })
     : [];
-  const latestByDetail = new Map<string, string>();
+  const txsByDetail = new Map<string, Array<{ status: string; createdAt: Date }>>();
   for (const tx of txs) {
-    if (tx.payrollDetailId) latestByDetail.set(tx.payrollDetailId, tx.status);
+    if (!tx.payrollDetailId) continue;
+    const list = txsByDetail.get(tx.payrollDetailId) ?? [];
+    list.push({ status: tx.status, createdAt: tx.createdAt });
+    txsByDetail.set(tx.payrollDetailId, list);
+  }
+  const latestByDetail = new Map<string, string>();
+  for (const [detailId, list] of txsByDetail) {
+    latestByDetail.set(detailId, list[list.length - 1].status);
   }
   const failedIds = ids.filter((id) => latestByDetail.get(id) === 'FAILED');
   if (failedIds.length === 0) {
@@ -497,10 +612,37 @@ export async function retryFailedPayrollB2C(
     skipped: [],
     failed: [],
     receipts: [],
+    backoffSkipped: 0,
+    maxAttemptSkipped: 0,
   };
 
+  const nowMs = Date.now();
   for (const detail of details) {
     const code = detail.employee.employeeCode || detail.employeeId;
+    // v2.33.0 retry discipline: the same pure gate the run summary uses.
+    // Ceil-blocked payslips are never re-fired from the UI; backoff-blocked
+    // ones return the exact remaining wait so the manager knows when to
+    // come back instead of discovering it from a Daraja rejection.
+    const txList = txsByDetail.get(detail.id) ?? [];
+    const failedAttempts = txList.filter((t) => t.status === 'FAILED').length;
+    const latestFailedAt = [...txList].reverse().find((t) => t.status === 'FAILED')?.createdAt ?? null;
+    const gate = evaluateB2CRetryGate(failedAttempts, latestFailedAt ? latestFailedAt.getTime() : null, nowMs);
+    if (!gate.allowed) {
+      if (gate.maxReached) {
+        summary.maxAttemptSkipped = (summary.maxAttemptSkipped ?? 0) + 1;
+        summary.skipped.push({
+          employeeCode: code,
+          reason: `Max retry attempts (${B2C_MAX_RETRY_ATTEMPTS}) reached - investigate in the Daraja portal before retrying.`,
+        });
+      } else {
+        summary.backoffSkipped = (summary.backoffSkipped ?? 0) + 1;
+        summary.skipped.push({
+          employeeCode: code,
+          reason: `Backoff active - retry available in ${formatB2CRetryWait(gate.waitMs)}.`,
+        });
+      }
+      continue;
+    }
     if (!detail.employee.phone) {
       summary.skipped.push({ employeeCode: code, reason: 'No M-Pesa phone number on the employee record.' });
       continue;
@@ -565,6 +707,8 @@ export async function retryFailedPayrollB2C(
       eligible: summary.eligible,
       initiated: summary.initiated,
       failed: summary.failed.length,
+      backoffSkipped: summary.backoffSkipped ?? 0,
+      maxAttemptSkipped: summary.maxAttemptSkipped ?? 0,
     },
   });
 

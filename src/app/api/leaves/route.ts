@@ -16,7 +16,7 @@ import {
   updateLeaveBalanceOnStatusChange,
   calculateWorkingDays,
 } from '@/lib/payroll-helpers';
-import { recomputeBalances, notifyLeaveRequestSubmitted } from '@/lib/hr/leave-service';
+import { recomputeBalances, notifyLeaveRequestSubmitted, notifyLeaveRequestCancelled } from '@/lib/hr/leave-service';
 import { toNum } from '@/lib/decimal-safe';
 import {
   LEAVE_DECISION_METADATA_MARKER,
@@ -377,6 +377,23 @@ async function updateLeaveHandler(
     );
   }
 
+  // v2.33.0: CANCEL authorization - the comment above promised "the employee
+  // themselves can cancel", but nothing enforced it: any authenticated
+  // same-store user could CANCEL a colleague's request (horizontal authz
+  // gap). The gate now mirrors the notifier's routing: decision-capable
+  // managers may cancel any request in their store (freeing a slot), while
+  // everyone else may cancel ONLY their own request (self-withdrawal).
+  if (action === 'CANCEL') {
+    const isDecisionCapable = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'].includes(session.role);
+    const isRequestOwner = leaveRequest.employee.user?.id === session.userId;
+    if (!isDecisionCapable && !isRequestOwner) {
+      return Response.json(
+        { success: false, error: 'You can only cancel your own leave requests.' },
+        { status: 403 }
+      );
+    }
+  }
+
   // Tenant scoping: non-admin can only manage their own store's requests
   if (session.storeId && leaveRequest.storeId !== session.storeId && session.role !== 'SUPER_ADMIN') {
     return Response.json(
@@ -514,6 +531,30 @@ async function updateLeaveHandler(
     } catch {
       // Decision delivery is best-effort by design - a notification or email
       // failure must never surface as a failed decision to the manager.
+    }
+  }
+
+  // v2.33.0: cancellation notifications - the last silent transition on the
+  // lifecycle. Routing is bidirectional (see notifyLeaveRequestCancelled):
+  // manager cancels → the employee hears about it; employee withdraws → the
+  // approvals group learns the slot freed up. Same best-effort contract as
+  // every other delivery surface: never blocks or fails the cancellation.
+  if (newStatus === 'CANCELLED') {
+    try {
+      await notifyLeaveRequestCancelled({
+        leaveRequestId,
+        storeId: leaveRequest.storeId,
+        employeeId: leaveRequest.employee.id,
+        leaveTypeId: leaveRequest.leaveType.id,
+        startDate: leaveRequest.startDate,
+        endDate: leaveRequest.endDate,
+        workingDays: toNum(leaveRequest.workingDays),
+        actorUserId: session.userId,
+        actorRole: session.role,
+        actorEmail: session.email || null,
+      });
+    } catch {
+      // Cancel delivery is best-effort by design.
     }
   }
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  LEAVE_CANCEL_METADATA_MARKER,
   LEAVE_DECISION_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   formatLeaveDay,
+  leaveCancelledCopy,
   leaveDecisionCopy,
   leaveSubmissionCopy,
   parseLeaveDecisionExtras,
@@ -177,5 +179,77 @@ describe('parseLeaveDecisionExtras', () => {
   it('marker constants are stable - the feed query relies on them', () => {
     expect(LEAVE_DECISION_METADATA_MARKER).toBe('leave_decision');
     expect(LEAVE_REQUEST_METADATA_MARKER).toBe('leave_request');
+  });
+});
+
+describe('leaveCancelledCopy (v2.33.0)', () => {
+  const CANCEL_INPUT = {
+    firstName: 'John',
+    lastName: 'Kamau',
+    leaveTypeName: 'Annual Leave',
+    startDate: '2026-02-02T00:00:00.000Z',
+    endDate: '2026-02-04T00:00:00.000Z',
+    workingDays: 3,
+    cancelledByManager: true,
+  };
+
+  it('manager cancel: CANCELLED badge, balance-restoring message', () => {
+    const copy = leaveCancelledCopy(CANCEL_INPUT);
+    expect(copy.title).toBe('Leave request cancelled - Annual Leave');
+    expect(copy.message).toBe(
+      'John Kamau: your Annual Leave request for 3 days (2 Feb 2026 - 4 Feb 2026) was cancelled by a manager. The days are back in your available balance.'
+    );
+    expect(copy.emailHtml).toContain('>CANCELLED<');
+    expect(copy.notifType).toBe('INFO');
+    expect(copy.priority).toBe('NORMAL');
+  });
+
+  it('employee withdrawal: WITHDRAWN badge, no-decision-needed message', () => {
+    const copy = leaveCancelledCopy({ ...CANCEL_INPUT, cancelledByManager: false });
+    expect(copy.title).toBe('Leave request withdrawn - Annual Leave');
+    expect(copy.message).toBe(
+      'John Kamau withdrew their Annual Leave request for 3 days (2 Feb 2026 - 4 Feb 2026). The pending days are released back to their balance - no decision needed.'
+    );
+    expect(copy.emailHtml).toContain('>WITHDRAWN<');
+    expect(copy.emailHtml).toContain('No action needed');
+  });
+
+  it('singular day and optional cancelled-by footer', () => {
+    const copy = leaveCancelledCopy({ ...CANCEL_INPUT, workingDays: 1, cancelledByLabel: 'owner@mbumahhardware.co.ke' });
+    expect(copy.message).toContain('for 1 day (2 Feb 2026 - 4 Feb 2026)');
+    expect(copy.emailHtml).toContain('Cancelled by owner@mbumahhardware.co.ke.');
+  });
+
+  it('escapes HTML in employee names and leave types', () => {
+    const copy = leaveCancelledCopy({
+      ...CANCEL_INPUT,
+      firstName: '<script>',
+      lastName: 'X">v',
+      leaveTypeName: 'Sick & Care',
+    });
+    expect(copy.emailHtml).not.toContain('<script>');
+    expect(copy.emailHtml).toContain('&lt;script&gt;');
+    expect(copy.emailHtml).toContain('Sick &amp; Care');
+  });
+});
+
+describe('parseLeaveDecisionExtras - cancel metadata (v2.33.0)', () => {
+  it('parses the leave_cancel kind with the cancelledByManager flag', () => {
+    const extras = parseLeaveDecisionExtras(
+      JSON.stringify({ kind: LEAVE_CANCEL_METADATA_MARKER, leaveRequestId: 'req_9', employeeId: 'emp_1', cancelledByManager: true })
+    );
+    expect(extras.kind).toBe('leave_cancel');
+    expect(extras.leaveRequestId).toBe('req_9');
+    expect(extras.cancelledByManager).toBe(true);
+  });
+
+  it('ignores non-boolean cancelledByManager values (fail-soft)', () => {
+    const extras = parseLeaveDecisionExtras(JSON.stringify({ kind: 'leave_cancel', cancelledByManager: 'yes' }));
+    expect(extras.cancelledByManager).toBeUndefined();
+    expect(extras.kind).toBe('leave_cancel');
+  });
+
+  it('the cancel marker constant is stable', () => {
+    expect(LEAVE_CANCEL_METADATA_MARKER).toBe('leave_cancel');
   });
 });

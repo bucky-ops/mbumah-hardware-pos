@@ -8,7 +8,12 @@
 
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
-import { LEAVE_REQUEST_METADATA_MARKER, leaveSubmissionCopy } from './leave-notify';
+import {
+  LEAVE_CANCEL_METADATA_MARKER,
+  LEAVE_REQUEST_METADATA_MARKER,
+  leaveCancelledCopy,
+  leaveSubmissionCopy,
+} from './leave-notify';
 import { sendEmail } from '@/lib/email-service';
 
 export interface RequestLeaveInput {
@@ -200,6 +205,142 @@ export async function notifyLeaveRequestSubmitted(params: {
       html: copy.emailHtml,
       text: copy.emailText,
       type: 'LEAVE_REQUEST',
+      metadata: { leaveRequestId: params.leaveRequestId, employeeId: params.employeeId },
+    }).catch(() => undefined);
+  }
+}
+
+/** Roles that can decide leave - shared by the submission fan-out above and
+ *  the cancel router below so both directions address the same group. */
+const DECISION_CAPABLE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
+
+function isDecisionCapableRole(role: string): boolean {
+  return (DECISION_CAPABLE_ROLES as readonly string[]).includes(role);
+}
+
+/** v2.33.0: cancellation notifications - the last silent transition on the
+ *  leave lifecycle. Routing mirrors the direction of the ACTOR's counterpart
+ *  so nobody is ever notified about their own action:
+ *  - manager cancels → ONE durable bell row + best-effort email to the
+ *    employee's linked user / employee address (mirror of the decision
+ *    path), so the withdrawal is not discovered by refreshing balances;
+ *  - employee self-cancels → the submissions fan-out (mirror of
+ *    notifyLeaveRequestSubmitted) tells the approvals group the slot freed
+ *    up, so nobody keeps a mental hold on the request.
+ *  Best-effort by design: never blocks or fails the cancellation. */
+export async function notifyLeaveRequestCancelled(params: {
+  leaveRequestId: string;
+  storeId: string;
+  employeeId: string;
+  leaveTypeId: string;
+  startDate: Date;
+  endDate: Date;
+  workingDays: number;
+  /** The user who performed the cancellation. */
+  actorUserId: string;
+  actorRole: string;
+  /** Optional actor display label ("cancelled by …" footer). */
+  actorEmail?: string | null;
+}): Promise<void> {
+  const [employee, leaveType] = await Promise.all([
+    db.employee.findUnique({
+      where: { id: params.employeeId },
+      select: { firstName: true, lastName: true, email: true, user: { select: { id: true, email: true } } },
+    }),
+    db.leaveType.findUnique({ where: { id: params.leaveTypeId }, select: { name: true } }),
+  ]);
+  if (!employee || !leaveType) return;
+
+  const actorIsManager = isDecisionCapableRole(params.actorRole);
+  const copy = leaveCancelledCopy({
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+    leaveTypeName: leaveType.name,
+    startDate: params.startDate.toISOString(),
+    endDate: params.endDate.toISOString(),
+    workingDays: params.workingDays,
+    cancelledByManager: actorIsManager,
+    cancelledByLabel: params.actorEmail ?? null,
+  });
+
+  const metadata = JSON.stringify({
+    kind: LEAVE_CANCEL_METADATA_MARKER,
+    leaveRequestId: params.leaveRequestId,
+    employeeId: params.employeeId,
+    cancelledByManager: actorIsManager,
+  });
+
+  if (actorIsManager) {
+    // Manager cancelled: one bell row for the employee's linked user (their
+    // own action is excluded by construction - the actor is the manager).
+    const recipientUserId = employee.user?.id ?? null;
+    const recipientEmail = employee.email || employee.user?.email || null;
+    if (recipientUserId) {
+      await db.notification.create({
+        data: {
+          storeId: params.storeId,
+          userId: recipientUserId,
+          title: copy.title,
+          message: copy.message,
+          type: copy.notifType,
+          category: 'HR',
+          priority: copy.priority,
+          actionUrl: '/employees/me/leave',
+          actionLabel: 'View my leave',
+          metadata,
+        },
+      });
+    }
+    if (recipientEmail) {
+      await sendEmail({
+        to: recipientEmail,
+        subject: copy.emailSubject,
+        html: copy.emailHtml,
+        text: copy.emailText,
+        userId: recipientUserId ?? undefined,
+        type: 'LEAVE_CANCEL',
+        metadata: { leaveRequestId: params.leaveRequestId, employeeId: params.employeeId },
+      }).catch(() => undefined);
+    }
+    return;
+  }
+
+  // Employee self-cancelled: fan out to the same approvals group as the
+  // submission path (actor excluded), one grouped email.
+  const approvers = await db.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: [...DECISION_CAPABLE_ROLES] },
+      id: { not: params.actorUserId },
+      OR: [{ storeId: params.storeId }, { role: 'SUPER_ADMIN' }],
+    },
+    select: { id: true, email: true },
+  });
+  if (approvers.length === 0) return;
+
+  await db.notification.createMany({
+    data: approvers.map((u) => ({
+      storeId: params.storeId,
+      userId: u.id,
+      title: copy.title,
+      message: copy.message,
+      type: copy.notifType,
+      category: 'HR',
+      priority: copy.priority,
+      metadata,
+    })),
+  });
+
+  const approverEmails = approvers
+    .map((u) => u.email)
+    .filter((e): e is string => typeof e === 'string' && e.includes('@'));
+  if (approverEmails.length > 0) {
+    await sendEmail({
+      to: approverEmails,
+      subject: copy.emailSubject,
+      html: copy.emailHtml,
+      text: copy.emailText,
+      type: 'LEAVE_CANCEL',
       metadata: { leaveRequestId: params.leaveRequestId, employeeId: params.employeeId },
     }).catch(() => undefined);
   }

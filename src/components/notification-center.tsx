@@ -22,7 +22,7 @@ import {
   PackageX, AlertTriangle, AlertOctagon, CircleDollarSign,
   UserPlus, Receipt, CheckCheck, BellRing, Filter, X,
   MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield, BarChart3, ArrowRight,
-  CalendarSync, MailX, CalendarCheck2, CalendarX2, CalendarPlus,
+  CalendarSync, MailX, CalendarCheck2, CalendarX2, CalendarPlus, CalendarOff,
 } from 'lucide-react';
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security' | 'email_failed';
@@ -334,6 +334,10 @@ export function NotificationCenter({
       // direction (employee → manager).
       case 'leave_request':
         return <CalendarPlus className="h-4 w-4 text-sky-600" />;
+      // v2.33.0: cancellations - violet calendar-off, the "nothing to do"
+      // surface (the balance already healed on cancel).
+      case 'leave_cancel':
+        return <CalendarOff className="h-4 w-4 text-violet-600" />;
     }
   };
 
@@ -537,7 +541,7 @@ export function NotificationCenter({
                     onClick={() => handleNotificationClick(notification)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
                     tabIndex={0}
-                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'leave_cancel' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type, notification.leaveStatus)}</div>
@@ -573,6 +577,16 @@ export function NotificationCenter({
                           <div className="mt-1 flex flex-wrap items-center gap-1">
                             <span className="inline-flex items-center gap-0.5 rounded border border-sky-200 bg-sky-50 px-1 py-0 text-[10px] font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
                               New request
+                            </span>
+                          </div>
+                        ) : null}
+                        {/* v2.33.0: cancellation rows carry a violet "Cancelled"
+                            chip ("Withdrawn" when the employee self-cancelled)
+                            so the terminal state reads at a glance. */}
+                        {notification.type === 'leave_cancel' ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="inline-flex items-center gap-0.5 rounded border border-violet-200 bg-violet-50 px-1 py-0 text-[10px] font-medium text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
+                              {notification.title.includes('withdrawn') ? 'Withdrawn' : 'Cancelled'}
                             </span>
                           </div>
                         ) : null}

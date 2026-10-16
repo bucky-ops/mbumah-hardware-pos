@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.33.0',
+    title: 'Leave cancellations are never silent — and failed M-Pesa retries now pace themselves',
+    bullets: [
+      'Cancelling a leave request is now a first-class action with a confirm dialog: managers get a violet Cancel button on pending and approved requests on the Leave desk, employees can withdraw their own pending requests from the self-service portal — and the other side always hears about it (violet bell row).',
+      'Failed M-Pesa disbursement retries now back off (2m, 4m, 8m … capped at 30m) instead of firing at Safaricom back-to-back — each payslip row shows exactly when its retry reopens.',
+      'After 5 failed attempts a payslip is flagged "manual review" and the retry button stops counting it, so permanent failures get human eyes instead of endless re-sends.',
+      'The email log gains a LEAVE_CANCEL filter (violet chip), making cancellation emails auditable like every other send.',
+    ],
+  },
+  {
     version: '2.32.1',
     title: 'Fixes: manager notifications now fire on portal leave requests, and pending days are always accurate',
     bullets: [

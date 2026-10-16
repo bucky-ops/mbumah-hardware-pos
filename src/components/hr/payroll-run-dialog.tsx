@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Banknote, Check, CheckCircle2, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/(shell)/hr/payroll/page';
 
 /** Colored payment status chips (v2.21.0 styling pass). */
@@ -90,6 +90,10 @@ interface B2CPayslipState {
   lastAttemptAt: string | null;
   lastResultDesc: string | null;
   settled: boolean;
+  /** v2.33.0 retry discipline (additive, server-supplied). */
+  retryBlocked?: boolean;
+  nextRetryAt?: string | null;
+  maxAttemptsReached?: boolean;
 }
 
 interface B2CDisbursementState {
@@ -98,6 +102,8 @@ interface B2CDisbursementState {
   staleProcessing: number;
   failed: number;
   completed: number;
+  /** v2.33.0: FAILED payslips the retry gate blocks right now. */
+  retryBlocked?: number;
   perPayslip: B2CPayslipState[];
 }
 
@@ -212,16 +218,19 @@ export function PayrollRunDialog({
     for (const s of disbursement?.perPayslip ?? []) map.set(s.payrollDetailId, s);
     return map;
   }, [disbursement]);
+  // v2.33.0: "Retry failed (N)" counts only payslips the retry gate allows
+  // right now - backoff-blocked and ceiling-blocked ones are excluded so the
+  // button never promises a re-send the service would just skip.
   const failedRetryable = useMemo(
     () =>
-      (payslips ?? []).filter(
-        (p) =>
-          p.payment.status === 'PENDING' &&
-          p.totals.net > 0 &&
-          b2cStateByPayslip.get(p.id)?.lastStatus === 'FAILED',
-      ),
+      (payslips ?? []).filter((p) => {
+        if (p.payment.status !== 'PENDING' || p.totals.net <= 0) return false;
+        const st = b2cStateByPayslip.get(p.id);
+        return st?.lastStatus === 'FAILED' && !st.retryBlocked;
+      }),
     [payslips, b2cStateByPayslip],
   );
+  const failedBlockedCount = (disbursement?.retryBlocked ?? 0) || 0;
   const stuckProcessing = disbursement?.staleProcessing ?? 0;
 
   if (!runId) return null;
@@ -445,16 +454,23 @@ export function PayrollRunDialog({
                     <Smartphone className="h-3.5 w-3.5" /> Disburse via M-Pesa
                   </Button>
                 )}
-                {(status === 'POSTED' || status === 'LOCKED') && can?.disburse && failedRetryable.length > 0 && (
+                {(status === 'POSTED' || status === 'LOCKED') && can?.disburse && (failedRetryable.length > 0 || failedBlockedCount > 0) && (
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => void runB2C('retry-failed')}
-                    disabled={busy}
-                    title={`Re-send the ${failedRetryable.length} payslip(s) whose last B2C attempt failed. Never touches payslips that are already paid or being processed.`}
-                    className="gap-1.5 border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                    disabled={busy || failedRetryable.length === 0}
+                    title={
+                      failedRetryable.length > 0
+                        ? `Re-send the ${failedRetryable.length} payslip(s) whose backoff has elapsed. Never touches payslips that are paid, being processed, or still within their retry backoff.`
+                        : `All ${failedBlockedCount} failed payslip(s) are inside their retry backoff or at the attempt ceiling - chips on each row show when retries reopen.`
+                    }
+                    className="gap-1.5 border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-60 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40"
                   >
                     <RefreshCw className="h-3.5 w-3.5" /> Retry failed ({failedRetryable.length})
+                    {failedBlockedCount > 0 ? (
+                      <span className="text-[10px] font-normal opacity-75">· {failedBlockedCount} waiting</span>
+                    ) : null}
                   </Button>
                 )}
                 {(status === 'POSTED' || status === 'LOCKED') && can?.disburse && stuckProcessing > 0 && (
@@ -560,12 +576,43 @@ export function PayrollRunDialog({
                                 const st = b2cStateByPayslip.get(p.id);
                                 if (!st || st.settled || !st.lastStatus) return null;
                                 if (st.lastStatus === 'FAILED') {
+                                  // v2.33.0 three-state retry chip: ready
+                                  // (emerald) / backoff countdown (amber) /
+                                  // ceiling reached (rose). Attempts badge
+                                  // rides along once more than one try.
+                                  const attemptsLabel =
+                                    st.attempts > 1 ? ` · ${st.attempts} attempts` : '';
+                                  if (st.maxAttemptsReached) {
+                                    return (
+                                      <span
+                                        className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-rose-700 dark:text-rose-400"
+                                        title={st.lastResultDesc || `B2C failed ${st.attempts} time(s) - the retry ceiling is reached, so this needs manual investigation in the Daraja portal before any further re-send.`}
+                                      >
+                                        <AlertTriangle className="h-3 w-3" aria-hidden /> B2C failed{attemptsLabel} · manual review
+                                      </span>
+                                    );
+                                  }
+                                  if (st.retryBlocked && st.nextRetryAt) {
+                                    const waitMs = new Date(st.nextRetryAt).getTime() - Date.now();
+                                    const wait =
+                                      waitMs > 0
+                                        ? `${Math.floor(waitMs / 60000)}m ${Math.round((waitMs % 60000) / 1000)}s`
+                                        : 'moments';
+                                    return (
+                                      <span
+                                        className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                                        title={st.lastResultDesc || `Last M-Pesa B2C attempt failed - retry reopens in ${wait}.`}
+                                      >
+                                        <Clock className="h-3 w-3" aria-hidden /> B2C failed{attemptsLabel} · retry in {wait}
+                                      </span>
+                                    );
+                                  }
                                   return (
                                     <span
-                                      className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400"
-                                      title={st.lastResultDesc || 'Last M-Pesa B2C attempt failed — use Retry failed to re-send.'}
+                                      className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-400"
+                                      title={st.lastResultDesc || 'Last M-Pesa B2C attempt failed - use Retry failed to re-send.'}
                                     >
-                                      <AlertTriangle className="h-3 w-3" aria-hidden /> B2C failed · retry ready
+                                      <AlertTriangle className="h-3 w-3" aria-hidden /> B2C failed{attemptsLabel} · retry ready
                                     </span>
                                   );
                                 }

@@ -12,6 +12,7 @@ import { parseDigestNotificationExtras } from '@/lib/hr/digest-notification-view
 // v2.31.0: leave-decision feed rows - marker constant for the category-HR
 // metadata split + the fail-soft extras parser for the status chip.
 import {
+  LEAVE_CANCEL_METADATA_MARKER,
   LEAVE_DECISION_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   parseLeaveDecisionExtras,
@@ -29,7 +30,9 @@ export interface NotificationData {
   // PUT /api/leaves for the employee's linked user.
   // v2.32.0: 'leave_request' - new-request rows written by POST /api/leaves
   // for the store's decision-capable users (targetTab → Payroll Leave desk).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request';
+  // v2.33.0: 'leave_cancel' - cancellation rows (manager-cancel or employee
+  // withdrawal) with violet accents + Cancelled chip.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -49,7 +52,7 @@ export interface NotificationData {
   emailStatus?: 'SENT' | 'FAILED';
   // v2.31.0: decision status on leave_decision rows - drives the emerald
   // Approved / amber Declined rail + chip in the notification center.
-  leaveStatus?: 'APPROVED' | 'REJECTED';
+  leaveStatus?: 'APPROVED' | 'REJECTED' | 'CANCELLED';
 }
 
 async function getHandler(request: NextRequest, session?: AuthSession): Promise<Response> {
@@ -369,6 +372,7 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               OR: [
                 { metadata: { contains: LEAVE_DECISION_METADATA_MARKER } },
                 { metadata: { contains: LEAVE_REQUEST_METADATA_MARKER } },
+                { metadata: { contains: LEAVE_CANCEL_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -393,6 +397,27 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               // Payroll tab - switch tabs instead of navigating away.
               targetTab: 'payroll',
               category: 'HR',
+            });
+          } else if (kind === 'leave_cancel') {
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_cancel',
+              title: n.title,
+              description: n.message,
+              // Cancellations are quiet info rows - nothing needs a
+              // decision, the balance already healed on cancel.
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              // Manager-cancel rows address the employee (portal page);
+              // self-cancel rows address the approvals group (Payroll tab
+              // Leave desk). The metadata flag routes each audience to the
+              // right destination.
+              targetTab: extras.cancelledByManager === true ? 'dashboard' : 'payroll',
+              category: 'HR',
+              actionUrl: n.actionUrl ?? undefined,
+              actionLabel: n.actionLabel ?? undefined,
+              leaveStatus: 'CANCELLED',
             });
           } else {
             const declined = n.type === 'WARNING' || extras.status === 'REJECTED';
