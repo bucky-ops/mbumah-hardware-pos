@@ -21,6 +21,7 @@ import {
   PackageX, AlertTriangle, AlertOctagon, CircleDollarSign,
   UserPlus, Receipt, CheckCheck, BellRing, Filter, X,
   MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield, BarChart3, ArrowRight,
+  CalendarSync,
 } from 'lucide-react';
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security';
@@ -276,6 +277,17 @@ export function NotificationCenter({
     }
   };
 
+  // v2.27.0: digest rows expose the schedule behind the copy — jump straight
+  // to the Schedules tab and highlight the card (?schedule=<id>). Nested
+  // affordance: the click must not bubble into the row's own deep link.
+  const handleManageSchedule = (e: React.MouseEvent, notification: NotificationItem) => {
+    e.stopPropagation();
+    if (!notification.scheduleId) return;
+    markRead(notification.id);
+    onOpenChange(false);
+    router.push(`/hr/reports?tab=schedules&schedule=${encodeURIComponent(notification.scheduleId)}`);
+  };
+
   const handleDismiss = (e: React.MouseEvent, notificationId: string) => {
     e.stopPropagation();
     dismiss(notificationId);
@@ -493,7 +505,7 @@ export function NotificationCenter({
                     onClick={() => handleNotificationClick(notification)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
                     tabIndex={0}
-                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type)}</div>
@@ -507,13 +519,51 @@ export function NotificationCenter({
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                           {notification.description}
                         </p>
+                        {/* v2.27.0: digest rows surface the delivery outcome
+                            (was the email actually delivered?) and the manual
+                            marker as tiny chips - the feed row previously made
+                            FAILED copies look identical to healthy ones. */}
+                        {notification.type === 'hr_digest' && (notification.emailStatus || notification.manual) ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {notification.emailStatus ? (
+                              <span
+                                className={`inline-flex items-center gap-0.5 rounded border px-1 py-0 text-[10px] font-medium ${
+                                  notification.emailStatus === 'SENT'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                    : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+                                }`}
+                              >
+                                {notification.emailStatus === 'SENT' ? 'Email sent' : 'Email failed'}
+                              </span>
+                            ) : null}
+                            {notification.manual ? (
+                              <span className="rounded border border-sky-200 bg-sky-50 px-1 py-0 text-[10px] font-medium text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
+                                manual
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {/* v2.24.0: digest rows carry a deep link - make the
                             affordance visible (not hover-only) since opening
-                            the report IS the action for this row type. */}
+                            the report IS the action for this row type.
+                            v2.27.0: scheduleId adds a second affordance that
+                            opens the Schedules tab with the card highlighted. */}
                         {notification.actionUrl ? (
-                          <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
-                            {notification.actionLabel ?? 'Open'} <ArrowRight className="h-3 w-3" aria-hidden />
-                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                            <p className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                              {notification.actionLabel ?? 'Open'} <ArrowRight className="h-3 w-3" aria-hidden />
+                            </p>
+                            {notification.scheduleId ? (
+                              <button
+                                type="button"
+                                onClick={(e) => handleManageSchedule(e, notification)}
+                                className="inline-flex items-center gap-1 rounded-sm px-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 hover:underline dark:hover:text-violet-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                                aria-label={`Manage the schedule behind ${notification.title}`}
+                              >
+                                <CalendarSync className="h-3 w-3" aria-hidden /> Manage schedule
+                              </button>
+                            ) : null}
+                          </div>
                         ) : null}
                         <p className="text-[10px] text-muted-foreground/60 mt-1" title={formatDateTime(notification.timestamp)}>
                           {formatRelativeTime(notification.timestamp)}

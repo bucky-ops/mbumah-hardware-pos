@@ -215,6 +215,9 @@ describe('listScheduleDeliveries', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ id: 'nl-1', status: 'FAILED', manual: true, recipients: 2 });
     expect(rows[1]).toMatchObject({ id: 'nl-2', status: 'SENT', manual: false, recipients: 2, sentAt: '2026-10-12T02:00:05.000Z' });
+    // v2.27.0: per-recipient list parsed from the comma-joined column.
+    expect(rows[0].recipientList).toEqual(['owner@mbumahhardware.co.ke', 'hr@mbumahhardware.co.ke']);
+    expect(rows[1].recipientList).toEqual(['owner@mbumahhardware.co.ke', 'hr@mbumahhardware.co.ke']);
 
     // Correlation filter: digest type + scheduleId pinned into the metadata.
     expect(db.notificationLog.findMany).toHaveBeenCalledWith(
@@ -253,7 +256,46 @@ describe('listScheduleDeliveries', () => {
     ]);
     const rows = await listScheduleDeliveries(ORG, ORG_ACTOR, SCHEDULE_ID);
     expect(rows[0].recipients).toBe(3);
+    expect(rows[0].recipientList).toEqual(['a@x.co.ke', 'b@x.co.ke', 'c@x.co.ke']);
     expect(rows[0].manual).toBe(false);
+  });
+
+  it('v2.27.0 recipientList: trims spaces, drops empty and address-less fragments', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow());
+    db.notificationLog.findMany.mockResolvedValue([
+      {
+        id: 'nl-messy',
+        status: 'FAILED',
+        recipient: ' a@x.co.ke ,  ,broken-fragment,b@y.co.ke,',
+        subject: 's',
+        error: 'delivery failed',
+        sentAt: null,
+        createdAt: new Date('2026-10-16T04:00:00Z'),
+        metadata: JSON.stringify({ scheduleId: SCHEDULE_ID }),
+      },
+    ]);
+    const rows = await listScheduleDeliveries(ORG, ORG_ACTOR, SCHEDULE_ID);
+    expect(rows[0].recipientList).toEqual(['a@x.co.ke', 'b@y.co.ke']);
+    // Fallback count (no recipientCount metadata) matches the parsed list.
+    expect(rows[0].recipients).toBe(2);
+  });
+
+  it('v2.27.0 recipientList: single recipient yields a one-element list', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow());
+    db.notificationLog.findMany.mockResolvedValue([
+      {
+        id: 'nl-single',
+        status: 'SENT',
+        recipient: 'solo@x.co.ke',
+        subject: 's',
+        error: null,
+        sentAt: new Date('2026-10-16T05:00:00Z'),
+        createdAt: new Date('2026-10-16T05:00:00Z'),
+        metadata: JSON.stringify({ scheduleId: SCHEDULE_ID, recipientCount: 1 }),
+      },
+    ]);
+    const rows = await listScheduleDeliveries(ORG, ORG_ACTOR, SCHEDULE_ID);
+    expect(rows[0].recipientList).toEqual(['solo@x.co.ke']);
   });
 });
 

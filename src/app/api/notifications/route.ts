@@ -5,6 +5,10 @@ import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 // FORMAT UNIFICATION (task 12-d): canonical en-KE KES formatter for money toasts
 // (accepts Prisma Decimal / string / number safely).
 import { formatKES } from '@/lib/utils/financialMath';
+// v2.27.0: flatten the digest copy's metadata (scheduleId / manual /
+// emailStatus) into feed fields so the notification center can surface the
+// delivery outcome + a "Manage schedule" deep link. Pure, fail-soft mapper.
+import { parseDigestNotificationExtras } from '@/lib/hr/digest-notification-view';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +31,11 @@ export interface NotificationData {
   // v2.24.0: deep link for HR digest rows (open the exact report tab).
   actionUrl?: string;
   actionLabel?: string;
+  // v2.27.0: flattened Notification.metadata (digest copies only) - delivery
+  // outcome chip, manual marker and the schedule deep link.
+  scheduleId?: string;
+  manual?: boolean;
+  emailStatus?: 'SENT' | 'FAILED';
 }
 
 async function getHandler(request: NextRequest, session?: AuthSession): Promise<Response> {
@@ -300,6 +309,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
         );
 
         for (const n of hrDigestNotifications) {
+          // v2.27.0: metadata → feed fields (fail-soft; malformed metadata
+          // simply yields no extras and the row renders without the chips).
+          const extras = parseDigestNotificationExtras(n.metadata);
           notifications.push({
             id: `hr-${n.id}`,
             type: 'hr_digest',
@@ -314,6 +326,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
             category: 'HR',
             actionUrl: n.actionUrl ?? undefined,
             actionLabel: n.actionLabel ?? undefined,
+            scheduleId: extras.scheduleId,
+            manual: extras.manual,
+            emailStatus: extras.emailStatus,
           });
         }
       } catch {

@@ -160,6 +160,14 @@ export default function HrReportsPage() {
   // the toolbar shows the active branch and clears the filter.
   const [storeId, setStoreId] = useState<string | null>(null);
   const [storeName, setStoreName] = useState<string | null>(null);
+  // v2.27.0: per-schedule deep link (?schedule=<id> from the notification
+  // center's "Manage schedule" affordance) - passed down to the Schedules
+  // tab, which scrolls to and ring-highlights the matching card.
+  const [highlightScheduleId, setHighlightScheduleId] = useState<string | null>(null);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('schedule');
+    if (requested) setHighlightScheduleId(requested);
+  }, []);
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('storeId');
     if (requested) setStoreId(requested);
@@ -390,7 +398,7 @@ export default function HrReportsPage() {
             Repeating email digests of any aggregate report. Computed on the server through the same
             governed scope rules as the interactive tabs — aggregates only, no names, no raw ids.
           </p>
-          <ReportSchedulesTab />
+          <ReportSchedulesTab highlightScheduleId={highlightScheduleId} />
         </TabsContent>
 
         {/* ── Headcount ── */}

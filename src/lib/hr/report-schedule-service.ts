@@ -932,6 +932,10 @@ export interface ScheduleDeliveryRow {
   sentAt: string | null;
   createdAt: string;
   recipients: number; // parsed from metadata for convenience
+  // v2.27.0: the individual addresses this attempt was addressed to (parsed
+  // from the comma-joined recipient column) so the UI can expand one row
+  // into per-recipient chips.
+  recipientList: string[];
   manual: boolean; // manual "send now" vs scheduled sweep
 }
 
@@ -983,6 +987,13 @@ export async function listScheduleDeliveries(
     } catch {
       meta = {};
     }
+    // v2.27.0: parse the address list once — the fallback count and the UI's
+    // per-recipient expansion now share the same derivation, so the row
+    // header ("N recipient(s)") and the expanded chips can never disagree.
+    const recipientList = log.recipient
+      .split(',')
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0 && r.includes('@'));
     return {
       id: log.id,
       status: log.status,
@@ -991,7 +1002,8 @@ export async function listScheduleDeliveries(
       error: log.error,
       sentAt: log.sentAt ? log.sentAt.toISOString() : null,
       createdAt: log.createdAt.toISOString(),
-      recipients: typeof meta.recipientCount === 'number' ? meta.recipientCount : log.recipient.split(',').filter(Boolean).length,
+      recipients: typeof meta.recipientCount === 'number' ? meta.recipientCount : recipientList.length,
+      recipientList,
       manual: meta.manual === true,
     };
   });
