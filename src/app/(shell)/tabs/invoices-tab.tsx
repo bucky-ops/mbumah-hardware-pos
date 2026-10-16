@@ -742,13 +742,17 @@ export default function InvoicesTab() {
       // v2.8.0 VISIBILITY FIX: show the exact message in an enlarged,
       // scrollable preview first - the old flow window.open'd the link
       // directly (often popup-blocked, so the user never saw the output).
+      // v2.32.0: envelope fix - the flat (res as {...}) reads were always
+      // undefined, so the preview showed a generic message and a broken
+      // waLink. request<T> returns the ApiResponse envelope ({success, data}).
+      const payload = res.data;
       setMsgPreview({
         open: true,
         channel: 'whatsapp',
         phone,
-        message: (res as { message?: string }).message || `${invoice.invoiceType} ${invoice.invoiceNumber}`,
-        title: `WhatsApp - ${(res as { documentTitle?: string }).documentTitle || invoice.invoiceNumber}`,
-        waLink: (res as { waLink?: string }).waLink,
+        message: payload?.message || `${invoice.invoiceType} ${invoice.invoiceNumber}`,
+        title: `WhatsApp - ${payload?.documentTitle || invoice.invoiceNumber}`,
+        waLink: payload?.waLink,
       });
     } catch (err) {
       const msg = handleError(err, 'Send invoice via WhatsApp');

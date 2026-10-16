@@ -20,7 +20,9 @@ import { recomputeBalances } from '@/lib/hr/leave-service';
 import { toNum } from '@/lib/decimal-safe';
 import {
   LEAVE_DECISION_METADATA_MARKER,
+  LEAVE_REQUEST_METADATA_MARKER,
   leaveDecisionCopy,
+  leaveSubmissionCopy,
   type LeaveDecisionStatus,
 } from '@/lib/hr/leave-notify';
 import { sendEmail } from '@/lib/email-service';
@@ -274,6 +276,69 @@ async function createLeaveHandler(
     userId: session.userId,
     metadata: { leaveRequestId: leaveRequest.id, employeeId, leaveTypeId, workingDays },
   });
+
+  // v2.32.0: submission notifications (employee → manager direction, the
+  // mirror of the v2.31.0 decision notifications). Every active decision-
+  // capable user of the store (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER /
+  // ACCOUNTANT - the same roles PUT requires to decide) plus all SUPER_ADMINs
+  // anywhere (they may decide cross-store) gets a durable bell row, and the
+  // group gets ONE email. The submitter is excluded - a manager submitting
+  // their own request never notifies themselves. Best-effort: a notification
+  // or email failure must never surface as a failed submission.
+  const approvers = await db.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] },
+      id: { not: session.userId },
+      OR: [{ storeId }, { role: 'SUPER_ADMIN' }],
+    },
+    select: { id: true, email: true },
+  });
+  if (approvers.length > 0) {
+    try {
+      const copy = leaveSubmissionCopy({
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        leaveTypeName: leaveType.name,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        workingDays,
+        reason: reason || null,
+        submittedByLabel: session.email || null,
+      });
+      await db.notification.createMany({
+        data: approvers.map((u) => ({
+          storeId,
+          userId: u.id,
+          title: copy.title,
+          message: copy.message,
+          type: copy.notifType,
+          category: 'HR',
+          priority: copy.priority,
+          metadata: JSON.stringify({
+            kind: LEAVE_REQUEST_METADATA_MARKER,
+            leaveRequestId: leaveRequest.id,
+            employeeId,
+          }),
+        })),
+      });
+      const approverEmails = approvers
+        .map((u) => u.email)
+        .filter((e): e is string => typeof e === 'string' && e.includes('@'));
+      if (approverEmails.length > 0) {
+        await sendEmail({
+          to: approverEmails,
+          subject: copy.emailSubject,
+          html: copy.emailHtml,
+          text: copy.emailText,
+          type: 'LEAVE_REQUEST',
+          metadata: { leaveRequestId: leaveRequest.id, employeeId },
+        }).catch(() => undefined);
+      }
+    } catch {
+      // Submission delivery is best-effort by design.
+    }
+  }
 
   return Response.json({
     success: true,

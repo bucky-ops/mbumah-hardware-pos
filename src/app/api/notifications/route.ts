@@ -13,6 +13,7 @@ import { parseDigestNotificationExtras } from '@/lib/hr/digest-notification-view
 // metadata split + the fail-soft extras parser for the status chip.
 import {
   LEAVE_DECISION_METADATA_MARKER,
+  LEAVE_REQUEST_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
 
@@ -26,7 +27,9 @@ export interface NotificationData {
   // manual report digests) addressed to the session user.
   // v2.31.0: 'leave_decision' - leave APPROVED/DECLINED bell rows written by
   // PUT /api/leaves for the employee's linked user.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision';
+  // v2.32.0: 'leave_request' - new-request rows written by POST /api/leaves
+  // for the store's decision-capable users (targetTab → Payroll Leave desk).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -350,47 +353,69 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
       }
     }
 
-    // 9. v2.31.0: leave decision notifications (category HR, metadata marker)
-    // - written by PUT /api/leaves when a manager approves/declines the
-    // employee's request. Addressed to the employee's linked user; read with
-    // runWithoutTenant for the same reason as the security/digest rows.
+    // 9. v2.31.0 + v2.32.0: leave notifications (category HR, metadata
+    // markers) - decision rows (PUT /api/leaves → the employee's linked
+    // user) and submission rows (POST /api/leaves → the store's
+    // decision-capable users). Read with runWithoutTenant for the same
+    // reason as the security/digest rows.
     if (session?.userId) {
       try {
-        const leaveDecisionNotifications = await runWithoutTenant(() =>
+        const leaveNotifications = await runWithoutTenant(() =>
           db.notification.findMany({
             where: {
               category: 'HR',
               userId: session.userId,
               createdAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
-              metadata: { contains: LEAVE_DECISION_METADATA_MARKER },
+              OR: [
+                { metadata: { contains: LEAVE_DECISION_METADATA_MARKER } },
+                { metadata: { contains: LEAVE_REQUEST_METADATA_MARKER } },
+              ],
             },
             orderBy: { createdAt: 'desc' },
             take: 15,
           })
         );
 
-        for (const n of leaveDecisionNotifications) {
+        for (const n of leaveNotifications) {
           const extras = parseLeaveDecisionExtras(n.metadata);
-          const declined = n.type === 'WARNING' || extras.status === 'REJECTED';
-          notifications.push({
-            id: `leave-${n.id}`,
-            type: 'leave_decision',
-            title: n.title,
-            description: n.message,
-            // Declined rides 'warning' (amber rail + icon) so the decision
-            // is not missed; approvals stay quiet 'info' (emerald rail).
-            severity: declined ? 'warning' : 'info',
-            timestamp: n.createdAt.toISOString(),
-            isRead: false,
-            targetTab: 'dashboard',
-            category: 'HR',
-            actionUrl: n.actionUrl ?? undefined,
-            actionLabel: n.actionLabel ?? undefined,
-            leaveStatus: declined ? 'REJECTED' : 'APPROVED',
-          });
+          // Rows written before v2.32.0 carry no kind - they are decisions.
+          const kind = extras.kind ?? 'leave_decision';
+          if (kind === 'leave_request') {
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_request',
+              title: n.title,
+              description: n.message,
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              // In-shell destination: the HR Leave desk lives on the
+              // Payroll tab - switch tabs instead of navigating away.
+              targetTab: 'payroll',
+              category: 'HR',
+            });
+          } else {
+            const declined = n.type === 'WARNING' || extras.status === 'REJECTED';
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_decision',
+              title: n.title,
+              description: n.message,
+              // Declined rides 'warning' (amber rail + icon) so the decision
+              // is not missed; approvals stay quiet 'info' (emerald rail).
+              severity: declined ? 'warning' : 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: 'dashboard',
+              category: 'HR',
+              actionUrl: n.actionUrl ?? undefined,
+              actionLabel: n.actionLabel ?? undefined,
+              leaveStatus: declined ? 'REJECTED' : 'APPROVED',
+            });
+          }
         }
       } catch {
-        /* leave decision section must never break the rest of the feed */
+        /* leave section must never break the rest of the feed */
       }
     }
 

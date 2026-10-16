@@ -440,9 +440,11 @@ export default function CreditsTab() {
         phone,
         customerId: entry.customerId,
       });
-      if (res.waLink) {
-        window.open(res.waLink, '_blank');
-        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      // v2.32.0: envelope fix - the flat res.waLink read was always undefined.
+      const payload = res.data;
+      if (payload?.waLink) {
+        window.open(payload.waLink, '_blank');
+        toast.success(`${payload.documentTitle} sent via WhatsApp`);
       }
     } catch (err) {
       const msg = handleError(err, 'Send credit note via WhatsApp');

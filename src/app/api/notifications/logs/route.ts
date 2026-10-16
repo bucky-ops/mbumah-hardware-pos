@@ -42,6 +42,7 @@ const VALID_TYPES = new Set([
   'PASSWORD_RESET',
   'TIER_UPGRADE',
   'LEAVE_DECISION',
+  'LEAVE_REQUEST',
   'TEST',
 ]);
 

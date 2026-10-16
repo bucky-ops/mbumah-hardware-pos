@@ -675,9 +675,13 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
         storeId,
         phone,
       });
-      if (res.waLink) {
-        window.open(res.waLink, '_blank');
-        toast.success(`${res.documentTitle} sent via WhatsApp`);
+      // v2.32.0: request<T> returns the ApiResponse ENVELOPE ({success, data})
+      // - the flat res.waLink read here was always undefined, so the WhatsApp
+      // window never opened (silent dead button). Read the payload envelope.
+      const payload = res.data;
+      if (payload?.waLink) {
+        window.open(payload.waLink, '_blank');
+        toast.success(`${payload.documentTitle} sent via WhatsApp`);
       }
     } catch (err) {
       const msg = handleError(err, 'Send gift card via WhatsApp');

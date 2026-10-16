@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.32.0',
+    title: 'WhatsApp sharing works from every tab — and managers now hear about new leave requests',
+    bullets: [
+      'Fixed: the "Send via WhatsApp" button was silently dead on Gift Cards, Transactions, Inventory, Catalog, Credits, Invoices and Delivery Notes — the app read the reply from the wrong envelope. Every share now opens WhatsApp with the prepared message.',
+      'Invoice and delivery-note WhatsApp previews now show the real message text and a working link instead of generic titles.',
+      'New leave requests now notify managers instantly: a bell row with a "New request" chip that jumps straight to the Payroll Leave desk, plus one email to the whole approvals group.',
+      'The email log can filter LEAVE_REQUEST sends, so the request-notification cadence is auditable like every other email.',
+    ],
+  },
+  {
     version: '2.31.0',
     title: 'Leave decisions now reach the employee — and the last hidden Decimal traps are gone',
     bullets: [

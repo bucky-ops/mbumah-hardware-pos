@@ -2865,7 +2865,9 @@ export interface NotificationItem {
   // manual report digests) addressed to the session user.
   // v2.31.0: 'leave_decision' - leave APPROVED/DECLINED bell rows written by
   // PUT /api/leaves for the employee's linked user.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision';
+  // v2.32.0: 'leave_request' - new-request rows written by POST /api/leaves
+  // for the store's decision-capable users (targetTab → Payroll Leave desk).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
