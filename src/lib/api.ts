@@ -212,6 +212,24 @@ async function request<T>(
     credentials: 'same-origin', // Include cookies for CSRF validation
   });
 
+  // v2.44.0: FIRST SIGN-IN PASSWORD ROTATION — mid-session flag flips.
+  // An admin can "Force password reset" an ALREADY SIGNED-IN user; from that
+  // moment every guarded API call answers 403 PASSWORD_CHANGE_REQUIRED.
+  // Dispatch a store-level event so the SPA flips to the forced rotation
+  // screen on the next render instead of toasting a cryptic 403 forever.
+  // (Non-JSON bodies and non-matching 403s — e.g. CSRF — fall through.)
+  if (response.status === 403) {
+    const rotationBody = await response
+      .clone()
+      .json()
+      .catch(() => null);
+    if (rotationBody?.code === 'PASSWORD_CHANGE_REQUIRED') {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mbt:password-change-required'));
+      }
+    }
+  }
+
   if (response.status === 401) {
     // v2.5.3: surface the server's SPECIFIC message (e.g. "Invalid email or
     // password." + the lockout warning) instead of generic copy - the inline
@@ -2422,6 +2440,9 @@ export interface UserItem {
   // "Engraved" shield badge and disables the deactivate control in the
   // admin users list (the server rejects those mutations with 403 anyway).
   isEngraved?: boolean;
+  // v2.44.0: first sign-in password rotation pending — drives the violet
+  // "Rotation due" badge + "Force password reset" row action.
+  mustChangePassword?: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   storeId: string | null;
@@ -2440,7 +2461,7 @@ export const usersApi = {
     return request<UserItem[]>(`/users?${query.toString()}`);
   },
 
-  create: async (data: { name: string; email: string; role: string; password: string; phone?: string; storeId?: string; organizationId?: string }) => {
+  create: async (data: { name: string; email: string; role: string; password: string; phone?: string; storeId?: string; organizationId?: string; mustChangePassword?: boolean }) => {
     return request<UserItem>('/users', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -2457,7 +2478,7 @@ export const usersApi = {
    * Role changes follow the same segregation-of-duties rule as create:
    * only SUPER_ADMIN may grant SUPER_ADMIN or ACCOUNTANT.
    */
-  update: async (id: string, data: { name?: string; phone?: string; role?: string; isActive?: boolean; password?: string }) => {
+  update: async (id: string, data: { name?: string; phone?: string; role?: string; isActive?: boolean; password?: string; mustChangePassword?: boolean }) => {
     return request<UserItem>(`/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),

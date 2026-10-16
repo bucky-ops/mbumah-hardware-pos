@@ -27,6 +27,11 @@ export const createUserSchema = z
     phone: z.string().optional(),
     storeId: z.string().optional(),
     organizationId: z.string().optional(),
+    // v2.44.0: first sign-in password rotation. Defaults to TRUE on the
+    // server when omitted — an admin-minted password is a temporary password
+    // until the user picks their own. Pass false only when the admin
+    // deliberately shares a permanent credential.
+    mustChangePassword: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     if ((STORE_BOUND_ROLES as readonly string[]).includes(data.role) && !data.storeId?.trim()) {
@@ -45,6 +50,9 @@ export const updateUserSchema = z.object({
   phone: z.string().optional(),
   storeId: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
+  // v2.44.0: toggle first sign-in password rotation ("Force password reset"
+  // row action in Settings → Users). Password resets via PATCH also set it.
+  mustChangePassword: z.boolean().optional(),
 });
 
 // Transaction schemas

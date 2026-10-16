@@ -109,7 +109,13 @@ async function changePasswordHandler(...args: unknown[]): Promise<Response> {
   const { sessionsRevoked } = await db.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: user.id },
-      data: { passwordHash: newPasswordHash },
+      data: {
+        passwordHash: newPasswordHash,
+        // v2.44.0: first sign-in rotation COMPLETE — the session becomes a
+        // full citizen immediately (opaque session tokens re-read the User
+        // row per request, so no token refresh is needed).
+        mustChangePassword: false,
+      },
     });
     const removed = await tx.session.deleteMany({
       where: {
@@ -135,7 +141,7 @@ async function changePasswordHandler(...args: unknown[]): Promise<Response> {
 
   return Response.json({
     success: true,
-    data: { sessionsRevoked },
+    data: { sessionsRevoked, mustChangePassword: false },
   });
 }
 

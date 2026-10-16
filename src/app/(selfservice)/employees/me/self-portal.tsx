@@ -20,6 +20,7 @@ import {
 } from '@/lib/auth';
 import { hasHrPermission, type HrPermissionKey } from '@/lib/hr/permissions';
 import { isHrModuleEnabled } from '@/lib/hr/feature-flag';
+import { ChangePasswordScreen } from '@/components/change-password-screen';
 import {
   resolveSelfEmployee,
   type SelfEmployee,
@@ -80,6 +81,14 @@ export async function loadSelfPortal(permission: HrPermissionKey): Promise<SelfP
         />
       ),
     };
+  }
+
+  // v2.44.0: first sign-in password rotation — a temporary-password session
+  // gets the forced "Set a new password" screen INSTEAD of every portal
+  // page (server-rendered; the client API gate enforces the same rule on
+  // every /api route, so there is nothing to browse past this).
+  if (session.mustChangePassword) {
+    return { ok: false, note: <ChangePasswordScreen /> };
   }
 
   const enabled = await isHrModuleEnabled(session.organizationId);

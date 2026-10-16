@@ -13,6 +13,7 @@ import {
   Settings, Save, Edit3, UserPlus, X,
   AlertTriangle, Terminal, MapPin, Phone,
   MessageSquare, Mail, Smartphone, Store,
+  KeyRound,
 } from 'lucide-react';
 
 import { useAppStore } from '@/lib/stores';
@@ -1250,7 +1251,7 @@ function UserManagement({ storeId }: { storeId: string }) {
   const queryClient = useQueryClient();
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserItem | null>(null);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'CASHIER', password: '', phone: '' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'CASHIER', password: '', phone: '', mustChangePassword: true });
   const [editForm, setEditForm] = useState({ name: '', email: '', role: '', phone: '' });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -1269,7 +1270,7 @@ function UserManagement({ storeId }: { storeId: string }) {
       toast.success('User created successfully');
       queryClient.invalidateQueries({ queryKey: ['users', storeId] });
       setAddDialogOpen(false);
-      setNewUser({ name: '', email: '', role: 'CASHIER', password: '', phone: '' });
+      setNewUser({ name: '', email: '', role: 'CASHIER', password: '', phone: '', mustChangePassword: true });
       setFormErrors({});
     },
     onError: (err: Error) => toast.error(err.message),
@@ -1303,7 +1304,7 @@ function UserManagement({ storeId }: { storeId: string }) {
   // toasts WITHOUT calling the server - edits and deactivations were silently
   // lost. They now hit the real PATCH/DELETE /api/users/[id] endpoints.
   const updateUserMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name?: string; phone?: string; role?: string; isActive?: boolean } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; phone?: string; role?: string; isActive?: boolean; mustChangePassword?: boolean } }) =>
       usersApi.update(id, data),
     onSuccess: (res) => {
       toast.success(`User ${res.data?.name || 'record'} updated successfully`);
@@ -1312,6 +1313,19 @@ function UserManagement({ storeId }: { storeId: string }) {
       setFormErrors({});
     },
     onError: (err: Error) => toast.error(err.message || 'Failed to update user'),
+  });
+
+  // v2.44.0: "Force password reset" — the user must pick a new password at
+  // their next sign-in before the API lets them do anything else. This is
+  // also the migration path for accounts provisioned BEFORE the rotation
+  // flag existed (v2.41.0-era temp passwords were never flagged).
+  const forceResetMutation = useMutation({
+    mutationFn: (user: UserItem) => usersApi.update(user.id, { mustChangePassword: true }),
+    onSuccess: (res) => {
+      toast.success(`${res.data?.name || 'User'} must set a new password at next sign-in`);
+      queryClient.invalidateQueries({ queryKey: ['users', storeId] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to force password reset'),
   });
 
   const toggleUserActiveMutation = useMutation({
@@ -1444,6 +1458,25 @@ function UserManagement({ storeId }: { storeId: string }) {
                 />
               </div>
             </div>
+            {/* v2.44.0: first sign-in password rotation — default ON because
+                an admin-minted password is a temporary password. Opt out only
+                when sharing a permanent credential deliberately. */}
+            <div className="flex items-center justify-between rounded-lg border border-violet-200/70 bg-violet-50/60 px-3 py-2.5 dark:border-violet-900/60 dark:bg-violet-950/30">
+              <div className="space-y-0.5 pr-3">
+                <Label htmlFor="new-user-rotation" className="text-sm font-medium">
+                  Require password change at first sign-in
+                </Label>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  The user must set their own password before they can use the app. Recommended.
+                </p>
+              </div>
+              <Switch
+                id="new-user-rotation"
+                checked={newUser.mustChangePassword}
+                onCheckedChange={(v) => setNewUser({ ...newUser, mustChangePassword: v })}
+                aria-label="Require password change at first sign-in"
+              />
+            </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleCreate} disabled={createMutation.isPending}>
@@ -1491,6 +1524,11 @@ function UserManagement({ storeId }: { storeId: string }) {
                         <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Engraved
                       </Badge>
                     )}
+                    {user.mustChangePassword && (
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400" title="First sign-in password rotation pending — the user must set a new password before they can use the app">
+                        <KeyRound className="h-2.5 w-2.5 mr-0.5" /> Rotation due
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <p className="text-[10px] text-muted-foreground">{user.email}</p>
@@ -1507,6 +1545,17 @@ function UserManagement({ storeId }: { storeId: string }) {
                     title="Edit User"
                   >
                     <Edit3 className="h-3 w-3" />
+                  </Button>
+                  {/* v2.44.0: force password reset at next sign-in. */} 
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/40"
+                    disabled={!!user.mustChangePassword || forceResetMutation.isPending}
+                    onClick={() => forceResetMutation.mutate(user)}
+                    title={user.mustChangePassword ? 'Password rotation is already required for this user' : 'Force password reset at next sign-in'}
+                  >
+                    <KeyRound className="h-3 w-3" />
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>

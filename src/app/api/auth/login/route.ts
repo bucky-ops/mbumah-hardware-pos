@@ -330,6 +330,9 @@ async function loginHandler(...args: unknown[]): Promise<Response> {
       organizationId: user.organizationId,
       storeId: user.storeId,
       isActive: user.isActive,
+      // v2.44.0: first sign-in password rotation — the client flips to the
+      // forced "Set a new password" screen instead of the workspace.
+      mustChangePassword: user.mustChangePassword,
       organization: {
         id: user.organization.id,
         name: user.organization.name,

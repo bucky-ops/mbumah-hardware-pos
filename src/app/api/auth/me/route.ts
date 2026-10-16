@@ -89,6 +89,8 @@ async function getMeHandler(...args: unknown[]): Promise<Response> {
       organizationId: user.organizationId,
       storeId: user.storeId,
       isActive: user.isActive,
+      // v2.44.0: first sign-in password rotation pending.
+      mustChangePassword: user.mustChangePassword,
       phone: user.phone,
       avatarUrl: user.avatarUrl,
       lastLoginAt: user.lastLoginAt,
