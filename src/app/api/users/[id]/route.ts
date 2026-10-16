@@ -42,6 +42,9 @@ const USER_SELECT = {
   role: true,
   phone: true,
   isActive: true,
+  // v2.44.0: first sign-in password rotation pending (drives the admin
+  // UI "rotation due" badge + force-reset row action).
+  mustChangePassword: true,
   // v2.14.0: engraved (self-healing) bootstrap admin flag - drives the
   // delete/demote guards below and the admin UI shield badge.
   isEngraved: true,
@@ -123,6 +126,9 @@ async function updateUserHandler(
   const phone = typeof body.phone === 'string' ? body.phone.trim() : undefined;
   const role = typeof body.role === 'string' ? body.role.trim() : undefined;
   const isActive = typeof body.isActive === 'boolean' ? body.isActive : undefined;
+  // v2.44.0: first sign-in password rotation toggle ("Force password reset").
+  const mustChangePassword =
+    typeof body.mustChangePassword === 'boolean' ? body.mustChangePassword : undefined;
   const password = typeof body.password === 'string' ? body.password : undefined;
 
   if (name !== undefined && (name.length < 2 || name.length > 100)) {
@@ -213,7 +219,14 @@ async function updateUserHandler(
   if (phone !== undefined) data.phone = phone || null;
   if (role !== undefined && role !== target.role) data.role = role;
   if (isActive !== undefined) data.isActive = isActive;
-  if (password !== undefined) data.passwordHash = await bcrypt.hash(password, 12);
+  if (mustChangePassword !== undefined) data.mustChangePassword = mustChangePassword;
+  if (password !== undefined) {
+    data.passwordHash = await bcrypt.hash(password, 12);
+    // v2.44.0: an admin-set password is a TEMPORARY password — the user must
+    // pick their own at next sign-in. The explicit mustChangePassword flag
+    // (when provided) wins, so the admin can opt out deliberately.
+    data.mustChangePassword = mustChangePassword ?? true;
+  }
 
   if (Object.keys(data).length === 0) {
     return Response.json({ success: false, error: 'No editable fields provided.' }, { status: 400 });

@@ -282,6 +282,10 @@ export interface AuthUser {
   // primary store (e.g. WAREHOUSE_MANAGER with two assigned branches). Returned
   // by /api/auth/login and /api/auth/me.
   memberships?: string[];
+  // v2.44.0: first sign-in password rotation pending — the SPA renders the
+  // forced "Set a new password" screen instead of the workspace until this
+  // is cleared (POST /api/profile/password). Returned by login/me.
+  mustChangePassword?: boolean;
 }
 
 export interface CartItem {

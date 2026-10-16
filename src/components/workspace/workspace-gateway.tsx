@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LoginScreen } from '@/components/login-screen';
+import { ChangePasswordScreen } from '@/components/change-password-screen';
 import { MainApp } from '@/components/app/main-app';
 import { useAppStore, useAuthStore } from '@/lib/stores';
 import { useWorkspaceStore, type WorkspaceStoreRef } from '@/lib/workspace/workspace-store';
@@ -116,6 +117,10 @@ export function WorkspaceGateway({ slug }: { slug: string | null }) {
   // Stable client-safe cause for the not-found / denied views (v2.18.0.0).
   const [statusCode, setStatusCode] = useState<string>('');
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  // v2.44.0: first sign-in password rotation gate for branch workspaces —
+  // mirrors the root page.tsx gate so a temporary-password session cannot
+  // browse the branch shell either.
+  const rotationPending = useAuthStore((s) => s.isAuthenticated && !!s.user?.mustChangePassword);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
   const setWorkspace = useWorkspaceStore((s) => s.setWorkspace);
   // Hooks must run unconditionally: the resolved workspace store is read on
@@ -196,6 +201,11 @@ export function WorkspaceGateway({ slug }: { slug: string | null }) {
   }, []);
 
   if (phase === 'loading') return <GatewaySkeleton />;
+
+  // v2.44.0: password rotation checkpoint — before the login/ready branches
+  // so an authenticated-but-flagged session sees the forced rotation screen
+  // no matter which workspace route it landed on.
+  if (isAuthenticated && rotationPending) return <ChangePasswordScreen />;
 
   if (phase === 'login') {
     // Same-origin login: after success the effect above re-resolves and the

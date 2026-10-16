@@ -97,6 +97,9 @@ export interface CreateLinkFormState {
   role: string;
   phone: string;
   password: string;
+  /** v2.44.0: first sign-in password rotation (default true — an admin-minted
+   *  password is temporary until the user picks their own). */
+  mustChangePassword?: boolean;
 }
 
 /** Submit-readiness mirror of the dialog's disabled logic (unit-testable). */

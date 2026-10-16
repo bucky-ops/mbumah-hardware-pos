@@ -96,7 +96,12 @@ export function LoginScreen() {
       // organization console and multi-store managers to the branch
       // selector. Returns null (stay) inside a workspace context or for
       // branch-only roles, so the classic SPA behavior is unchanged.
-      const target = postLoginRedirect(useAuthStore.getState().user);
+      // v2.44.0: first sign-in password rotation — a flagged user STAYS on
+      // this page; the page.tsx gate renders the forced "Set a new password"
+      // screen instead of the shell (no router.push past the checkpoint).
+      const flaggedUser = useAuthStore.getState().user;
+      if (flaggedUser?.mustChangePassword) return;
+      const target = postLoginRedirect(flaggedUser);
       if (target) router.push(target);
     } catch (err: unknown) {
       // INLINE feedback instead of a popup toast: the error appears inside

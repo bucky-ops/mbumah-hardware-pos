@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { useAuthStore, useAppStore, useCartStore } from '@/lib/stores';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LoginScreen } from '@/components/login-screen';
+import { ChangePasswordScreen } from '@/components/change-password-screen';
 import { MainApp } from '@/components/app/main-app';
 
 // Hydration-safe client-only mount detection
@@ -74,6 +75,9 @@ function useLoadingWatchdog(hasMounted: boolean) {
 
 export default function HomePage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  // v2.44.0: first sign-in password rotation gate — the flagged user sees
+  // the forced "Set a new password" screen INSTEAD of the whole POS shell.
+  const rotationPending = useAuthStore((s) => s.isAuthenticated && !!s.user?.mustChangePassword);
   const hydrateFromStorage = useAuthStore((s) => s.hydrateFromStorage);
   const hasMounted = useHasMounted();
   const showRetry = useLoadingWatchdog(hasMounted);
@@ -149,6 +153,10 @@ export default function HomePage() {
       </div>
     );
   }
+
+  // v2.44.0: password rotation checkpoint — rendered before ANY shell so a
+  // temporary-password session cannot browse a single tab of the POS.
+  if (rotationPending) return <ChangePasswordScreen />;
 
   return isAuthenticated ? <MainApp /> : <ErrorBoundary><LoginScreen /></ErrorBoundary>;
 }

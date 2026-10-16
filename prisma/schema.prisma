@@ -184,6 +184,14 @@ model User {
   phone               String?
   avatarUrl           String?
   isActive            Boolean   @default(true)
+  // v2.44.0: first sign-in password rotation. Set at provisioning time (the
+  // v2.41.0 create-&-link dialog and POST /api/users both mint a temporary
+  // password) or by an admin password reset / explicit "force reset" action.
+  // While true, every guarded API route answers 403 PASSWORD_CHANGE_REQUIRED
+  // except the exempt allowlist (profile password change, auth me/verify/
+  // logout, csrf) so the ONLY thing the account can do is pick a new
+  // password. Cleared by POST /api/profile/password.
+  mustChangePassword  Boolean   @default(false)
   // v2.14.0: engraved (self-healing) bootstrap admin. Cannot be deleted or
   // demoted via the API so a fresh deployment always has a working login.
   isEngraved          Boolean   @default(false)

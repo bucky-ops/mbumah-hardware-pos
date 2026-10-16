@@ -61,6 +61,9 @@ async function getUsersHandler(
         role: true,
         phone: true,
         isActive: true,
+        // v2.44.0: first sign-in password rotation pending — drives the
+        // admin UI violet "Rotation due" badge + force-reset row action.
+        mustChangePassword: true,
         // v2.14.0: engraved (self-healing) bootstrap admin flag - drives the
         // admin UI shield badge and the client-side delete guard.
         isEngraved: true,
@@ -103,7 +106,7 @@ async function createUserHandler(
   if (!validation.success) {
     return Response.json({ success: false, error: validation.error }, { status: 400 });
   }
-  const { name, email, role, phone, storeId, organizationId, password } = validation.data;
+  const { name, email, role, phone, storeId, organizationId, password, mustChangePassword } = validation.data;
 
   // v2.12.2 (PR B - RBAC): role-management gate ('settings.roles.manage') ─
   // Creating a user necessarily assigns a role, so the WHOLE create is now
@@ -210,6 +213,11 @@ async function createUserHandler(
       storeId: targetStoreId,
       organizationId: organizationId || session.organizationId,
       passwordHash,
+      // v2.44.0: an admin-minted password is a TEMPORARY password by default
+      // — the user must rotate it at first sign-in before the API lets them
+      // do anything else (see assertPasswordRotation in lib/auth.ts). Only
+      // an explicit mustChangePassword=false from the admin opts out.
+      mustChangePassword: mustChangePassword ?? true,
     },
     select: {
       id: true,
@@ -218,6 +226,7 @@ async function createUserHandler(
       role: true,
       phone: true,
       isActive: true,
+      mustChangePassword: true,
       createdAt: true,
       storeId: true,
     },

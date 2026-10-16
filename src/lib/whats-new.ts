@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.44.0',
+    title: 'Temporary passwords now expire at first sign-in — every account picks its own password',
+    bullets: [
+      'Accounts provisioned by an admin (Settings → Users or the HR desk\u2019s create-&-link dialog) must set their own password before they can use the app — the temporary password alone no longer opens the workspace, so a shared or overheard credential is useless the moment it is written down.',
+      'The forced "Set a new password" screen shows a live strength meter with plain-language rules (length, mixed case, number, symbol) and signs out your other devices automatically once the new password is saved.',
+      'Admins gained a "Force password reset" action on every user row — a violet "Rotation due" badge shows who still owes a password, which is also the one-click migration path for accounts provisioned before this release.',
+      'An admin-set password reset (or a user created while "Require password change at first sign-in" is on) always demands a rotation; untick the option only when deliberately sharing a permanent credential.',
+      'Leave desk polish: the amber "corrected" row marker is now a proper chip — hover it to see who corrected the request, when, and their note, without opening the dialog.',
+    ],
+  },
+  {
     version: '2.43.0',
     title: 'Approvers now hear about corrections — no more deciding on stale dates',
     bullets: [

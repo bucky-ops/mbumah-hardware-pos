@@ -173,6 +173,24 @@ if (typeof window !== 'undefined') {
       // Never crash the page from a session-event handler.
     }
   });
+
+  // v2.44.0: FIRST SIGN-IN PASSWORD ROTATION — mid-session flag flips.
+  // Fired by api.ts when any guarded endpoint answers 403
+  // PASSWORD_CHANGE_REQUIRED (admin hit "Force password reset" on this
+  // signed-in user). Flip the cached user's flag so the SPA gates
+  // (page.tsx / workspace-gateway) render the forced rotation screen.
+  window.addEventListener('mbt:password-change-required', () => {
+    try {
+      const s = useAuthStore.getState();
+      if (s.user && !s.user.mustChangePassword) {
+        useAuthStore.setState({
+          user: { ...s.user, mustChangePassword: true },
+        });
+      }
+    } catch {
+      // Never crash the page from a session-event handler.
+    }
+  });
 }
 
 interface CartState {

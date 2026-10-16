@@ -82,6 +82,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Types
 
@@ -901,7 +902,7 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
   const sessionUser = useAuthStore((s) => s.user);
   const canCreateAccounts = sessionUser?.role === 'SUPER_ADMIN';
   const [mode, setMode] = useState<'link' | 'create'>('link');
-  const [createForm, setCreateForm] = useState<CreateLinkFormState>({ name: '', email: '', role: '', phone: '', password: '' });
+  const [createForm, setCreateForm] = useState<CreateLinkFormState>({ name: '', email: '', role: '', phone: '', password: '', mustChangePassword: true });
   const [pwCopied, setPwCopied] = useState(false);
   const updCreate = (patch: Partial<CreateLinkFormState>) => setCreateForm((f) => ({ ...f, ...patch }));
 
@@ -920,6 +921,7 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
         role: '',
         phone: '',
         password: generateTempPassword(),
+        mustChangePassword: true,
       });
     }
   }
@@ -983,6 +985,9 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
           ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
           storeId,
           password: form.password,
+          // v2.44.0: the temp password forces a first sign-in rotation unless
+          // the admin explicitly opts out.
+          mustChangePassword: form.mustChangePassword !== false,
         }),
       });
       await apiFetch(`/api/employees/${employee?.id}/portal-link`, { method: 'POST', body: JSON.stringify({ userId: created.id }) });
@@ -1214,6 +1219,17 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
                           {pwCopied ? 'Copied' : 'Copy'}
                         </Button>
                       </div>
+                      {/* v2.44.0: first sign-in rotation — default ON; the temp
+                          password stops working as a credential once rotated. */}
+                      <label className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none">
+                        <Checkbox
+                          checked={createForm.mustChangePassword !== false}
+                          onCheckedChange={(v) => updCreate({ mustChangePassword: v === true })}
+                          aria-label="Require password change at first sign-in"
+                          className="h-3.5 w-3.5"
+                        />
+                        Require password change at first sign-in
+                      </label>
                       <p className="text-[11px] text-muted-foreground">Share it over a secure channel — the employee should change it after first sign-in.</p>
                     </div>
 
@@ -1927,11 +1943,38 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                             {l.halfDay && <p className="text-[10px] text-muted-foreground mt-0.5">half day</p>}
                             {/* v2.40.0: at-a-glance correction marker — rows
                                 edited in place stay PENDING, so the amber
-                                chip is what tells the desk they changed. */}
+                                chip is what tells the desk they changed.
+                                v2.44.0: the marker is now a kind-coded chip
+                                with a hover tooltip — WHO corrected, WHEN,
+                                and the note ("before → after" summary) so an
+                                approver never decides on stale dates without
+                                the bell having caught their eye first. */}
                             {l.editedByName ? (
-                              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-0.5" title={`Corrected by ${l.editedByName}`}>
-                                <Edit className="h-2.5 w-2.5" aria-hidden /> corrected
-                              </p>
+                              <TooltipProvider delayDuration={120}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span
+                                      tabIndex={0}
+                                      className="mt-0.5 inline-flex max-w-fit items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-px text-[10px] font-medium text-amber-700 cursor-default outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400"
+                                    >
+                                      <Edit className="h-2.5 w-2.5" aria-hidden /> corrected
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" align="start" className="max-w-64">
+                                    <p className="font-medium">
+                                      Corrected by {l.editedByName}
+                                      {l.editedAt
+                                        ? ` · ${new Date(l.editedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                                        : ''}
+                                    </p>
+                                    {l.editNote ? (
+                                      <p className="mt-0.5 text-xs opacity-90 whitespace-pre-wrap break-words">{l.editNote}</p>
+                                    ) : (
+                                      <p className="mt-0.5 text-xs opacity-90">Values were corrected in place — re-check the dates and days before deciding.</p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             ) : null}
                             {/* v2.42.0 + v2.43.0: at-a-glance attachment
                                 marker — the paperclip now says WHAT is

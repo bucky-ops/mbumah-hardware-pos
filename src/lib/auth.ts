@@ -50,6 +50,12 @@ export interface AuthSession {
   role: string;
   storeId: string | null;
   organizationId: string;
+  /** v2.44.0: first sign-in password rotation pending (User.mustChangePassword).
+   *  OPTIONAL — legacy session constructions (service helpers, test mocks)
+   *  omit it; `undefined` is treated as "no rotation pending". The two real
+   *  session readers (getSessionFromRequest / getSessionFromCookies) always
+   *  populate it from the DB row. */
+  mustChangePassword?: boolean;
 }
 
 // Core session extraction
@@ -89,6 +95,7 @@ export async function getSessionFromRequest(
           storeId: true,
           organizationId: true,
           isActive: true,
+          mustChangePassword: true,
         },
       },
     },
@@ -117,7 +124,65 @@ export async function getSessionFromRequest(
     role: session.user.role,
     storeId: session.user.storeId,
     organizationId: session.user.organizationId,
+    mustChangePassword: session.user.mustChangePassword,
   };
+}
+
+/**
+ * v2.44.0: FIRST SIGN-IN PASSWORD ROTATION — the server-side half.
+ *
+ * A session whose user still carries `mustChangePassword = true` (freshly
+ * provisioned with a temporary password, or force-reset by an admin) may
+ * ONLY reach the allowlisted endpoints: change their own password, check
+ * who they are, log out, and load the CSRF token. Everything else guarded
+ * by requireAuth / withSessionAuth / requireStoreAccess answers
+ *
+ *     403 { code: 'PASSWORD_CHANGE_REQUIRED' }
+ *
+ * so a leaked temporary password is useless until it is rotated — and the
+ * client (api.ts) reacts to that exact code by flipping the SPA to the
+ * forced "Set a new password" screen.
+ *
+ * The session row is re-read from the DB on EVERY request (opaque token),
+ * so clearing the flag takes effect immediately — no token to refresh.
+ */
+export const PASSWORD_CHANGE_REQUIRED_CODE = 'PASSWORD_CHANGE_REQUIRED' as const;
+
+/** Paths a rotation-pending session may still call (suffix match on pathname). */
+export const PASSWORD_ROTATION_EXEMPT_PATHS: readonly string[] = [
+  '/api/profile/password', // the rotation itself (POST /api/profile/password)
+  '/api/auth/me', // client hydration / who-am-I
+  '/api/auth/verify', // thin session passthrough used by QA + health probes
+  '/api/auth/logout', // the escape hatch
+  '/api/security/csrf-token', // needed to POST the rotation at all
+  '/api/client-error', // client error reporting must not loop
+];
+
+export function isPasswordRotationExemptPath(pathname: string): boolean {
+  return PASSWORD_ROTATION_EXEMPT_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+/**
+ * Returns the 403 response when the session still owes a password rotation
+ * and the request is not allowlisted; `null` when the request may proceed.
+ */
+export function assertPasswordRotation(
+  request: NextRequest,
+  session: AuthSession,
+): Response | null {
+  if (!session.mustChangePassword) return null;
+  const pathname = new URL(request.url).pathname;
+  if (isPasswordRotationExemptPath(pathname)) return null;
+  return Response.json(
+    {
+      success: false,
+      code: PASSWORD_CHANGE_REQUIRED_CODE,
+      error: 'Set a new password before continuing.',
+    },
+    { status: 403 },
+  );
 }
 
 /**
@@ -149,6 +214,7 @@ export async function getSessionFromCookies(): Promise<AuthSession | null> {
           storeId: true,
           organizationId: true,
           isActive: true,
+          mustChangePassword: true,
         },
       },
     },
@@ -167,6 +233,7 @@ export async function getSessionFromCookies(): Promise<AuthSession | null> {
     role: session.user.role,
     storeId: session.user.storeId,
     organizationId: session.user.organizationId,
+    mustChangePassword: session.user.mustChangePassword,
   };
 }
 
@@ -242,6 +309,11 @@ export function requireAuth(
         { status: 401 }
       );
     }
+
+    // v2.44.0: first sign-in password rotation — a rotation-pending session
+    // only reaches the exempt allowlist (see assertPasswordRotation).
+    const rotationDue = assertPasswordRotation(request, session);
+    if (rotationDue) return rotationDue;
 
     if (options?.roles && options.roles.length > 0) {
       if (!options.roles.includes(session.role)) {
@@ -367,6 +439,10 @@ export function withSessionAuth(
         { status: 401 }
       );
     }
+
+    // v2.44.0: first sign-in password rotation (exempt paths pass through).
+    const rotationDue = assertPasswordRotation(request, session);
+    if (rotationDue) return rotationDue;
 
     if (
       allowedRoles &&
@@ -718,6 +794,10 @@ export function requireStoreAccess(
         { status: 401 }
       );
     }
+
+    // v2.44.0: first sign-in password rotation (exempt paths pass through).
+    const rotationDue = assertPasswordRotation(request, session);
+    if (rotationDue) return rotationDue;
 
     // Task 3-d: optional role gate, enforced after session validation and
     // before store-access resolution. SUPER_ADMIN always bypasses.
