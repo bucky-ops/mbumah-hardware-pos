@@ -404,13 +404,16 @@ export default function DeliveryNotesTab() {
     }).then((res) => {
       // v2.8.0 VISIBILITY FIX: enlarged, scrollable preview of the exact
       // message before the wa.me link opens (was a blind window.open).
+      // v2.32.0: envelope fix - the flat (res as {...}) casts read undefined
+      // fields off the ApiResponse envelope; the payload lives on res.data.
+      const payload = res.data;
       setMsgPreview({
         open: true,
         channel: 'whatsapp',
         phone,
-        message: (res as { message?: string }).message || `Delivery Note ${note.deliveryNumber}`,
-        title: `WhatsApp - ${(res as { documentTitle?: string }).documentTitle || note.deliveryNumber}`,
-        waLink: (res as { waLink?: string }).waLink,
+        message: payload?.message || `Delivery Note ${note.deliveryNumber}`,
+        title: `WhatsApp - ${payload?.documentTitle || note.deliveryNumber}`,
+        waLink: payload?.waLink,
       });
     }).catch((err: unknown) => {
       const msg = handleError(err, 'Send delivery note via WhatsApp');

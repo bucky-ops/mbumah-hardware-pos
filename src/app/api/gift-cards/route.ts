@@ -105,12 +105,20 @@ async function createGiftCardHandler(...args: unknown[]): Promise<Response> {
     autoAdjustItems,
   } = validation.data;
 
-  // Fields from body that are not in the schema but still used
-  const currency = (body as Record<string, unknown>).currency || 'KES';
+  // Fields from body that are not in the schema but still used.
+  // v2.32.0: explicit runtime coercion - the raw `unknown || fallback`
+  // expressions typed as {} and failed the string-field assignments
+  // (TS2322/TS2769 baseline noise).
+  const asTrimmedString = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() !== '' ? v : null;
+  const currency = asTrimmedString((body as Record<string, unknown>).currency) ?? 'KES';
   // SYS-2: issuer identity comes from the session inside the tx (body ignored).
-  const _issuedBy = (body as Record<string, unknown>).issuedBy || null;
-  const issuedTo = (body as Record<string, unknown>).issuedTo || null;
-  const expiresAt = (body as Record<string, unknown>).expiresAt || validation.data.expiryDate || null;
+  const _issuedBy = asTrimmedString((body as Record<string, unknown>).issuedBy);
+  const issuedTo = asTrimmedString((body as Record<string, unknown>).issuedTo);
+  const rawExpiresAt =
+    (body as Record<string, unknown>).expiresAt ?? validation.data.expiryDate ?? null;
+  const expiresAt: string | Date | null =
+    typeof rawExpiresAt === 'string' || rawExpiresAt instanceof Date ? rawExpiresAt : null;
 
   // Verify store exists
   const store = await db.store.findUnique({ where: { id: storeId } });

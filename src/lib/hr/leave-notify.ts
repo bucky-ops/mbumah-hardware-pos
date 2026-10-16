@@ -23,6 +23,13 @@
  *  leave-decision rows from digest rows with a `contains` on this string. */
 export const LEAVE_DECISION_METADATA_MARKER = 'leave_decision';
 
+/** v2.32.0: marker for SUBMISSION rows (employee → manager direction). The
+ *  feed's category-HR section pulls both markers and maps the feed type by
+ *  the parsed `kind`. */
+export const LEAVE_REQUEST_METADATA_MARKER = 'leave_request';
+
+export type LeaveNotificationKind = 'leave_decision' | 'leave_request';
+
 export type LeaveDecisionStatus = 'APPROVED' | 'REJECTED';
 
 export interface LeaveDecisionCopyInput {
@@ -153,6 +160,9 @@ export function leaveDecisionCopy(input: LeaveDecisionCopyInput): LeaveDecisionC
 }
 
 export interface LeaveDecisionExtras {
+  /** Which direction the row came from - feed type selector. Rows written
+   *  before v2.32.0 carry no kind and default to 'leave_decision'. */
+  kind?: LeaveNotificationKind;
   leaveRequestId?: string;
   status?: string;
   decidedByLabel?: string;
@@ -167,6 +177,7 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
     if (!parsed || typeof parsed !== 'object') return {};
     const rec = parsed as Record<string, unknown>;
     const out: LeaveDecisionExtras = {};
+    if (rec.kind === 'leave_decision' || rec.kind === 'leave_request') out.kind = rec.kind;
     if (typeof rec.leaveRequestId === 'string') out.leaveRequestId = rec.leaveRequestId;
     if (typeof rec.status === 'string') out.status = rec.status;
     if (typeof rec.decidedByLabel === 'string') out.decidedByLabel = rec.decidedByLabel;
@@ -174,4 +185,94 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
   } catch {
     return {};
   }
+}
+
+export interface LeaveSubmissionCopyInput {
+  firstName: string;
+  lastName: string;
+  leaveTypeName: string;
+  /** ISO date strings as stored on the LeaveRequest row. */
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  /** Optional employee reason (the request note). */
+  reason?: string | null;
+  /** Optional submitter display label ("submitted by …" footer). */
+  submittedByLabel?: string | null;
+}
+
+export interface LeaveSubmissionCopy {
+  title: string;
+  message: string;
+  notifType: 'INFO';
+  priority: 'NORMAL';
+  emailSubject: string;
+  emailText: string;
+  emailHtml: string;
+}
+
+/** Build every copy surface for one leave REQUEST submission (the
+ *  employee → manager direction added in v2.32.0). Managers get a bell row
+ *  that deep-links their workspace's Payroll tab (targetTab, set by the
+ *  route) and one grouped email. */
+export function leaveSubmissionCopy(input: LeaveSubmissionCopyInput): LeaveSubmissionCopy {
+  const { firstName, lastName, leaveTypeName, startDate, endDate, workingDays, reason, submittedByLabel } = input;
+
+  const name = `${firstName} ${lastName}`.trim();
+  const range = `${formatLeaveDay(startDate)} - ${formatLeaveDay(endDate)}`;
+  const days = `${workingDays} day${workingDays === 1 ? '' : 's'}`;
+
+  const title = `New leave request - ${name}`;
+  const reasonSuffix = reason ? ` Reason: ${reason}` : '';
+  const message = `${name} requested ${leaveTypeName} for ${days} (${range}). Review it on the Leave desk.${reasonSuffix}`;
+
+  const emailSubject = `Leave request pending review - ${name} (${days} ${leaveTypeName})`;
+  const accent = '#0369a1';
+  const accentBg = '#f0f9ff';
+  const accentBorder = '#bae6fd';
+
+  const rows: Array<[string, string]> = [
+    ['Employee', escapeHtml(name)],
+    ['Leave type', escapeHtml(leaveTypeName)],
+    ['Dates', escapeHtml(range)],
+    ['Working days', escapeHtml(days)],
+  ];
+  if (reason) rows.push(['Reason', escapeHtml(reason)]);
+
+  const footer = submittedByLabel
+    ? `<p style="margin:12px 0 0;color:#6b7280;font-size:12px;">Submitted by ${escapeHtml(submittedByLabel)}.</p>`
+    : '';
+
+  const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+  <div style="background:${accentBg};padding:16px 20px;border-bottom:1px solid ${accentBorder};">
+    <span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${accent};color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.02em;">PENDING REVIEW</span>
+    <h2 style="margin:10px 0 0;font-size:18px;color:#111827;">New leave request</h2>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
+    ${rows
+      .map(
+        ([k, v]) =>
+          `<tr><td style="padding:8px 20px;color:#6b7280;width:120px;white-space:nowrap;">${k}</td><td style="padding:8px 20px 8px 0;font-weight:600;color:#111827;">${v}</td></tr>`
+      )
+      .join('\n    ')}
+  </table>
+  <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f9fafb;">
+    <p style="margin:0;color:#6b7280;font-size:12px;">Open the Payroll tab - Leave desk to approve or decline this request.</p>
+    ${footer}
+  </div>
+</div>`;
+
+  const emailText = [
+    `New leave request - MBUMAH HARDWARE`,
+    ``,
+    `Employee: ${name}`,
+    `Leave type: ${leaveTypeName}`,
+    `Dates: ${range}`,
+    `Working days: ${days}`,
+    ...(reason ? [`Reason: ${reason}`] : []),
+    ``,
+    `Open the Payroll tab - Leave desk to approve or decline this request.`,
+  ].join('\n');
+
+  return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
 }

@@ -717,8 +717,10 @@ export default function InventoryTab() {
         storeId: currentStoreId,
         phone,
       });
-      if (res?.waLink) {
-        window.open(res.waLink, '_blank');
+      // v2.32.0: envelope fix - the flat res.waLink read was always undefined.
+      const payload = res.data;
+      if (payload?.waLink) {
+        window.open(payload.waLink, '_blank');
         toast.success('Inventory report sent via WhatsApp');
       } else {
         throw new Error('No WhatsApp link returned');

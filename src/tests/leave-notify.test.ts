@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LEAVE_DECISION_METADATA_MARKER,
+  LEAVE_REQUEST_METADATA_MARKER,
   formatLeaveDay,
   leaveDecisionCopy,
+  leaveSubmissionCopy,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
 
@@ -77,6 +79,59 @@ describe('leaveDecisionCopy', () => {
   });
 });
 
+describe('leaveSubmissionCopy (v2.32.0 manager direction)', () => {
+  const SUBMIT_INPUT = {
+    firstName: 'Grace',
+    lastName: 'Achieng',
+    leaveTypeName: 'Sick Leave',
+    startDate: '2026-03-02T00:00:00.000Z',
+    endDate: '2026-03-03T00:00:00.000Z',
+    workingDays: 2,
+    reason: 'Malaria - doctor’s note attached.',
+    submittedByLabel: 'cashier@mbumahhardware.co.ke',
+  };
+
+  it('builds manager-facing copy with the review call-to-action', () => {
+    const copy = leaveSubmissionCopy(SUBMIT_INPUT);
+    expect(copy.title).toBe('New leave request - Grace Achieng');
+    expect(copy.message).toBe(
+      'Grace Achieng requested Sick Leave for 2 days (2 Mar 2026 - 3 Mar 2026). Review it on the Leave desk. Reason: Malaria - doctor’s note attached.'
+    );
+    expect(copy.notifType).toBe('INFO');
+    expect(copy.priority).toBe('NORMAL');
+  });
+
+  it('uses singular "day" for one-day requests', () => {
+    const copy = leaveSubmissionCopy({ ...SUBMIT_INPUT, workingDays: 1 });
+    expect(copy.message).toContain('for 1 day (2 Mar 2026 - 3 Mar 2026)');
+  });
+
+  it('omits the Reason suffix when no reason was given', () => {
+    const copy = leaveSubmissionCopy({ ...SUBMIT_INPUT, reason: null });
+    expect(copy.message).not.toContain('Reason:');
+    expect(copy.emailHtml).not.toContain('Reason</td>');
+  });
+
+  it('renders the PENDING REVIEW badge and submitted-by footer', () => {
+    const copy = leaveSubmissionCopy(SUBMIT_INPUT);
+    expect(copy.emailHtml).toContain('>PENDING REVIEW</span>');
+    expect(copy.emailHtml).toContain('Submitted by cashier@mbumahhardware.co.ke.');
+    const anonymous = leaveSubmissionCopy({ ...SUBMIT_INPUT, submittedByLabel: null });
+    expect(anonymous.emailHtml).not.toContain('Submitted by');
+  });
+
+  it('escapes HTML-sensitive content in the email body', () => {
+    const copy = leaveSubmissionCopy({
+      ...SUBMIT_INPUT,
+      lastName: '<b>&amp;',
+      reason: '"quotes" & <tags>',
+    });
+    expect(copy.emailHtml).not.toContain('<b>');
+    expect(copy.emailHtml).toContain('&lt;b&gt;');
+    expect(copy.emailHtml).toContain('&quot;quotes&quot; &amp; &lt;tags&gt;');
+  });
+});
+
 describe('formatLeaveDay', () => {
   it('formats in UTC deterministically', () => {
     expect(formatLeaveDay('2026-02-02T00:00:00.000Z')).toBe('2 Feb 2026');
@@ -89,11 +144,26 @@ describe('formatLeaveDay', () => {
 });
 
 describe('parseLeaveDecisionExtras', () => {
-  it('parses valid decision metadata', () => {
+  it('parses valid decision metadata including the kind selector', () => {
     const extras = parseLeaveDecisionExtras(
       JSON.stringify({ kind: LEAVE_DECISION_METADATA_MARKER, leaveRequestId: 'req_1', status: 'APPROVED', decidedByLabel: 'Owner' })
     );
-    expect(extras).toEqual({ leaveRequestId: 'req_1', status: 'APPROVED', decidedByLabel: 'Owner' });
+    expect(extras).toEqual({ kind: 'leave_decision', leaveRequestId: 'req_1', status: 'APPROVED', decidedByLabel: 'Owner' });
+  });
+
+  it('parses submission metadata as the leave_request kind', () => {
+    const extras = parseLeaveDecisionExtras(
+      JSON.stringify({ kind: LEAVE_REQUEST_METADATA_MARKER, leaveRequestId: 'req_2', employeeId: 'emp_1' })
+    );
+    expect(extras).toEqual({ kind: 'leave_request', leaveRequestId: 'req_2' });
+  });
+
+  it('rows without a kind default to decisions at the feed mapping site', () => {
+    // The route maps `extras.kind ?? 'leave_decision'` - pre-v2.32.0 rows
+    // must keep rendering as decisions.
+    const extras = parseLeaveDecisionExtras(JSON.stringify({ leaveRequestId: 'req_3', status: 'REJECTED' }));
+    expect(extras.kind).toBeUndefined();
+    expect(extras.kind ?? 'leave_decision').toBe('leave_decision');
   });
 
   it('yields no extras on malformed JSON or wrong shapes (fail-soft)', () => {
@@ -104,7 +174,8 @@ describe('parseLeaveDecisionExtras', () => {
     expect(parseLeaveDecisionExtras('')).toEqual({});
   });
 
-  it('marker constant is stable - the feed query relies on it', () => {
+  it('marker constants are stable - the feed query relies on them', () => {
     expect(LEAVE_DECISION_METADATA_MARKER).toBe('leave_decision');
+    expect(LEAVE_REQUEST_METADATA_MARKER).toBe('leave_request');
   });
 });

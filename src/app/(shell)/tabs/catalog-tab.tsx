@@ -415,8 +415,10 @@ export default function CatalogTab() {
         storeId: currentStoreId,
         phone,
       });
-      if (res?.waLink) {
-        window.open(res.waLink, '_blank');
+      // v2.32.0: envelope fix - the flat res.waLink read was always undefined.
+      const payload = res.data;
+      if (payload?.waLink) {
+        window.open(payload.waLink, '_blank');
         toast.success('Catalog sent via WhatsApp');
         setWaOpen(false);
         setWaPhone('');
