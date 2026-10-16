@@ -34,10 +34,19 @@ async function main() {
     return;
   }
 
-  const employee = await db.employee.findFirst({
-    where: { deletedAt: null },
-    orderBy: { createdAt: 'asc' },
-  });
+  // v2.31.0: prefer an employee WITH a linked user account (userId) - the
+  // decision notification's in-app bell row is addressed to that user, so
+  // approving the seeded request exercises the full delivery chain (bell row
+  // + email) instead of only the email leg.
+  const employee =
+    (await db.employee.findFirst({
+      where: { deletedAt: null, userId: { not: null } },
+      orderBy: { createdAt: 'asc' },
+    })) ??
+    (await db.employee.findFirst({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    }));
   if (!employee) throw new Error('No employee found.');
 
   const annual = await db.leaveType.findUnique({ where: { code: 'ANNUAL' } });

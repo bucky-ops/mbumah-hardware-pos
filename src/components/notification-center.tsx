@@ -22,7 +22,7 @@ import {
   PackageX, AlertTriangle, AlertOctagon, CircleDollarSign,
   UserPlus, Receipt, CheckCheck, BellRing, Filter, X,
   MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield, BarChart3, ArrowRight,
-  CalendarSync, MailX,
+  CalendarSync, MailX, CalendarCheck2, CalendarX2,
 } from 'lucide-react';
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security' | 'email_failed';
@@ -312,7 +312,7 @@ export function NotificationCenter({
     setShowDismissed(!showDismissed);
   };
 
-  const getNotificationIcon = (type: NotificationItem['type']) => {
+  const getNotificationIcon = (type: NotificationItem['type'], leaveStatus?: NotificationItem['leaveStatus']) => {
     switch (type) {
       case 'out_of_stock': return <PackageX className="h-4 w-4 text-red-500" />;
       case 'low_stock': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
@@ -324,6 +324,12 @@ export function NotificationCenter({
       case 'security': return <ShieldAlert className="h-4 w-4 text-red-500" />;
       // v2.24.0: HR report digest copies - violet chart.
       case 'hr_digest': return <BarChart3 className="h-4 w-4 text-violet-500" />;
+      // v2.31.0: leave decisions - emerald check / amber cross, mirroring the
+      // status rails on the HR Leave desk rows.
+      case 'leave_decision':
+        return leaveStatus === 'REJECTED'
+          ? <CalendarX2 className="h-4 w-4 text-amber-500" />
+          : <CalendarCheck2 className="h-4 w-4 text-emerald-500" />;
     }
   };
 
@@ -497,7 +503,7 @@ export function NotificationCenter({
                       className="w-full text-left p-3 rounded-lg border bg-muted/50 dark:bg-muted/20 border-border opacity-60 group"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type)}</div>
+                        <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type, notification.leaveStatus)}</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">{notification.title}</p>
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
@@ -527,10 +533,10 @@ export function NotificationCenter({
                     onClick={() => handleNotificationClick(notification)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
                     tabIndex={0}
-                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''}`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type)}</div>
+                      <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type, notification.leaveStatus)}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium">{notification.title}</p>
@@ -541,6 +547,22 @@ export function NotificationCenter({
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                           {notification.description}
                         </p>
+                        {/* v2.31.0: leave decisions surface the outcome as a
+                            tiny chip (mirrors the HR desk's status accents) so
+                            an approval and a decline never look alike. */}
+                        {notification.type === 'leave_decision' && notification.leaveStatus ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span
+                              className={`inline-flex items-center gap-0.5 rounded border px-1 py-0 text-[10px] font-medium ${
+                                notification.leaveStatus === 'APPROVED'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                  : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                              }`}
+                            >
+                              {notification.leaveStatus === 'APPROVED' ? 'Approved' : 'Declined'}
+                            </span>
+                          </div>
+                        ) : null}
                         {/* v2.27.0: digest rows surface the delivery outcome
                             (was the email actually delivered?) and the manual
                             marker as tiny chips - the feed row previously made

@@ -11,6 +11,7 @@
 
 import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { toNum } from '@/lib/decimal-safe';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess } from '@/lib/auth';
@@ -229,10 +230,14 @@ async function clockInOutHandler(
   }
 
   // Compute working hours = (checkOut - checkIn) - breakHours
+  // v2.31.0: breakHours/expectedHours are Prisma Decimal columns (valueOf is
+  // a STRING) - read them through toNum so they can never leak into
+  // arithmetic (the legacy `x || 0` / `x || 8` fallbacks are preserved
+  // runtime-exactly: Decimal(0) is a truthy OBJECT, only null falls back).
   const checkIn = record.checkIn;
   const totalHours = (now.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-  const workingHours = Math.max(0, totalHours - (record.breakHours || 0));
-  const overtimeHours = Math.max(0, workingHours - (record.expectedHours || 8));
+  const workingHours = Math.max(0, totalHours - toNum(record.breakHours || 0));
+  const overtimeHours = Math.max(0, workingHours - toNum(record.expectedHours || 8));
 
   record = await db.attendanceRecord.update({
     where: { id: record.id },

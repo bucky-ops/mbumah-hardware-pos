@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth } from '@/lib/auth';
+import { toNum } from '@/lib/decimal-safe';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +90,9 @@ async function updateGiftCardHandler(...args: unknown[]): Promise<Response> {
         { status: 400 }
       );
     }
-    if (newInitial < existing.currentBalance) {
+    // v2.31.0: currentBalance is a Decimal column (valueOf is a STRING) -
+    // read through toNum so the guard compares numbers, not coerced strings.
+    if (newInitial < toNum(existing.currentBalance)) {
       return Response.json(
         { success: false, error: `Initial balance cannot be less than current balance (${existing.currentBalance}).` },
         { status: 400 }
@@ -99,7 +102,7 @@ async function updateGiftCardHandler(...args: unknown[]): Promise<Response> {
 
   // If autoAdjustItems is being toggled on, adjust visibility based on current balance
   if (body.autoAdjustItems === true) {
-    updateData.isVisible = existing.currentBalance > 0;
+    updateData.isVisible = toNum(existing.currentBalance) > 0;
   }
 
   if (Object.keys(updateData).length === 0) {

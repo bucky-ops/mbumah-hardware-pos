@@ -6,6 +6,7 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { generateSKU } from '@/lib/helpers';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
+import { toNum } from '@/lib/decimal-safe';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,16 +56,19 @@ async function getBundlesHandler(...args: unknown[]): Promise<Response> {
     db.product.count({ where }),
   ]);
 
+    // v2.31.0: pricePerUnit/costPrice/quantityRequired/pricePerUnit(bundle)
+    // are Prisma Decimal columns (valueOf is a STRING) - read through toNum
+    // so the reduce accumulates real numbers, never string concats.
     const enrichedBundles = bundles.map((bundle) => {
     const componentTotalPrice = bundle.bundleItems.reduce(
-      (sum, bi) => sum + (bi.childProduct.pricePerUnit * bi.quantityRequired),
+      (sum, bi) => sum + toNum(bi.childProduct.pricePerUnit) * toNum(bi.quantityRequired),
       0
     );
     const componentTotalCost = bundle.bundleItems.reduce(
-      (sum, bi) => sum + (bi.childProduct.costPrice * bi.quantityRequired),
+      (sum, bi) => sum + toNum(bi.childProduct.costPrice) * toNum(bi.quantityRequired),
       0
     );
-    const discountAmount = componentTotalPrice - bundle.pricePerUnit;
+    const discountAmount = componentTotalPrice - toNum(bundle.pricePerUnit);
     const discountPercent = componentTotalPrice > 0
       ? Math.round((discountAmount / componentTotalPrice) * 10000) / 100
       : 0;

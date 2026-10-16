@@ -39,6 +39,7 @@ import {
 // AUDIT REMEDIATION (F9-3): reuse the app's existing KRA PIN validator.
 // (validateKraPin is exported from etims-utils, not kra-helpers.)
 import { validateKraPin } from '@/lib/etims-utils';
+import { toNum } from '@/lib/decimal-safe';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,7 +102,9 @@ async function buildKraInvoicePayload(
       quantity: item.quantity,
       unitPrice: item.pricePerUnit,
       // SaleItem stores discount as a percent; convert to absolute amount.
-      discount: Math.round(((item.pricePerUnit * item.discountPercent) / 100) * item.quantity * 100) / 100,
+      // v2.31.0: pricePerUnit/discountPercent are Decimal columns (valueOf is
+      // a STRING) - read through toNum so they can never leak into arithmetic.
+      discount: Math.round(((toNum(item.pricePerUnit) * toNum(item.discountPercent)) / 100) * toNum(item.quantity) * 100) / 100,
       vatRate,
       vatAmount: Math.round(vatAmount * 100) / 100,
       total: Math.round(lineTotal * 100) / 100,

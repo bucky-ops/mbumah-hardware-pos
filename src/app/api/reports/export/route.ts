@@ -8,6 +8,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireAuth, withSessionAuth, MANAGER_PLUS_ROLES } from '@/lib/auth';
 import { distributeReceipt } from '@/lib/receipt-distribution';
 import { APIError } from '@/lib/api-error';
+import { toNum } from '@/lib/decimal-safe';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,8 +125,10 @@ async function getExportHandler(...args: unknown[]): Promise<Response> {
         p.reorderLevel.toString(),
         p.pricePerUnit.toString(),
         p.costPrice.toString(),
-        (p.quantityInStock * p.costPrice).toString(),
-        (p.quantityInStock * p.pricePerUnit).toString(),
+        // v2.31.0: quantityInStock/costPrice/pricePerUnit mix Int and Decimal
+        // columns - read through toNum so the stock value math is numeric.
+        (toNum(p.quantityInStock) * toNum(p.costPrice)).toString(),
+        (toNum(p.quantityInStock) * toNum(p.pricePerUnit)).toString(),
         p.quantityInStock <= p.reorderLevel ? 'Yes' : 'No',
         p.isRental ? 'Yes' : 'No',
         p.isBundle ? 'Yes' : 'No',

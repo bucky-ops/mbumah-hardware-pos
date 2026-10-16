@@ -9,6 +9,12 @@ import { formatKES } from '@/lib/utils/financialMath';
 // emailStatus) into feed fields so the notification center can surface the
 // delivery outcome + a "Manage schedule" deep link. Pure, fail-soft mapper.
 import { parseDigestNotificationExtras } from '@/lib/hr/digest-notification-view';
+// v2.31.0: leave-decision feed rows - marker constant for the category-HR
+// metadata split + the fail-soft extras parser for the status chip.
+import {
+  LEAVE_DECISION_METADATA_MARKER,
+  parseLeaveDecisionExtras,
+} from '@/lib/hr/leave-notify';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +24,9 @@ export interface NotificationData {
   // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
   // v2.24.0: 'hr_digest' - durable HR-category digest copies (scheduled and
   // manual report digests) addressed to the session user.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest';
+  // v2.31.0: 'leave_decision' - leave APPROVED/DECLINED bell rows written by
+  // PUT /api/leaves for the employee's linked user.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -36,6 +44,9 @@ export interface NotificationData {
   scheduleId?: string;
   manual?: boolean;
   emailStatus?: 'SENT' | 'FAILED';
+  // v2.31.0: decision status on leave_decision rows - drives the emerald
+  // Approved / amber Declined rail + chip in the notification center.
+  leaveStatus?: 'APPROVED' | 'REJECTED';
 }
 
 async function getHandler(request: NextRequest, session?: AuthSession): Promise<Response> {
@@ -294,6 +305,8 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
     // they are read with runWithoutTenant: rows may carry any storeId (or
     // null for org-wide schedules) and the tenant extension would hide them
     // while browsing another branch.
+    // v2.31.0: leave-decision rows share category HR - they are excluded here
+    // (metadata marker) and surfaced by section 9 as their own feed type.
     if (session?.userId) {
       try {
         const hrDigestNotifications = await runWithoutTenant(() =>
@@ -302,6 +315,7 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               category: 'HR',
               userId: session.userId,
               createdAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
+              NOT: { metadata: { contains: LEAVE_DECISION_METADATA_MARKER } },
             },
             orderBy: { createdAt: 'desc' },
             take: 15,
@@ -333,6 +347,50 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
         }
       } catch {
         /* HR digest section must never break the rest of the feed */
+      }
+    }
+
+    // 9. v2.31.0: leave decision notifications (category HR, metadata marker)
+    // - written by PUT /api/leaves when a manager approves/declines the
+    // employee's request. Addressed to the employee's linked user; read with
+    // runWithoutTenant for the same reason as the security/digest rows.
+    if (session?.userId) {
+      try {
+        const leaveDecisionNotifications = await runWithoutTenant(() =>
+          db.notification.findMany({
+            where: {
+              category: 'HR',
+              userId: session.userId,
+              createdAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
+              metadata: { contains: LEAVE_DECISION_METADATA_MARKER },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 15,
+          })
+        );
+
+        for (const n of leaveDecisionNotifications) {
+          const extras = parseLeaveDecisionExtras(n.metadata);
+          const declined = n.type === 'WARNING' || extras.status === 'REJECTED';
+          notifications.push({
+            id: `leave-${n.id}`,
+            type: 'leave_decision',
+            title: n.title,
+            description: n.message,
+            // Declined rides 'warning' (amber rail + icon) so the decision
+            // is not missed; approvals stay quiet 'info' (emerald rail).
+            severity: declined ? 'warning' : 'info',
+            timestamp: n.createdAt.toISOString(),
+            isRead: false,
+            targetTab: 'dashboard',
+            category: 'HR',
+            actionUrl: n.actionUrl ?? undefined,
+            actionLabel: n.actionLabel ?? undefined,
+            leaveStatus: declined ? 'REJECTED' : 'APPROVED',
+          });
+        }
+      } catch {
+        /* leave decision section must never break the rest of the feed */
       }
     }
 
