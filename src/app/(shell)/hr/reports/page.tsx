@@ -24,6 +24,7 @@ import {
   Building2,
   Coins,
   CalendarClock,
+  CalendarDays,
   CalendarX2,
   DoorOpen,
   Hourglass,
@@ -71,6 +72,43 @@ interface AbsenceDto extends Period {
   absenceRatePct: number;
   leaveRatePct: number;
   availableWorkingDays: number;
+}
+// v2.35.0: leave entitlement utilisation & liability (mirrors the server DTO;
+// rows are employeeCode + job title only — no names, no raw ids).
+interface LeaveUtilRow {
+  employeeCode: string;
+  jobTitle: string;
+  employmentType: string;
+  storeName: string;
+  typeName: string;
+  typeCode: string;
+  allocated: number;
+  carried: number;
+  used: number;
+  pending: number;
+  encashed: number;
+  available: number;
+  committedPct: number;
+  flag: 'OVERDRAWN' | 'EXHAUSTED' | 'LOW' | 'OPEN';
+}
+interface LeaveUtilDto {
+  scope: string;
+  year: number;
+  years: number[];
+  rows: LeaveUtilRow[];
+  totals: {
+    entitlement: number;
+    used: number;
+    pending: number;
+    available: number;
+    committedPct: number;
+    overdrawn: number;
+    exhausted: number;
+    low: number;
+    tracked: number;
+  };
+  byType: Array<{ type: string; code: string; allocated: number; carried: number; used: number; pending: number; available: number; committedPct: number }>;
+  byStore: Array<{ store: string; allocated: number; carried: number; used: number; pending: number; available: number }>;
 }
 interface TurnoverDto extends Period {
   exits: number;
@@ -131,7 +169,27 @@ function downloadCSV(filename: string, header: string[], rows: unknown[][]): voi
   URL.revokeObjectURL(url);
 }
 
-const REPORT_TAB_KEYS = ['headcount', 'cost', 'absence', 'turnover', 'tth', 'statutory', 'p10', 'schedules', 'privacy'] as const;
+const REPORT_TAB_KEYS = ['headcount', 'cost', 'absence', 'leave', 'turnover', 'tth', 'statutory', 'p10', 'schedules', 'privacy'] as const;
+
+/** v2.35.0: flag chip tone for a leave utilisation row. */
+function utilFlagTone(flag: LeaveUtilRow['flag']): string {
+  switch (flag) {
+    case 'OVERDRAWN':
+      return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300';
+    case 'EXHAUSTED':
+    case 'LOW':
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300';
+    default:
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
+  }
+}
+
+/** v2.35.0: fill tone for the committed-days rail. */
+function utilRailTone(committedPct: number): string {
+  if (committedPct >= 100) return 'bg-rose-500';
+  if (committedPct >= 80) return 'bg-amber-500';
+  return 'bg-emerald-500';
+}
 
 export default function HrReportsPage() {
   const [error, setError] = useState('');
@@ -206,6 +264,8 @@ export default function HrReportsPage() {
   const [statutory, setStatutory] = useState<StatutoryDto | null>(null);
   const [p10, setP10] = useState<P10Dto | null>(null);
   const [erasure, setErasure] = useState<ErasureDto | null>(null);
+  const [leaveUtil, setLeaveUtil] = useState<LeaveUtilDto | null>(null);
+  const [leaveYear, setLeaveYear] = useState(String(new Date().getUTCFullYear()));
 
   const [hiddenCols, setHiddenCols] = useState<Record<string, boolean>>({});
   const [rejectTarget, setRejectTarget] = useState<ErasureDto['requests'][number] | null>(null);
@@ -256,6 +316,20 @@ export default function HrReportsPage() {
     }
   }, []);
 
+  // v2.35.0: leave balances follow the leave YEAR (calendar year), not the
+  // global reporting period — loaded independently so the year picker only
+  // refetches this report.
+  const loadLeaveUtil = useCallback(async () => {
+    setError('');
+    try {
+      const qs = `year=${encodeURIComponent(leaveYear)}${storeId ? `&storeId=${encodeURIComponent(storeId)}` : ''}`;
+      setLeaveUtil(await apiGet<LeaveUtilDto>(`/api/hr/reports/leave-utilisation?${qs}`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load leave balances.');
+      setLeaveUtil(null);
+    }
+  }, [leaveYear, storeId]);
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -265,6 +339,9 @@ export default function HrReportsPage() {
   useEffect(() => {
     void loadErasure();
   }, [loadErasure]);
+  useEffect(() => {
+    void loadLeaveUtil();
+  }, [loadLeaveUtil]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -382,6 +459,9 @@ export default function HrReportsPage() {
           <TabsTrigger value="headcount">Headcount</TabsTrigger>
           <TabsTrigger value="cost">Employment cost</TabsTrigger>
           <TabsTrigger value="absence">Absence</TabsTrigger>
+          <TabsTrigger value="leave" className="gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5 text-emerald-500" aria-hidden /> Leave balances
+          </TabsTrigger>
           <TabsTrigger value="turnover">Turnover</TabsTrigger>
           <TabsTrigger value="tth">Time to hire</TabsTrigger>
           <TabsTrigger value="statutory">Statutory</TabsTrigger>
@@ -555,6 +635,193 @@ export default function HrReportsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
+
+        {/* ── Leave entitlement utilisation (v2.35.0) ── */}
+        <TabsContent value="leave" className="space-y-4">
+          {!leaveUtil ? (
+            <Skeleton className="h-40 w-full" />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+                <p className="text-xs text-muted-foreground">
+                  Leave year {leaveUtil.year} — balances are year-keyed (calendar year), independent of the reporting period above.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="leave-year" className="text-xs">Leave year</Label>
+                  <Select value={leaveYear} onValueChange={setLeaveYear}>
+                    <SelectTrigger id="leave-year" className="h-8 w-28" aria-label="Leave year">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {leaveUtil.years.map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                <Stat
+                  label="Liability days"
+                  value={`${leaveUtil.totals.available}d`}
+                  tone={leaveUtil.totals.available > 0 ? 'warn' : 'good'}
+                  hint="entitlement still available"
+                />
+                <Stat
+                  label="Committed"
+                  value={`${leaveUtil.totals.committedPct}%`}
+                  tone={leaveUtil.totals.committedPct >= 80 ? 'warn' : 'good'}
+                  hint="used + pending vs entitlement"
+                />
+                <Stat
+                  label="Over-drawn"
+                  value={String(leaveUtil.totals.overdrawn)}
+                  tone={leaveUtil.totals.overdrawn > 0 ? 'warn' : 'good'}
+                  hint="balances below zero"
+                />
+                <Stat label="Pending days" value={`${leaveUtil.totals.pending}d`} hint="awaiting decision" />
+                <Stat
+                  label="Tracked rows"
+                  value={String(leaveUtil.totals.tracked)}
+                  hint={`${leaveUtil.totals.exhausted} exhausted · ${leaveUtil.totals.low} low`}
+                />
+              </div>
+              {leaveUtil.byType.length > 0 ? (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm">
+                      <CalendarDays className="h-4 w-4 text-emerald-500" aria-hidden /> Entitlement by leave type
+                    </CardTitle>
+                    <CardDescription>Committed share of allocated + carried-forward days.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2.5">
+                    {leaveUtil.byType.map((t) => {
+                      const pool = t.allocated + t.carried;
+                      return (
+                        <div key={t.code} className="flex items-center gap-3">
+                          <div className="w-40 shrink-0 truncate text-xs font-medium" title={t.type}>{t.type}</div>
+                          <div
+                            className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted"
+                            role="img"
+                            aria-label={`${t.type}: ${t.committedPct}% committed of ${pool} days`}
+                          >
+                            <div
+                              className={`absolute inset-y-0 left-0 rounded-full ${utilRailTone(t.committedPct)}`}
+                              style={{ width: `${Math.min(100, Math.max(0, t.committedPct))}%` }}
+                            />
+                          </div>
+                          <div className="w-56 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                            {t.used + t.pending}d / {pool}d · {t.available}d free
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              ) : null}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <CalendarDays className="h-4 w-4 text-emerald-500" aria-hidden /> Per-employee balances
+                  </CardTitle>
+                  <CardDescription>employeeCode + job title only — no names, no raw ids. OVERDRAWN rows need balance correction before further requests can be approved.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <TableToolbar
+                    columns={[
+                      { key: 'code', label: 'Employee' },
+                      { key: 'title', label: 'Title' },
+                      { key: 'type', label: 'Branch' },
+                      { key: 'ltype', label: 'Leave type' },
+                      { key: 'alloc', label: 'Allocated' },
+                      { key: 'used', label: 'Used' },
+                      { key: 'pend', label: 'Pending' },
+                      { key: 'avail', label: 'Available' },
+                      { key: 'rail', label: 'Committed' },
+                      { key: 'flag', label: 'Flag' },
+                    ]}
+                    exportCsv={() =>
+                      downloadCSV(
+                        `leave-utilisation-${leaveUtil.year}.csv`,
+                        ['Employee', 'Job title', 'Branch', 'Leave type', 'Allocated', 'Carried', 'Used', 'Pending', 'Available', 'Committed %', 'Flag'],
+                        leaveUtil.rows.map((r) => [
+                          r.employeeCode,
+                          r.jobTitle,
+                          r.storeName,
+                          r.typeName,
+                          r.allocated.toFixed(1),
+                          r.used.toFixed(1),
+                          r.pending.toFixed(1),
+                          r.available.toFixed(1),
+                          r.committedPct.toFixed(1),
+                          r.flag,
+                        ]),
+                      )
+                    }
+                  />
+                  {leaveUtil.rows.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      No entitlement balances recorded for {leaveUtil.year} yet — balances appear once leave types are allocated to employees.
+                    </p>
+                  ) : (
+                    <div className="max-h-[520px] overflow-auto">
+                      <Table>
+                        <TableHeader><TableRow>
+                          <TableHead className={`sticky top-0 bg-card ${col('code')}`}>Employee</TableHead>
+                          <TableHead className={`sticky top-0 bg-card ${col('title')}`}>Title</TableHead>
+                          <TableHead className={`sticky top-0 bg-card ${col('type')}`}>Branch</TableHead>
+                          <TableHead className={`sticky top-0 bg-card ${col('ltype')}`}>Leave type</TableHead>
+                          <TableHead className={`sticky top-0 bg-card text-right ${col('alloc')}`}>Allocated</TableHead>
+                          <TableHead className={`sticky top-0 bg-card text-right ${col('used')}`}>Used</TableHead>
+                          <TableHead className={`sticky top-0 bg-card text-right ${col('pend')}`}>Pending</TableHead>
+                          <TableHead className={`sticky top-0 bg-card text-right ${col('avail')}`}>Available</TableHead>
+                          <TableHead className={`sticky top-0 bg-card ${col('rail')}`}>Committed</TableHead>
+                          <TableHead className={`sticky top-0 bg-card ${col('flag')}`}>Flag</TableHead>
+                        </TableRow></TableHeader>
+                        <TableBody>
+                          {leaveUtil.rows.map((r) => (
+                            <TableRow key={`${r.employeeCode}-${r.typeCode}`}>
+                              <TableCell className={`font-medium tabular-nums ${col('code')}`}>{r.employeeCode}</TableCell>
+                              <TableCell className={`max-w-44 truncate ${col('title')}`} title={r.jobTitle}>{r.jobTitle}</TableCell>
+                              <TableCell className={`text-xs text-muted-foreground ${col('type')}`}>{r.storeName}</TableCell>
+                              <TableCell className={col('ltype')}>{r.typeName}</TableCell>
+                              <TableCell className={`text-right tabular-nums ${col('alloc')}`}>{r.allocated.toFixed(1)}</TableCell>
+                              <TableCell className={`text-right tabular-nums ${col('used')}`}>{r.used.toFixed(1)}</TableCell>
+                              <TableCell className={`text-right tabular-nums ${col('pend')}`}>{r.pending > 0 ? r.pending.toFixed(1) : '—'}</TableCell>
+                              <TableCell className={`text-right font-semibold tabular-nums ${r.available < 0 ? 'text-rose-600 dark:text-rose-400' : ''} ${col('avail')}`}>
+                                {r.available.toFixed(1)}
+                              </TableCell>
+                              <TableCell className={col('rail')}>
+                                <div className="flex items-center justify-end gap-2">
+                                  <div
+                                    className="relative h-1.5 w-20 overflow-hidden rounded-full bg-muted"
+                                    role="img"
+                                    aria-label={`${r.committedPct}% committed`}
+                                  >
+                                    <div
+                                      className={`absolute inset-y-0 left-0 rounded-full ${utilRailTone(r.committedPct)}`}
+                                      style={{ width: `${Math.min(100, Math.max(0, r.committedPct))}%` }}
+                                    />
+                                  </div>
+                                  <span className="w-11 text-right text-xs tabular-nums">{r.committedPct}%</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className={col('flag')}>
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${utilFlagTone(r.flag)}`}>
+                                  {r.flag}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </>

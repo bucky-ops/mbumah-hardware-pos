@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.35.0',
+    title: 'Leave balances become a governed report — liability days, over-draw flags and year-keyed exports',
+    bullets: [
+      'A new "Leave balances" tab in HR reports shows, for any leave year, every employee entitlement side by side: allocated, carried forward, used, pending and available — with a committed-percent rail per row (emerald under 80%, amber near the ceiling, rose when over-drawn).',
+      'Rows flag themselves: OVERDRAWN (balance below zero), EXHAUSTED (nothing left), LOW (80%+ committed) or OPEN, so balance corrections and approvals can be prioritised without opening each employee.',
+      'The headline cards answer the compliance question directly — liability days still owed to the team, committed share, over-drawn count and days pending decision — with per-leave-type bars summarising where the entitlement sits.',
+      'CSV export and print follow the report pack conventions: employeeCode + job title only (never names or raw ids), a TOTAL row, and the server-side export is audit logged as a data export.',
+    ],
+  },
+  {
     version: '2.34.0',
     title: 'Declined leave can be resubmitted in one tap — and failed M-Pesa payslips can be retried individually',
     bullets: [
