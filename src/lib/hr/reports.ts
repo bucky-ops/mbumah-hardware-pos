@@ -833,3 +833,245 @@ export async function auditP10Export(session: Session, year: number, format: str
     metadata: { year, format, scope: resolveReportScope(session) },
   }).catch(() => undefined);
 }
+
+// ── 8. Leave entitlement utilisation (v2.35.0, spec reporting/compliance) ───
+
+/**
+ * Per-employee leave entitlement utilisation for one leave year (calendar
+ * year, matching leave-service). Spec rules preserved: rows carry
+ * employeeCode + job title only — never names or raw ids; BRANCH-scoped
+ * callers see only their store; ORG callers may drill down per branch.
+ *
+ * Liability lens: entitlement-bearing days that remain AVAILABLE are the
+ * organisation's leave liability (Employment Act 2007 obligations), so the
+ * rollup reports them alongside over-draw positions.
+ */
+export interface LeaveUtilisationRow {
+  employeeCode: string;
+  jobTitle: string;
+  employmentType: string;
+  storeName: string;
+  typeName: string;
+  typeCode: string;
+  allocated: number;
+  carried: number;
+  used: number;
+  pending: number;
+  encashed: number;
+  available: number; // allocated + carried - used - pending
+  committedPct: number; // (used + pending) / (allocated + carried), 1dp
+  flag: 'OVERDRAWN' | 'EXHAUSTED' | 'LOW' | 'OPEN';
+}
+
+export interface LeaveUtilisationDto {
+  scope: ReportScope;
+  year: number;
+  years: number[]; // distinct leave years present in scope (desc)
+  rows: LeaveUtilisationRow[];
+  totals: {
+    entitlement: number; // allocated + carried
+    used: number;
+    pending: number;
+    available: number; // liability days
+    committedPct: number;
+    overdrawn: number;
+    exhausted: number;
+    low: number;
+    tracked: number; // rows passing the noise filter
+  };
+  byType: Array<{ type: string; code: string; allocated: number; carried: number; used: number; pending: number; available: number; committedPct: number }>;
+  byStore: Array<{ store: string; allocated: number; carried: number; used: number; pending: number; available: number }>;
+}
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+function flagOf(available: number, committedPct: number): LeaveUtilisationRow['flag'] {
+  if (available < 0) return 'OVERDRAWN';
+  if (available === 0) return 'EXHAUSTED';
+  if (committedPct >= 80) return 'LOW';
+  return 'OPEN';
+}
+
+export async function leaveUtilisationReport(
+  session: Session,
+  year: number,
+  opts?: { storeId?: string | null },
+): Promise<LeaveUtilisationDto | null> {
+  const scope = resolveReportScope(session);
+  if (!scope) return null;
+
+  const employeeWhere = { status: 'ACTIVE', deletedAt: null, ...scopeWhere(session, scope, opts?.storeId) };
+  const [balances, yearRows] = await Promise.all([
+    db.employeeLeaveBalance.findMany({
+      where: { leaveYear: year, employee: employeeWhere },
+      select: {
+        allocatedDays: true,
+        carryForwardDays: true,
+        usedDays: true,
+        pendingDays: true,
+        encashedDays: true,
+        employee: {
+          select: { employeeCode: true, jobTitle: true, employmentType: true, store: { select: { name: true } } },
+        },
+        leaveType: { select: { name: true, code: true } },
+      },
+    }),
+    db.employeeLeaveBalance.findMany({
+      where: { employee: employeeWhere },
+      select: { leaveYear: true },
+      distinct: ['leaveYear'],
+    }),
+  ]);
+
+  const years = yearRows
+    .map((r) => r.leaveYear)
+    .sort((a, b) => b - a);
+  if (!years.includes(year)) years.unshift(year);
+
+  // Noise filter: a (employee, type) pair with no entitlement and no activity
+  // carries no signal (e.g. unlimited types like Compassionate left untouched).
+  const live = balances.filter((b) => {
+    const allocated = Number(b.allocatedDays);
+    const carried = Number(b.carryForwardDays);
+    const used = Number(b.usedDays);
+    const pending = Number(b.pendingDays);
+    return allocated + carried > 0 || used > 0 || pending > 0;
+  });
+
+  const rows: LeaveUtilisationRow[] = live
+    .map((b) => {
+      const allocated = r1(Number(b.allocatedDays));
+      const carried = r1(Number(b.carryForwardDays));
+      const used = r1(Number(b.usedDays));
+      const pending = r1(Number(b.pendingDays));
+      const encashed = r1(Number(b.encashedDays));
+      const available = r1(allocated + carried - used - pending);
+      const pool = allocated + carried;
+      const committedPct = pool > 0 ? r1(((used + pending) / pool) * 100) : 100;
+      return {
+        employeeCode: b.employee.employeeCode ?? '(unassigned)',
+        jobTitle: b.employee.jobTitle ?? '(no title)',
+        employmentType: b.employee.employmentType,
+        storeName: b.employee.store?.name ?? '(unknown branch)',
+        typeName: b.leaveType.name,
+        typeCode: b.leaveType.code,
+        allocated,
+        carried,
+        used,
+        pending,
+        encashed,
+        available,
+        committedPct,
+        flag: flagOf(available, committedPct),
+      };
+    })
+    .sort(
+      (a, b2) =>
+        a.storeName.localeCompare(b2.storeName) ||
+        a.employeeCode.localeCompare(b2.employeeCode) ||
+        a.typeName.localeCompare(b2.typeName),
+    );
+
+  const sum = (f: (r: LeaveUtilisationRow) => number) => r1(rows.reduce((acc, r) => acc + f(r), 0));
+  const totals = {
+    entitlement: sum((r) => r.allocated + r.carried),
+    used: sum((r) => r.used),
+    pending: sum((r) => r.pending),
+    available: sum((r) => r.available),
+    committedPct: 0,
+    overdrawn: rows.filter((r) => r.flag === 'OVERDRAWN').length,
+    exhausted: rows.filter((r) => r.flag === 'EXHAUSTED').length,
+    low: rows.filter((r) => r.flag === 'LOW').length,
+    tracked: rows.length,
+  };
+  totals.committedPct = totals.entitlement > 0 ? r1(((totals.used + totals.pending) / totals.entitlement) * 100) : 100;
+
+  const byTypeMap = new Map<string, { type: string; code: string; allocated: number; carried: number; used: number; pending: number; available: number }>();
+  const byStoreMap = new Map<string, { store: string; allocated: number; carried: number; used: number; pending: number; available: number }>();
+  for (const r of rows) {
+    const t = byTypeMap.get(r.typeCode) ?? { type: r.typeName, code: r.typeCode, allocated: 0, carried: 0, used: 0, pending: 0, available: 0 };
+    t.allocated = r1(t.allocated + r.allocated);
+    t.carried = r1(t.carried + r.carried);
+    t.used = r1(t.used + r.used);
+    t.pending = r1(t.pending + r.pending);
+    t.available = r1(t.available + r.available);
+    byTypeMap.set(r.typeCode, t);
+
+    const s = byStoreMap.get(r.storeName) ?? { store: r.storeName, allocated: 0, carried: 0, used: 0, pending: 0, available: 0 };
+    s.allocated = r1(s.allocated + r.allocated);
+    s.carried = r1(s.carried + r.carried);
+    s.used = r1(s.used + r.used);
+    s.pending = r1(s.pending + r.pending);
+    s.available = r1(s.available + r.available);
+    byStoreMap.set(r.storeName, s);
+  }
+  const byType = [...byTypeMap.values()]
+    .map((t) => ({ ...t, committedPct: t.allocated + t.carried > 0 ? r1(((t.used + t.pending) / (t.allocated + t.carried)) * 100) : 100 }))
+    .sort((a, b2) => b2.allocated + b2.carried - (a.allocated + a.carried) || a.type.localeCompare(b2.type));
+  const byStore = [...byStoreMap.values()].sort((a, b2) => a.store.localeCompare(b2.store));
+
+  return { scope, year, years, rows, totals, byType, byStore };
+}
+
+/** CSV for the utilisation report (RFC 4180 via toCSV). */
+export function leaveUtilisationToCSV(dto: LeaveUtilisationDto): string {
+  const header = [
+    'Employee',
+    'Job title',
+    'Employment type',
+    'Branch',
+    'Leave type',
+    'Allocated',
+    'Carried forward',
+    'Used',
+    'Pending',
+    'Encashed',
+    'Available',
+    'Committed %',
+    'Flag',
+  ];
+  const rows = dto.rows.map((r) => [
+    r.employeeCode,
+    r.jobTitle,
+    r.employmentType,
+    r.storeName,
+    r.typeName,
+    r.allocated.toFixed(1),
+    r.carried.toFixed(1),
+    r.used.toFixed(1),
+    r.pending.toFixed(1),
+    r.encashed.toFixed(1),
+    r.available.toFixed(1),
+    r.committedPct.toFixed(1),
+    r.flag,
+  ]);
+  rows.push([
+    'TOTAL',
+    '',
+    '',
+    '',
+    '',
+    dto.totals.entitlement.toFixed(1),
+    '',
+    dto.totals.used.toFixed(1),
+    dto.totals.pending.toFixed(1),
+    '',
+    dto.totals.available.toFixed(1),
+    dto.totals.committedPct.toFixed(1),
+    `${dto.totals.overdrawn} overdrawn`,
+  ]);
+  return toCSV(header, rows);
+}
+
+/** Audit the export (spec: exports audit logged). Fire-and-tolerate. */
+export async function auditLeaveUtilisationExport(session: Session, year: number, format: string): Promise<void> {
+  await hrAudit({
+    actorId: session.userId,
+    actorRole: session.role,
+    action: 'LEAVE_UTILISATION_EXPORTED',
+    resourceType: HrEntityType.DATA_EXPORT,
+    resourceId: `leave-utilisation-${year}`,
+    storeId: session.storeId,
+    metadata: { year, format, scope: resolveReportScope(session) },
+  }).catch(() => undefined);
+}
