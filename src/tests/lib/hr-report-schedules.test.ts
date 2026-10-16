@@ -31,6 +31,7 @@ const db = vi.hoisted(() => {
     hrReportSchedule: model(),
     organization: model(),
     store: model(),
+    notification: model(),
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
   };
 });
@@ -71,6 +72,7 @@ import {
   isScheduleDue,
   runDueHrReportSchedules,
   buildDigestData,
+  sendScheduleNow,
   HrScheduleError,
 } from '@/lib/hr/report-schedule-service';
 
@@ -292,5 +294,94 @@ describe('buildDigestData scope session', () => {
     );
     expect(digest?.scopeLabel).toBe('Juja Main');
     expect(digest?.reportLabel).toBe('Headcount');
+  });
+});
+
+// ── v2.24.0: manual sendScheduleNow ─────────────────────────────────────────
+
+describe('sendScheduleNow', () => {
+  const rowBase = {
+    id: 'sched-9',
+    organizationId: 'org-1',
+    storeId: null as string | null,
+    reportKey: 'headcount',
+    frequency: 'DAILY',
+    recipients: JSON.stringify(['owner@mbumah.co.ke']),
+    weekday: null as number | null,
+    dayOfMonth: null as number | null,
+    hourUtc: 3,
+    active: true,
+    createdAt: new Date('2026-10-01T00:00:00Z'),
+  };
+  const orgActor = { id: 'user-owner', role: 'STORE_OWNER', storeId: null };
+  const bmActor = { id: 'user-bm', role: 'BRANCH_MANAGER', storeId: 'store-9' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.organization.findUnique.mockResolvedValue({ name: 'MBUMAH Hardware' });
+    db.notification.create.mockResolvedValue({ id: 'notif-1' });
+  });
+
+  it('404s for an unknown / cross-org schedule', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(null);
+    await expect(sendScheduleNow('org-1', orgActor, 'sched-9', NOW)).rejects.toMatchObject({
+      code: 'SCHEDULE_NOT_FOUND',
+      status: 404,
+    });
+  });
+
+  it('forbids a BRANCH manager sending an out-of-scope schedule', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue({ ...rowBase, storeId: 'store-other' });
+    await expect(sendScheduleNow('org-1', bmActor, 'sched-9', NOW)).rejects.toMatchObject({
+      code: 'STORE_SCOPE_FORBIDDEN',
+      status: 403,
+    });
+  });
+
+  it('allows a BRANCH manager to send their OWN branch schedule and stamps SENT without touching lastRunAt', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue({ ...rowBase, storeId: 'store-9', lastRunAt: new Date('2026-10-14T03:00:00Z') });
+    const result = await sendScheduleNow('org-1', bmActor, 'sched-9', NOW);
+    expect(result.outcome).toBe('SENT');
+    expect(result.email.success).toBe(true);
+    // The stored row's lastRunAt is echoed untouched in the view (ISO string).
+    expect(result.schedule.lastRunAt).toBe('2026-10-14T03:00:00.000Z');
+    expect(db.hrReportSchedule.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'sched-9' }, data: expect.objectContaining({ lastStatus: 'SENT' }) }),
+    );
+    const updateData = (db.hrReportSchedule.update as ReturnType<typeof vi.fn>).mock.calls[0][0].data;
+    expect(updateData.lastRunAt).toBeUndefined();
+    // In-app copy addressed to the ACTOR, category HR, quiet priority.
+    expect(db.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ category: 'HR', userId: 'user-bm', priority: 'NORMAL', storeId: 'store-9' }),
+      }),
+    );
+    // Audit carries the REAL actor + manualSend marker.
+    expect(hrAudit).toHaveBeenCalledWith(expect.objectContaining({ actorId: 'user-bm', actorRole: 'BRANCH_MANAGER', metadata: expect.objectContaining({ manualSend: true, outcome: 'SENT' }) }));
+  });
+
+  it('stamps FAILED + HIGH-priority notification when the email send fails', async () => {
+    (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ success: false, error: 'RESEND_API_KEY not configured' });
+    db.hrReportSchedule.findFirst.mockResolvedValue({ ...rowBase, lastRunAt: null });
+    const result = await sendScheduleNow('org-1', orgActor, 'sched-9', NOW);
+    expect(result.outcome).toBe('FAILED');
+    expect(db.hrReportSchedule.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ lastStatus: 'FAILED' }) }),
+    );
+    const updateData = (db.hrReportSchedule.update as ReturnType<typeof vi.fn>).mock.calls[0][0].data;
+    expect(updateData.lastRunAt).toBeUndefined();
+    expect(db.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ category: 'HR', priority: 'HIGH' }) }),
+    );
+  });
+
+  it('SKIPPED when the report returns no data (still writes the in-app copy)', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue({ ...rowBase, reportKey: 'employment-cost' });
+    const result = await sendScheduleNow('org-1', orgActor, 'sched-9', NOW);
+    expect(result.outcome).toBe('SKIPPED');
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(db.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ category: 'HR', userId: 'user-owner' }) }),
+    );
   });
 });

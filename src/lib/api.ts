@@ -2861,7 +2861,9 @@ export interface NotificationItem {
   id: string;
   // v2.12.7 (PR C): 'security' - durable SECURITY-category Notification rows
   // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security';
+  // v2.24.0: 'hr_digest' - durable HR-category digest copies (scheduled and
+  // manual report digests) addressed to the session user.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -2871,6 +2873,9 @@ export interface NotificationItem {
   // v2.12.7 (PR C): raw Notification.category ('SECURITY' on security rows) -
   // drives the Alerts panel's Security filter tab.
   category?: string;
+  // v2.24.0: deep link on HR digest rows (open the exact report tab).
+  actionUrl?: string;
+  actionLabel?: string;
 }
 
 export interface NotificationSummary {

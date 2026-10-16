@@ -161,6 +161,23 @@ jobs:
           bun run prisma:validate
           echo "Prisma schema is valid."
 
+      # v2.24.0: the COMMITTED provider must be postgresql (the file's own
+      # header documents this). Local installs/builds flip the working-tree
+      # schema to SQLite via scripts/setup-prisma-provider.mjs - that flip
+      # must never be committed (v2.18.4.0 shipped it and it stayed
+      # unnoticed through v2.23.0 because production builds self-heal via
+      # vercel-build's setup step). Checked against the git OBJECT, not the
+      # working tree, so a CI-side postinstall flip cannot mask a violation.
+      - name: Verify committed Prisma provider (postgresql)
+        run: |
+          echo "Checking the COMMITTED schema provider (git object, flip-proof)..."
+          COMMITTED=$(git show HEAD:prisma/schema.prisma | grep -oP 'provider\s*=\s*"\K\w+' | head -1)
+          if [ "$COMMITTED" != "postgresql" ]; then
+            echo "::error::prisma/schema.prisma is committed with provider = \"$COMMITTED\". The committed provider MUST be \"postgresql\"; local/dev provider flips are applied by scripts/setup-prisma-provider.mjs at install time and must never be committed."
+            exit 1
+          fi
+          echo "Committed provider is postgresql."
+
       # v2.18.0.2: release safety guards. The Prisma configuration check
       # blocks the deprecated package.json#prisma block and any accidental
       # Prisma prerelease/major drift; the release-selection check proves the

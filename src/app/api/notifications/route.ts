@@ -12,7 +12,9 @@ export interface NotificationData {
   id: string;
   // v2.12.7 (PR C): 'security' - durable SECURITY-category Notification rows
   // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security';
+  // v2.24.0: 'hr_digest' - durable HR-category digest copies (scheduled and
+  // manual report digests) addressed to the session user.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -22,6 +24,9 @@ export interface NotificationData {
   // v2.12.7 (PR C): raw Notification.category so the Alerts panel can filter
   // (the synthesized sections below carry no category - undefined).
   category?: string;
+  // v2.24.0: deep link for HR digest rows (open the exact report tab).
+  actionUrl?: string;
+  actionLabel?: string;
 }
 
 async function getHandler(request: NextRequest, session?: AuthSession): Promise<Response> {
@@ -270,6 +275,49 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
         }
       } catch {
         /* security section must never break the rest of the feed */
+      }
+    }
+
+    // 8. v2.24.0: durable HR digest notifications (category HR) - the
+    // notification-center copies of scheduled + manual HR report digests
+    // (report-schedule-service.writeDigestNotification). Addressed BY USER
+    // ID (the actor / schedule creator), so - like the security rows above -
+    // they are read with runWithoutTenant: rows may carry any storeId (or
+    // null for org-wide schedules) and the tenant extension would hide them
+    // while browsing another branch.
+    if (session?.userId) {
+      try {
+        const hrDigestNotifications = await runWithoutTenant(() =>
+          db.notification.findMany({
+            where: {
+              category: 'HR',
+              userId: session.userId,
+              createdAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 15,
+          })
+        );
+
+        for (const n of hrDigestNotifications) {
+          notifications.push({
+            id: `hr-${n.id}`,
+            type: 'hr_digest',
+            title: n.title,
+            description: n.message,
+            // Failed deliveries ride priority HIGH -> amber popup so a
+            // broken digest cadence is never silent; successes stay quiet.
+            severity: n.priority === 'URGENT' || n.priority === 'HIGH' ? 'warning' : 'info',
+            timestamp: n.createdAt.toISOString(),
+            isRead: false,
+            targetTab: 'hr-digest',
+            category: 'HR',
+            actionUrl: n.actionUrl ?? undefined,
+            actionLabel: n.actionLabel ?? undefined,
+          });
+        }
+      } catch {
+        /* HR digest section must never break the rest of the feed */
       }
     }
 

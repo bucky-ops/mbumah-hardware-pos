@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertTriangle, Plus } from 'lucide-react';
-import { CORRECTION_STATUS_STYLES, StatusBadge, kes } from '@/app/hr/payroll/page';
+import { CORRECTION_STATUS_STYLES, StatusBadge, kes } from '@/app/(shell)/hr/payroll/page';
 
 interface CorrectionRow {
   id: string;

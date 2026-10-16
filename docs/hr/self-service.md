@@ -110,17 +110,33 @@ mobile throttling:
 | v2.23.0 poll deferred | 78 | 95 | 96 | 100 | 370 ms | poll deferred to requestIdleCallback |
 | **v2.23.0 final** | **81** | **100** | 96 | 100 | 350 ms | progressbars carry accessible names; weighted a11y failures: none |
 
-Remaining gap to the 90 target (documented blocker, remediation scoped for a
-dedicated perf round):
+**RESOLVED in v2.24.0 — target exceeded (81 → 94).** The documented blocker
+was remediated exactly as scoped, in two layers:
 
-- The self-service portal renders inside the root SPA shell, so every page
-  boots the full POS runtime (auth + workspace stores, api layer, POS tab
-  registry, notification center) — ~2.3 s of main-thread work on the Lighthouse
-  mobile CPU, ~85% of the remaining LCP render delay. Reaching 90 requires
-  route-level bundle scoping (a slim layout for `/employees/me` that skips the
-  POS shell) rather than micro-optimisations; touching the root layout is a
-  cross-cutting change that needs its own QA pass across all workspaces.
-- Next impactful steps in priority order: (1) slim `/employees/me` layout
-  without Providers-dependent widgets (est. +8-12 perf), (2) split the shared
-  chunk the `unused-javascript` audit attributes 600 ms to (est. +3-5),
-  (3) modern browserslist targets to drop the legacy-JS tail (est. +2-3).
+1. Route-level bundle scoping (v2.24.0): the app router is split into route
+   groups — everything POS lives in `src/app/(shell)/` and mounts the full
+   `<Providers>` stack there; `/employees/me` lives in
+   `src/app/(selfservice)/` with a slim `SelfServiceProviders` (theme +
+   crash boundary + console error logging only — no React Query, no auth/app
+   stores, no alert popups, no toaster). Root layout now renders only the
+   document shell. Effect: TBT 350 → 320 ms, main-thread 2.1 → 1.9 s.
+2. The home page is now a SERVER COMPONENT (v2.24.0): the session resolves
+   via `getSessionFromCookies()`, the same `getMyDashboard` service the API
+   route uses assembles the payload, and the HTML streams with real content
+   (`home-view.tsx`, LCP ≈ FCP). The old chain — skeleton, hydrate, fetch,
+   re-render — gated LCP behind ~2 extra seconds. The offline localStorage
+   mirror is kept by a tiny client island (`cache-writer.tsx`); the
+   interactivity-bearing portal pages (payslips, attendance, leave, goals,
+   documents) remain client components.
+
+| run | perf | a11y | BP | SEO | TBT | note |
+|-----|------|------|----|-----|-----|------|
+| v2.23.0 final | 81 | 100 | 96 | 100 | 350 ms | progressbars carry accessible names |
+| v2.24.0 route groups | 81 | 100 | 96 | 100 | 320 ms | boot cost down; LCP still fetch-gated |
+| **v2.24.0 SSR home** | **94** | **100** | 96 | 100 | **170 ms** | LCP 3.9 → 2.5 s; HTML carries the dashboard |
+
+Notes: attendance clock times render with an explicit Africa/Nairobi
+timezone (previously viewer-local — a silent drift for devices off Kenyan
+time). Remaining headroom is the Next.js App Router runtime itself
+(~224 KiB framework chunk, irreducible) and the residual hydration work of
+the client-side portal pages — micro-optimisations only from here.
