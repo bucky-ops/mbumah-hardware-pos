@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -87,5 +89,40 @@ describe('formatB2CRetryWait', () => {
 
   it('never renders negative waits', () => {
     expect(formatB2CRetryWait(-5000)).toBe('0s');
+  });
+});
+
+// v2.34.0 static contracts: per-payslip retry targeting must stay gated,
+// sanitized, and scoped to the retry path only.
+describe('v2.34.0 per-payslip retry contracts', () => {
+  const service = readFileSync(join(process.cwd(), 'src/lib/hr/payroll/disbursement-service.ts'), 'utf8');
+  const route = readFileSync(join(process.cwd(), 'src/app/api/payroll/runs/[id]/disburse-mpesa/route.ts'), 'utf8');
+  const dialog = readFileSync(join(process.cwd(), 'src/components/hr/payroll-run-dialog.tsx'), 'utf8');
+
+  it('the detailIds filter sits inside retryFailedPayrollB2C only', () => {
+    const retryStart = service.indexOf('export async function retryFailedPayrollB2C');
+    const filterAt = service.indexOf('id: { in: detailIds }');
+    expect(retryStart).toBeGreaterThan(-1);
+    expect(filterAt).toBeGreaterThan(retryStart);
+    // The plain disburse sweep (before the retry fn) must stay unfiltered.
+    const disburseSweep = service.slice(0, retryStart);
+    expect(disburseSweep).not.toContain('in: detailIds');
+  });
+
+  it('the route sanitizes detailIds: strings only, deduped, length-capped', () => {
+    expect(route).toContain("typeof v === 'string' && v.length > 0 && v.length <= 64");
+    expect(route).toContain('.slice(0, 50)');
+    expect(route).toContain('[...new Set(');
+  });
+
+  it('only the retry path receives detailIds', () => {
+    expect(route).toContain('retryFailedPayrollB2C(payrollActorContext(session), id, detailIds)');
+    expect(route).toContain('disburseRunViaMpesa(payrollActorContext(session), id))()');
+  });
+
+  it('the row-level Retry button honours the same gate flags', () => {
+    expect(dialog).toContain("b2cStateByPayslip.get(p.id)?.lastStatus === 'FAILED'");
+    expect(dialog).toContain('!b2cStateByPayslip.get(p.id)?.retryBlocked');
+    expect(dialog).toContain('detailIds: [detailId]');
   });
 });

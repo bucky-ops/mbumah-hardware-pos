@@ -540,6 +540,11 @@ export async function summariseRunB2CState(runId: string): Promise<B2CStateSumma
 export async function retryFailedPayrollB2C(
   ctx: RunActorContext,
   runId: string,
+  /** v2.34.0: optional per-payslip targeting from the run dialog's row-level
+   *  Retry buttons. Ids that do not belong to this run are silently dropped
+   *  (the run-wide scan below only sees this run's details anyway); an empty
+   *  or absent list means "every gate-allowed FAILED payslip". */
+  detailIds?: string[],
 ): Promise<B2CDisburseSummary> {
   const run = await db.payrollRun.findFirst({
     where: { id: runId, storeId: ctx.storeId },
@@ -597,6 +602,10 @@ export async function retryFailedPayrollB2C(
       id: { in: failedIds },
       paymentStatus: 'PENDING',
       netPay: { gt: 0 },
+      // v2.34.0: row-level Retry narrows the sweep to the clicked payslip
+      // (ids outside this run simply cannot match failedIds, so no extra
+      // validation pass is needed).
+      ...(detailIds && detailIds.length > 0 ? { id: { in: detailIds } } : {}),
     },
     include: {
       employee: { select: { employeeCode: true, firstName: true, lastName: true, phone: true } },

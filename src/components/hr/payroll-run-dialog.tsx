@@ -171,6 +171,11 @@ export function PayrollRunDialog({
   const [b2cOpen, setB2cOpen] = useState(false);
   const [b2cSummary, setB2cSummary] = useState<B2CSummary | null>(null);
   const [b2cMode, setB2cMode] = useState<'all' | 'retry-failed'>('all');
+  // v2.34.0: row-level retry in flight — the per-payslip Retry button shows
+  // its own spinner instead of disabling every control in the dialog.
+  // (Declared with the other hooks, BEFORE the `!runId` early return, so the
+  // hook order is stable across renders.)
+  const [rowRetryingId, setRowRetryingId] = useState<string | null>(null);
 
   const load = useCallback(async (id: string) => {
     setError(null);
@@ -297,12 +302,26 @@ export function PayrollRunDialog({
 
   const stage = lifecycleStage(status);
 
-  const runB2C = async (mode: 'all' | 'retry-failed' | 'refresh-stuck') => {
-    const result = await act('disburse-mpesa', { mode });
+  const runB2C = async (mode: 'all' | 'retry-failed' | 'refresh-stuck', detailId?: string) => {
+    const result = await act('disburse-mpesa', {
+      mode,
+      // v2.34.0: a row-level Retry targets exactly that payslip; the same
+      // gated retry service validates the backoff/ceiling again server-side.
+      ...(detailId ? { detailIds: [detailId] } : {}),
+    });
     if (result?.ok) {
       const data = (result.body as { data?: B2CSummary }).data;
       if (data) setB2cSummary(data);
       setB2cOpen(false);
+    }
+  };
+
+  const retryOne = async (detailId: string) => {
+    setRowRetryingId(detailId);
+    try {
+      await runB2C('retry-failed', detailId);
+    } finally {
+      setRowRetryingId(null);
     }
   };
 
@@ -630,6 +649,25 @@ export function PayrollRunDialog({
                               })()}
                             </TableCell>
                             <TableCell className="space-x-1 text-right whitespace-nowrap">
+                              {/* v2.34.0: per-payslip Retry — only for payslips
+                                  the shared gate allows right now (FAILED,
+                                  unpaid, under the ceiling, backoff elapsed).
+                                  The run-wide button still exists above. */}
+                              {p.payment.status === 'PENDING' && p.totals.net > 0 &&
+                                b2cStateByPayslip.get(p.id)?.lastStatus === 'FAILED' &&
+                                !b2cStateByPayslip.get(p.id)?.retryBlocked ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40"
+                                  title="Re-send this payslip via M-Pesa B2C (same retry gate as the run-wide action)."
+                                  onClick={() => void retryOne(p.id)}
+                                  disabled={busy || rowRetryingId !== null}
+                                >
+                                  {rowRetryingId === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                  Retry
+                                </Button>
+                              ) : null}
                               <Button variant="ghost" size="sm" onClick={() => void showTrace(p.id)}>
                                 {traceLoading && trace?.id !== p.id ? 'Trace…' : trace?.id === p.id ? 'Hide trace' : 'Trace'}
                               </Button>

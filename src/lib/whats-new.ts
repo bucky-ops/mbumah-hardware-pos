@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.34.0',
+    title: 'Declined leave can be resubmitted in one tap — and failed M-Pesa payslips can be retried individually',
+    bullets: [
+      'Rejected leave requests in your portal now show a "Review & resubmit" button: the request dialog opens pre-filled with the type, dates and your original reason, and the manager\'s note stays visible while you adjust and resubmit.',
+      'Every request card in the portal now carries a status rail (amber pending, emerald approved, rose declined, violet cancelled) so the state reads at a glance.',
+      'In the payroll run dialog, each failed M-Pesa payslip gets its own Retry button — re-send just that one instead of sweeping the whole run; the same backoff and attempt-ceiling gate still protects every send.',
+      'Blocked payslips (backoff window open, or at the 5-attempt ceiling) show exactly why on their row — countdown chips for the former, a manual-review flag for the latter.',
+    ],
+  },
+  {
     version: '2.33.0',
     title: 'Leave cancellations are never silent — and failed M-Pesa retries now pace themselves',
     bullets: [
