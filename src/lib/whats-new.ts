@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.43.0',
+    title: 'Approvers now hear about corrections — no more deciding on stale dates',
+    bullets: [
+      'When a pending leave request is corrected on the HR desk, everyone who was notified of the ORIGINAL request now receives an amber "Corrected - re-review" bell row carrying the full before → after summary — until now only the employee was told, so an approver could approve dates that had already changed.',
+      'The correction bell deep-links straight to the Leave desk, and the actor plus the employee are excluded from the fan-out (nobody is notified about their own action, and the employee already has their own "Corrected by HR" row — no duplicates).',
+      'A grouped email rides along with the bell row, amber-accented and stating plainly: the request keeps its pending status, review the corrected details before deciding.',
+      'Attachments got sharper too: desk-row paperclips now say what is attached and how big ("PDF · 12 KB", "Image · 179 B"), kind-coded to match the chip colors, and image attachments preview inline on the detail dialog and the employee portal card.',
+    ],
+  },
+  {
     version: '2.42.0',
     title: 'Leave attachments — the medical certificate travels with the request',
     bullets: [

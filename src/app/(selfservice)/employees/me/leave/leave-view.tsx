@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, UserCheck } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 import { LeaveAttachmentPicker, LeaveAttachmentChip } from '@/components/hr/leave-attachment-ui';
+import { parseLeaveAttachmentMeta } from '@/lib/hr/leave-attachment';
 
 export interface BalanceDto {
   leaveTypeId: string;
@@ -261,13 +262,24 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                   </div>
                 ) : null}
                 {r.reason ? <p className="mt-1 text-xs text-muted-foreground">“{r.reason}”</p> : null}
-                {/* v2.42.0: the supporting document, kind-coded — one click
-                    opens it in a new tab (data URLs offer a download). */}
+                {/* v2.42.0 + v2.43.0: the supporting document, kind-coded —
+                    one click opens it in a new tab (data URLs offer a
+                    download); image attachments preview inline so the
+                    employee can confirm the right file is on the request. */}
                 {r.attachmentUrl ? (
                   <div className="mt-1.5">
                     <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       <Paperclip className="h-3 w-3" aria-hidden /> Attached document
                     </p>
+                    {parseLeaveAttachmentMeta(r.attachmentUrl)?.kind === 'image' &&
+                    r.attachmentUrl.startsWith('data:image/') ? (
+                      /* eslint-disable-next-line @next/next/no-img-element -- governed 500 KB data URL; next/image adds nothing for an inline evidence preview */
+                      <img
+                        src={r.attachmentUrl}
+                        alt="Attached document preview"
+                        className="mb-1.5 max-h-40 w-full rounded-md border bg-white object-contain dark:bg-background"
+                      />
+                    ) : null}
                     <LeaveAttachmentChip value={r.attachmentUrl} />
                   </div>
                 ) : null}

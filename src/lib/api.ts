@@ -2873,7 +2873,9 @@ export interface NotificationItem {
   // in their name (violet user-check, "Entered by HR" chip, portal link).
   // v2.40.0: 'leave_edited' - requests HR corrected in place (indigo pencil,
   // "Corrected by HR" chip, portal link).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited';
+  // v2.43.0: 'leave_corrected' - approver-facing rows for the same
+  // corrections (amber file-pen, "Corrected - re-review" chip, Payroll desk).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';

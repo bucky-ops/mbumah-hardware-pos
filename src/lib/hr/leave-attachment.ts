@@ -190,3 +190,15 @@ export function formatBytes(bytes: number): string {
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
 }
+
+/** v2.43.0: compact at-a-glance text for row-level attachment markers —
+ *  "PDF · 12 KB" / "Image · 179 B" / "Link" (null = nothing attached).
+ *  Used on desk rows and portal cards so the marker says WHAT is attached
+ *  and HOW BIG, not just that something is. */
+export function describeLeaveAttachmentMarker(value: string | null | undefined): string | null {
+  const meta = parseLeaveAttachmentMeta(value);
+  if (!meta) return null;
+  if (meta.kind === 'pdf') return meta.bytes != null ? `PDF · ${formatBytes(meta.bytes)}` : 'PDF';
+  if (meta.kind === 'image') return meta.bytes != null ? `Image · ${formatBytes(meta.bytes)}` : 'Image';
+  return 'Link';
+}
