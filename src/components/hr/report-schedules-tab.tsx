@@ -26,6 +26,8 @@ import {
   CalendarDays,
   CalendarRange,
   CalendarSync,
+  ChevronDown,
+  ChevronUp,
   CircleAlert,
   CircleCheck,
   CircleX,
@@ -77,6 +79,8 @@ interface DeliveryRow {
   sentAt: string | null;
   createdAt: string;
   recipients: number;
+  // v2.27.0: per-recipient chips (parsed server-side from the joined column).
+  recipientList: string[];
   manual: boolean;
 }
 
@@ -186,7 +190,7 @@ function hourLabel(hourUtc: number): string {
   return `${String(hourUtc).padStart(2, '0')}:00 UTC`;
 }
 
-export function ReportSchedulesTab() {
+export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleId?: string | null } = {}) {
   const [rows, setRows] = useState<ScheduleRow[] | null>(null);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [error, setError] = useState('');
@@ -218,6 +222,13 @@ export function ReportSchedulesTab() {
   const [historyError, setHistoryError] = useState('');
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // v2.27.0: per-recipient expansion inside the history panel (one row →
+  // the individual addresses the attempt was addressed to).
+  const [historyExpandedId, setHistoryExpandedId] = useState<string | null>(null);
+  // v2.27.0: deep-link target highlight (?schedule=<id> from the
+  // notification center's "Manage schedule" affordance).
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+
   // v2.26.0: per-schedule recipient management (PATCH …/schedules/[id]).
   const [recipientsTarget, setRecipientsTarget] = useState<ScheduleRow | null>(null);
   const [recipientsDraft, setRecipientsDraft] = useState('');
@@ -247,6 +258,21 @@ export function ReportSchedulesTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // v2.27.0: deep-link target (?schedule=<id> from the notification center's
+  // "Manage schedule" affordance) — once the rows are loaded, scroll the
+  // matching card into view and keep a violet ring on it briefly so the
+  // operator lands on the exact schedule, not just the tab.
+  useEffect(() => {
+    if (!highlightScheduleId || !rows || rows.length === 0) return;
+    const target = rows.find((r) => r.id === highlightScheduleId);
+    if (!target) return;
+    setHighlightId(target.id);
+    const el = document.getElementById(`schedule-card-${target.id}`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timer = window.setTimeout(() => setHighlightId(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [highlightScheduleId, rows]);
 
   const create = async () => {
     setBusy(true);
@@ -361,12 +387,16 @@ export function ReportSchedulesTab() {
     if (historyId === s.id) {
       setHistoryId(null);
       setHistoryRows(null);
+      // v2.27.0: collapsing the panel also collapses any expanded row.
+      setHistoryExpandedId(null);
       return;
     }
     setHistoryId(s.id);
     setHistoryRows(null);
     setHistoryError('');
     setHistoryLoading(true);
+    // v2.27.0: switching schedules collapses the previous row expansion.
+    setHistoryExpandedId(null);
     try {
       const res = await apiGet<DeliveryRow[]>(`/api/hr/reports/schedules/${s.id}/deliveries?limit=10`);
       setHistoryRows(res);
@@ -478,8 +508,9 @@ export function ReportSchedulesTab() {
           {rows.map((s) => (
             <Card
               key={s.id}
-              className={`gap-3 overflow-hidden py-0 transition-shadow hover:shadow-md ${s.active ? '' : 'opacity-75'}`}
-              aria-label={`${s.reportLabel} schedule`}
+              id={`schedule-card-${s.id}`}
+              className={`gap-3 overflow-hidden py-0 transition-shadow hover:shadow-md ${s.active ? '' : 'opacity-75'} ${highlightId === s.id ? 'ring-2 ring-violet-400 dark:ring-violet-500 ring-offset-2 ring-offset-background' : ''}`}
+              aria-label={`${s.reportLabel} schedule${highlightId === s.id ? ' (highlighted from notification)' : ''}`}
             >
               <div className={`h-1 w-full ${s.active ? 'bg-gradient-to-r from-sky-500 via-violet-500 to-amber-400' : 'bg-muted'}`} />
               <CardHeader className="px-4 pt-3">
@@ -597,33 +628,80 @@ export function ReportSchedulesTab() {
                       </p>
                     ) : (
                       <ul className="divide-y">
-                        {historyRows.map((d) => (
-                          <li
-                            key={d.id}
-                            className="flex items-start justify-between gap-2 py-1.5 transition-colors hover:bg-muted/40"
-                          >
-                            <div className="min-w-0">
-                              <p className="flex items-center gap-1.5">
-                                <Badge variant="outline" className={`px-1 py-0 text-[10px] ${DELIVERY_STATUS_STYLES[d.status] ?? ''}`}>
-                                  {d.status}
-                                </Badge>
-                                <span className="text-muted-foreground">{formatDate(d.createdAt)}</span>
-                                {d.manual ? (
-                                  <span className="rounded bg-sky-100 px-1 text-[10px] text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">manual</span>
-                                ) : null}
-                                <span className="text-muted-foreground">· {d.recipients} recipient(s)</span>
-                              </p>
-                              {d.error ? (
-                                <p className="mt-0.5 line-clamp-2 text-rose-600 dark:text-rose-400" title={d.error}>
-                                  {d.error}
-                                </p>
+                        {historyRows.map((d) => {
+                          // v2.27.0: each attempt expands into per-recipient
+                          // chips — the same outcome applies to every address
+                          // on the attempt (the provider accepts/rejects the
+                          // whole envelope), so the chip carries the row's
+                          // status glyph.
+                          const expanded = historyExpandedId === d.id;
+                          return (
+                            <li key={d.id} className="py-1.5 transition-colors hover:bg-muted/40">
+                              <button
+                                type="button"
+                                onClick={() => setHistoryExpandedId(expanded ? null : d.id)}
+                                aria-expanded={expanded}
+                                aria-label={`${d.status} delivery on ${formatDate(d.createdAt)} to ${d.recipientList.length} recipient(s) — ${expanded ? 'hide' : 'show'} per-recipient details`}
+                                className="flex w-full items-start justify-between gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <div className="min-w-0">
+                                  <p className="flex items-center gap-1.5">
+                                    <Badge variant="outline" className={`px-1 py-0 text-[10px] ${DELIVERY_STATUS_STYLES[d.status] ?? ''}`}>
+                                      {d.status}
+                                    </Badge>
+                                    <span className="text-muted-foreground">{formatDate(d.createdAt)}</span>
+                                    {d.manual ? (
+                                      <span className="rounded bg-sky-100 px-1 text-[10px] text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">manual</span>
+                                    ) : null}
+                                    <span className="text-muted-foreground">· {d.recipientList.length} recipient(s)</span>
+                                  </p>
+                                  {d.error ? (
+                                    <p className="mt-0.5 line-clamp-2 text-rose-600 dark:text-rose-400" title={d.error}>
+                                      {d.error}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <span
+                                  className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
+                                  title={expanded ? 'Hide per-recipient details' : 'Show per-recipient details'}
+                                >
+                                  {expanded ? (
+                                    <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+                                  ) : (
+                                    <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                                  )}
+                                </span>
+                              </button>
+                              {expanded && d.recipientList.length > 0 ? (
+                                <div className="mt-1.5 rounded-md border bg-muted/30 px-2 py-1.5">
+                                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                    Per-recipient · {d.recipientList.length} address{d.recipientList.length === 1 ? '' : 'es'}
+                                  </p>
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {d.recipientList.map((r) => (
+                                      <span
+                                        key={r}
+                                        className={`inline-flex max-w-full items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 font-mono text-[10px] ${
+                                          d.status === 'SENT'
+                                            ? 'border-emerald-200 text-emerald-800 dark:border-emerald-900 dark:text-emerald-200'
+                                            : d.status === 'FAILED'
+                                              ? 'border-rose-200 text-rose-800 dark:border-rose-900 dark:text-rose-200'
+                                              : 'border-amber-200 text-amber-800 dark:border-amber-900 dark:text-amber-200'
+                                        }`}
+                                        title={`${r} — attempt ${d.status}`}
+                                      >
+                                        <span aria-hidden className="font-sans">
+                                          {d.status === 'SENT' ? '✓' : d.status === 'PENDING' ? '…' : '×'}
+                                        </span>
+                                        <span className="truncate">{r}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
                               ) : null}
-                            </div>
-                            <span className="shrink-0 font-mono text-[10px] text-muted-foreground" title="Outbound email provider result">
-                              {d.status === 'SENT' ? '✓' : d.status === 'PENDING' ? '…' : '×'}
-                            </span>
-                          </li>
-                        ))}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </div>

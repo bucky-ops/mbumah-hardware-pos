@@ -22,6 +22,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.27.0',
+    title: 'Know exactly who got the digest — and jump from a notification straight to its schedule',
+    bullets: [
+      'Delivery history rows on the Schedules page now expand: click any attempt to see the individual email addresses it was addressed to, each marked with the send outcome.',
+      'Digest notifications now show whether the email actually went out ("Email sent" / "Email failed") and whether it was a manual send — no more identical-looking rows for healthy and broken deliveries.',
+      'Digest notifications about a schedule get a "Manage schedule" link that opens the Schedules page and highlights the exact schedule card for you.',
+    ],
+  },
+  {
     version: '2.26.0',
     title: 'Delivery ops console: see every email that left the building, and manage digest recipients in place',
     bullets: [

@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.27.0] Delivery intelligence: per-recipient delivery expansion, digest rows that link to their schedule
+
+Feature release (post-EMS polish round). Closes the two remaining delivery-observability gaps from the v2.25.0/v2.26.0 loop: a delivery attempt now expands to show exactly which addresses it was addressed to, and the notification center's digest copies finally tell you what happened to the email — and jump straight to the schedule that produced them.
+
+### Added
+- **Per-recipient delivery expansion** (Reports → Schedules → History): every delivery-history row is now expandable (chevron + `aria-expanded`, full-row button with focus ring) and reveals a per-recipient chip list parsed server-side from the envelope's address column — each chip carries the attempt's outcome glyph (✓/×/…) and a tooltip ("address — attempt FAILED"). The row header now shows the parsed address count instead of the metadata-derived number, so the two can never disagree. Expansion collapses automatically when the panel closes or another schedule's history opens.
+- **Digest-row intelligence in the notification center**: HR digest copies (v2.24.0) previously rendered as generic info rows — a FAILED email looked identical to a healthy one. The `/api/notifications` route now flattens each digest copy's `Notification.metadata` through a pure fail-soft mapper (`parseDigestNotificationExtras`, shape-guarded, allow-list only) into three feed fields: `emailStatus` renders a delivery chip ("Email sent" emerald / "Email failed" rose), `manual` renders a sky "manual" marker, and `scheduleId` renders a violet **"Manage schedule"** affordance next to "Open report" that navigates to `/hr/reports?tab=schedules&schedule=<id>`. Digest rows also gain a violet left accent rail so they scan as a distinct class at a glance.
+- **Per-schedule deep-link highlight** (Schedules tab): the reports page reads a new `?schedule=<id>` query param and passes it into the Schedules tab, which scrolls the matching card into view and ring-highlights it (violet ring, offset) for four seconds — so "Manage schedule" lands you on the exact schedule, not just the tab.
+- **Tests**: 9 new cases (858 total / 46 files) — `hr-schedule-deliveries.test.ts` extends the delivery mapping with `recipientList` parsing (joined pair, messy input with spaces/empty/address-less fragments, single recipient) and the new mapper test file `digest-notification-view.test.ts` covers the full fail-soft contract (valid payloads, null/non-string input, malformed JSON, non-object JSON, shape-guard drops, allow-list behavior).
+- **scripts/verify-v2-27-0.mjs** (`npm run verify:v2-27-0`): static checks over the service parser, the UI expansion + reset semantics, the mapper + route flattening + API types, the notification-center chips/deep link, the reports-page param pass-through, the card highlight, and version metadata.
+
 ## [2.26.0] Delivery ops console: admin email log viewer, digest recipient management, schedule write scope
 
 Feature release (post-EMS polish round). Completes the delivery-observability loop started in v2.25.0 with an ops-facing surface: the Admin tab gains a read-only viewer over the (now durable) email delivery log, scheduled digests gain in-place recipient management with live validation, and schedule writes are finally as fail-closed as schedule sends.

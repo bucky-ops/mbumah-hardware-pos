@@ -2876,6 +2876,11 @@ export interface NotificationItem {
   // v2.24.0: deep link on HR digest rows (open the exact report tab).
   actionUrl?: string;
   actionLabel?: string;
+  // v2.27.0: flattened Notification.metadata on digest rows - delivery
+  // outcome chip, manual marker, and the schedule deep link target.
+  scheduleId?: string;
+  manual?: boolean;
+  emailStatus?: 'SENT' | 'FAILED';
 }
 
 export interface NotificationSummary {
