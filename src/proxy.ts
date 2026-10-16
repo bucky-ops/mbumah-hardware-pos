@@ -176,6 +176,10 @@ const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/logout',
   '/api/payments/mpesa/callback',
+  // v2.21.0: Daraja B2C payroll webhooks - server-to-server (no session),
+  // credentialed inside the routes (Basic auth + optional IP allowlist).
+  '/api/payments/mpesa/b2c/result',
+  '/api/payments/mpesa/b2c/queue-timeout',
   '/api/security/csrf-token',
   // Client error logger - errors can happen before/during auth (e.g. hydration
   // crashes on the login page). Must be public so the error boundary can
@@ -194,6 +198,10 @@ const PUBLIC_PATHS = [
 
 const CSRF_EXEMPT_PATHS = [
   '/api/payments/mpesa/callback',
+  // v2.21.0: Daraja B2C payroll webhooks - Safaricom server calls carry no
+  // CSRF token; auth is enforced by Basic credentials in the routes.
+  '/api/payments/mpesa/b2c/result',
+  '/api/payments/mpesa/b2c/queue-timeout',
   // Client error logger - error boundaries use fire-and-forget fetch()
   // which cannot include a CSRF token (the page may be in a broken state).
   '/api/logs/client-error',
@@ -210,6 +218,7 @@ function getRateLimitTier(pathname: string, method: string): RateLimitTier {
   // tier of 30/min).
   if (pathname === '/api/transactions' && method === 'POST') return 'PAYMENT';
   if (pathname.startsWith('/api/payments/mpesa/stkpush') && method === 'POST') return 'PAYMENT';
+  if (pathname.startsWith('/api/payments/mpesa/b2c/') && method === 'POST') return 'PAYMENT';
   if (pathname.startsWith('/api/products/search')) return 'SEARCH';
   if (pathname.startsWith('/api/whatsapp')) return 'MESSAGING';
   if ((pathname.startsWith('/api/messages') || pathname.startsWith('/api/chat')) && method !== 'GET') return 'MESSAGING';

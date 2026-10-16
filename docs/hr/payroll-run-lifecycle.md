@@ -122,16 +122,43 @@ maker-checked approve → post like any other, and posting marks the correction
 - `PayrollRun.idempotencyKey` is a `@unique` natural key (EMS data model
   delta) for external triggers.
 
-## Manual disbursement
+## Disbursement
 
-`POST /api/payroll/runs/[id]/disburse` marks `PENDING` payslips `PAID` with a
-payment reference and timestamp (POSTED/LOCKED runs only). M-Pesa B2C
-automation remains optional future work and would reuse `MpesaTransaction`.
+Two disbursement paths exist for POSTED/LOCKED runs (both STORE_OWNER,
+`hr.payroll.disburse`):
+
+1. **Manual confirmation** — `POST /api/payroll/runs/[id]/disburse` marks
+   `PENDING` payslips `PAID` with a payment reference and timestamp (bank
+   transfer, cash, or an external payroll platform).
+2. **M-Pesa B2C (v2.21.0)** — `POST /api/payroll/runs/[id]/disburse-mpesa`
+   sends every `PENDING` payslip with net pay above zero to the employee's
+   registered phone number as a Daraja B2C `SalaryPayment`:
+
+   - One payslip has at most one active `MpesaTransaction` (additive nullable
+     `payrollDetailId` column); re-running the action skips, never double-pays.
+   - **Real mode** (Daraja B2C credentials configured): payslips stay `PENDING`
+     until Safaricom calls `/api/payments/mpesa/b2c/result`, which is claimed
+     exactly once per transaction and settles the payslip `PAID` with an
+     `MPESA-<receipt>` reference (append-only bypass, audit logged). Failures
+     (wrong number, unregistered recipient) leave the payslip `PENDING` for
+     retry after the cause is fixed.
+   - **Mock mode** (credentials absent): transactions complete immediately with `SIM…` receipts and payslips settle so QA can exercise the whole loop. Development defaults to mock; a production build must opt in with `MPESA_B2C_ALLOW_MOCK=true` (staging/hermetic QA; the opt-in is recorded in the audit event). Without the opt-in production refuses with `B2C_NOT_CONFIGURED` — money movement is never silently simulated.
+   - Employees without a phone number are **skipped with a reason** (reported
+     in the response summary), not failed; per-employee initiation failures
+     are reported without aborting the batch.
+   - The result webhook reuses the C2B callback security contract (HTTP Basic
+     credentials + optional IP allowlist + SecurityEvent logging).
 
 ## Verification
 
 - `npm test` — `src/tests/lib/payroll-run-lifecycle.test.ts` (22 cases):
   state machine, maker-checker, gate blocking, idempotent balanced posting,
   chart-account readiness, reversal line swap, replacement-run creation.
+- `npm test` — `src/tests/lib/payroll-b2c-disbursement.test.ts` (13 cases):
+  state guard, production mock refusal, phone/amount validation, idempotent
+  re-run, no-phone skip, per-employee failure isolation, mock settlement,
+  webhook settlement exactly once, duplicate delivery, failed-result handling.
 - `npm run verify:payroll-lifecycle` — static contract checks (routes, masking,
   idempotency keys, no float math, audit coverage).
+- `npm run verify:b2c` — static contract checks for the B2C wiring (schema
+  column, Daraja payload, idempotency, webhook auth, UI affordances).

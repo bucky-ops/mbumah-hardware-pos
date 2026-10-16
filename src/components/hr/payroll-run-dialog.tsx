@@ -3,7 +3,7 @@
 // Payroll run detail dialog: lifecycle action bar (maker-checker aware),
 // payslip table with per-payslip trace + PDF, validation issue surfacing.
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -11,8 +11,61 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Banknote, CheckCircle2, FileDown, Lock, Play, Send, ShieldQuestion, Undo2, XCircle } from 'lucide-react';
+import { Banknote, Check, CheckCircle2, FileDown, Loader2, Lock, Play, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/hr/payroll/page';
+
+/** Colored payment status chips (v2.21.0 styling pass). */
+const PAYMENT_STATUS_STYLES: Record<string, string> = {
+  PENDING: 'bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800',
+  PAID: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
+  FAILED: 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
+  HELD: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+};
+
+/** Lifecycle stepper model: which stage is done / current for a run status. */
+const LIFECYCLE_STEPS = [
+  { key: 'prepare', label: 'Prepare' },
+  { key: 'submit', label: 'Submit' },
+  { key: 'approve', label: 'Approve' },
+  { key: 'post', label: 'Post' },
+  { key: 'disburse', label: 'Disburse' },
+  { key: 'lock', label: 'Lock' },
+] as const;
+
+function lifecycleStage(status: string): number {
+  switch (status) {
+    case 'DRAFT':
+    case 'REJECTED':
+      return 0;
+    case 'PENDING_APPROVAL':
+      return 2;
+    case 'APPROVED':
+      return 3;
+    case 'POSTED':
+      return 4;
+    case 'LOCKED':
+      return 7; // every step complete
+    default:
+      return -1; // VOIDED / FAILED: stepper hidden
+  }
+}
+
+function PaymentBadge({ status, reference }: { status: string; reference: string | null }) {
+  const mpesa = reference?.startsWith('MPESA-') ? reference : null;
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      <Badge variant="outline" className={`text-[11px] ${PAYMENT_STATUS_STYLES[status] ?? ''}`}>
+        {status === 'PAID' ? <Check className="mr-1 inline h-3 w-3" aria-hidden /> : null}
+        {status}
+      </Badge>
+      {mpesa && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-400" title="M-Pesa B2C receipt">
+          <Smartphone className="h-3 w-3" aria-hidden /> {mpesa.replace('MPESA-', '')}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface RunDetail {
   id: string;
@@ -57,6 +110,16 @@ interface TraceResponse {
   rateTableIds: string[];
 }
 
+interface B2CSummary {
+  mode: 'daraja' | 'mock';
+  eligible: number;
+  initiated: number;
+  alreadyInitiated: number;
+  skipped: Array<{ employeeCode: string; reason: string }>;
+  failed: Array<{ employeeCode: string; code: string; message: string }>;
+  receipts: Array<{ employeeCode: string; receipt: string }>;
+}
+
 export function PayrollRunDialog({
   runId,
   onClose,
@@ -75,6 +138,8 @@ export function PayrollRunDialog({
   const [rejectReason, setRejectReason] = useState('');
   const [trace, setTrace] = useState<{ id: string; data: TraceResponse } | null>(null);
   const [traceLoading, setTraceLoading] = useState(false);
+  const [b2cOpen, setB2cOpen] = useState(false);
+  const [b2cSummary, setB2cSummary] = useState<B2CSummary | null>(null);
 
   const load = useCallback(async (id: string) => {
     setError(null);
@@ -108,9 +173,16 @@ export function PayrollRunDialog({
     }
   }, [runId, load]);
 
+  // Hooks must run before the early return below (rules-of-hooks).
+  const pendingPayslips = useMemo(
+    () => (payslips ?? []).filter((p) => p.payment.status === 'PENDING' && p.totals.net > 0),
+    [payslips],
+  );
+  const pendingTotal = useMemo(() => pendingPayslips.reduce((s, p) => s + p.totals.net, 0), [pendingPayslips]);
+
   if (!runId) return null;
 
-  const act = async (action: string, body?: Record<string, unknown>) => {
+  const act = async (action: string, body?: Record<string, unknown>): Promise<{ ok: boolean; body: Record<string, unknown> } | null> => {
     setBusy(true);
     setError(null);
     setIssues(null);
@@ -125,7 +197,7 @@ export function PayrollRunDialog({
         error?: string;
         code?: string;
         issues?: ApiIssue[];
-        data?: { replay?: boolean };
+        data?: { replay?: boolean } & Record<string, unknown>;
       };
       if (!res.ok) {
         if (respBody.issues) setIssues(respBody.issues);
@@ -133,15 +205,17 @@ export function PayrollRunDialog({
           respBody.error ||
             `${action} failed (${res.status}).${respBody.code ? ` [${respBody.code}]` : ''}`,
         );
-        return;
+        return { ok: false, body: respBody as Record<string, unknown> };
       }
       if (action === 'validate') {
         setIssues(null);
       }
       await load(runId);
       onChanged();
+      return { ok: true, body: respBody as Record<string, unknown> };
     } catch {
       setError('Network error during the action.');
+      return null;
     } finally {
       setBusy(false);
     }
@@ -167,6 +241,17 @@ export function PayrollRunDialog({
   const can = detail?.can;
   const status = run?.status ?? '';
   const parsedIssues: ApiIssue[] | null = issues ?? (run?.errorMessage ? tryParseIssues(run.errorMessage) : null);
+
+  const stage = lifecycleStage(status);
+
+  const runB2C = async () => {
+    const result = await act('disburse-mpesa', {});
+    if (result?.ok) {
+      const data = (result.body as { data?: B2CSummary }).data;
+      if (data) setB2cSummary(data);
+      setB2cOpen(false);
+    }
+  };
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -205,6 +290,51 @@ export function PayrollRunDialog({
                 </div>
               ))}
             </div>
+
+            {/* Lifecycle stepper (v2.21.0 styling pass) */}
+            {stage >= 0 && (
+              <div className="rounded-lg border bg-muted/30 px-4 py-3" aria-label="Run lifecycle progress">
+                <ol className="flex flex-wrap items-center gap-y-2 text-[11px]">
+                  {LIFECYCLE_STEPS.map((step, i) => {
+                    const done = stage > i + (i >= 4 ? 1 : 0);
+                    const current = !done && (
+                      (i === 0 && (status === 'DRAFT' || status === 'REJECTED')) ||
+                      (i === 1 && status === 'DRAFT') ||
+                      (i === 2 && status === 'PENDING_APPROVAL') ||
+                      (i === 3 && status === 'APPROVED') ||
+                      (i === 4 && status === 'POSTED' && pendingPayslips.length > 0) ||
+                      (i === 5 && status === 'POSTED' && pendingPayslips.length === 0)
+                    );
+                    // POSTED: disburse is current until all pending payslips are settled; lock comes after
+                    const state = done ? 'done' : current ? 'current' : 'todo';
+                    return (
+                      <li key={step.key} className="flex items-center">
+                        {i > 0 && <span aria-hidden className={`mx-1.5 h-px w-5 sm:w-8 ${done ? 'bg-emerald-400' : 'bg-border'}`} />}
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium transition-colors ${
+                            state === 'done'
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                              : state === 'current'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground'
+                          }`}
+                        >
+                          {state === 'done' ? (
+                            <Check className="h-3 w-3" aria-hidden />
+                          ) : state === 'current' ? (
+                            <span className="relative flex h-2 w-2" aria-hidden>
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-foreground opacity-60" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary-foreground" />
+                            </span>
+                          ) : null}
+                          {step.label}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
 
             {/* Lifecycle action bar */}
             <div className="rounded-lg border p-4">
@@ -255,6 +385,19 @@ export function PayrollRunDialog({
                     className="gap-1.5"
                   >
                     <Send className="h-3.5 w-3.5" /> Mark disbursed
+                  </Button>
+                )}
+                {(status === 'POSTED' || status === 'LOCKED') && can?.disburse && pendingPayslips.length > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setB2cSummary(null);
+                      setB2cOpen(true);
+                    }}
+                    disabled={busy}
+                    className="gap-1.5 border-emerald-300 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+                  >
+                    <Smartphone className="h-3.5 w-3.5" /> Disburse via M-Pesa
                   </Button>
                 )}
                 {['DRAFT', 'REJECTED', 'PENDING_APPROVAL', 'APPROVED'].includes(status) && can?.approve && (
@@ -343,7 +486,7 @@ export function PayrollRunDialog({
                             </TableCell>
                             <TableCell className="text-right font-semibold tabular-nums">{kes(p.totals.net)}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-[11px]">{p.payment.status}</Badge>
+                              <PaymentBadge status={p.payment.status} reference={p.payment.reference} />
                             </TableCell>
                             <TableCell className="space-x-1 text-right whitespace-nowrap">
                               <Button variant="ghost" size="sm" onClick={() => void showTrace(p.id)}>
@@ -383,6 +526,120 @@ export function PayrollRunDialog({
               )}
             </div>
           </div>
+        )}
+
+        {/* M-Pesa B2C disbursement confirm (v2.21.0) */}
+        <Dialog open={b2cOpen} onOpenChange={setB2cOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Smartphone className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Disburse via M-Pesa B2C
+              </DialogTitle>
+              <DialogDescription>
+                Sends each pending payslip to the employee&apos;s registered M-Pesa number as a SalaryPayment.
+                Employees without a phone number are skipped and listed in the result. This action is
+                audit-logged and can never double-pay a payslip.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                <p>
+                  <span className="font-semibold tabular-nums">{pendingPayslips.length}</span> payslip(s) ·
+                  total <span className="font-semibold tabular-nums">{kes(pendingTotal)}</span> net pay
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Real mode requires Daraja B2C credentials; the payslips stay PENDING until Safaricom
+                  reports the result. Without credentials (development) the run completes in mock mode.
+                </p>
+              </div>
+              {error && (
+                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                  {error}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setB2cOpen(false)} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy || pendingPayslips.length === 0}
+                  onClick={() => void runB2C()}
+                  className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+                >
+                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Smartphone className="h-3.5 w-3.5" aria-hidden />}
+                  {busy ? 'Sending…' : `Send ${pendingPayslips.length} payment(s)`}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* M-Pesa B2C result summary */}
+        {b2cSummary && (
+          <Dialog open onOpenChange={(v) => !v && setB2cSummary(null)}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {b2cSummary.failed.length === 0 ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  )}
+                  M-Pesa disbursement {b2cSummary.mode === 'mock' ? '(mock mode)' : 'sent'}
+                </DialogTitle>
+                <DialogDescription>
+                  {b2cSummary.initiated} initiated · {b2cSummary.alreadyInitiated} already active ·{' '}
+                  {b2cSummary.skipped.length} skipped · {b2cSummary.failed.length} failed
+                  {b2cSummary.mode === 'daraja' && ' · payslips settle when Safaricom reports the result'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-72 space-y-3 overflow-y-auto text-sm">
+                {b2cSummary.receipts.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed (mock receipts)</p>
+                    <ul className="space-y-1">
+                      {b2cSummary.receipts.map((r) => (
+                        <li key={r.employeeCode} className="flex items-center justify-between gap-2 rounded-md border bg-emerald-50/60 px-2.5 py-1.5 dark:border-emerald-900 dark:bg-emerald-950/30">
+                          <span className="font-medium">{r.employeeCode}</span>
+                          <span className="font-mono text-xs text-emerald-700 dark:text-emerald-300">{r.receipt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {b2cSummary.skipped.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Skipped</p>
+                    <ul className="space-y-1">
+                      {b2cSummary.skipped.map((s) => (
+                        <li key={s.employeeCode} className="rounded-md border px-2.5 py-1.5">
+                          <span className="font-medium">{s.employeeCode}</span>
+                          <span className="text-muted-foreground"> — {s.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {b2cSummary.failed.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Failed</p>
+                    <ul className="space-y-1">
+                      {b2cSummary.failed.map((f) => (
+                        <li key={f.employeeCode} className="rounded-md border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 dark:border-rose-900 dark:bg-rose-950/30">
+                          <span className="font-medium">{f.employeeCode}</span>
+                          <span className="text-rose-700 dark:text-rose-300"> — {f.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => setB2cSummary(null)}>Done</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
 
         {/* Reject with reason */}

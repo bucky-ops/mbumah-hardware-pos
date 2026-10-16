@@ -2,6 +2,27 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.21.0] M-Pesa B2C payroll disbursement + org-console deep links + payroll UI polish
+
+Feature release (post-EMS polish round, spec Phase 4.6 optional M-Pesa B2C). Adds the optional payslip disbursement channel, makes the org-console HR tiles one-click deep links into the exact report, and upgrades the payroll run dialog with a lifecycle stepper, colored payment states, and per-payslip M-Pesa receipts.
+
+### Added
+- **M-Pesa B2C payslip disbursement** (`POST /api/payroll/runs/[id]/disburse-mpesa`, STORE_OWNER + `hr.payroll.disburse`): sends every pending payslip with net pay above zero to the employee's registered number as a Daraja B2C `SalaryPayment`. One payslip has at most one active disbursement transaction (additive nullable `MpesaTransaction.payrollDetailId` column) so re-running the action skips instead of double-paying; employees without a phone number are skipped with a reason and per-employee initiation failures never abort the batch.
+- **Settlement webhooks** (`/api/payments/mpesa/b2c/result`, `/api/payments/mpesa/b2c/queue-timeout`): the result webhook claims the callback exactly once per transaction (atomic `callbackReceived` claim), settles successful payslips `PAID` with an `MPESA-<receipt>` reference through the append-only bypass (audit logged), and leaves failed transfers `PENDING` for retry. Security mirrors the C2B callback contract: HTTP Basic credentials (constant-time compare), optional IP allowlist, SecurityEvent logging on every rejection, rate limited.
+- **Explicit mock mode**: without Daraja B2C credentials the disbursement completes with `SIM…` receipts so QA exercises the full loop; development defaults to mock, a production build must opt in via `MPESA_B2C_ALLOW_MOCK=true` (staging/hermetic QA, audit-recorded), and without the opt-in production refuses with `B2C_NOT_CONFIGURED` — money movement is never silently simulated. Real mode keeps payslips `PENDING` until Safaricom reports the result.
+- **Org-console HR tile deep links**: the five "People & payroll" tiles now link to their exact destination (`?tab=headcount|cost|absence` into /hr/reports, the payroll tile into /hr/payroll, expiry alerts into /hr/assets) with hover/focus affordances and keyboard focus rings; /hr/reports tabs are deep-linkable via `?tab=` (bookmarkable via replaceState, unknown values fall back to headcount).
+- **Payroll run dialog styling pass**: animated lifecycle stepper (Prepare → Submit → Approve → Post → Disburse → Lock) with done/current/todo states and ARIA labelling; colored payment status badges (PENDING slate / PAID emerald / FAILED rose / HELD amber) in light and dark variants; M-Pesa receipt chips on paid payslips; B2C confirmation dialog with the pending payslip count and net total before sending, plus a structured result summary (initiated / already active / skipped / failed / mock receipts).
+- **Tests**: 15 new cases (state guard, production mock refusal + staging opt-in, phone/amount validation, idempotent re-run, no-phone skip, per-employee failure isolation, mock settlement, webhook settlement exactly once, duplicate delivery, failed-result handling, trace-shape gate + stored-columns payslip fallback). Suite: **780 tests / 41 files**.
+- **scripts/verify-b2c.mjs** (`npm run verify:b2c`): static checks over the schema column, Daraja payload, idempotency branch, webhook auth contract, UI affordances, and deep links.
+- **Docs**: docs/hr/payroll-run-lifecycle.md (disbursement section rewritten for both paths), docs/EMS_ENV_AND_DEPLOYMENT_NOTES.md (B2C env variables and webhook registration).
+
+### Security
+- The B2C result webhook stays public for Safaricom but is credentialed exactly like the C2B callback (Basic auth constant-time, IP allowlist, SecurityEvent rows); settlements are idempotent and the payslip-side writes go through the append-only bypass with audit events.
+- Mock disbursements are impossible in production without the explicit `MPESA_B2C_ALLOW_MOCK` opt-in, eliminating any path that could mark payslips paid without a real Daraja transaction or an explicit manual confirmation.
+
+### Fixed
+- **Payslip views degraded to 0.00 when the stored computationTrace was missing or schema-mismatched** (row stubs from external triggers/imports). `buildPayslipView` now falls back to the authoritative `PayrollDetail` columns (the same stored lines the P10 register reads) with engine-stable line codes, keeping the gross − deductions = net identity exact; statutory identifiers stay masked in the fallback path.
+
 ## [2.20.0] EMS HR reporting, P10, org-console tiles, retention & erasure
 
 Feature release (Stage H, EMS Phase 4.8 — final EMS phase). Completes the module with the six governed HR reports, the P10 statutory register reproduced from stored payroll lines, five HR tiles in the organization console, per-record-type retention with legal hold, and Data Protection Act erasure handling with recorded decisions.

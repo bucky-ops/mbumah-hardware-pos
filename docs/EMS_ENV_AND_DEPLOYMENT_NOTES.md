@@ -23,7 +23,11 @@ No new required environment variables are introduced by EMS through 2.19.0. The 
 ## Operational notes
 
 1. Rate table changes are data insertions through the HR settings surface, not code deployments. The rate change runbook lives in docs/hr/payroll-rate-tables.md (written with 2.18.8).
-2. Payroll disbursement via M-Pesa B2C is future work; no env keys are reserved now.
+2. Payroll disbursement via M-Pesa B2C (v2.21.0): the run-level `POST /api/payroll/runs/[id]/disburse-mpesa` action reuses `MpesaTransaction` through an additive nullable `payrollDetailId` column. Configuration:
+   - Reused Daraja credentials: `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_CALLBACK_URL` (the B2C `ResultURL`/`QueueTimeOutURL` are derived by replacing the C2B callback path with `/api/payments/mpesa/b2c/result` and `/api/payments/mpesa/b2c/queue-timeout`).
+   - New B2C-specific variables: `MPESA_INITIATOR_NAME`, and the initiator secret as `MPESA_INITIATOR_PASSWORD` plus the Safaricom X.509 cert (`MPESA_CERT` PEM inline or `MPESA_CERT_PATH`), or a precomputed `MPESA_SECURITY_CREDENTIAL`.
+   - Webhook auth reuses the C2B contract: `MPESA_CALLBACK_USERNAME` / `MPESA_CALLBACK_PASSWORD` (HTTP Basic, constant-time) and optional `MPESA_CALLBACK_IPS` allowlist. Register the result URL with these credentials upstream.
+   - When the B2C credentials are absent the action runs in MOCK mode (SIM receipts, payslips marked PAID immediately) in development; a production build may opt in explicitly for staging/hermetic QA with `MPESA_B2C_ALLOW_MOCK=true` (recorded in the audit event). Otherwise production refuses with `B2C_NOT_CONFIGURED` — money movement is never silently simulated.
 3. Backups: the nightly backup and the pre-update backup both cover EMS tables automatically because they copy the whole database.
 4. Retention: the existing retention cron route is extended in 2.19.0 for EMS record classes.
 

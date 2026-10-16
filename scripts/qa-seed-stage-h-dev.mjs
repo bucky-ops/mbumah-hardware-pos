@@ -69,7 +69,27 @@ async function main() {
           netPay: l.net,
           daysWorked: 22,
           daysPresent: 22,
-          computationTrace: JSON.stringify({ source: 'qa-seed', note: 'stored line for P10 QA' }),
+          // Full-shaped StoredPayslipResult (v2.21.0): the payslip view parses
+          // this first and falls back to the stored columns when it does not
+          // match, so the stub must carry the real cents to render amounts.
+          computationTrace: JSON.stringify({
+            grossCents: Math.round(l.gross * 100),
+            totalDeductionsCents: Math.round(l.ded * 100),
+            netCents: Math.round(l.net * 100),
+            earnings: [
+              { code: 'BASIC', label: 'Basic salary', amountCents: Math.round(l.gross * 0.7 * 100) },
+              { code: 'HOUSE', label: 'House allowance', amountCents: Math.round(l.gross * 0.2 * 100) },
+              { code: 'TRANSPORT', label: 'Transport allowance', amountCents: Math.round(l.gross * 0.1 * 100) },
+            ],
+            deductions: [
+              { code: 'PAYE', label: 'PAYE income tax', amountCents: Math.round(l.paye * 100) },
+              { code: 'SHIF', label: 'Social Health Insurance Fund', amountCents: Math.round(l.nhif * 100) },
+              { code: 'AHL', label: 'Affordable Housing Levy', amountCents: Math.round(l.ahl * 100) },
+              { code: 'NSSF_T1', label: 'NSSF (employee)', amountCents: Math.round(l.nssf * 100) },
+            ],
+            employerContributions: [],
+            engineSteps: ['resolveRates', 'computePayslip'],
+          }),
         },
       });
       void i;

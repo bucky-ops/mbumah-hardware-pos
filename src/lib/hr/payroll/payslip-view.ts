@@ -77,6 +77,66 @@ function maskValue(_value: string | null | undefined): string {
   return PII_MASK;
 }
 
+// ── v2.21.0 stored-columns fallback ─────────────────────────────────────────
+//
+// The payslip view normally renders the stored computationTrace (the exact
+// engine result). When the trace is missing or unparseable (rows written by
+// external triggers, QA fixtures, or any future legacy import) the view must
+// degrade to the AUTHORITATIVE PayrollDetail columns instead of showing
+// zeros - those columns are the same stored lines the P10 register reads.
+// Line detail is reconstructed with the engine's stable codes; the identity
+// gross - deductions = net holds by construction from the stored columns.
+
+interface StoredTraceLine {
+  code: string;
+  label: string;
+  amountCents: number;
+  rateTableId?: string;
+}
+
+interface StoredLines {
+  earnings: StoredTraceLine[];
+  deductions: StoredTraceLine[];
+  employerContributions: StoredTraceLine[];
+  grossCents: number;
+  totalDeductionsCents: number;
+  netCents: number;
+}
+
+function storedLinesFromDetail(detail: Record<string, unknown>): StoredLines {
+  const cents = (v: unknown): number => Math.round(Number(v ?? 0) * 100);
+  const line = (code: string, label: string, v: unknown): StoredTraceLine | null =>
+    cents(v) !== 0 ? { code, label, amountCents: cents(v) } : null;
+
+  const earnings = [
+    line('BASIC', 'Basic salary', detail.basicSalary),
+    line('HOUSE', 'House allowance', detail.houseAllowance),
+    line('TRANSPORT', 'Transport allowance', detail.transportAllowance),
+    line('MEDICAL', 'Medical allowance', detail.medicalAllowance),
+    line('OTHER_ALLOW', 'Other allowances', detail.otherAllowances),
+    line('OVERTIME', 'Overtime', detail.overtimePay),
+  ].filter((l): l is StoredTraceLine => l !== null);
+
+  const deductions = [
+    line('PAYE', 'PAYE income tax', detail.paye),
+    line('NSSF_T1', 'NSSF (employee)', detail.nssf),
+    line('SHIF', 'Social Health Insurance Fund', detail.nhif),
+    line('AHL', 'Affordable Housing Levy', detail.housingLevy),
+    line('PAYE_ARREARS', 'PAYE arrears', detail.payeArrears),
+    line('LOAN', 'Staff loan recovery', detail.loanDeduction),
+    line('OTHER_DED', 'Other deductions', detail.otherDeductions),
+  ].filter((l): l is StoredTraceLine => l !== null);
+
+  return {
+    earnings,
+    deductions,
+    employerContributions: [],
+    grossCents: cents(detail.grossPay),
+    totalDeductionsCents: cents(detail.totalDeductions),
+    netCents: cents(detail.netPay),
+  };
+}
+
 /**
  * Shape a payslip for a viewer. `viewerCanUnmask` must be computed server-side
  * (hr.employee.unmask.pii permission or own-payslip session) - never from a
@@ -100,7 +160,7 @@ export function buildPayslipView(input: {
   employee: PayslipSourceEmployee;
   viewerCanUnmask: boolean;
 }): PayslipView {
-  const result = parseTrace(input.detail.computationTrace);
+  const result = parseTrace(input.detail.computationTrace) ?? storedLinesFromDetail(input.detail as unknown as Record<string, unknown>);
   const statutory: Record<string, string> = {};
   for (const field of PAYSLIP_PII_FIELDS) {
     const raw = (input.employee as unknown as Record<string, unknown>)[field];

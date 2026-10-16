@@ -623,12 +623,17 @@ model MpesaTransaction {
   resultDesc         String?
   callbackReceived   Boolean  @default(false)
   transactionId      String? // Link to SalesTransaction
+  // v2.21.0: payroll B2C disbursement linkage (additive, nullable). Set when
+  // the transaction was initiated by the payroll disbursement flow; the B2C
+  // result webhook uses it to settle the payslip (PayrollDetail.paymentStatus).
+  payrollDetailId    String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([storeId])
   @@index([checkoutRequestId])
   @@index([status])
+  @@index([payrollDetailId])
   // F6-3/F6-4 remediation: one Daraja receipt may only ever settle ONE
   // MpesaTransaction per store. Nullable column ⇒ retries with no receipt
   // yet are unaffected (PostgreSQL/SQLite allow multiple NULLs).

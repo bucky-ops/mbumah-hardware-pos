@@ -167,21 +167,42 @@ function StatCard({
   label,
   value,
   tone,
+  href,
+  title,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   tone?: 'warn';
+  // v2.21.0: optional deep-link. When set the tile becomes a Link with a
+  // focus ring + hover affordance; otherwise it stays a static card.
+  href?: string;
+  title?: string;
 }) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
+  const body = (
+    <>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className={tone === 'warn' ? 'text-amber-600' : 'text-muted-foreground'}>{icon}</span>
         {label}
       </div>
       <p className={`mt-2 text-xl font-semibold tabular-nums ${tone === 'warn' ? 'text-amber-600' : ''}`}>{value}</p>
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link
+        href={href}
+        title={title ?? label}
+        className="group block rounded-lg border bg-card p-4 outline-none transition-all hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        {body}
+        <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          Open <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+        </span>
+      </Link>
+    );
+  }
+  return <div className="rounded-lg border bg-card p-4">{body}</div>;
 }
 
 export function OrgConsole() {
@@ -422,25 +443,31 @@ export function OrgConsole() {
           <section aria-label="HR summary tiles">
             <h2 className="mb-2 text-sm font-semibold text-muted-foreground">People &amp; payroll</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-              <StatCard icon={<Users className="h-4 w-4" aria-hidden="true" />} label="Active headcount" value={String(summary.hr.headcountActive)} />
-              <StatCard icon={<Wallet className="h-4 w-4" aria-hidden="true" />} label="Employment cost (month)" value={formatKES(summary.hr.monthEmploymentCost)} />
+              <StatCard icon={<Users className="h-4 w-4" aria-hidden="true" />} label="Active headcount" value={String(summary.hr.headcountActive)} href="/hr/reports?tab=headcount" title="Open headcount report" />
+              <StatCard icon={<Wallet className="h-4 w-4" aria-hidden="true" />} label="Employment cost (month)" value={formatKES(summary.hr.monthEmploymentCost)} href="/hr/reports?tab=cost" title="Open employment cost report" />
               <StatCard
                 icon={<CalendarClock className="h-4 w-4" aria-hidden="true" />}
                 label="Absence rate (month)"
                 value={`${summary.hr.monthAbsenceRatePct}%`}
                 tone={summary.hr.monthAbsenceRatePct >= 10 ? 'warn' : undefined}
+                href="/hr/reports?tab=absence"
+                title="Open absence report"
               />
               <StatCard
                 icon={<ReceiptText className="h-4 w-4" aria-hidden="true" />}
                 label={summary.hr.latestPayroll ? `Payroll — ${summary.hr.latestPayroll.periodName}` : 'Payroll'}
                 value={summary.hr.latestPayroll ? summary.hr.latestPayroll.status.toLowerCase() : 'no runs yet'}
                 tone={summary.hr.latestPayroll && ['APPROVED', 'PENDING_APPROVAL'].includes(summary.hr.latestPayroll.status) ? 'warn' : undefined}
+                href="/hr/payroll"
+                title="Open the payroll workspace"
               />
               <StatCard
                 icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />}
                 label="Expiry alerts (90d + overdue assets)"
                 value={String(summary.hr.expiryAlerts.documentsExpiring90Days + summary.hr.expiryAlerts.assetsOverdue)}
                 tone={summary.hr.expiryAlerts.documentsExpiring90Days + summary.hr.expiryAlerts.assetsOverdue > 0 ? 'warn' : undefined}
+                href="/hr/assets"
+                title="Resolve in HR assets (documents live on the employee record)"
               />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">

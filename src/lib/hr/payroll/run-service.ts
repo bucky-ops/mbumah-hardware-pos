@@ -88,7 +88,9 @@ export interface PayrollIssue {
   message: string;
 }
 
-interface RunActorContext {
+// v2.21.0: exported so the B2C disbursement service (disbursement-service.ts)
+// can share the exact actor-context shape without redefining it.
+export interface RunActorContext {
   storeId: string;
   organizationId: string;
   actorId: string;
