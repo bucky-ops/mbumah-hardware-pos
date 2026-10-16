@@ -198,6 +198,12 @@ jobs:
           bun run verify:release-selection
           bun run verify:windows-build
 
+      # v2.37.0: bun.lock ↔ package-lock.json parity. The repo installs with
+      # bun in CI but npm locally; a dependency added to only one lockfile
+      # makes the two resolve different trees (has burned real time before).
+      - name: Verify lockfile parity (bun.lock ↔ package-lock.json)
+        run: node scripts/check-lockfile-drift.mjs
+
       - name: Check for hardcoded secrets
         run: |
           echo "Scanning for potential hardcoded secrets..."

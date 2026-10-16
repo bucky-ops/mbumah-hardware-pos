@@ -63,10 +63,12 @@ vi.mock('@/lib/hr/reports', () => ({
   turnoverReport: vi.fn(),
   timeToHireReport: vi.fn(),
   statutoryLiabilityReport: vi.fn(),
+  leaveUtilisationReport: vi.fn(),
 }));
 
 import { sendEmail } from '@/lib/email-service';
 import { hrAudit } from '@/lib/hr/audit';
+import { leaveUtilisationReport } from '@/lib/hr/reports';
 import {
   validateScheduleInput,
   isScheduleDue,
@@ -383,5 +385,125 @@ describe('sendScheduleNow', () => {
     expect(db.notification.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ category: 'HR', userId: 'user-owner' }) }),
     );
+  });
+});
+
+describe('leave-utilisation digest (v2.37.0, year-keyed)', () => {
+  // The reports module is vi.mock'ed at the top of this file; the static
+  // import keeps the real signature, so cast for mock control (same pattern
+  // as sendEmail above).
+  const leaveMock = leaveUtilisationReport as unknown as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, messageId: 'm-1' });
+  });
+
+  const dto = () => ({
+    scope: 'ORG',
+    year: 2026,
+    years: [2026],
+    rows: [{ employeeCode: 'MBH-1-001', jobTitle: 'Store Manager', storeName: 'Juja', typeName: 'Annual Leave', allocated: 21, carried: 0, used: 5, pending: 2, available: 14, committedPct: 33.3, flags: [] }],
+    totals: { entitlement: 145, used: 8, pending: 4, available: 696, committedPct: 8.3, overdrawn: 0, exhausted: 1, low: 2, tracked: 25 },
+    byType: [
+      { type: 'Annual Leave', code: 'ANNUAL', allocated: 105, carried: 0, used: 8, pending: 4, available: 93, committedPct: 11.4 },
+      { type: 'Sick Leave', code: 'SICK', allocated: 40, carried: 0, used: 0, pending: 0, available: 40, committedPct: 0 },
+    ],
+    byStore: [{ store: 'Juja', allocated: 145, carried: 0, used: 8, pending: 4, available: 133 }],
+  });
+
+  it('builds a leave-year digest: year label, totals headline, byType table', async () => {
+    leaveMock.mockResolvedValue(dto());
+    const digest = await buildDigestData(
+      { organizationId: 'org-1', storeId: null, reportKey: 'leave-utilisation', frequency: 'WEEKLY' },
+      NOW,
+    );
+    // The session sweeps with the CURRENT UTC year of `now` (2026) and the
+    // schedule's store scope.
+    expect(leaveUtilisationReport).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: 'org-1' }),
+      2026,
+      { storeId: null },
+    );
+    expect(digest).toMatchObject({
+      reportLabel: 'Leave balances',
+      periodLabel: 'Leave year 2026', // year-keyed, NOT the period label
+      frequencyLabel: 'WEEKLY',
+      scopeLabel: 'All branches',
+    });
+    expect(digest?.headline.map((h) => h.label)).toEqual(['Tracked rows', 'Liability days', 'Committed', 'Over-drawn', 'Pending days', 'Exhausted / low']);
+    expect(digest?.headline.find((h) => h.label === 'Liability days')?.value).toBe('696');
+    expect(digest?.headline.find((h) => h.label === 'Committed')?.value).toBe('8.3%');
+    expect(digest?.headline.find((h) => h.label === 'Exhausted / low')?.value).toBe('1 / 2');
+    expect(digest?.table?.columns).toEqual(['Type', 'Allocated', 'Carried', 'Used', 'Pending', 'Available', 'Committed %']);
+    expect(digest?.table?.rows[0]).toEqual(['Annual Leave', '105', '0', '8', '4', '93', '11.4%']);
+    expect(digest?.table?.caption).toBe('Entitlement by leave type (2026)');
+  });
+
+  it('narrows to the store scope and stays aggregate-only (no employee rows leak)', async () => {
+    leaveMock.mockResolvedValue({ ...dto(), year: 2026 });
+    const digest = await buildDigestData(
+      { organizationId: 'org-1', storeId: 'store-9', reportKey: 'leave-utilisation', frequency: 'MONTHLY' },
+      NOW,
+    );
+    expect(leaveUtilisationReport).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'BRANCH_MANAGER' }),
+      2026,
+      { storeId: 'store-9' },
+    );
+    // The digest carries NO per-employee rows — the DTO's employee-level
+    // `rows` array must never reach the email (only byType aggregates do).
+    const flat = JSON.stringify(digest);
+    expect(flat).not.toContain('MBH-1-001');
+    expect(flat).not.toContain('Store Manager');
+  });
+
+  it('returns null when the report returns null (fail-closed scope)', async () => {
+    leaveMock.mockResolvedValue(null);
+    const digest = await buildDigestData(
+      { organizationId: 'org-1', storeId: null, reportKey: 'leave-utilisation', frequency: 'DAILY' },
+      NOW,
+    );
+    expect(digest).toBeNull();
+  });
+
+  it('sweeps a due leave-utilisation schedule to SENT with the Leave balances subject', async () => {
+    leaveMock.mockResolvedValue(dto());
+    db.hrReportSchedule.findMany.mockResolvedValue([
+      {
+        id: 'sched-leave',
+        organizationId: 'org-1',
+        storeId: null,
+        reportKey: 'leave-utilisation',
+        frequency: 'WEEKLY',
+        recipients: JSON.stringify(['owner@mbumah.co.ke']),
+        weekday: 3,
+        dayOfMonth: null,
+        hourUtc: 3,
+        active: true,
+        lastRunAt: null,
+        lastStatus: null,
+        lastError: null,
+      },
+    ]);
+    db.organization.findUnique.mockResolvedValue({ name: 'MBUMAH Hardware' });
+    const result = await runDueHrReportSchedules(NOW);
+    expect(result.sent).toBe(1);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const call = (sendEmail as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.subject).toBe('Leave balances digest — MBUMAH Hardware (Leave year 2026)');
+    expect(call.type).toBe('HR_REPORT_DIGEST');
+    expect(call.html).toContain('Entitlement by leave type');
+  });
+
+  it('schedules accept the leave-utilisation report key', () => {
+    const v = validateScheduleInput({
+      reportKey: 'leave-utilisation',
+      frequency: 'MONTHLY',
+      recipients: ['hr@mbumah.co.ke'],
+      dayOfMonth: 1,
+      hourUtc: 6,
+    });
+    expect(v.reportKey).toBe('leave-utilisation');
   });
 });

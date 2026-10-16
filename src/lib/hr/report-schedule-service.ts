@@ -31,6 +31,7 @@ import {
   absenceReport,
   employmentCostReport,
   headcountReport,
+  leaveUtilisationReport,
   statutoryLiabilityReport,
   timeToHireReport,
   turnoverReport,
@@ -44,6 +45,7 @@ export const HR_SCHEDULE_REPORTS = [
   'turnover',
   'time-to-hire',
   'statutory-liability',
+  'leave-utilisation',
 ] as const;
 export type HrScheduleReportKey = (typeof HR_SCHEDULE_REPORTS)[number];
 
@@ -57,6 +59,7 @@ export const REPORT_LABELS: Record<HrScheduleReportKey, string> = {
   turnover: 'Turnover',
   'time-to-hire': 'Time to hire',
   'statutory-liability': 'Statutory liability',
+  'leave-utilisation': 'Leave balances',
 };
 
 export class HrScheduleError extends Error {
@@ -521,6 +524,32 @@ export async function buildDigestData(
         },
       };
     }
+    case 'leave-utilisation': {
+      // v2.37.0: the only YEAR-KEYED schedule — balances are calendar-year
+      // scoped, NOT period-keyed, so the digest re-computes for the current
+      // UTC leave year on every fire and says so in the period label.
+      const r = await leaveUtilisationReport(session, now.getUTCFullYear(), { storeId: schedule.storeId });
+      if (!r) return null;
+      const pct = (v: number) => `${Math.round(v * 10) / 10}%`;
+      return {
+        ...base,
+        reportLabel: REPORT_LABELS['leave-utilisation'],
+        periodLabel: `Leave year ${r.year}`,
+        headline: [
+          { label: 'Tracked rows', value: String(r.totals.tracked) },
+          { label: 'Liability days', value: String(r.totals.available) },
+          { label: 'Committed', value: pct(r.totals.committedPct) },
+          { label: 'Over-drawn', value: String(r.totals.overdrawn) },
+          { label: 'Pending days', value: String(r.totals.pending) },
+          { label: 'Exhausted / low', value: `${r.totals.exhausted} / ${r.totals.low}` },
+        ],
+        table: {
+          caption: `Entitlement by leave type (${r.year})`,
+          columns: ['Type', 'Allocated', 'Carried', 'Used', 'Pending', 'Available', 'Committed %'],
+          rows: r.byType.map((t) => [t.type, String(t.allocated), String(t.carried), String(t.used), String(t.pending), String(t.available), pct(t.committedPct)]),
+        },
+      };
+    }
     default:
       return null;
   }
@@ -569,6 +598,7 @@ export const REPORT_KEY_TO_TAB: Record<HrScheduleReportKey, string> = {
   turnover: 'turnover',
   'time-to-hire': 'tth',
   'statutory-liability': 'statutory',
+  'leave-utilisation': 'leave',
 };
 
 function digestHeadlines(digest: HrReportDigestData): string {
