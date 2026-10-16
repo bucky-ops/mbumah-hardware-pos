@@ -50,7 +50,14 @@ vi.mock('@/lib/mpesa-daraja', () => ({
   },
 }));
 
-import { disburseRunViaMpesa, settlePayrollB2CResult } from '@/lib/hr/payroll/disbursement-service';
+import {
+  disburseRunViaMpesa,
+  settlePayrollB2CResult,
+  retryFailedPayrollB2C,
+  refreshStuckPayrollB2C,
+  summariseRunB2CState,
+  B2C_STALE_PROCESSING_MS,
+} from '@/lib/hr/payroll/disbursement-service';
 import { PayrollLifecycleError } from '@/lib/hr/payroll/run-service';
 import { initiatePayrollB2C } from '@/lib/mpesa-b2c';
 import { hrAudit } from '@/lib/hr/audit';
@@ -369,5 +376,152 @@ describe('settlePayrollB2CResult', () => {
     const outcome = await settlePayrollB2CResult({ Result: { ResultCode: 0 } });
     expect(outcome).toMatchObject({ settled: false, outcome: 'UNKNOWN' });
     expect(db.mpesaTransaction.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+
+// ── v2.22.0: retry-failed + stuck-status recovery ────────────────────────────
+
+describe('retryFailedPayrollB2C', () => {
+  it('rejects with NOTHING_TO_RETRY when no payslip has a failed attempt', async () => {
+    db.payrollRun.findFirst.mockResolvedValue(runFixture('POSTED'));
+    db.payrollDetail.findMany.mockResolvedValueOnce([{ id: 'detail-1' }]);
+    db.mpesaTransaction.findMany.mockResolvedValueOnce([{ payrollDetailId: 'detail-1', status: 'COMPLETED' }]);
+    await expect(retryFailedPayrollB2C(CTX, 'run-1')).rejects.toMatchObject({ code: 'NOTHING_TO_RETRY', status: 409 });
+  });
+
+  it('re-initiates only payslips whose latest attempt FAILED and settles them in mock mode', async () => {
+    setNodeEnv('development');
+    // Earlier tests install persistent findFirst mocks (clearAllMocks keeps
+    // implementations) — reset so initiatePayrollB2C's idempotency lookup
+    // sees no active transaction for the retryable payslip.
+    db.mpesaTransaction.findFirst.mockReset().mockResolvedValue(undefined);
+    db.payrollRun.findFirst.mockResolvedValue(runFixture('POSTED'));
+    // runDetailIds → run payslips
+    db.payrollDetail.findMany.mockResolvedValueOnce([{ id: 'detail-1' }, { id: 'detail-2' }]);
+    // latest tx per payslip: detail-1 FAILED (retryable), detail-2 COMPLETED (untouched)
+    db.mpesaTransaction.findMany.mockResolvedValueOnce([
+      { payrollDetailId: 'detail-1', status: 'COMPLETED' },
+      { payrollDetailId: 'detail-1', status: 'FAILED' },
+      { payrollDetailId: 'detail-2', status: 'COMPLETED' },
+    ]);
+    // retryable details fetch (employee + money columns)
+    db.payrollDetail.findMany.mockResolvedValueOnce([
+      detailFixture({ id: 'detail-1', transactions: undefined }),
+    ]);
+    db.payrollDetail.count.mockResolvedValue(0);
+    db.payrollDetail.update.mockResolvedValue({});
+    db.mpesaTransaction.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({ id: 'tx-new', ...args.data }));
+    db.payrollRun.update.mockResolvedValue({});
+
+    const summary = await retryFailedPayrollB2C(CTX, 'run-1');
+    expect(summary.mode).toBe('mock');
+    expect(summary.eligible).toBe(1);
+    expect(summary.initiated).toBe(1);
+    expect(summary.receipts).toHaveLength(1);
+    // Payslip settled PAID with the mock receipt
+    expect(db.payrollDetail.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paymentStatus: 'PAID' }) }),
+    );
+    // paidAt stamped when nothing remains pending
+    expect(db.payrollRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paidAt: expect.any(Date) }) }),
+    );
+    // Audit carries the retry marker
+    expect(hrAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ b2cRetry: true }) }),
+    );
+  });
+
+  it('never touches a payslip with an active PROCESSING transaction', async () => {
+    setNodeEnv('development');
+    db.payrollRun.findFirst.mockResolvedValue(runFixture('POSTED'));
+    db.payrollDetail.findMany.mockResolvedValueOnce([{ id: 'detail-1' }]);
+    db.mpesaTransaction.findMany.mockResolvedValueOnce([{ payrollDetailId: 'detail-1', status: 'PROCESSING' }]);
+    await expect(retryFailedPayrollB2C(CTX, 'run-1')).rejects.toMatchObject({ code: 'NOTHING_TO_RETRY' });
+  });
+});
+
+describe('summariseRunB2CState', () => {
+  it('aggregates per-payslip B2C state without PII', async () => {
+    const now = Date.now();
+    db.payrollDetail.findMany.mockResolvedValueOnce([
+      { id: 'd1', paymentStatus: 'PENDING' },
+      { id: 'd2', paymentStatus: 'PENDING' },
+      { id: 'd3', paymentStatus: 'PAID' },
+    ]);
+    db.mpesaTransaction.findMany.mockResolvedValueOnce([
+      { payrollDetailId: 'd1', status: 'COMPLETED', createdAt: new Date(now - 120_000), resultDesc: null },
+      { payrollDetailId: 'd1', status: 'FAILED', createdAt: new Date(now - 60_000), resultDesc: 'recipient not registered' },
+      { payrollDetailId: 'd2', status: 'PROCESSING', createdAt: new Date(now - 30 * 60_000), resultDesc: null },
+      { payrollDetailId: 'd3', status: 'COMPLETED', createdAt: new Date(now - 90_000), resultDesc: null },
+    ]);
+    const state = await summariseRunB2CState('run-1');
+    expect(state.failed).toBe(1);
+    expect(state.processing).toBe(1);
+    expect(state.staleProcessing).toBe(1); // 30 min > 10 min threshold
+    expect(state.completed).toBe(1);
+    const failed = state.perPayslip.find((p) => p.payrollDetailId === 'd1');
+    expect(failed).toMatchObject({ attempts: 2, lastStatus: 'FAILED', settled: false });
+    // No phone numbers / names / employee codes in the payload
+    expect(JSON.stringify(state)).not.toMatch(/0712|Wanjiku|MBM-JUJ/);
+  });
+});
+
+describe('refreshStuckPayrollB2C', () => {
+  it('mock mode resolves a stuck PROCESSING transaction and settles the payslip', async () => {
+    setNodeEnv('development');
+    db.payrollRun.findFirst.mockResolvedValue(runFixture('POSTED'));
+    db.payrollDetail.findMany.mockResolvedValueOnce([{ id: 'detail-stuck' }]);
+    db.mpesaTransaction.findMany.mockResolvedValueOnce([
+      {
+        id: 'tx-stuck',
+        checkoutRequestId: 'pb2c-stuck',
+        payrollDetailId: 'detail-stuck',
+        status: 'PROCESSING',
+        callbackReceived: false,
+        createdAt: new Date(Date.now() - B2C_STALE_PROCESSING_MS - 60_000),
+      },
+    ]);
+    // codeById + paidStatus map fetch
+    db.payrollDetail.findMany.mockResolvedValueOnce([
+      { id: 'detail-stuck', paymentStatus: 'PENDING', employee: { employeeCode: 'MBM-JUJ-E002' } },
+    ]);
+    // queryPayrollB2CStatus mock path: locate the transaction, then complete it
+    db.mpesaTransaction.findFirst.mockResolvedValue({ id: 'tx-stuck', callbackReceived: false, status: 'PROCESSING' });
+    db.mpesaTransaction.update.mockResolvedValue({});
+    db.payrollDetail.update.mockResolvedValue({});
+
+    const result = await refreshStuckPayrollB2C(CTX, 'run-1');
+    expect(result.mode).toBe('mock');
+    expect(result.queried).toBe(1);
+    expect(result.settled).toBe(1);
+    expect(result.receipts[0]).toMatchObject({ employeeCode: 'MBM-JUJ-E002' });
+    expect(db.payrollDetail.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paymentStatus: 'PAID' }) }),
+    );
+    expect(hrAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ b2cStatusQuery: true, settled: 1 }) }),
+    );
+  });
+
+  it('ignores fresh PROCESSING transactions (below the staleness threshold)', async () => {
+    setNodeEnv('development');
+    db.mpesaTransaction.findFirst.mockReset().mockResolvedValue(undefined);
+    db.payrollRun.findFirst.mockResolvedValue(runFixture('POSTED'));
+    db.payrollDetail.findMany.mockResolvedValueOnce([{ id: 'detail-1' }]);
+    db.mpesaTransaction.findMany.mockResolvedValueOnce([
+      {
+        id: 'tx-fresh',
+        checkoutRequestId: 'pb2c-fresh',
+        payrollDetailId: 'detail-1',
+        status: 'PROCESSING',
+        callbackReceived: false,
+        createdAt: new Date(Date.now() - 60_000),
+      },
+    ]);
+    const result = await refreshStuckPayrollB2C(CTX, 'run-1');
+    expect(result.queried).toBe(0);
+    expect(result.message).toBe('No stuck transactions to re-query.');
   });
 });

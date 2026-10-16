@@ -309,3 +309,135 @@ export async function initiatePayrollB2C(req: PayrollB2CRequest): Promise<Payrol
     alreadyInitiated: false,
   };
 }
+
+// ── B2C transaction status re-query (v2.22.0) ───────────────────────────────
+
+export interface B2CStatusQueryResult {
+  mode: 'daraja' | 'mock';
+  /** Daraja accepted the re-query; the definitive result still arrives on the result webhook. */
+  accepted: boolean;
+  status: 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  receiptNumber: string | null;
+  message: string;
+}
+
+/**
+ * Re-query Daraja for a stuck B2C disbursement (transaction PROCESSING with
+ * no result callback). Uses the Daraja Transaction Status endpoint
+ * (/mpesa/transactionStatus/v1/query, CommandID TransactionStatusQuery) keyed
+ * by our OriginatorConversationID. The query is itself asynchronous: an
+ * accepted query makes Safaricom re-emit the result on our ResultURL, where
+ * the existing webhook settlement path applies unchanged.
+ *
+ * Mock mode (no credentials, staging/QA only) resolves the stuck transaction
+ * as COMPLETED with a simulated receipt immediately, so hermetic QA can
+ * exercise the full settle path without Daraja.
+ */
+export async function queryPayrollB2CStatus(params: {
+  originatorConversationId: string;
+  storeId: string;
+  employeeCode: string;
+}): Promise<B2CStatusQueryResult> {
+  if (isB2CConfigured()) {
+    const baseUrl = process.env.NODE_ENV === 'production' ? 'https://api.safaricom.co.ke' : 'https://sandbox.safaricom.co.ke';
+    const consumerKey = process.env.MPESA_CONSUMER_KEY as string;
+    const consumerSecret = process.env.MPESA_CONSUMER_SECRET as string;
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+    const tokenRes = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    if (!tokenRes.ok) throw new Error(`Daraja OAuth failed: ${tokenRes.status}`);
+    const tokenJson = (await tokenRes.json()) as { access_token?: string };
+    if (!tokenJson.access_token) throw new Error('Daraja OAuth returned no access_token.');
+
+    const securityCredential = buildSecurityCredential();
+    if (!securityCredential) throw new Error('B2C security credential could not be built.');
+    const callbackBase = process.env.MPESA_CALLBACK_URL
+      ? process.env.MPESA_CALLBACK_URL.replace(/\/api\/payments\/mpesa\/callback$/, '')
+      : process.env.APP_URL || 'https://example.com';
+
+    const res = await fetch(`${baseUrl}/mpesa/transactionStatus/v1/query`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenJson.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        Initiator: process.env.MPESA_INITIATOR_NAME,
+        SecurityCredential: securityCredential,
+        CommandID: 'TransactionStatusQuery',
+        TransactionID: params.originatorConversationId,
+        PartyA: process.env.MPESA_SHORTCODE,
+        IdentifierType: '4', // 4 = organisation shortcode
+        ResultURL: `${callbackBase}/api/payments/mpesa/b2c/result`,
+        QueueTimeOutURL: `${callbackBase}/api/payments/mpesa/b2c/queue-timeout`,
+        Remarks: `Status query ${params.employeeCode}`.slice(0, 100),
+        Occasion: 'Payroll',
+      }),
+    });
+    const raw = await res.text();
+    let json: Record<string, string> = {};
+    try {
+      json = JSON.parse(raw) as Record<string, string>;
+    } catch {
+      // keep raw for diagnostics
+    }
+    if (!res.ok || (json.ResponseCode && json.ResponseCode !== '0')) {
+      throw new Error(`Daraja status query rejected: ${res.status} ${raw.slice(0, 200)}`);
+    }
+    await systemLog({
+      action: 'MPESA_B2C_PAYROLL_STATUS_QUERY',
+      component: LogComponent.PAYMENT,
+      severity: LogSeverity.INFO,
+      message: `Payroll B2C status re-query accepted for ${params.employeeCode}, conversation ${params.originatorConversationId}`,
+      storeId: params.storeId,
+      metadata: { conversationId: params.originatorConversationId, mode: 'daraja' },
+    }).catch(() => {});
+    return {
+      mode: 'daraja',
+      accepted: true,
+      status: 'PROCESSING',
+      receiptNumber: null,
+      message: json.ResponseDescription || 'Status query accepted; Safaricom will re-send the result.',
+    };
+  }
+
+  // MOCK PATH: resolve the stuck transaction immediately.
+  const mockReceipt = `SIM${Date.now()}${Math.floor(Math.random() * 900 + 100)}`;
+  const row = await db.mpesaTransaction.findFirst({
+    where: { checkoutRequestId: params.originatorConversationId },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!row) throw new Error('Stuck transaction not found for the given conversation id.');
+  if (row.callbackReceived) {
+    return {
+      mode: 'mock',
+      accepted: true,
+      status: (row.status as B2CStatusQueryResult['status']) ?? 'PROCESSING',
+      receiptNumber: row.mpesaReceiptNumber,
+      message: 'Transaction already settled.',
+    };
+  }
+  await db.mpesaTransaction.update({
+    where: { id: row.id },
+    data: {
+      status: 'COMPLETED',
+      resultCode: '0',
+      resultDesc: 'Mock B2C status query resolved the stuck transaction (development mode).',
+      callbackReceived: true,
+      mpesaReceiptNumber: mockReceipt,
+    },
+  });
+  await systemLog({
+    action: 'MPESA_B2C_PAYROLL_MOCK',
+    component: LogComponent.PAYMENT,
+    severity: LogSeverity.WARN,
+    message: `Payroll B2C MOCK status query completed for ${params.employeeCode}, receipt ${mockReceipt}`,
+    storeId: params.storeId,
+    metadata: { conversationId: params.originatorConversationId, amount: Number(row.amount), mode: 'mock' },
+  }).catch(() => {});
+  return {
+    mode: 'mock',
+    accepted: true,
+    status: 'COMPLETED',
+    receiptNumber: mockReceipt,
+    message: 'Mock status query completed the stuck disbursement.',
+  };
+}

@@ -65,7 +65,13 @@ export const HR_PERMISSIONS: Record<string, readonly PlatformRole[]> = {
   'hr.documents.read.own': ['CASHIER', 'EMPLOYEE', 'BRANCH_MANAGER', 'ACCOUNTANT', 'HR_MANAGER', 'STORE_OWNER'],
 
   // Reports, settings, rate tables
-  'hr.report.branch': ['HR_MANAGER', 'BRANCH_MANAGER'],
+  // v2.22.0 QA fix: the report ROUTES gate on hr.report.branch while the
+  // service's resolveReportScope grants ORG scope to STORE_OWNER/ACCOUNTANT —
+  // the guard was denying them before the scope resolver ever ran (spec:
+  // "ORG=STORE_OWNER/HR_MANAGER/ACCOUNTANT/SUPER_ADMIN, BRANCH=BRANCH_MANAGER,
+  // else 403"). Both roles belong here; the scope resolver stays the
+  // fail-closed authority for how much each caller sees.
+  'hr.report.branch': ['HR_MANAGER', 'BRANCH_MANAGER', 'ACCOUNTANT', 'STORE_OWNER'],
   'hr.report.all': ['HR_MANAGER', 'ACCOUNTANT', 'STORE_OWNER'],
   'hr.settings.manage': ['SUPER_ADMIN'],
   'hr.rate-table.manage': ['SUPER_ADMIN'],

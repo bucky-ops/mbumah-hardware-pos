@@ -23,6 +23,9 @@ import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { GET as reconciliationGET } from '@/app/api/cron/reconciliation/route';
 import { GET as retentionGET } from '@/app/api/cron/retention/route';
+// v2.22.0: scheduled HR report email digests ride the same nightly dispatch
+// (no additional Vercel cron entry on the Hobby plan).
+import { GET as hrDigestGET } from '@/app/api/cron/hr-report-digests/route';
 
 export const dynamic = 'force-dynamic';
 // Both sub-routes declare maxDuration 60; parallel execution keeps the
@@ -99,6 +102,7 @@ async function nightlyCronHandler(...args: unknown[]): Promise<Response> {
   const results = await dispatchAll(request, [
     { name: 'reconciliation', run: () => reconciliationGET(request) },
     { name: 'retention', run: () => retentionGET(request) },
+    { name: 'hr-report-digests', run: () => hrDigestGET(request) },
   ]);
 
   const allOk = results.every((r) => r.ok);

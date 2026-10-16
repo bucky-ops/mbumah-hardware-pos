@@ -578,3 +578,101 @@ export function receiptText(data: ReceiptTemplateData): string {
   lines.push(`Thank you for shopping with us!`);
   return lines.join('\n');
 }
+
+// ── HR report digest (v2.22.0, scheduled /hr/reports digests) ────────────────
+
+export interface HrDigestLine {
+  label: string;
+  value: string;
+}
+
+export interface HrDigestTable {
+  caption: string;
+  columns: string[];
+  rows: Array<Array<string | number>>;
+}
+
+export interface HrReportDigestData {
+  organizationName: string;
+  reportLabel: string;
+  periodLabel: string;
+  scopeLabel: string;
+  headline: HrDigestLine[];
+  table?: HrDigestTable;
+  frequencyLabel: string;
+}
+
+/** Escape user-derived text for safe interpolation into HTML. */
+function esc(v: string | number): string {
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function hrReportDigestTemplate(data: HrReportDigestData): string {
+  const headlineRows = data.headline
+    .map(
+      (h) => `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid ${BRAND.border};color:${BRAND.textMuted};font-size:13px;">${esc(h.label)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid ${BRAND.border};text-align:right;font-weight:700;font-size:13px;">${esc(h.value)}</td>
+        </tr>`,
+    )
+    .join('');
+
+  const tableHtml = data.table
+    ? `
+        <h3 style="margin:20px 0 8px 0;font-size:14px;">${esc(data.table.caption)}</h3>
+        <table style="width:100%;font-size:13px;">
+          <thead>
+            <tr>
+              ${data.table.columns.map((c) => `<th style="padding:8px 12px;background:${BRAND.bg};text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:${BRAND.textMuted};">${esc(c)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${data.table.rows
+              .map(
+                (row) => `
+            <tr>
+              ${row.map((cell, i) => `<td style="padding:7px 12px;border-bottom:1px solid ${BRAND.border};${i > 0 ? 'text-align:right;' : ''}">${esc(cell)}</td>`).join('')}
+            </tr>`,
+              )
+              .join('')}
+          </tbody>
+        </table>`
+    : '';
+
+  return emailShell(
+    `${data.reportLabel} - ${data.organizationName}`,
+    `
+    <h2>${esc(data.reportLabel)}</h2>
+    <p><strong>${esc(data.organizationName)}</strong> &middot; ${esc(data.periodLabel)} &middot; ${esc(data.scopeLabel)} &middot; ${esc(data.frequencyLabel)} digest</p>
+
+    <table style="width:100%;margin:12px 0;">${headlineRows}</table>
+    ${tableHtml}
+
+    <p style="margin-top:20px;font-size:12px;color:${BRAND.textMuted};">
+      Aggregates only — this digest never contains employee names, national IDs or raw record ids.
+      Manage schedules in the HR workspace &rarr; Reports &rarr; Schedules.
+    </p>`,
+  );
+}
+
+/** Plain-text digest for clients that don't render HTML. */
+export function hrReportDigestText(data: HrReportDigestData): string {
+  const lines: string[] = [];
+  lines.push(`${BRAND.name} — ${data.reportLabel}`);
+  lines.push(`${data.organizationName} · ${data.periodLabel} · ${data.scopeLabel}`);
+  lines.push('-'.repeat(48));
+  for (const h of data.headline) lines.push(`${h.label}: ${h.value}`);
+  if (data.table) {
+    lines.push('');
+    lines.push(data.table.caption);
+    for (const row of data.table.rows) lines.push(row.join(' | '));
+  }
+  lines.push('');
+  lines.push('Aggregates only. Manage schedules: HR workspace > Reports > Schedules.');
+  return lines.join('\n');
+}

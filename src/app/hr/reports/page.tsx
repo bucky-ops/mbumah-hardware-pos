@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   BarChart3,
   Coins,
+  CalendarClock,
   CalendarX2,
   DoorOpen,
   Hourglass,
@@ -32,6 +33,7 @@ import {
   Columns3,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate, formatKes } from '@/components/hr/self-service-ui';
+import { ReportSchedulesTab } from '@/components/hr/report-schedules-tab';
 
 type Money = number;
 
@@ -127,7 +129,7 @@ function downloadCSV(filename: string, header: string[], rows: unknown[][]): voi
   URL.revokeObjectURL(url);
 }
 
-const REPORT_TAB_KEYS = ['headcount', 'cost', 'absence', 'turnover', 'tth', 'statutory', 'p10', 'privacy'] as const;
+const REPORT_TAB_KEYS = ['headcount', 'cost', 'absence', 'turnover', 'tth', 'statutory', 'p10', 'schedules', 'privacy'] as const;
 
 export default function HrReportsPage() {
   const [error, setError] = useState('');
@@ -318,8 +320,20 @@ export default function HrReportsPage() {
           <TabsTrigger value="tth">Time to hire</TabsTrigger>
           <TabsTrigger value="statutory">Statutory</TabsTrigger>
           <TabsTrigger value="p10">P10</TabsTrigger>
+          <TabsTrigger value="schedules" className="gap-1.5">
+            <CalendarClock className="h-3.5 w-3.5" aria-hidden /> Schedules
+          </TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
         </TabsList>
+
+        {/* ── Schedules (v2.22.0) ── */}
+        <TabsContent value="schedules" className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Repeating email digests of any aggregate report. Computed on the server through the same
+            governed scope rules as the interactive tabs — aggregates only, no names, no raw ids.
+          </p>
+          <ReportSchedulesTab />
+        </TabsContent>
 
         {/* ── Headcount ── */}
         <TabsContent value="headcount" className="space-y-4">

@@ -74,3 +74,25 @@ describe('hr role constants', () => {
     expect(PAYROLL_APPROVER_ROLES).toContain('STORE_OWNER');
   });
 });
+
+describe('hr report permissions (v2.22.0 QA fix)', () => {
+  it('lets the org-scope roles reach the report routes', () => {
+    // The report routes gate on hr.report.branch while resolveReportScope
+    // grants ORG scope to STORE_OWNER/ACCOUNTANT. Before the fix the guard
+    // denied both roles before the scope resolver ran, locking the store
+    // owner and accountant out of /hr/reports entirely (regression caught in
+    // QA when the owner tried to create a report schedule).
+    expect(hasHrPermission('STORE_OWNER', 'hr.report.branch')).toBe(true);
+    expect(hasHrPermission('ACCOUNTANT', 'hr.report.branch')).toBe(true);
+    expect(hasHrPermission('HR_MANAGER', 'hr.report.branch')).toBe(true);
+    expect(hasHrPermission('BRANCH_MANAGER', 'hr.report.branch')).toBe(true);
+    expect(hasHrPermission('SUPER_ADMIN', 'hr.report.branch')).toBe(true);
+  });
+
+  it('still fails closed for roles without report access', () => {
+    expect(hasHrPermission('CASHIER', 'hr.report.branch')).toBe(false);
+    expect(hasHrPermission('WAREHOUSE_MANAGER', 'hr.report.branch')).toBe(false);
+    expect(hasHrPermission(null, 'hr.report.branch')).toBe(false);
+    expect(hasHrPermission('CASHIER', 'hr.report.all')).toBe(false);
+  });
+});

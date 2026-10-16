@@ -229,12 +229,42 @@ interface StoredPayslipResult {
   rateTableIds: string[];
 }
 
+/**
+ * Parse a stored computationTrace into the engine result shape.
+ *
+ * v2.22.0 hardening: traces written before every field existed (early engine
+ * versions, external triggers, QA fixtures) may omit optional arrays or spell
+ * the engine-step log `engineSteps` instead of `trace`. Every consumer of this
+ * parser indexes those arrays unconditionally (describePayslip, the trace
+ * route, the run dialog), so a missing array must never reach them — missing
+ * optional fields are normalised to safe defaults instead of a 500. Only the
+ * identity-bearing fields (grossCents, earnings) remain mandatory.
+ */
 export function parseTrace(raw: string | null): StoredPayslipResult | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as StoredPayslipResult;
-    if (typeof parsed.grossCents !== 'number' || !Array.isArray(parsed.earnings)) return null;
-    return parsed;
+    const parsed = JSON.parse(raw) as Partial<StoredPayslipResult> & { engineSteps?: StoredPayslipResult['trace'] } | null;
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.grossCents !== 'number' || !Array.isArray(parsed.earnings)) {
+      return null;
+    }
+    const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+    const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const totalDeductionsCents = num(parsed.totalDeductionsCents) ?? 0;
+    // Legacy fixtures recorded the step log as plain strings — lift them to
+    // the {step, detail} shape the trace route and dialog expect.
+    const trace = arr<StoredPayslipResult['trace'][number] | string>(parsed.trace ?? parsed.engineSteps).map((s) =>
+      typeof s === 'string' ? { step: s, detail: '' } : s,
+    );
+    return {
+      earnings: parsed.earnings,
+      deductions: arr(parsed.deductions),
+      employerContributions: arr(parsed.employerContributions),
+      grossCents: parsed.grossCents,
+      totalDeductionsCents,
+      netCents: num(parsed.netCents) ?? parsed.grossCents - totalDeductionsCents,
+      trace,
+      rateTableIds: arr(parsed.rateTableIds),
+    };
   } catch {
     return null;
   }
