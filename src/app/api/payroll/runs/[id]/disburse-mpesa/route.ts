@@ -32,8 +32,13 @@ const DISBURSE_ROLES = ['STORE_OWNER'] as const;
 export const POST = hrGuard('hr.payroll.disburse', DISBURSE_ROLES)(
   async (request, session, context?: { params: Promise<{ id: string }> }) => {
     const { id } = (await context?.params) ?? { id: '' };
-    const body = (await readJson(request)) as { mode?: string };
+    const body = (await readJson(request)) as { mode?: string; detailIds?: unknown };
     const mode = body.mode === 'retry-failed' || body.mode === 'refresh-stuck' ? body.mode : 'all';
+    // v2.34.0: row-level Retry targeting — only string ids, deduped, capped
+    // so a malformed payload can never widen the query beyond reason.
+    const detailIds = Array.isArray(body.detailIds)
+      ? [...new Set(body.detailIds.filter((v): v is string => typeof v === 'string' && v.length > 0 && v.length <= 64))].slice(0, 50)
+      : undefined;
     try {
       if (mode === 'refresh-stuck') {
         const result: B2CStaleResult = await refreshStuckPayrollB2C(
@@ -43,8 +48,8 @@ export const POST = hrGuard('hr.payroll.disburse', DISBURSE_ROLES)(
         return Response.json({ success: true, data: result });
       }
       const summary: B2CDisburseSummary = await (mode === 'retry-failed'
-        ? retryFailedPayrollB2C
-        : disburseRunViaMpesa)(payrollActorContext(session), id);
+        ? () => retryFailedPayrollB2C(payrollActorContext(session), id, detailIds)
+        : () => disburseRunViaMpesa(payrollActorContext(session), id))();
       return Response.json({ success: true, data: summary });
     } catch (error) {
       const mapped = payrollErrorResponse(error);

@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarOff, CalendarPlus, Loader2, Palmtree } from 'lucide-react';
+import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, RefreshCw } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 
 export interface BalanceDto {
@@ -56,6 +56,12 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
   // The approvers group is notified with a violet Withdrawn row and the
   // pending days release back to the balance via the aggregate recompute.
   const [withdrawTarget, setWithdrawTarget] = useState<RequestDto | null>(null);
+  // v2.34.0: resubmission after rejection — the last unclosed transition on
+  // the leave lifecycle. The Declined card showed WHY it was rejected but the
+  // employee had to rebuild the request from scratch; "Review & resubmit"
+  // re-opens the request dialog pre-filled from the rejected row (type,
+  // dates, half-day, original reason) with the manager's note in view.
+  const [resubmitOf, setResubmitOf] = useState<RequestDto | null>(null);
 
   const withdraw = async () => {
     if (!withdrawTarget) return;
@@ -78,6 +84,25 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
   const [halfDay, setHalfDay] = useState('false');
   const [reason, setReason] = useState('');
 
+  /** Pre-fill the request dialog from a rejected request (v2.34.0). Falls
+   *  back to an empty type when that balance row no longer exists — the
+   *  dialog's own balance-check will refuse a type without entitlement. */
+  const openResubmit = (r: RequestDto) => {
+    const match = initialData.balances.find((b) => b.code === r.code);
+    setResubmitOf(r);
+    setLeaveTypeId(match?.leaveTypeId ?? '');
+    setStartDate(r.startDate.slice(0, 10));
+    setEndDate(r.endDate.slice(0, 10));
+    setHalfDay(r.halfDay ? 'true' : 'false');
+    setReason(r.reason ?? '');
+    setOpen(true);
+  };
+
+  const closeRequestDialog = () => {
+    setOpen(false);
+    setResubmitOf(null);
+  };
+
   const submit = async () => {
     setBusy(true);
     setError('');
@@ -90,6 +115,7 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
         ...(reason.trim() ? { reason } : {}),
       });
       setOpen(false);
+      setResubmitOf(null);
       setStartDate('');
       setEndDate('');
       setReason('');
@@ -149,7 +175,18 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
           <h2 className="px-1 text-sm font-semibold">My requests</h2>
           <ul className="space-y-2">
             {initialData.requests.map((r) => (
-              <li key={r.id} className="rounded-xl border bg-card px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md">
+              <li
+                key={r.id}
+                className={`rounded-xl border bg-card px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md ${
+                  r.status === 'REJECTED'
+                    ? 'border-l-[3px] border-l-rose-400 dark:border-l-rose-500'
+                    : r.status === 'PENDING'
+                      ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500'
+                      : r.status === 'APPROVED'
+                        ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500'
+                        : 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500'
+                }`}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-medium">
                     {r.type}
@@ -170,6 +207,19 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                         <CalendarOff className="h-3 w-3" aria-hidden /> Withdraw
                       </Button>
                     ) : null}
+                    {/* v2.34.0: resubmission after rejection — the pre-filled
+                        retry that closes the decision loop. */}
+                    {r.status === 'REJECTED' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1 border-amber-300 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                        onClick={() => openResubmit(r)}
+                        disabled={busy}
+                      >
+                        <RefreshCw className="h-3 w-3" aria-hidden /> Review &amp; resubmit
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -177,9 +227,12 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                 </p>
                 {r.reason ? <p className="mt-1 text-xs text-muted-foreground">“{r.reason}”</p> : null}
                 {r.rejectionReason ? (
-                  <p className="mt-1 rounded-lg bg-rose-50 px-2 py-1 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
-                    Declined: {r.rejectionReason}
-                  </p>
+                  <div className="mt-1 rounded-lg bg-rose-50 px-2 py-1.5 dark:bg-rose-950/40">
+                    <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">
+                      <MessageSquareWarning className="h-3 w-3" aria-hidden /> Manager&apos;s note
+                    </p>
+                    <p className="mt-0.5 text-xs text-rose-700 dark:text-rose-300">Declined: {r.rejectionReason}</p>
+                  </div>
                 ) : null}
               </li>
             ))}
@@ -220,13 +273,39 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
         </DialogContent>
       </Dialog>
 
-      {/* Request dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Request dialog — doubles as the v2.34.0 resubmission flow when a
+          rejected request pre-filled it: the amber context card keeps the
+          manager's note and the "creates a NEW request" contract visible
+          while every field stays editable. */}
+      <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : closeRequestDialog())}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Request leave</DialogTitle>
-            <DialogDescription>The request goes to your branch approver. Balance checks run immediately.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              {resubmitOf ? (
+                <>
+                  <RefreshCw className="h-4 w-4 text-amber-600" aria-hidden /> Resubmit leave request
+                </>
+              ) : (
+                'Request leave'
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {resubmitOf
+                ? 'Pre-filled from the declined request — adjust anything, then submit. This creates a NEW request; the declined one stays on record.'
+                : 'The request goes to your branch approver. Balance checks run immediately.'}
+            </DialogDescription>
           </DialogHeader>
+          {resubmitOf ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Rejected request</p>
+              <p className="mt-0.5 text-sm text-foreground">
+                {resubmitOf.type} · {formatDate(resubmitOf.startDate)} → {formatDate(resubmitOf.endDate)} · {Number(resubmitOf.workingDays)} day(s)
+              </p>
+              {resubmitOf.rejectionReason ? (
+                <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">Manager&apos;s note: {resubmitOf.rejectionReason}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>Leave type</Label>
@@ -267,9 +346,10 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={closeRequestDialog}>Cancel</Button>
             <Button disabled={busy || !leaveTypeId || !startDate || !endDate} onClick={() => void submit()}>
-              Submit request
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : resubmitOf ? <RefreshCw className="h-4 w-4" aria-hidden /> : null}
+              {resubmitOf ? 'Resubmit request' : 'Submit request'}
             </Button>
           </DialogFooter>
         </DialogContent>
