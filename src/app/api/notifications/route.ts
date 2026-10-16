@@ -13,6 +13,7 @@ import { parseDigestNotificationExtras } from '@/lib/hr/digest-notification-view
 // metadata split + the fail-soft extras parser for the status chip.
 import {
   LEAVE_CANCEL_METADATA_MARKER,
+  LEAVE_CORRECTED_METADATA_MARKER,
   LEAVE_DECISION_METADATA_MARKER,
   LEAVE_ON_BEHALF_METADATA_MARKER,
   LEAVE_EDITED_METADATA_MARKER,
@@ -38,7 +39,10 @@ export interface NotificationData {
   // in their name; violet surface, portal deep link.
   // v2.40.0: 'leave_edited' - employee-facing rows for requests HR corrected
   // in place (edit window); indigo surface, portal deep link.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited';
+  // v2.43.0: 'leave_corrected' - approver-facing rows for the same
+  // corrections (the approvals group was notified of the ORIGINAL request);
+  // amber surface, targetTab → Payroll Leave desk.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -339,6 +343,7 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                   { metadata: { contains: LEAVE_CANCEL_METADATA_MARKER } },
                   { metadata: { contains: LEAVE_ON_BEHALF_METADATA_MARKER } },
                   { metadata: { contains: LEAVE_EDITED_METADATA_MARKER } },
+                  { metadata: { contains: LEAVE_CORRECTED_METADATA_MARKER } },
                 ],
               },
             },
@@ -398,6 +403,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.40.0: the employee-facing rows for requests HR corrected
                 // in place (edit window).
                 { metadata: { contains: LEAVE_EDITED_METADATA_MARKER } },
+                // v2.43.0: the approver-facing rows for the same corrections
+                // (the approvals group re-checks before deciding).
+                { metadata: { contains: LEAVE_CORRECTED_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -479,6 +487,22 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               category: 'HR',
               actionUrl: n.actionUrl ?? undefined,
               actionLabel: n.actionLabel ?? undefined,
+            });
+          } else if (kind === 'leave_corrected') {
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_corrected',
+              title: n.title,
+              description: n.message,
+              // v2.43.0: the request an approver was notified of was
+              // corrected under them — a quiet info row with the amber
+              // "re-check before deciding" surface that deep-links the
+              // Payroll tab's Leave desk, where the corrected row lives.
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: 'payroll',
+              category: 'HR',
             });
           } else {
             const declined = n.type === 'WARNING' || extras.status === 'REJECTED';

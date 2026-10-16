@@ -42,6 +42,7 @@ import {
 
 import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf, previewWorkingDays } from '@/lib/leave-tab';
 import { LeaveAttachmentPicker, LeaveAttachmentChip } from '@/components/hr/leave-attachment-ui';
+import { describeLeaveAttachmentMarker, parseLeaveAttachmentMeta } from '@/lib/hr/leave-attachment';
 import {
   suggestPortalEmail,
   generateTempPassword,
@@ -1932,13 +1933,29 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                 <Edit className="h-2.5 w-2.5" aria-hidden /> corrected
                               </p>
                             ) : null}
-                            {/* v2.42.0: at-a-glance attachment marker — a
-                                paperclip on the type cell says a supporting
-                                document is on the request (open via View). */}
+                            {/* v2.42.0 + v2.43.0: at-a-glance attachment
+                                marker — the paperclip now says WHAT is
+                                attached and HOW BIG ("PDF · 12 KB" / "Image ·
+                                179 B" / "Link"), kind-coded to match the chip
+                                language (pdf rose / image sky / link indigo). */}
                             {l.attachmentUrl ? (
-                              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-0.5" title="A supporting document is attached">
-                                <Paperclip className="h-2.5 w-2.5" aria-hidden /> attachment
-                              </p>
+                              (() => {
+                                const meta = parseLeaveAttachmentMeta(l.attachmentUrl);
+                                const markerClass =
+                                  meta?.kind === 'image'
+                                    ? 'text-sky-600 dark:text-sky-400'
+                                    : meta?.kind === 'link'
+                                      ? 'text-indigo-600 dark:text-indigo-400'
+                                      : 'text-rose-600 dark:text-rose-400';
+                                return (
+                                  <p
+                                    className={`text-[10px] mt-0.5 flex items-center gap-0.5 font-medium ${markerClass}`}
+                                    title={`Supporting document: ${meta?.label ?? 'attached'}`}
+                                  >
+                                    <Paperclip className="h-2.5 w-2.5" aria-hidden /> {describeLeaveAttachmentMarker(l.attachmentUrl)}
+                                  </p>
+                                );
+                              })()
                             ) : null}
                           </td>
                           <td className="px-2 py-2.5">
@@ -2182,13 +2199,24 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   <p className="text-sm whitespace-pre-wrap break-words">{detail.reason}</p>
                 </div>
               )}
-              {/* v2.42.0: the supporting document, kind-coded and one click
-                  away (opens in a new tab; data URLs offer a download). */}
+              {/* v2.42.0 + v2.43.0: the supporting document, kind-coded and
+                  one click away (opens in a new tab; data URLs offer a
+                  download). Image attachments now preview INLINE so the desk
+                  can see the certificate without leaving the dialog. */}
               {detail.attachmentUrl ? (
                 <div className="rounded-lg border bg-muted/30 p-2.5">
                   <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                     <Paperclip className="h-3 w-3" aria-hidden /> Supporting document
                   </p>
+                  {parseLeaveAttachmentMeta(detail.attachmentUrl)?.kind === 'image' &&
+                  detail.attachmentUrl.startsWith('data:image/') ? (
+                    /* eslint-disable-next-line @next/next/no-img-element -- governed 500 KB data URL; next/image adds nothing for an inline evidence preview */
+                    <img
+                      src={detail.attachmentUrl}
+                      alt="Supporting document preview"
+                      className="mb-2 max-h-48 w-full rounded-md border bg-white object-contain dark:bg-background"
+                    />
+                  ) : null}
                   <LeaveAttachmentChip value={detail.attachmentUrl} />
                 </div>
               ) : null}

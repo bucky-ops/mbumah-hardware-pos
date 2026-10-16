@@ -10,10 +10,12 @@ import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import {
   LEAVE_CANCEL_METADATA_MARKER,
+  LEAVE_CORRECTED_METADATA_MARKER,
   LEAVE_EDITED_METADATA_MARKER,
   LEAVE_ON_BEHALF_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   leaveCancelledCopy,
+  leaveCorrectedCopy,
   leaveEditedCopy,
   leaveOnBehalfCopy,
   leaveSubmissionCopy,
@@ -290,6 +292,109 @@ export async function notifyLeaveRequestSubmitted(params: {
       text: copy.emailText,
       type: 'LEAVE_REQUEST',
       metadata: { leaveRequestId: params.leaveRequestId, employeeId: params.employeeId },
+    }).catch(() => undefined);
+  }
+}
+
+/** v2.43.0: approver-facing CORRECTION notifications — when a PENDING leave
+ *  request that was already fanned out to the approvals group gets corrected
+ *  in place (the v2.40.0 edit window), every decision-capable user of the
+ *  store learns the request they were notified of has changed. One durable
+ *  category-HR bell row per approver + ONE grouped email, amber "re-check
+ *  before deciding" copy carrying the before → after summary. Recipients
+ *  mirror the submission fan-out (notifyLeaveRequestSubmitted) minus two
+ *  exclusions: the actor (nobody is notified about their own action) and
+ *  the employee's linked user (the employee-side leave_edited row already
+ *  covers them — a manager-employee never gets the same fact twice).
+ *  Best-effort by design: never blocks or fails the correction itself. */
+export async function notifyLeaveRequestCorrected(params: {
+  leaveRequestId: string;
+  storeId: string;
+  employeeId: string;
+  /** Precomputed employee display name (the edit path already has it). */
+  employeeName: string;
+  leaveTypeName: string;
+  startDate: Date;
+  endDate: Date;
+  workingDays: number;
+  previousLeaveTypeName?: string | null;
+  previousStartDate: Date;
+  previousEndDate: Date;
+  previousWorkingDays: number;
+  /** The user who performed the correction (excluded from the fan-out). */
+  actorUserId: string;
+  /** The employee's linked user id, when one exists (excluded - covered by
+   *  the employee-facing leave_edited row). */
+  employeeLinkedUserId?: string | null;
+}): Promise<void> {
+  if (!params.leaveTypeName) return;
+
+  const exclude = new Set<string>([params.actorUserId]);
+  if (params.employeeLinkedUserId) exclude.add(params.employeeLinkedUserId);
+
+  const approvers = await db.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] },
+      id: { notIn: [...exclude] },
+      OR: [{ storeId: params.storeId }, { role: 'SUPER_ADMIN' }],
+    },
+    select: { id: true, email: true },
+  });
+  if (approvers.length === 0) return;
+
+  // Editor display label: same fallback ladder as the employee-side copy
+  // above (name → email → 'HR').
+  const editedByLabel =
+    (await db.user
+      .findUnique({ where: { id: params.actorUserId }, select: { name: true, email: true } })
+      .then((u) => u?.name?.trim() || u?.email || null)
+      .catch(() => null)) || 'HR';
+
+  const copy = leaveCorrectedCopy({
+    firstName: params.employeeName.split(' ')[0] || params.employeeName,
+    lastName: params.employeeName.split(' ').slice(1).join(' '),
+    leaveTypeName: params.leaveTypeName,
+    startDate: params.startDate.toISOString(),
+    endDate: params.endDate.toISOString(),
+    workingDays: params.workingDays,
+    previousLeaveTypeName: params.previousLeaveTypeName ?? null,
+    previousStartDate: params.previousStartDate.toISOString(),
+    previousEndDate: params.previousEndDate.toISOString(),
+    previousWorkingDays: params.previousWorkingDays,
+    editedByLabel,
+    editNote: null,
+  });
+
+  await db.notification.createMany({
+    data: approvers.map((u) => ({
+      storeId: params.storeId,
+      userId: u.id,
+      title: copy.title,
+      message: copy.message,
+      type: copy.notifType,
+      category: 'HR',
+      priority: copy.priority,
+      metadata: JSON.stringify({
+        kind: LEAVE_CORRECTED_METADATA_MARKER,
+        leaveRequestId: params.leaveRequestId,
+        employeeId: params.employeeId,
+        editedByLabel,
+      }),
+    })),
+  });
+
+  const approverEmails = approvers
+    .map((u) => u.email)
+    .filter((e): e is string => typeof e === 'string' && e.includes('@'));
+  if (approverEmails.length > 0) {
+    await sendEmail({
+      to: approverEmails,
+      subject: copy.emailSubject,
+      html: copy.emailHtml,
+      text: copy.emailText,
+      type: 'LEAVE_EDIT',
+      metadata: { leaveRequestId: params.leaveRequestId, employeeId: params.employeeId, editedByLabel },
     }).catch(() => undefined);
   }
 }
@@ -642,6 +747,34 @@ export async function editLeaveRequest(input: EditLeaveRequestInput) {
   } catch {
     // Edit delivery is best-effort by design — the correction itself has
     // already been applied, audited and recomputed by this point.
+  }
+
+  // v2.43.0: approver-side correction awareness — the approvals group was
+  // notified of the ORIGINAL request (submission fan-out) and can sit on a
+  // mental slot that silently re-based under them; without this row an
+  // approver may approve on stale dates. One bell row per decision-capable
+  // user, excluding the actor (nobody is notified about their own action)
+  // and the employee's linked user (already covered by the employee-side
+  // row above, so a manager-employee never gets the same fact twice).
+  try {
+    await notifyLeaveRequestCorrected({
+      leaveRequestId: request.id,
+      storeId: request.storeId,
+      employeeId: request.employeeId,
+      employeeName: `${request.employee.firstName} ${request.employee.lastName}`.trim(),
+      leaveTypeName: updated.leaveType.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      workingDays,
+      previousLeaveTypeName: request.leaveType.name,
+      previousStartDate: request.startDate,
+      previousEndDate: request.endDate,
+      previousWorkingDays: Number(request.workingDays),
+      actorUserId: input.actorId,
+      employeeLinkedUserId: request.employee.user?.id ?? null,
+    });
+  } catch {
+    // Approver delivery is best-effort by design.
   }
 
   return updated;

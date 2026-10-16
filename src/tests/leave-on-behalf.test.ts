@@ -311,10 +311,10 @@ describe('POST /api/leaves — static v2.38.0 contracts', () => {
 describe('GET /api/notifications — feed section contracts (v2.38.0 QA fix)', () => {
   const feed = readFileSync(join(ROOT, 'app/api/notifications/route.ts'), 'utf8');
 
-  it('excludes ALL four leave markers from the digest sweep (no double-render)', () => {
+  it('excludes ALL leave markers from the digest sweep (no double-render)', () => {
     const notBlock = feed.slice(feed.indexOf('const hrDigestNotifications'), feed.indexOf("/* HR digest section must never break"));
     expect(notBlock).toContain('NOT: {');
-    for (const marker of ['LEAVE_DECISION_METADATA_MARKER', 'LEAVE_REQUEST_METADATA_MARKER', 'LEAVE_CANCEL_METADATA_MARKER', 'LEAVE_ON_BEHALF_METADATA_MARKER']) {
+    for (const marker of ['LEAVE_DECISION_METADATA_MARKER', 'LEAVE_REQUEST_METADATA_MARKER', 'LEAVE_CANCEL_METADATA_MARKER', 'LEAVE_ON_BEHALF_METADATA_MARKER', 'LEAVE_EDITED_METADATA_MARKER', 'LEAVE_CORRECTED_METADATA_MARKER']) {
       expect(notBlock).toContain(`contains: ${marker}`);
     }
   });
@@ -324,6 +324,8 @@ describe('GET /api/notifications — feed section contracts (v2.38.0 QA fix)', (
     expect(leaveBlock).toContain('{ metadata: { contains: LEAVE_ON_BEHALF_METADATA_MARKER } }');
     expect(leaveBlock).toContain("type: 'leave_on_behalf'");
     // The employee row deep-links the portal page, not a workspace tab.
-    expect(leaveBlock).toContain("actionUrl: n.actionUrl ?? undefined,\n              actionLabel: n.actionLabel ?? undefined,\n            });\n          } else {");
+    // v2.43.0: the successor branch is now the approver-facing correction
+    // fan-out (leave_corrected), not the leave_decision fallback.
+    expect(leaveBlock).toContain("actionUrl: n.actionUrl ?? undefined,\n              actionLabel: n.actionLabel ?? undefined,\n            });\n          } else if (kind === 'leave_corrected') {");
   });
 });

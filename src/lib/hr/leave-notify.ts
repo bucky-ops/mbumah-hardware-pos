@@ -28,6 +28,12 @@
  *  leave-decision rows from digest rows with a `contains` on this string. */
 export const LEAVE_DECISION_METADATA_MARKER = 'leave_decision';
 
+/** v2.43.0: marker for APPROVER-facing correction rows (the edit window's
+ *  fan-out to the store's decision-capable users). The employee-facing
+ *  correction row keeps 'leave_edited'; this kind addresses the approvals
+ *  group whose slot on the request was silently re-based under them. */
+export const LEAVE_CORRECTED_METADATA_MARKER = 'leave_corrected';
+
 /** v2.32.0: marker for SUBMISSION rows (employee → manager direction). The
  *  feed's category-HR section pulls both markers and maps the feed type by
  *  the parsed `kind`. */
@@ -55,7 +61,8 @@ export type LeaveNotificationKind =
   | 'leave_request'
   | 'leave_cancel'
   | 'leave_on_behalf'
-  | 'leave_edited';
+  | 'leave_edited'
+  | 'leave_corrected';
 
 export type LeaveDecisionStatus = 'APPROVED' | 'REJECTED';
 
@@ -220,7 +227,8 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
       rec.kind === 'leave_request' ||
       rec.kind === 'leave_cancel' ||
       rec.kind === 'leave_on_behalf' ||
-      rec.kind === 'leave_edited'
+      rec.kind === 'leave_edited' ||
+      rec.kind === 'leave_corrected'
     )
       out.kind = rec.kind;
     if (typeof rec.leaveRequestId === 'string') out.leaveRequestId = rec.leaveRequestId;
@@ -525,6 +533,121 @@ export function leaveOnBehalfCopy(input: LeaveOnBehalfCopyInput): LeaveOnBehalfC
   ]
     .filter((l) => l !== null)
     .join('\n');
+
+  return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
+// ── v2.43.0: EDIT WINDOW (approver-facing copy) ────────────────────────────
+
+export interface LeaveCorrectedCopyInput {
+  /** The EMPLOYEE's name (the person the request is FOR). */
+  firstName: string;
+  lastName: string;
+  /** Corrected (current) values of the request. */
+  leaveTypeName: string;
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  /** Values BEFORE the correction - approvers were notified of THESE. */
+  previousLeaveTypeName?: string | null;
+  previousStartDate: string;
+  previousEndDate: string;
+  previousWorkingDays: number;
+  /** Display name of the HR editor ("corrected by …" footer). */
+  editedByLabel: string;
+  /** Optional note from the editor explaining the correction. */
+  editNote?: string | null;
+}
+
+export interface LeaveCorrectedCopy {
+  title: string;
+  message: string;
+  notifType: 'INFO';
+  priority: 'NORMAL';
+  emailSubject: string;
+  emailText: string;
+  emailHtml: string;
+}
+
+/** Build every copy surface for the APPROVER-facing notification written
+ *  when a PENDING request that was already fanned out to the approvals
+ *  group gets corrected in place (v2.43.0). Without this row an approver
+ *  could approve on the ORIGINAL dates they were notified of. Amber
+ *  accents - the "re-check before deciding" direction; the copy always
+ *  states what the request LOOKS LIKE NOW vs what the approver was told,
+ *  who made the correction and that the request still awaits a decision. */
+export function leaveCorrectedCopy(input: LeaveCorrectedCopyInput): LeaveCorrectedCopy {
+  const {
+    firstName,
+    lastName,
+    leaveTypeName,
+    startDate,
+    endDate,
+    workingDays,
+    previousLeaveTypeName,
+    previousStartDate,
+    previousEndDate,
+    previousWorkingDays,
+    editedByLabel,
+    editNote,
+  } = input;
+
+  const name = `${firstName} ${lastName}`.trim();
+  const range = `${formatLeaveDay(startDate)} - ${formatLeaveDay(endDate)}`;
+  const days = `${workingDays} day${workingDays === 1 ? '' : 's'}`;
+  const oldRange = `${formatLeaveDay(previousStartDate)} - ${formatLeaveDay(previousEndDate)}`;
+  const oldDays = `${previousWorkingDays} day${previousWorkingDays === 1 ? '' : 's'}`;
+  const typeChanged = !!previousLeaveTypeName && previousLeaveTypeName !== leaveTypeName;
+  const oldTypePrefix = typeChanged ? `${previousLeaveTypeName} ` : '';
+
+  const title = `Leave request corrected - ${name}`;
+  const noteSuffix = editNote ? ` Note: "${editNote}".` : '';
+  const message = `${name}'s ${oldTypePrefix}leave request (${oldDays}, ${oldRange}) was corrected by ${editedByLabel} — it is now ${leaveTypeName} for ${days} (${range}) and still awaits a decision.${noteSuffix}`;
+
+  const emailSubject = `Corrected: ${name}'s leave request (now ${days} ${leaveTypeName})`;
+  const accent = '#b45309';
+  const accentBg = '#fffbeb';
+  const accentBorder = '#fde68a';
+
+  const rows: Array<[string, string]> = [
+    ['Employee', escapeHtml(name)],
+    ['Leave type', `${escapeHtml(leaveTypeName)}${typeChanged ? ` (was ${escapeHtml(previousLeaveTypeName ?? '')})` : ''}`],
+    ['Dates', `${escapeHtml(range)} (was ${escapeHtml(oldRange)})`],
+    ['Working days', `${escapeHtml(days)} (was ${escapeHtml(oldDays)})`],
+  ];
+  if (editNote) rows.push(['Note', escapeHtml(editNote)]);
+
+  const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+  <div style="background:${accentBg};padding:16px 20px;border-bottom:1px solid ${accentBorder};">
+    <span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${accent};color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.02em;">CORRECTED</span>
+    <h2 style="margin:10px 0 0;font-size:18px;color:#111827;">A pending request you were notified of was corrected</h2>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
+    ${rows
+      .map(
+        ([k, v]) =>
+          `<tr><td style="padding:8px 20px;color:#6b7280;width:120px;white-space:nowrap;">${k}</td><td style="padding:8px 20px 8px 0;font-weight:600;color:#111827;">${v}</td></tr>`
+      )
+      .join('\n    ')}
+  </table>
+  <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f9fafb;">
+    <p style="margin:0;color:#6b7280;font-size:12px;">The request keeps its pending status - review the corrected details on the Leave desk before deciding, so the approval lands on the real dates.</p>
+    <p style="margin:12px 0 0;color:#6b7280;font-size:12px;">Corrected by ${escapeHtml(editedByLabel)} (HR).</p>
+  </div>
+</div>`;
+
+  const emailText = [
+    `Leave request corrected - MBUMAH HARDWARE`,
+    ``,
+    `Employee: ${name}`,
+    `Leave type: ${leaveTypeName}${typeChanged ? ` (was ${previousLeaveTypeName})` : ''}`,
+    `Dates: ${range} (was ${oldRange})`,
+    `Working days: ${days} (was ${oldDays})`,
+    ...(editNote ? [`Note: ${editNote}`] : []),
+    ``,
+    `The request keeps its pending status - review the corrected details on the Leave desk before deciding.`,
+    `Corrected by ${editedByLabel} (HR).`,
+  ].join('\n');
 
   return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
 }
