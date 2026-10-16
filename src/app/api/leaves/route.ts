@@ -14,7 +14,7 @@ import { requireStoreAccess, requireRole } from '@/lib/auth';
 import {
   updateLeaveBalanceOnStatusChange,
 } from '@/lib/payroll-helpers';
-import { recomputeBalances, requestLeave, notifyLeaveRequestCancelled } from '@/lib/hr/leave-service';
+import { recomputeBalances, requestLeave, notifyLeaveRequestCancelled, editLeaveRequest } from '@/lib/hr/leave-service';
 import { toNum } from '@/lib/decimal-safe';
 import {
   LEAVE_DECISION_METADATA_MARKER,
@@ -91,6 +91,11 @@ async function listLeavesHandler(
     // of the employee (null = self-filed via the portal). Rendered as the
     // violet "Entered by HR" chip on the HR desk and the portal.
     enteredByName: r.enteredByName,
+    // v2.40.0: edit-window provenance (null = never corrected). Rendered as
+    // the amber "Corrected by HR" chip on the HR desk and the portal card.
+    editedAt: r.editedAt?.toISOString() ?? null,
+    editedByName: r.editedByName,
+    editNote: r.editNote,
   }));
 
   // Optionally include leave balances for the filtered employees
@@ -333,7 +338,7 @@ export const POST = withErrorBoundary(
   'LEAVES_CREATE'
 );
 
-// PUT: Approve / reject / cancel a leave request
+// PUT: Approve / reject / cancel / EDIT a leave request
 async function updateLeaveHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }
@@ -349,15 +354,18 @@ async function updateLeaveHandler(
     );
   }
 
-  if (!['APPROVE', 'REJECT', 'CANCEL'].includes(action)) {
+  if (!['APPROVE', 'REJECT', 'CANCEL', 'EDIT'].includes(action)) {
     return Response.json(
-      { success: false, error: 'action must be "APPROVE", "REJECT", or "CANCEL".' },
+      { success: false, error: 'action must be "APPROVE", "REJECT", "CANCEL", or "EDIT".' },
       { status: 400 }
     );
   }
 
-  // Only managers+ can approve/reject; the employee themselves can cancel
-  if (action === 'APPROVE' || action === 'REJECT') {
+  // Only managers+ can approve/reject; the employee themselves can cancel.
+  // v2.40.0: EDIT (correcting a pending request in place) is an HR-desk
+  // governance action — the same decision-capable gate as the on-behalf
+  // filing path; employees correct their own requests via withdraw + refile.
+  if (action === 'APPROVE' || action === 'REJECT' || action === 'EDIT') {
     const roleError = requireRole('SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT')(session);
     if (roleError) return roleError;
   }
@@ -411,6 +419,116 @@ async function updateLeaveHandler(
       { success: false, error: 'You can only manage leave requests from your own store.' },
       { status: 403 }
     );
+  }
+
+  // ── v2.40.0: EDIT — the governed correction window ─────────────────────
+  // Correct a PENDING request in place (dates / half-day / type / reason /
+  // attachment / note) instead of cancel + refile. Handled in its own early
+  // branch: unlike the decision actions below it performs NO status
+  // transition and NO approvedBy stamp — the request stays exactly where it
+  // is in the approval flow, only its content is corrected (with the
+  // editedAt/editedByName/editNote provenance stamp from the schema).
+  if (action === 'EDIT') {
+    const { startDate, endDate, halfDay, leaveTypeId, reason, emergencyContact, attachmentUrl, editNote, editedByName } =
+      body as {
+        startDate?: string;
+        endDate?: string;
+        halfDay?: boolean;
+        leaveTypeId?: string;
+        reason?: string;
+        emergencyContact?: string | null;
+        attachmentUrl?: string | null;
+        editNote?: string | null;
+        editedByName?: string | null;
+      };
+
+    if (!startDate || !endDate) {
+      return Response.json(
+        { success: false, error: 'startDate and endDate are required for an edit.' },
+        { status: 400 }
+      );
+    }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return Response.json(
+        { success: false, error: 'Invalid date format. Use ISO 8601.' },
+        { status: 400 }
+      );
+    }
+    if (start > end) {
+      return Response.json(
+        { success: false, error: 'startDate must be before or equal to endDate.' },
+        { status: 400 }
+      );
+    }
+    // Optional type change must be real.
+    if (leaveTypeId && leaveTypeId !== leaveRequest.leaveTypeId) {
+      const newType = await db.leaveType.findUnique({ where: { id: leaveTypeId }, select: { id: true } });
+      if (!newType) {
+        return Response.json({ success: false, error: 'Leave type not found.' }, { status: 404 });
+      }
+    }
+
+    // Editor display name: explicit override (from the UI session) or the
+    // acting user's own record — the employee-facing copy always names who
+    // corrected the request.
+    let editorLabel = typeof editedByName === 'string' && editedByName.trim() ? editedByName.trim() : null;
+    if (!editorLabel) {
+      const actor = await db.user.findUnique({ where: { id: session.userId }, select: { name: true, email: true } });
+      editorLabel = actor?.name?.trim() || actor?.email || session.email || 'HR';
+    }
+
+    let updated;
+    try {
+      updated = await editLeaveRequest({
+        requestId: leaveRequestId,
+        actorId: session.userId,
+        actorRole: session.role,
+        startDate: start,
+        endDate: end,
+        halfDay: halfDay === true,
+        leaveTypeId: leaveTypeId && leaveTypeId !== leaveRequest.leaveTypeId ? leaveTypeId : undefined,
+        ...(reason !== undefined ? { reason } : {}),
+        ...(emergencyContact !== undefined ? { emergencyContact: typeof emergencyContact === 'string' && emergencyContact.trim() ? emergencyContact.trim() : null } : {}),
+        ...(attachmentUrl !== undefined ? { attachmentUrl: typeof attachmentUrl === 'string' && attachmentUrl.trim() ? attachmentUrl.trim() : null } : {}),
+        editedByName: editorLabel,
+        editNote: typeof editNote === 'string' && editNote.trim() ? editNote.trim() : null,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Leave request could not be edited.';
+      if (message.startsWith('NOT_EDITABLE')) {
+        return Response.json({ success: false, error: message.replace('NOT_EDITABLE: ', '') , code: 'NOT_EDITABLE' }, { status: 400 });
+      }
+      if (message.startsWith('INSUFFICIENT_LEAVE_BALANCE')) {
+        return Response.json(
+          { success: false, error: message.replace('INSUFFICIENT_LEAVE_BALANCE: ', 'Insufficient leave balance. '), code: 'INSUFFICIENT_BALANCE' },
+          { status: 400 }
+        );
+      }
+      if (message.includes('PERIOD_MISMATCH') || message.includes('endDate')) {
+        return Response.json({ success: false, error: message }, { status: 400 });
+      }
+      return Response.json({ success: false, error: message }, { status: 400 });
+    }
+
+    await systemLog({
+      action: 'LEAVE_REQUEST_EDITED',
+      component: LogComponent.SYSTEM,
+      severity: LogSeverity.INFO,
+      message: `Leave request edited: ${leaveRequest.employee.firstName} ${leaveRequest.employee.lastName} - ${leaveRequest.leaveType.name} (${toNum(leaveRequest.workingDays)} day(s), ${new Date(leaveRequest.startDate).toISOString().slice(0, 10)} to ${new Date(leaveRequest.endDate).toISOString().slice(0, 10)}) corrected to ${updated.leaveType.name} (${toNum(updated.workingDays)} day(s), ${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)}) by ${editorLabel}`,
+      storeId: leaveRequest.storeId,
+      userId: session.userId,
+      metadata: {
+        leaveRequestId,
+        employeeId: leaveRequest.employeeId,
+        oldWorkingDays: toNum(leaveRequest.workingDays),
+        newWorkingDays: toNum(updated.workingDays),
+        typeChanged: updated.leaveTypeId !== leaveRequest.leaveTypeId,
+      },
+    });
+
+    return Response.json({ success: true, data: updated });
   }
 
   const oldStatus = leaveRequest.status;

@@ -161,6 +161,10 @@ interface LeaveRequest {
   createdAt: string;
   /** v2.38.0: HR filer display name when entered on behalf (null = self-filed). */
   enteredByName?: string | null;
+  /** v2.40.0: edit-window provenance (null = never corrected in place). */
+  editedAt?: string | null;
+  editedByName?: string | null;
+  editNote?: string | null;
 }
 
 // Matches the per-employee balance rows returned as `balances` by
@@ -1323,6 +1327,17 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const [newHalfDay, setNewHalfDay] = useState(false);
   const [newReason, setNewReason] = useState('');
 
+  // v2.40.0: edit-window state — the correction dialog for PENDING requests
+  // (dates / half-day / type / reason / emergency contact / note-to-employee).
+  const [editTarget, setEditTarget] = useState<LeaveRequest | null>(null);
+  const [editTypeId, setEditTypeId] = useState('');
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
+  const [editHalfDay, setEditHalfDay] = useState(false);
+  const [editReason, setEditReason] = useState('');
+  const [editEmergency, setEditEmergency] = useState('');
+  const [editNote, setEditNote] = useState('');
+
   // GET /api/leaves returns { success, data: [...], balances?: [...],
   // leaveTypes: [...] } — apiFetch would drop the side payloads, so this
   // query uses apiFetchEnvelope to also read the per-employee balances.
@@ -1363,24 +1378,49 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   // v2.38.0: live balance preview for the picked employee — the governed
   // /api/leave/balances read (same figure the portal and the service guard
   // use), so the dialog shows EXACTLY what the server will enforce.
+  // v2.40.0: the same read now feeds BOTH dialogs — whichever surface is
+  // active (edit window first, then the on-behalf filing dialog).
+  const activePreviewEmployeeId = editTarget?.employeeId ?? newEmployeeId;
   const { data: previewEnv, isLoading: previewLoading } = useQuery({
-    queryKey: ['payroll-leave-balance-preview', newEmployeeId],
+    queryKey: ['payroll-leave-balance-preview', activePreviewEmployeeId],
     queryFn: () =>
       apiFetchEnvelope<{ success: boolean; data: Array<{ leaveTypeId: string; allocatedDays: unknown; carryForwardDays: unknown; usedDays: unknown; pendingDays: unknown }> }>(
-        `/api/leave/balances?employeeId=${newEmployeeId}`,
+        `/api/leave/balances?employeeId=${activePreviewEmployeeId}`,
       ),
-    enabled: newOpen && !!newEmployeeId,
+    enabled: (!!editTarget && !!activePreviewEmployeeId) || (newOpen && !!newEmployeeId),
   });
   const previewBalances = Array.isArray(previewEnv?.data) ? previewEnv.data : [];
-  const previewRow = previewBalances.find((b) => b.leaveTypeId === newTypeId);
+  const previewRow = previewBalances.find((b) => b.leaveTypeId === (editTarget ? editTypeId : newTypeId));
   const previewEntitlement = previewRow ? toNum(previewRow.allocatedDays) + toNum(previewRow.carryForwardDays) : null;
+  // v2.40.0: inside the edit window the request's OWN pending days count as
+  // headroom when the leave type is unchanged — they are re-reserved on
+  // save (the recompute rewrites pendingDays from the request table).
+  const editSelfHeadroom =
+    editTarget && previewRow && previewRow.leaveTypeId === editTarget.leaveTypeId ? toNum(editTarget.workingDays) : 0;
   const previewAvailable =
     previewRow && previewEntitlement !== null
-      ? previewEntitlement - toNum(previewRow.usedDays) - toNum(previewRow.pendingDays)
+      ? previewEntitlement - toNum(previewRow.usedDays) - toNum(previewRow.pendingDays) + editSelfHeadroom
       : null;
-  const previewDays = previewWorkingDays(newStart, newEnd, newHalfDay);
+  const previewDays = editTarget
+    ? previewWorkingDays(editStart, editEnd, editHalfDay)
+    : previewWorkingDays(newStart, newEnd, newHalfDay);
   const previewInsufficient = previewAvailable !== null && previewDays > previewAvailable;
-  const newFormReady = !!newEmployeeId && !!newTypeId && previewDays > 0 && !!newStart && newStart <= newEnd && !previewInsufficient;
+  const newFormReady =
+    !editTarget && !!newEmployeeId && !!newTypeId && previewDays > 0 && !!newStart && newStart <= newEnd && !previewInsufficient;
+  // v2.40.0: the correction is submittable only when something actually
+  // changed (no-op saves would ping the employee for nothing) and the
+  // corrected range fits the balance.
+  const editChanged =
+    !!editTarget &&
+    (editTypeId !== editTarget.leaveTypeId ||
+      editStart !== editTarget.startDate.slice(0, 10) ||
+      editEnd !== editTarget.endDate.slice(0, 10) ||
+      editHalfDay !== editTarget.halfDay ||
+      editReason !== (editTarget.reason ?? '') ||
+      (editEmergency || '') !== (editTarget.emergencyContact ?? '') ||
+      editNote.trim().length > 0);
+  const editFormReady =
+    !!editTarget && editChanged && previewDays > 0 && !!editStart && editStart <= editEnd && !previewInsufficient;
 
   // PUT /api/leaves requires UPPERCASE actions ('APPROVE' | 'REJECT' |
   // 'CANCEL') — the lowercase values this tab used to send were rejected
@@ -1459,6 +1499,73 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
     setNewHalfDay(false);
     setNewReason('');
     setNewOpen(true);
+  };
+
+  // v2.40.0: open the correction window on a PENDING request — prefilled
+  // with the stored values so the manager edits exactly what is on file.
+  const openEdit = (l: LeaveRequest) => {
+    setEditTypeId(l.leaveTypeId);
+    setEditStart(l.startDate.slice(0, 10));
+    setEditEnd(l.endDate.slice(0, 10));
+    setEditHalfDay(l.halfDay);
+    setEditReason(l.reason ?? '');
+    setEditEmergency(l.emergencyContact ?? '');
+    setEditNote('');
+    setEditTarget(l);
+  };
+
+  // v2.40.0: save the correction — PUT action EDIT. The server recomputes
+  // working days, re-guards the balance (the request's own pending days are
+  // headroom when the type is unchanged), stamps the provenance columns and
+  // notifies the employee with the before → after summary.
+  const editMutation = useMutation({
+    mutationFn: (payload: {
+      leaveRequestId: string;
+      leaveTypeId: string;
+      startDate: string;
+      endDate: string;
+      halfDay: boolean;
+      reason: string;
+      emergencyContact: string | null;
+      editNote: string | null;
+      employeeName: string;
+    }) =>
+      apiFetch('/api/leaves', {
+        method: 'PUT',
+        body: JSON.stringify({
+          action: 'EDIT',
+          leaveRequestId: payload.leaveRequestId,
+          leaveTypeId: payload.leaveTypeId,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          halfDay: payload.halfDay,
+          reason: payload.reason,
+          emergencyContact: payload.emergencyContact,
+          editNote: payload.editNote,
+        }),
+      }),
+    onSuccess: (_data, vars) => {
+      toast.success(`Request corrected — ${vars.employeeName} has been notified with the changes`);
+      setEditTarget(null);
+      qc.invalidateQueries({ queryKey: ['payroll-leaves', storeId] });
+      qc.invalidateQueries({ queryKey: ['payroll-leave-balance-preview'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const confirmEdit = () => {
+    if (!editTarget || !editFormReady) return;
+    editMutation.mutate({
+      leaveRequestId: editTarget.id,
+      leaveTypeId: editTypeId,
+      startDate: new Date(`${editStart}T00:00:00.000Z`).toISOString(),
+      endDate: new Date(`${editEnd}T00:00:00.000Z`).toISOString(),
+      halfDay: editHalfDay,
+      reason: editReason.trim(),
+      emergencyContact: editEmergency.trim() || null,
+      editNote: editNote.trim() || null,
+      employeeName: editTarget.employeeName,
+    });
   };
 
   return (
@@ -1556,6 +1663,14 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                               {l.leaveTypeName}
                             </Badge>
                             {l.halfDay && <p className="text-[10px] text-muted-foreground mt-0.5">half day</p>}
+                            {/* v2.40.0: at-a-glance correction marker — rows
+                                edited in place stay PENDING, so the amber
+                                chip is what tells the desk they changed. */}
+                            {l.editedByName ? (
+                              <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-0.5" title={`Corrected by ${l.editedByName}`}>
+                                <Edit className="h-2.5 w-2.5" aria-hidden /> corrected
+                              </p>
+                            ) : null}
                           </td>
                           <td className="px-2 py-2.5">
                             <p className="text-xs tabular-nums">{formatDate(l.startDate)} → {formatDate(l.endDate)}</p>
@@ -1607,6 +1722,22 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                     disabled={actionMutation.isPending}
                                   >
                                     <X className="h-4 w-4" />
+                                  </Button>
+                                  {/* v2.40.0: correct a pending request in
+                                      place — fix dates / type / reason
+                                      without the cancel+refile dance; the
+                                      employee is told with a before →
+                                      after summary. */}
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                                    title="Correct request — fix dates, type or reason without cancelling"
+                                    aria-label={`Correct leave for ${l.employeeName}`}
+                                    onClick={() => openEdit(l)}
+                                    disabled={editMutation.isPending}
+                                  >
+                                    <Edit className="h-4 w-4" />
                                   </Button>
                                   {/* v2.33.0: managers may cancel a pending
                                       request (slot freed, employee notified). */}
@@ -1791,6 +1922,17 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
               {detail.emergencyContact && (
                 <DetailField label="Emergency contact during leave" value={detail.emergencyContact} />
               )}
+              {/* v2.40.0: correction provenance — who fixed it, when, and
+                  (optionally) why, straight from the edit-window stamp. */}
+              {detail.editedByName && (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-2.5">
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1 flex items-center gap-1">
+                    <Edit className="h-3 w-3" aria-hidden /> Corrected by HR · {detail.editedByName}
+                    {detail.editedAt ? <span className="font-normal text-amber-600/80 dark:text-amber-400/80">· {formatDateTime(detail.editedAt)}</span> : null}
+                  </p>
+                  {detail.editNote ? <p className="text-sm whitespace-pre-wrap break-words">{detail.editNote}</p> : <p className="text-xs text-muted-foreground">Values were corrected in place — see the dates and days on this dialog.</p>}
+                </div>
+              )}
               {detail.approvedAt && (
                 <p className="text-xs text-muted-foreground">Decided {formatDateTime(detail.approvedAt)}</p>
               )}
@@ -1912,6 +2054,166 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
             >
               {actionMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Ban className="h-4 w-4 mr-1.5" />}
               Cancel request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.40.0: the correction window — edit a PENDING request in place
+          instead of the lossy cancel + refile dance. Amber governance
+          styling (the correction color); the dialog previews the recomputed
+          working days against the governed balance figure, shows the
+          before → after delta, and the save is disabled until something
+          actually changed and the range fits. The employee always gets the
+          before → after summary (bell row + email) with the optional note. */}
+      <Dialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-4 w-4 text-amber-600" /> Correct pending leave request
+            </DialogTitle>
+            <DialogDescription>
+              {editTarget
+                ? `${editTarget.employeeName} · ${editTarget.leaveTypeName} · currently ${formatDate(editTarget.startDate)} → ${formatDate(editTarget.endDate)}`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3.5">
+            {/* Governance context card — the three rules of the window. */}
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-1">
+              <p className="text-sm text-foreground">You are correcting this request in place — the status stays PENDING and no re-approval is needed.</p>
+              <ul className="text-xs text-muted-foreground space-y-0.5 list-disc pl-4">
+                <li>The employee is told immediately: a portal bell row and an email show the before → after values, your name and your note.</li>
+                <li>Working days and the balance reservation are recomputed automatically — the corrected range must fit the available balance.</li>
+                <li>Only pending requests can be corrected. Decided requests are frozen history — cancel them instead.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-type">Leave type</Label>
+              <Select value={editTypeId} onValueChange={setEditTypeId}>
+                <SelectTrigger id="edit-type" className="w-full">
+                  <SelectValue placeholder="Select leave type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leaveTypes.map((lt) => (
+                    <SelectItem key={lt.id} value={lt.id}>
+                      {lt.name} · {lt.defaultDaysPerYear} d/yr{lt.isPaid ? '' : ' · unpaid'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-start">Start date</Label>
+                <Input id="edit-start" type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-end">End date</Label>
+                <Input id="edit-end" type="date" value={editEnd} min={editStart || undefined} onChange={(e) => setEditEnd(e.target.value)} />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={editHalfDay} onCheckedChange={(v) => setEditHalfDay(v === true)} />
+              Half day (the range is credited minus half a day)
+            </label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-reason">Reason (recorded for the employee)</Label>
+              <Textarea
+                id="edit-reason"
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="e.g. Family trip upcountry — phoned in on Monday morning."
+                rows={2}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-emergency">Emergency contact during leave (optional)</Label>
+              <Input
+                id="edit-emergency"
+                value={editEmergency}
+                onChange={(e) => setEditEmergency(e.target.value)}
+                placeholder="Name · phone"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-note">Note to the employee (why the correction)</Label>
+              <Textarea
+                id="edit-note"
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder="e.g. Dates adjusted — the 2nd clashes with the month-end stock take."
+                rows={2}
+              />
+            </div>
+
+            {/* Before → after strip — the delta is the point of the dialog. */}
+            {editTarget ? (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">Was</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatDate(editTarget.startDate)} → {formatDate(editTarget.endDate)} ·{' '}
+                    {toNum(editTarget.workingDays) % 1 === 0 ? toNum(editTarget.workingDays) : toNum(editTarget.workingDays).toFixed(1)} day(s)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">Now (preview)</span>
+                  <span className="font-semibold tabular-nums" data-testid="edit-days-preview">
+                    {previewDays % 1 === 0 ? previewDays : previewDays.toFixed(1)} day{previewDays === 1 ? '' : 's'}
+                    {editTypeId !== editTarget.leaveTypeId ? ' · type changed' : ''}
+                  </span>
+                </div>
+                {previewRow ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Available balance for this type</span>
+                      <span className={`font-semibold tabular-nums ${previewInsufficient ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {previewAvailable !== null && (previewAvailable % 1 === 0 ? previewAvailable : previewAvailable.toFixed(1))} of{' '}
+                        {previewEntitlement !== null && (previewEntitlement % 1 === 0 ? previewEntitlement : previewEntitlement.toFixed(1))} d
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden" role="presentation">
+                      <div
+                        className={`h-full rounded-full transition-all ${previewInsufficient ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${previewEntitlement && previewEntitlement > 0 ? Math.min(100, Math.max(0, ((previewAvailable ?? 0) / previewEntitlement) * 100)) : 0}%` }}
+                      />
+                    </div>
+                    {previewInsufficient ? (
+                      <p className="flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-400">
+                        <AlertTriangle className="h-3.5 w-3.5 mt-px shrink-0" aria-hidden />
+                        Corrected range needs {previewDays} d but only {previewAvailable} d are available — the server will reject this correction.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : previewLoading ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading balance…
+                  </p>
+                ) : (
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 mt-px shrink-0" aria-hidden />
+                    No tracked balance for this employee &amp; type yet — the correction is still balance-checked on save.
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={editMutation.isPending}>Discard</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!editFormReady || editMutation.isPending}
+              onClick={confirmEdit}
+            >
+              {editMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Edit className="h-4 w-4 mr-1.5" />}
+              Save correction
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -522,6 +522,11 @@ export async function listMyLeave(employee: SelfEmployee): Promise<{
       // behalf of the employee (null = self-filed) — renders the violet
       // "Filed by HR" chip on the portal card.
       enteredByName: r.enteredByName ?? null,
+      // v2.40.0: edit-window provenance (null = never corrected) — renders
+      // the amber "Corrected by HR" chip and the optional note on the card.
+      editedAt: r.editedAt?.toISOString() ?? null,
+      editedByName: r.editedByName ?? null,
+      editNote: r.editNote ?? null,
       rejectionReason: r.status === 'REJECTED' ? r.rejectionReason ?? null : null,
       createdAt: r.createdAt.toISOString(),
     })),

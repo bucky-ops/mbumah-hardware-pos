@@ -15,6 +15,7 @@ import {
   LEAVE_CANCEL_METADATA_MARKER,
   LEAVE_DECISION_METADATA_MARKER,
   LEAVE_ON_BEHALF_METADATA_MARKER,
+  LEAVE_EDITED_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
@@ -35,7 +36,9 @@ export interface NotificationData {
   // withdrawal) with violet accents + Cancelled chip.
   // v2.38.0: 'leave_on_behalf' - employee-facing rows for requests HR filed
   // in their name; violet surface, portal deep link.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf';
+  // v2.40.0: 'leave_edited' - employee-facing rows for requests HR corrected
+  // in place (edit window); indigo surface, portal deep link.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -335,6 +338,7 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                   { metadata: { contains: LEAVE_REQUEST_METADATA_MARKER } },
                   { metadata: { contains: LEAVE_CANCEL_METADATA_MARKER } },
                   { metadata: { contains: LEAVE_ON_BEHALF_METADATA_MARKER } },
+                  { metadata: { contains: LEAVE_EDITED_METADATA_MARKER } },
                 ],
               },
             },
@@ -391,6 +395,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.38.0: the employee-facing rows for requests HR filed
                 // in their name.
                 { metadata: { contains: LEAVE_ON_BEHALF_METADATA_MARKER } },
+                // v2.40.0: the employee-facing rows for requests HR corrected
+                // in place (edit window).
+                { metadata: { contains: LEAVE_EDITED_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -447,6 +454,24 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               // out from self-filed requests — violet "Entered by HR"
               // surface with the portal deep link (review or withdraw
               // while PENDING).
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: '',
+              category: 'HR',
+              actionUrl: n.actionUrl ?? undefined,
+              actionLabel: n.actionLabel ?? undefined,
+            });
+          } else if (kind === 'leave_edited') {
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_edited',
+              title: n.title,
+              description: n.message,
+              // v2.40.0: HR corrected the request in place — a quiet info
+              // row (no action needed; the status stays PENDING) with the
+              // indigo "Corrected by HR" surface and the portal deep link
+              // so the employee can read the corrected values on their card.
               severity: 'info',
               timestamp: n.createdAt.toISOString(),
               isRead: false,

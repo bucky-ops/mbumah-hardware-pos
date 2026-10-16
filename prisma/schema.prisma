@@ -1842,6 +1842,15 @@ model LeaveRequest {
   rejectionReason String? // Manager's reason if rejected
   attachmentUrl   String? // e.g. medical certificate for sick leave
 
+  // v2.40.0: governed edit window (HR corrects a PENDING request in place
+  // instead of cancel + refile). All three columns stay NULL for untouched
+  // requests; the first edit stamps who corrected it, when, and (optionally)
+  // a note explaining the change - surfaced as the "Corrected by HR" chip
+  // on the HR desk rows/detail dialog and the employee's portal card.
+  editedAt   DateTime?
+  editedByName String?
+  editNote   String?
+
   // Approval chain
   approvedBy String? // User ID of approver
   delegateApproverUserId String? // EMS v2.18.7: approver delegation
