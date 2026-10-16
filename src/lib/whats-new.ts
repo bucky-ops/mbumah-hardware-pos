@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.31.0',
+    title: 'Leave decisions now reach the employee — and the last hidden Decimal traps are gone',
+    bullets: [
+      'Employees now get notified the moment a manager decides their leave: a bell notification with an Approved/Declined chip, plus an email copy with the full decision (and the reason when declined).',
+      'Bell rows deep-link straight to the portal leave page, so reviewing the decision is one tap.',
+      'Email log gains a LEAVE_DECISION filter so delivery of decision emails is auditable like receipts and digests.',
+      'Hardening: every remaining Decimal read across checkout, gift cards, KRA eTIMS, bundles, reports, WhatsApp and attendance now goes through a decimal-safe conversion — the same string-concatenation trap that once corrupted leave balances can no longer recur anywhere.',
+    ],
+  },
+  {
     version: '2.30.0',
     title: 'The Payroll tab leave desk actually works now — approve, reject with a reason, and see every balance',
     bullets: [

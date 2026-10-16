@@ -8,6 +8,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 // FORMAT UNIFICATION (task 12-d): canonical en-KE KES formatter for all
 // WhatsApp money strings (handles Decimal / string / number safely).
 import { formatKES } from '@/lib/utils/financialMath';
+import { toNum } from '@/lib/decimal-safe';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,7 +78,11 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
 
         if (invoice.items && Array.isArray(invoice.items)) {
           for (const item of invoice.items) {
-            const itemTotal = item.lineTotal || item.quantity * item.pricePerUnit;
+            // v2.31.0: quantity/pricePerUnit/lineTotal are Decimal columns
+            // (valueOf is a STRING) - read through toNum so fallback math is
+            // numeric (legacy semantics kept: a present Decimal(0) lineTotal
+            // still wins over the quantity fallback).
+            const itemTotal = toNum(item.lineTotal ?? toNum(item.quantity) * toNum(item.pricePerUnit));
             whatsappMessage += `\u2022 ${item.productName || 'Item'} x${item.quantity} @ ${formatKES(item.pricePerUnit)} = ${formatKES(itemTotal)}\n`;
           }
         }
@@ -85,7 +90,7 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
         whatsappMessage += `\u{1F4B0} Subtotal: ${formatKES(invoice.subtotal)}\n`;
         whatsappMessage += `\u{1F4CA} Tax: ${formatKES(invoice.taxAmount)}\n`;
-        if (invoice.discountAmount > 0)
+        if (toNum(invoice.discountAmount) > 0)
           whatsappMessage += `\u{1F3F7}\uFE0F Discount: ${formatKES(invoice.discountAmount)}\n`;
         whatsappMessage += `\u{1F4B5} *TOTAL: ${formatKES(invoice.totalAmount)}*\n`;
         whatsappMessage += `\u{1F4CA} Status: ${invoice.status}\n`;
@@ -124,7 +129,7 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
         whatsappMessage += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
         whatsappMessage += `\u{1F4B0} Subtotal: ${formatKES(transaction.subtotal)}\n`;
         whatsappMessage += `\u{1F4CA} Tax: ${formatKES(transaction.taxAmount)}\n`;
-        if (transaction.discountAmount > 0)
+        if (toNum(transaction.discountAmount) > 0)
           whatsappMessage += `\u{1F3F7}\uFE0F Discount: ${formatKES(transaction.discountAmount)}\n`;
         whatsappMessage += `\u{1F4B5} *TOTAL: ${formatKES(transaction.totalAmount)}*\n`;
         whatsappMessage += `\u{1F4B3} Payment: ${transaction.paymentMethod}\n`;
@@ -154,7 +159,8 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
 
         if (quotation.items && Array.isArray(quotation.items)) {
           for (const item of quotation.items) {
-            const itemTotal = item.lineTotal || item.quantity * item.pricePerUnit;
+            // v2.31.0: Decimal-safe fallback math (same as the invoice case).
+            const itemTotal = toNum(item.lineTotal ?? toNum(item.quantity) * toNum(item.pricePerUnit));
             whatsappMessage += `\u2022 ${item.productName || 'Item'} x${item.quantity} @ ${formatKES(item.pricePerUnit)} = ${formatKES(itemTotal)}\n`;
           }
         }
@@ -193,7 +199,7 @@ async function sendDocumentHandler(request: NextRequest, session: AuthSession): 
           whatsappMessage += `\u{1F4B0} Value: ${formatKES(voucher.value)}\n`;
         }
         if (voucher.description) whatsappMessage += `\u{1F4DD} ${voucher.description}\n`;
-        if (voucher.minimumPurchase > 0)
+        if (toNum(voucher.minimumPurchase) > 0)
           whatsappMessage += `\u{1F512} Min. Purchase: ${formatKES(voucher.minimumPurchase)}\n`;
         if (voucher.maxDiscount)
           whatsappMessage += `\u{1F4CA} Max Discount: ${formatKES(voucher.maxDiscount)}\n`;

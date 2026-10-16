@@ -114,6 +114,7 @@ export const NotificationType = {
   WELCOME: 'WELCOME',
   PASSWORD_RESET: 'PASSWORD_RESET',
   TIER_UPGRADE: 'TIER_UPGRADE',
+  LEAVE_DECISION: 'LEAVE_DECISION',
   TEST: 'TEST',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

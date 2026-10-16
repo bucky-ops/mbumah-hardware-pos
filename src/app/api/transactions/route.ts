@@ -1249,7 +1249,10 @@ async function createTransactionInner(
         { status: 400 }
       );
     }
-    if (giftCard.currentBalance < finalTotal) {
+    // v2.31.0: currentBalance is a Decimal column (valueOf is a STRING) -
+    // read through this file's canonical financialMath toNum so the guard
+    // compares numbers, not coerced strings.
+    if (toNum(giftCard.currentBalance) < finalTotal) {
       return Response.json(
         {
           success: false,

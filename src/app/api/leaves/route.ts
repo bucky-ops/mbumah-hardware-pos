@@ -17,6 +17,13 @@ import {
   calculateWorkingDays,
 } from '@/lib/payroll-helpers';
 import { recomputeBalances } from '@/lib/hr/leave-service';
+import { toNum } from '@/lib/decimal-safe';
+import {
+  LEAVE_DECISION_METADATA_MARKER,
+  leaveDecisionCopy,
+  type LeaveDecisionStatus,
+} from '@/lib/hr/leave-notify';
+import { sendEmail } from '@/lib/email-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -208,7 +215,9 @@ async function createLeaveHandler(
   const workingDays = calculateWorkingDays(start, end) * (halfDay ? 0.5 : 1);
 
   // Check leave balance (for paid, non-unlimited leave types)
-  if (leaveType.defaultDaysPerYear > 0) {
+  // v2.31.0: defaultDaysPerYear is a Decimal column (valueOf is a STRING) -
+  // read through toNum so the guard compares numbers, not coerced strings.
+  if (toNum(leaveType.defaultDaysPerYear) > 0) {
     const leaveYear = start.getFullYear();
     const balance = await getOrCreateLeaveBalance(employeeId, leaveTypeId, leaveYear);
     if (balance.available < workingDays) {
@@ -321,7 +330,18 @@ async function updateLeaveHandler(
   const leaveRequest = await db.leaveRequest.findUnique({
     where: { id: leaveRequestId },
     include: {
-      employee: { select: { id: true, firstName: true, lastName: true, storeId: true } },
+      employee: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          storeId: true,
+          // v2.31.0: decision-notification recipients - the linked user (in-app
+          // bell row) and the employee email (best-effort email delivery).
+          email: true,
+          user: { select: { id: true, email: true } },
+        },
+      },
       leaveType: { select: { id: true, name: true } },
     },
   });
@@ -411,6 +431,67 @@ async function updateLeaveHandler(
     userId: session.userId,
     metadata: { leaveRequestId, employeeId: leaveRequest.employeeId, oldStatus, newStatus },
   });
+
+  // v2.31.0: decision notifications - a durable in-app bell row addressed to
+  // the employee's linked user (feed type 'leave_decision') plus a
+  // best-effort email via the central email service. NEVER blocks or fails
+  // the decision itself: the request is already updated, balanced and logged
+  // by the time this runs, and every step below is individually fail-soft.
+  if (newStatus === 'APPROVED' || newStatus === 'REJECTED') {
+    const recipientUserId = leaveRequest.employee.user?.id ?? null;
+    const recipientEmail =
+      leaveRequest.employee.email || leaveRequest.employee.user?.email || null;
+    try {
+      const copy = leaveDecisionCopy({
+        status: newStatus as LeaveDecisionStatus,
+        firstName: leaveRequest.employee.firstName,
+        lastName: leaveRequest.employee.lastName,
+        leaveTypeName: leaveRequest.leaveType.name,
+        startDate: leaveRequest.startDate.toISOString(),
+        endDate: leaveRequest.endDate.toISOString(),
+        workingDays: toNum(leaveRequest.workingDays),
+        rejectionReason: rejectionReason || null,
+        decidedByLabel: session.email || null,
+      });
+
+      if (recipientUserId) {
+        await db.notification.create({
+          data: {
+            storeId: leaveRequest.storeId,
+            userId: recipientUserId,
+            title: copy.title,
+            message: copy.message,
+            type: copy.notifType,
+            category: 'HR',
+            priority: copy.priority,
+            actionUrl: '/employees/me/leave',
+            actionLabel: 'View my leave',
+            metadata: JSON.stringify({
+              kind: LEAVE_DECISION_METADATA_MARKER,
+              leaveRequestId,
+              status: newStatus,
+              decidedByLabel: session.email || undefined,
+            }),
+          },
+        });
+      }
+
+      if (recipientEmail) {
+        await sendEmail({
+          to: recipientEmail,
+          subject: copy.emailSubject,
+          html: copy.emailHtml,
+          text: copy.emailText,
+          userId: recipientUserId ?? undefined,
+          type: 'LEAVE_DECISION',
+          metadata: { leaveRequestId, status: newStatus },
+        }).catch(() => undefined);
+      }
+    } catch {
+      // Decision delivery is best-effort by design - a notification or email
+      // failure must never surface as a failed decision to the manager.
+    }
+  }
 
   return Response.json({
     success: true,

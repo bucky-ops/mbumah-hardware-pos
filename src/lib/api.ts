@@ -2863,7 +2863,9 @@ export interface NotificationItem {
   // (privilege-abuse lockouts, discount-spam alerts) now surface in the feed.
   // v2.24.0: 'hr_digest' - durable HR-category digest copies (scheduled and
   // manual report digests) addressed to the session user.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest';
+  // v2.31.0: 'leave_decision' - leave APPROVED/DECLINED bell rows written by
+  // PUT /api/leaves for the employee's linked user.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -2881,6 +2883,9 @@ export interface NotificationItem {
   scheduleId?: string;
   manual?: boolean;
   emailStatus?: 'SENT' | 'FAILED';
+  // v2.31.0: decision status on leave_decision rows - drives the emerald
+  // Approved / amber Declined rail + chip in the notification center.
+  leaveStatus?: 'APPROVED' | 'REJECTED';
 }
 
 export interface NotificationSummary {
