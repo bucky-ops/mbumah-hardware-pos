@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.26.0] Delivery ops console: admin email log viewer, digest recipient management, schedule write scope
+
+Feature release (post-EMS polish round). Completes the delivery-observability loop started in v2.25.0 with an ops-facing surface: the Admin tab gains a read-only viewer over the (now durable) email delivery log, scheduled digests gain in-place recipient management with live validation, and schedule writes are finally as fail-closed as schedule sends.
+
+### Fixed
+- **Schedule PATCH/DELETE bypassed the branch scope (fail-closed doctrine violation)**: `updateSchedule` and `deleteSchedule` accepted any schedule in the organization from any role the route guard admits — including BRANCH_MANAGER. A branch manager could edit, pause or delete an org-wide or another branch's schedule, or worse, add their own address to an org-scope digest and start receiving aggregates of branches they must never see (send/preview/history have been fail-closed since v2.24.0; writes were not). Both writes now run `assertScheduleScope` (BRANCH managers may only manage their own branch's schedule; org-wide stays out of their scope; `STORE_SCOPE_FORBIDDEN` 403 otherwise), the PATCH/DELETE routes pass the real actor role/store, and the UPDATE/DELETE audit rows carry the actual actor identity instead of the synthetic `SYSTEM`.
+
+### Added
+- **Admin email delivery log viewer** (`Admin` tab → "Email delivery log"): a read-only console over `/api/notifications/logs` — the endpoint restored in v2.25.0 that no UI consumed until now. Every outbound email attempt (receipts, low-stock alerts, HR digests, …) is listable with status filters (ALL/SENT/FAILED/PENDING chips), a type filter mirroring the API whitelist, 15-per-page pagination with a total counter, 60s auto-refresh, and per-row expansion showing the delivery error, the parsed metadata (messageId, scheduleId, reportKey, actor), and the attributed user when known. Status/type chips and all interactive elements carry dark variants and focus rings; subject/recipient truncate with tooltips to keep the dense table scroll-free on mobile.
+- **Digest recipient management** (Reports → Schedules): every schedule card's recipient chips and a new "Recipients" action open an editor dialog — one address per line, live per-address validation (invalid addresses highlighted red, valid ones green), automatic dedupe/trim/lowercase mirroring the server rules, a save button that stays disabled until the draft is valid and actually changed, and inline surfacing of scope errors (the new 403). Saving PATCHes `recipients` and refreshes the list; the next scheduled fire uses the updated list.
+- **Tests**: 6 new cases (849 total / 45 files) — schedule write scope: BRANCH manager org-wide PATCH 403 with no DB write, other-branch PATCH 403, own-branch PATCH succeeds with recipients normalized (trim/lowercase/dedupe) and the real actor audited, org-role PATCH of org-wide still allowed, DELETE 403 + real-role audit on success, 404 precedence before scope checks.
+- **scripts/verify-v2-26-0.mjs** (`npm run verify:v2-26-0`): static checks over the scope enforcement + audit attribution, the route actor pass-through, the viewer component/filters/pagination + admin-tab mount, the recipient editor affordances, and version metadata.
+
 ## [2.25.0] Digest delivery observability: durable email log, delivery history, dry-run preview
 
 Feature release (post-EMS polish round). Makes email delivery observable end to end: the delivery log that the central email service has been trying to write since the email feature shipped actually persists now (the Prisma model had never been created), every scheduled digest gains a per-schedule delivery history with health dots, and a new dry-run preview shows exactly what the next digest email will contain — without sending anything.
