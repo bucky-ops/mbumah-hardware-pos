@@ -36,11 +36,19 @@ import {
   IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play, UserX, Ban,
   CalendarPlus, UserCheck, Info,
   UserCog, Link2, Unlink, ShieldCheck,
+  Copy, RefreshCw, Wand2,
 } from 'lucide-react';
 
 import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf, previewWorkingDays } from '@/lib/leave-tab';
+import {
+  suggestPortalEmail,
+  generateTempPassword,
+  PORTAL_CREATE_ROLE_OPTIONS,
+  isCreateLinkFormReady,
+  type CreateLinkFormState,
+} from '@/lib/hr/portal-account';
 
-import { useAppStore } from '@/lib/stores';
+import { useAppStore, useAuthStore } from '@/lib/stores';
 import { formatKES, formatDate, formatDateTime } from '@/lib/api';
 
 // MONEY GUARD (v2.3.1): salary fields were typed as number in the contract but
@@ -880,6 +888,37 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
   const [pickUserId, setPickUserId] = useState('');
   const [userSearch, setUserSearch] = useState('');
 
+  // v2.41.0: create-&-link mode — compose POST /api/users (SUPER_ADMIN-only
+  // via settings.roles.manage) + the existing portal-link endpoint so the
+  // desk can provision an account for an employee who has NONE, instead of
+  // sending the admin to Settings → Users and back. The create tab only
+  // renders for SUPER_ADMIN; other linkers keep the Settings hint.
+  const sessionUser = useAuthStore((s) => s.user);
+  const canCreateAccounts = sessionUser?.role === 'SUPER_ADMIN';
+  const [mode, setMode] = useState<'link' | 'create'>('link');
+  const [createForm, setCreateForm] = useState<CreateLinkFormState>({ name: '', email: '', role: '', phone: '', password: '' });
+  const [pwCopied, setPwCopied] = useState(false);
+  const updCreate = (patch: Partial<CreateLinkFormState>) => setCreateForm((f) => ({ ...f, ...patch }));
+
+  // Reset the create form each time the dialog opens on an unlinked
+  // employee — prefilled name + email suggestion + a fresh temp password.
+  const createPrefillKey = `${open}-${employee?.id ?? ''}`;
+  const [lastPrefillKey, setLastPrefillKey] = useState('');
+  if (createPrefillKey !== lastPrefillKey) {
+    setLastPrefillKey(createPrefillKey);
+    if (open && employee && !employee.userId) {
+      setMode('link');
+      setPwCopied(false);
+      setCreateForm({
+        name: employee.fullName,
+        email: suggestPortalEmail(employee.fullName),
+        role: '',
+        phone: '',
+        password: generateTempPassword(),
+      });
+    }
+  }
+
   const { data: usersEnv, isLoading: usersLoading } = useQuery<
     Array<{ id: string; name: string; email: string; role: string; isActive: boolean; store?: { name: string } | null }>
   >({
@@ -922,7 +961,49 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const busy = linkMutation.isPending || unlinkMutation.isPending;
+  // v2.41.0: create the account (POST /api/users — the server re-validates
+  // everything and 409s duplicate emails) then immediately bind it via the
+  // governed portal-link endpoint. Two calls in ONE mutation so the dialog
+  // shows a single pending state and a failure of the link leg still leaves
+  // a recoverable state (the account exists; link can be retried from the
+  // candidate list — the users query is invalidated to show it).
+  const createAndLinkMutation = useMutation({
+    mutationFn: async (form: CreateLinkFormState): Promise<{ message?: string }> => {
+      const created = await apiFetch<{ id: string }>('/api/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          role: form.role,
+          ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
+          storeId,
+          password: form.password,
+        }),
+      });
+      await apiFetch(`/api/employees/${employee?.id}/portal-link`, { method: 'POST', body: JSON.stringify({ userId: created.id }) });
+      return { message: `Account created and linked — ${employee?.firstName ?? 'the employee'} can now sign in` };
+    },
+    onSuccess: (res: { message?: string }) => {
+      toast.success(res?.message || 'Account created and linked');
+      qc.invalidateQueries({ queryKey: ['payroll-employees', storeId] });
+      qc.invalidateQueries({ queryKey: ['payroll-leave-roster', storeId] });
+      qc.invalidateQueries({ queryKey: ['portal-link-users', storeId] });
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const busy = linkMutation.isPending || unlinkMutation.isPending || createAndLinkMutation.isPending;
+
+  function handleCopyPassword() {
+    navigator.clipboard?.writeText(createForm.password).then(
+      () => {
+        setPwCopied(true);
+        setTimeout(() => setPwCopied(false), 2000);
+      },
+      () => toast.error('Could not copy — select the password manually.'),
+    );
+  }
 
   function handleUnlink() {
     if (!employee?.user) return;
@@ -991,63 +1072,216 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
                   <span className="font-semibold">Not linked.</span> Without a linked account this employee never sees in-app notifications — HR filings on their behalf are silent for them (email still goes out if an address is on file).
                 </div>
 
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      placeholder="Search active users by name, email or role..."
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                      className="pl-9 h-9"
-                    />
+                {/* v2.41.0: account source — link an existing login or
+                    provision a brand-new one without leaving the desk
+                    (create leg is SUPER_ADMIN-only, mirroring the users API
+                    role gate). */}
+                {canCreateAccounts ? (
+                  <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1" role="tablist" aria-label="Account source">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === 'link'}
+                      onClick={() => setMode('link')}
+                      className={`flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        mode === 'link'
+                          ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Search className="h-3.5 w-3.5" aria-hidden /> Link existing
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === 'create'}
+                      onClick={() => setMode('create')}
+                      className={`flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        mode === 'create'
+                          ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <UserPlus className="h-3.5 w-3.5" aria-hidden /> Create new account
+                    </button>
                   </div>
+                ) : null}
 
-                  {usersLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Loading users…
+                {mode === 'create' && canCreateAccounts ? (
+                  /* v2.41.0: create-&-link form — prefilled from the
+                     employee record, temp password generated + copyable,
+                     least-privilege role picker (privileged roles stay in
+                     Settings → Users where the segregation gate lives). */
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pl-create-name">Full name *</Label>
+                        <Input
+                          id="pl-create-name"
+                          value={createForm.name}
+                          onChange={(e) => updCreate({ name: e.target.value })}
+                          placeholder="The account holder's name"
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="pl-create-phone">Phone (optional)</Label>
+                        <Input
+                          id="pl-create-phone"
+                          value={createForm.phone}
+                          onChange={(e) => updCreate({ phone: e.target.value })}
+                          placeholder="e.g. +254 7…"
+                          autoComplete="off"
+                        />
+                      </div>
                     </div>
-                  ) : candidates.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                      {allUsers.length === 0
-                        ? 'No active users found for this store. Create user accounts first (Settings → Users).'
-                        : 'Every active user in this store already has an employee record. Unlink one first, or create a new user.'}
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pl-create-email">Email — the sign-in name *</Label>
+                      <div className="flex gap-1.5">
+                        <Input
+                          id="pl-create-email"
+                          value={createForm.email}
+                          onChange={(e) => updCreate({ email: e.target.value })}
+                          placeholder="name@mbumahhardware.co.ke"
+                          autoComplete="off"
+                          className="flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0 gap-1 px-2.5 text-xs"
+                          title="Re-suggest from the name"
+                          onClick={() => updCreate({ email: suggestPortalEmail(createForm.name) })}
+                        >
+                          <Wand2 className="h-3.5 w-3.5" aria-hidden /> Suggest
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Suggested from the employee&apos;s name — edit freely. A duplicate email is rejected by the server.</p>
                     </div>
-                  ) : (
-                    <div className="max-h-56 space-y-1.5 overflow-y-auto custom-scrollbar pr-1" role="listbox" aria-label="Candidate portal users">
-                      {candidates.map((u) => {
-                        const selected = pickUserId === u.id;
-                        return (
-                          <button
-                            key={u.id}
-                            type="button"
-                            role="option"
-                            aria-selected={selected}
-                            onClick={() => setPickUserId(selected ? '' : u.id)}
-                            className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left transition-colors ${
-                              selected
-                                ? 'border-violet-400 bg-violet-50 ring-1 ring-violet-300 dark:border-violet-700 dark:bg-violet-950/40 dark:ring-violet-800'
-                                : 'border-border hover:bg-muted/50'
-                            }`}
-                          >
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
-                                {initialsOf(u.name || u.email)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium">{u.name}</p>
-                              <p className="truncate text-xs text-muted-foreground">{u.email}</p>
-                            </div>
-                            <Badge variant="outline" className={`shrink-0 text-[10px] ring-1 ${roleTone(u.role)}`}>
-                              {u.role.replace('_', ' ')}
-                            </Badge>
-                            {selected && <Check className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden />}
-                          </button>
-                        );
-                      })}
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pl-create-role">Role *</Label>
+                      <Select value={createForm.role} onValueChange={(v) => updCreate({ role: v })}>
+                        <SelectTrigger id="pl-create-role" className="w-full">
+                          <SelectValue placeholder="Select the account role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PORTAL_CREATE_ROLE_OPTIONS.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>
+                              {r.label} · {r.hint}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">
+                        Bound to this store&apos;s branch. Privileged roles (SUPER_ADMIN, ACCOUNTANT) are provisioned from Settings → Users.
+                      </p>
                     </div>
-                  )}
-                </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pl-create-password">Temporary password *</Label>
+                      <div className="flex gap-1.5">
+                        <Input
+                          id="pl-create-password"
+                          value={createForm.password}
+                          onChange={(e) => updCreate({ password: e.target.value })}
+                          className="flex-1 font-mono text-xs"
+                          autoComplete="off"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0 px-2.5"
+                          title="Generate a new temporary password"
+                          onClick={() => { updCreate({ password: generateTempPassword() }); setPwCopied(false); }}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 shrink-0 gap-1 px-2.5 text-xs"
+                          title="Copy the temporary password"
+                          onClick={handleCopyPassword}
+                        >
+                          {pwCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+                          {pwCopied ? 'Copied' : 'Copy'}
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Share it over a secure channel — the employee should change it after first sign-in.</p>
+                    </div>
+
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/30">
+                      <p className="flex items-start gap-1.5 text-xs text-emerald-800 dark:text-emerald-300">
+                        <ShieldCheck className="h-3.5 w-3.5 mt-px shrink-0" aria-hidden />
+                        The account is created in this store and linked immediately — {employee?.firstName ?? 'the employee'} starts receiving notifications right away, and the provisioning lands in the audit trail.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Search active users by name, email or role..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="pl-9 h-9"
+                      />
+                    </div>
+
+                    {usersLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Loading users…
+                      </div>
+                    ) : candidates.length === 0 ? (
+                      <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                        {allUsers.length === 0
+                          ? canCreateAccounts
+                            ? 'No active users found for this store — switch to “Create new account” to provision one here.'
+                            : 'No active users found for this store. Create user accounts first (Settings → Users).'
+                          : canCreateAccounts
+                            ? 'Every active user in this store already has an employee record — unlink one first, or switch to “Create new account”.'
+                            : 'Every active user in this store already has an employee record. Unlink one first, or create a new user.'}
+                      </div>
+                    ) : (
+                      <div className="max-h-56 space-y-1.5 overflow-y-auto custom-scrollbar pr-1" role="listbox" aria-label="Candidate portal users">
+                        {candidates.map((u) => {
+                          const selected = pickUserId === u.id;
+                          return (
+                            <button
+                              key={u.id}
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              onClick={() => setPickUserId(selected ? '' : u.id)}
+                              className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left transition-colors ${
+                                selected
+                                  ? 'border-violet-400 bg-violet-50 ring-1 ring-violet-300 dark:border-violet-700 dark:bg-violet-950/40 dark:ring-violet-800'
+                                  : 'border-border hover:bg-muted/50'
+                              }`}
+                            >
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+                                  {initialsOf(u.name || u.email)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium">{u.name}</p>
+                                <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                              </div>
+                              <Badge variant="outline" className={`shrink-0 text-[10px] ring-1 ${roleTone(u.role)}`}>
+                                {u.role.replace('_', ' ')}
+                              </Badge>
+                              {selected && <Check className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1055,7 +1289,18 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Close</Button>
-          {!employee?.userId && (
+          {!employee?.userId && mode === 'create' && canCreateAccounts && (
+            <Button
+              size="sm"
+              disabled={!isCreateLinkFormReady(createForm) || busy}
+              onClick={() => createAndLinkMutation.mutate(createForm)}
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {createAndLinkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" aria-hidden />}
+              Create &amp; link account
+            </Button>
+          )}
+          {!employee?.userId && (mode === 'link' || !canCreateAccounts) && (
             <Button
               size="sm"
               disabled={!pickUserId || busy}
