@@ -27,6 +27,7 @@ import { type NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireAuth, type AuthSession } from '@/lib/auth';
+import { toEmailLogCsv, type EmailLogCsvRow } from '@/lib/email-log-csv';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,10 @@ const VALID_TYPES = new Set([
 ]);
 
 const VALID_STATUSES = new Set(['PENDING', 'SENT', 'FAILED']);
+
+// v2.29.0: runaway guard for the CSV export — an export can never pull more
+// than this many rows out of the log table in one response.
+const CSV_EXPORT_CAP = 2000;
 
 async function getLogsHandler(
   request: NextRequest,
@@ -68,6 +73,14 @@ async function getLogsHandler(
   const status = searchParams.get('status');
   if (status && VALID_STATUSES.has(status)) {
     where.status = status;
+  }
+
+  // v2.29.0: CSV export — same role gate + filters, but pagination is
+  // IGNORED so the export always covers the whole filtered history (capped
+  // at CSV_EXPORT_CAP rows as a runaway guard). Short-circuits before the
+  // paginated query so an export never pays for the page fetch + count.
+  if (searchParams.get('format') === 'csv') {
+    return exportLogsCsv(where);
   }
 
   const [logs, total] = await Promise.all([
@@ -137,3 +150,43 @@ export const GET = withErrorBoundary(
   requireAuth(getLogsHandler, { roles: ALLOWED_ROLES }),
   'NOTIFICATIONS_LOGS_LIST',
 );
+
+/** v2.29.0: pull the full filtered history (capped) and stream it as CSV. */
+async function exportLogsCsv(where: Record<string, unknown>): Promise<Response> {
+  const exportRows = await db.notificationLog.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: CSV_EXPORT_CAP,
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+  const csvRows: EmailLogCsvRow[] = exportRows.map((log) => {
+    let meta: Record<string, unknown> = {};
+    try {
+      meta = log.metadata ? (JSON.parse(log.metadata) as Record<string, unknown>) : {};
+    } catch {
+      meta = {};
+    }
+    return {
+      id: log.id,
+      type: log.type,
+      recipient: log.recipient,
+      subject: log.subject,
+      status: log.status,
+      error: log.error,
+      sentAt: log.sentAt,
+      createdAt: log.createdAt,
+      messageId: typeof meta.messageId === 'string' ? meta.messageId : undefined,
+      userName: log.user?.name ?? null,
+      userEmail: log.user?.email ?? null,
+    };
+  });
+  const stamp = new Date().toISOString().slice(0, 10);
+  return new Response(toEmailLogCsv(csvRows), {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="mbumah-email-delivery-log-${stamp}.csv"`,
+      'Cache-Control': 'no-store',
+    },
+  });
+}
