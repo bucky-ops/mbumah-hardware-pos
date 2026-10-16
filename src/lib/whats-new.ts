@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.41.0',
+    title: 'Provision a portal account without leaving the desk — create & link in one step',
+    bullets: [
+      'The portal-account dialog gains a "Create new account" tab next to "Link existing": when an employee has no login at all, the admin can now provision one right there instead of walking over to Settings → Users and back.',
+      'The form pre-fills itself from the employee record — full name and an email suggested from the name (editable, with a re-suggest button) — and generates a readable temporary password you can regenerate or copy with one click.',
+      'The role picker offers the least-privilege store roles (Cashier, Inventory Manager, Branch Manager, Store Owner) with plain-English hints; privileged roles stay in Settings → Users where the segregation-of-duties gate lives, and the create leg is SUPER_ADMIN-only exactly like the users API.',
+      'One click creates the account in the employee\'s store, links it immediately, and lands both steps in the audit trail — the employee starts receiving personal leave and payroll notifications right away, and portal coverage on the directory updates instantly.',
+    ],
+  },
+  {
     version: '2.40.0',
     title: 'Correct pending leave requests in place — no more cancel-and-refile',
     bullets: [
