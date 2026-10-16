@@ -319,3 +319,209 @@ export async function listUnmaskedSummariesForExport(storeId: string): Promise<R
   const rows = await db.employee.findMany({ where: { storeId, deletedAt: null } });
   return rows.map(stripEmployeePii);
 }
+
+// ─── v2.39.0: governed portal-account linking ────────────────────────────────
+//
+// The leave lifecycle notifications (v2.32.0 decision fan-out, v2.36.0
+// decision bells, v2.38.0 on-behalf employee bells) all resolve the
+// EMPLOYEE → USER link at fire time. Until now that link could only be
+// created by direct database writes (seed/QA scripts) — there was no
+// governed surface for it. These service functions close the gap:
+//
+//   linkPortalAccount   — bind an active User to an Employee (1:1, same store)
+//   unlinkPortalAccount — release the binding (Employee.userId → null)
+//
+// Every call writes a hash-chained hrAudit row. PII discipline: metadata
+// carries ids and role labels only — never the user's email or the
+// employee's name (docs/EMS_SECURITY_PRIVACY_NOTES.md).
+
+export class PortalLinkError extends Error {
+  status: number;
+  code: string;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = 'PortalLinkError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export interface PortalLinkResult {
+  employeeId: string;
+  userId: string | null;
+  linked: boolean;
+  /** True when the request was a no-op because the binding already existed. */
+  alreadyInPlace: boolean;
+  message: string;
+}
+
+async function loadEmployeeForPortalLink(employeeId: string) {
+  return db.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      id: true,
+      storeId: true,
+      status: true,
+      userId: true,
+      user: { select: { id: true, email: true, name: true, role: true, isActive: true, storeId: true } },
+    },
+  });
+}
+
+export async function linkPortalAccount(input: {
+  employeeId: string;
+  userId: string;
+  actorId: string;
+  actorRole?: string | null;
+}): Promise<PortalLinkResult> {
+  const employee = await loadEmployeeForPortalLink(input.employeeId);
+  if (!employee) {
+    throw new PortalLinkError(404, 'EMPLOYEE_NOT_FOUND', 'Employee not found.');
+  }
+  if (employee.status === 'TERMINATED') {
+    throw new PortalLinkError(
+      400,
+      'EMPLOYEE_TERMINATED',
+      'Portal access cannot be linked to a terminated employee. Restore the employment record first.',
+    );
+  }
+
+  if (employee.userId === input.userId) {
+    return {
+      employeeId: employee.id,
+      userId: employee.userId,
+      linked: true,
+      alreadyInPlace: true,
+      message: 'This portal account is already linked to the employee.',
+    };
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: input.userId },
+    select: { id: true, email: true, role: true, isActive: true, storeId: true },
+  });
+  if (!user) {
+    throw new PortalLinkError(404, 'USER_NOT_FOUND', 'Portal user not found.');
+  }
+  if (!user.isActive) {
+    throw new PortalLinkError(400, 'USER_INACTIVE', 'That portal account is deactivated. Reactivate it before linking.');
+  }
+  // Governed scope rule: the user must belong to the employee's store. A
+  // cross-store SUPER_ADMIN sees every store already — linking their account
+  // to a store employee would blur personal-employment notifications into an
+  // administrative account, so it is refused.
+  if (user.storeId !== employee.storeId) {
+    throw new PortalLinkError(
+      400,
+      'STORE_MISMATCH',
+      'That portal account belongs to a different store. Pick an account from the employee\'s own store.',
+    );
+  }
+
+  // 1:1 by schema (Employee.userId @unique) — pre-check so the caller gets a
+  // friendly 409 naming the other employee instead of a raw Prisma P2002.
+  const clash = await db.employee.findFirst({
+    where: { userId: input.userId, id: { not: employee.id }, deletedAt: null },
+    select: { id: true, firstName: true, lastName: true, storeId: true },
+  });
+  if (clash) {
+    const otherEmployee = clash.firstName
+      ? `${clash.firstName} ${clash.lastName}`
+      : 'another employee';
+    if (clash.storeId !== employee.storeId) {
+      throw new PortalLinkError(
+        409,
+        'USER_LINKED_ELSEWHERE',
+        `That portal account is already linked to ${otherEmployee} in another store.`,
+      );
+    }
+    throw new PortalLinkError(
+      409,
+      'USER_LINKED_ELSEWHERE',
+      `That portal account is already linked to ${otherEmployee}. Unlink it there first.`,
+    );
+  }
+
+  // Defensive double-check: the employee being re-linked away from an
+  // EXISTING different user is allowed (re-link), audited as such.
+  const previousUserId = employee.userId;
+
+  await db.employee.update({
+    where: { id: employee.id },
+    data: { userId: input.userId },
+  });
+
+  await hrAudit({
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    action: 'UPDATE',
+    resourceType: HrEntityType.EMPLOYEE,
+    resourceId: employee.id,
+    storeId: employee.storeId,
+    reason: previousUserId ? 'Portal account re-linked.' : 'Portal account linked.',
+    metadata: {
+      portalLink: 'LINK',
+      linkedUserId: input.userId,
+      linkedUserRole: user.role,
+      previousUserId: previousUserId ?? undefined,
+    },
+  });
+
+  return {
+    employeeId: employee.id,
+    userId: input.userId,
+    linked: true,
+    alreadyInPlace: false,
+    message: previousUserId
+      ? 'Portal account re-linked. Leave and payroll notifications now reach the new account.'
+      : 'Portal account linked. Leave and payroll notifications now reach this employee in the app.',
+  };
+}
+
+export async function unlinkPortalAccount(input: {
+  employeeId: string;
+  actorId: string;
+  actorRole?: string | null;
+}): Promise<PortalLinkResult> {
+  const employee = await loadEmployeeForPortalLink(input.employeeId);
+  if (!employee) {
+    throw new PortalLinkError(404, 'EMPLOYEE_NOT_FOUND', 'Employee not found.');
+  }
+  if (!employee.userId) {
+    return {
+      employeeId: employee.id,
+      userId: null,
+      linked: false,
+      alreadyInPlace: true,
+      message: 'This employee has no linked portal account.',
+    };
+  }
+
+  await db.employee.update({
+    where: { id: employee.id },
+    data: { userId: null },
+  });
+
+  await hrAudit({
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    action: 'UPDATE',
+    resourceType: HrEntityType.EMPLOYEE,
+    resourceId: employee.id,
+    storeId: employee.storeId,
+    reason: 'Portal account unlinked.',
+    metadata: {
+      portalLink: 'UNLINK',
+      previousUserId: employee.userId,
+    },
+  });
+
+  return {
+    employeeId: employee.id,
+    userId: null,
+    linked: false,
+    alreadyInPlace: false,
+    message:
+      'Portal account unlinked. The employee will no longer receive in-app leave or payroll notifications.',
+  };
+}
