@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.42.0',
+    title: 'Leave attachments — the medical certificate travels with the request',
+    bullets: [
+      'Leave requests now carry supporting documents: employees attach a file from the portal (a photo of the medical certificate is the classic case) and HR can attach one when filing on behalf or correcting a pending request.',
+      'Attachments are governed, not a free-for-all: PDF, PNG, JPEG and WebP only, hard-capped at 500 KB, validated on the client before upload and re-validated server-side on every filing and correction path.',
+      'The document is visible everywhere the request is — a kind-coded chip (PDF / image / link) on the Leave desk detail dialog, an "attachment" marker on desk rows, and an "Attached document" chip on the employee\'s portal card — one click opens it, with a download option.',
+      'The correction window treats the attachment as first-class: replace or remove it and the Save button lights up exactly like any other change, with the same before → after notification to the employee.',
+    ],
+  },
+  {
     version: '2.41.0',
     title: 'Provision a portal account without leaving the desk — create & link in one step',
     bullets: [

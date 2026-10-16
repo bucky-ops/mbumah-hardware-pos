@@ -22,6 +22,7 @@ import {
   type LeaveDecisionStatus,
 } from '@/lib/hr/leave-notify';
 import { sendEmail } from '@/lib/email-service';
+import { validateLeaveAttachmentUrl } from '@/lib/hr/leave-attachment';
 
 export const dynamic = 'force-dynamic';
 
@@ -201,6 +202,17 @@ async function createLeaveHandler(
   if (start > end) {
     return Response.json(
       { success: false, error: 'startDate must be before or equal to endDate.' },
+      { status: 400 }
+    );
+  }
+
+  // v2.42.0: governed attachment — allowlist (PDF/PNG/JPEG/WebP) + 500 KB
+  // decoded cap for data URLs, http(s) links stay accepted. The client
+  // picker enforces the same rules; this is the authority.
+  const attachmentCheck = validateLeaveAttachmentUrl(attachmentUrl);
+  if (!attachmentCheck.ok) {
+    return Response.json(
+      { success: false, error: attachmentCheck.message, code: `ATTACHMENT_${attachmentCheck.code}` },
       { status: 400 }
     );
   }
@@ -462,6 +474,16 @@ async function updateLeaveHandler(
         { status: 400 }
       );
     }
+    // v2.42.0: the attachment follows the same governed rules as filing —
+    // allowlist + size cap on the data URL, http(s) links accepted.
+    const attachmentCheck = validateLeaveAttachmentUrl(attachmentUrl);
+    if (!attachmentCheck.ok) {
+      return Response.json(
+        { success: false, error: attachmentCheck.message, code: `ATTACHMENT_${attachmentCheck.code}` },
+        { status: 400 }
+      );
+    }
+
     // Optional type change must be real.
     if (leaveTypeId && leaveTypeId !== leaveRequest.leaveTypeId) {
       const newType = await db.leaveType.findUnique({ where: { id: leaveTypeId }, select: { id: true } });

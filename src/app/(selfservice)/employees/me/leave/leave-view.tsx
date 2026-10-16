@@ -16,8 +16,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, PenLine, RefreshCw, UserCheck } from 'lucide-react';
+import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, UserCheck } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { LeaveAttachmentPicker, LeaveAttachmentChip } from '@/components/hr/leave-attachment-ui';
 
 export interface BalanceDto {
   leaveTypeId: string;
@@ -48,6 +49,8 @@ export interface RequestDto {
   editedAt?: string | null;
   editedByName?: string | null;
   editNote?: string | null;
+  /** v2.42.0: supporting document — data URL (governed cap) or http(s) link. */
+  attachmentUrl?: string | null;
 }
 export interface LeaveDto {
   balances: BalanceDto[];
@@ -91,6 +94,9 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
   const [endDate, setEndDate] = useState('');
   const [halfDay, setHalfDay] = useState('false');
   const [reason, setReason] = useState('');
+  // v2.42.0: optional supporting document (e.g. a medical certificate photo)
+  // attached from the portal — same governed rules the HR desk enforces.
+  const [attachment, setAttachment] = useState<string | null>(null);
 
   /** Pre-fill the request dialog from a rejected request (v2.34.0). Falls
    *  back to an empty type when that balance row no longer exists — the
@@ -109,6 +115,7 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
   const closeRequestDialog = () => {
     setOpen(false);
     setResubmitOf(null);
+    setAttachment(null);
   };
 
   const submit = async () => {
@@ -121,12 +128,14 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
         endDate: new Date(endDate).toISOString(),
         halfDay: halfDay === 'true',
         ...(reason.trim() ? { reason } : {}),
+        ...(attachment ? { attachmentUrl: attachment } : {}),
       });
       setOpen(false);
       setResubmitOf(null);
       setStartDate('');
       setEndDate('');
       setReason('');
+      setAttachment(null);
       // Re-run the server render - balances + requests come back fresh.
       router.refresh();
     } catch (e) {
@@ -252,6 +261,16 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                   </div>
                 ) : null}
                 {r.reason ? <p className="mt-1 text-xs text-muted-foreground">“{r.reason}”</p> : null}
+                {/* v2.42.0: the supporting document, kind-coded — one click
+                    opens it in a new tab (data URLs offer a download). */}
+                {r.attachmentUrl ? (
+                  <div className="mt-1.5">
+                    <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <Paperclip className="h-3 w-3" aria-hidden /> Attached document
+                    </p>
+                    <LeaveAttachmentChip value={r.attachmentUrl} />
+                  </div>
+                ) : null}
                 {r.rejectionReason ? (
                   <div className="mt-1 rounded-lg bg-rose-50 px-2 py-1.5 dark:bg-rose-950/40">
                     <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">
@@ -370,6 +389,9 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
               <Label htmlFor="leave-reason">Reason (optional)</Label>
               <Textarea id="leave-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
+            {/* v2.42.0: optional supporting document — a photo of the medical
+                certificate is the classic case. Same rules as the HR desk. */}
+            <LeaveAttachmentPicker value={attachment} onChange={setAttachment} testId="portal-attachment" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeRequestDialog}>Cancel</Button>

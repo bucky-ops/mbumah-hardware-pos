@@ -25,6 +25,7 @@ import { hasHrPermission, type HrPermissionKey } from './permissions';
 import { isHrModuleEnabled } from './feature-flag';
 import { StageGError } from './stage-g-shared';
 import { requestLeave } from './leave-service';
+import { validateLeaveAttachmentUrl } from './leave-attachment';
 import { listMyGoals } from './goal-service';
 import { listMyReviews } from './performance-service';
 
@@ -527,6 +528,9 @@ export async function listMyLeave(employee: SelfEmployee): Promise<{
       editedAt: r.editedAt?.toISOString() ?? null,
       editedByName: r.editedByName ?? null,
       editNote: r.editNote ?? null,
+      // v2.42.0: supporting document (data URL within the governed cap, or
+      // a legacy http(s) link) — renders the kind-coded attachment chip.
+      attachmentUrl: r.attachmentUrl ?? null,
       rejectionReason: r.status === 'REJECTED' ? r.rejectionReason ?? null : null,
       createdAt: r.createdAt.toISOString(),
     })),
@@ -543,6 +547,7 @@ export async function requestMyLeave(
     endDate?: unknown;
     halfDay?: unknown;
     reason?: unknown;
+    attachmentUrl?: unknown;
   },
 ): Promise<Record<string, unknown>> {
   const leaveTypeId = String(input.leaveTypeId ?? '').trim();
@@ -552,6 +557,11 @@ export async function requestMyLeave(
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     throw new StageGError('INVALID_PERIOD', 'startDate and endDate must be valid ISO dates.', 400);
   }
+  // v2.42.0: optional supporting document — same allowlist + 500 KB cap the
+  // HR desk enforces; a non-string or rejected value is a 400.
+  const rawAttachment = typeof input.attachmentUrl === 'string' ? input.attachmentUrl.trim() : '';
+  const attachmentCheck = validateLeaveAttachmentUrl(rawAttachment || null);
+  if (!attachmentCheck.ok) throw new StageGError(`ATTACHMENT_${attachmentCheck.code}`, attachmentCheck.message, 400);
   const request = await requestLeave({
     employeeId: employee.id, // forced self; client value ignored
     storeId: employee.storeId,
@@ -562,6 +572,7 @@ export async function requestMyLeave(
     endDate,
     halfDay: input.halfDay === true,
     reason: typeof input.reason === 'string' ? input.reason.trim() || undefined : undefined,
+    attachmentUrl: rawAttachment || null, // v2.42.0: validated above
     submitterEmail: session.email, // v2.32.0: manager notification footer
   }).catch((error: unknown) => {
     // leave-service throws plain Errors with CODE: prefixes; normalise.

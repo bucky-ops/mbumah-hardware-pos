@@ -37,9 +37,11 @@ import {
   CalendarPlus, UserCheck, Info,
   UserCog, Link2, Unlink, ShieldCheck,
   Copy, RefreshCw, Wand2,
+  Paperclip,
 } from 'lucide-react';
 
 import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf, previewWorkingDays } from '@/lib/leave-tab';
+import { LeaveAttachmentPicker, LeaveAttachmentChip } from '@/components/hr/leave-attachment-ui';
 import {
   suggestPortalEmail,
   generateTempPassword,
@@ -173,6 +175,8 @@ interface LeaveRequest {
   editedAt?: string | null;
   editedByName?: string | null;
   editNote?: string | null;
+  /** v2.42.0: supporting document — data URL (governed cap) or http(s) link. */
+  attachmentUrl?: string | null;
 }
 
 // Matches the per-employee balance rows returned as `balances` by
@@ -1571,6 +1575,8 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const [newEnd, setNewEnd] = useState('');
   const [newHalfDay, setNewHalfDay] = useState(false);
   const [newReason, setNewReason] = useState('');
+  // v2.42.0: optional supporting document for the on-behalf filing.
+  const [newAttachment, setNewAttachment] = useState<string | null>(null);
 
   // v2.40.0: edit-window state — the correction dialog for PENDING requests
   // (dates / half-day / type / reason / emergency contact / note-to-employee).
@@ -1582,6 +1588,9 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const [editReason, setEditReason] = useState('');
   const [editEmergency, setEditEmergency] = useState('');
   const [editNote, setEditNote] = useState('');
+  // v2.42.0: attachment state inside the correction window — prefilled from
+  // the request; remove/replace participates in the no-op guard.
+  const [editAttachment, setEditAttachment] = useState<string | null>(null);
 
   // GET /api/leaves returns { success, data: [...], balances?: [...],
   // leaveTypes: [...] } — apiFetch would drop the side payloads, so this
@@ -1663,6 +1672,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
       editHalfDay !== editTarget.halfDay ||
       editReason !== (editTarget.reason ?? '') ||
       (editEmergency || '') !== (editTarget.emergencyContact ?? '') ||
+      (editAttachment ?? '') !== (editTarget.attachmentUrl ?? '') ||
       editNote.trim().length > 0);
   const editFormReady =
     !!editTarget && editChanged && previewDays > 0 && !!editStart && editStart <= editEnd && !previewInsufficient;
@@ -1719,7 +1729,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   // filers targeting a colleague and 400s INSUFFICIENT_BALANCE (mirrored
   // client-side by the disabled submit + rose preview above).
   const newRequestMutation = useMutation({
-    mutationFn: (payload: { employeeId: string; leaveTypeId: string; startDate: string; endDate: string; halfDay: boolean; reason?: string }) =>
+    mutationFn: (payload: { employeeId: string; leaveTypeId: string; startDate: string; endDate: string; halfDay: boolean; reason?: string; attachmentUrl?: string | null }) =>
       apiFetch('/api/leaves', { method: 'POST', body: JSON.stringify({ storeId, ...payload }) }),
     onSuccess: (_data, vars) => {
       const who = roster.find((r) => r.id === vars.employeeId);
@@ -1731,6 +1741,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
       setNewEnd('');
       setNewHalfDay(false);
       setNewReason('');
+      setNewAttachment(null);
       qc.invalidateQueries({ queryKey: ['payroll-leaves', storeId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1743,6 +1754,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
     setNewEnd('');
     setNewHalfDay(false);
     setNewReason('');
+    setNewAttachment(null);
     setNewOpen(true);
   };
 
@@ -1756,6 +1768,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
     setEditReason(l.reason ?? '');
     setEditEmergency(l.emergencyContact ?? '');
     setEditNote('');
+    setEditAttachment(l.attachmentUrl ?? null);
     setEditTarget(l);
   };
 
@@ -1772,6 +1785,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
       halfDay: boolean;
       reason: string;
       emergencyContact: string | null;
+      attachmentUrl: string | null;
       editNote: string | null;
       employeeName: string;
     }) =>
@@ -1786,6 +1800,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
           halfDay: payload.halfDay,
           reason: payload.reason,
           emergencyContact: payload.emergencyContact,
+          attachmentUrl: payload.attachmentUrl,
           editNote: payload.editNote,
         }),
       }),
@@ -1808,6 +1823,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
       halfDay: editHalfDay,
       reason: editReason.trim(),
       emergencyContact: editEmergency.trim() || null,
+      attachmentUrl: editAttachment,
       editNote: editNote.trim() || null,
       employeeName: editTarget.employeeName,
     });
@@ -1914,6 +1930,14 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                             {l.editedByName ? (
                               <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-0.5" title={`Corrected by ${l.editedByName}`}>
                                 <Edit className="h-2.5 w-2.5" aria-hidden /> corrected
+                              </p>
+                            ) : null}
+                            {/* v2.42.0: at-a-glance attachment marker — a
+                                paperclip on the type cell says a supporting
+                                document is on the request (open via View). */}
+                            {l.attachmentUrl ? (
+                              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-0.5" title="A supporting document is attached">
+                                <Paperclip className="h-2.5 w-2.5" aria-hidden /> attachment
                               </p>
                             ) : null}
                           </td>
@@ -2158,6 +2182,16 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   <p className="text-sm whitespace-pre-wrap break-words">{detail.reason}</p>
                 </div>
               )}
+              {/* v2.42.0: the supporting document, kind-coded and one click
+                  away (opens in a new tab; data URLs offer a download). */}
+              {detail.attachmentUrl ? (
+                <div className="rounded-lg border bg-muted/30 p-2.5">
+                  <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Paperclip className="h-3 w-3" aria-hidden /> Supporting document
+                  </p>
+                  <LeaveAttachmentChip value={detail.attachmentUrl} />
+                </div>
+              ) : null}
               {detail.rejectionReason && (
                 <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-2.5">
                   <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Rejection reason</p>
@@ -2398,6 +2432,14 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
               />
             </div>
 
+            {/* v2.42.0: attachment inside the correction window — prefilled
+                from the request; removing or replacing it participates in the
+                no-op guard, so Save only lights up when something changed. */}
+            <div className="space-y-1.5">
+              <Label>Supporting document</Label>
+              <LeaveAttachmentPicker value={editAttachment} onChange={setEditAttachment} testId="edit-attachment" />
+            </div>
+
             {/* Before → after strip — the delta is the point of the dialog. */}
             {editTarget ? (
               <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
@@ -2550,6 +2592,11 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
               />
             </div>
 
+            {/* v2.42.0: optional supporting document — same governed rules the
+                API enforces (PDF/PNG/JPEG/WebP, 500 KB cap), validated before
+                the file is ever read. */}
+            <LeaveAttachmentPicker value={newAttachment} onChange={setNewAttachment} testId="onbehalf-attachment" />
+
             {/* Live preview strip — days + balance rail. */}
             <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
               <div className="flex items-center justify-between gap-2 text-sm">
@@ -2616,6 +2663,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   endDate: new Date(`${newEnd}T00:00:00.000Z`).toISOString(),
                   halfDay: newHalfDay,
                   ...(newReason.trim() ? { reason: newReason.trim() } : {}),
+                  ...(newAttachment ? { attachmentUrl: newAttachment } : {}),
                 })
               }
             >
