@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.37.0',
+    title: 'Leave balances join the scheduled digest pack — the year-keyed balance sheet can now land in the right inbox on autopilot',
+    bullets: [
+      'The "Leave balances" report is now schedulable alongside the other report digests: pick it in the Schedule a report digest dialog, choose daily/weekly/monthly, add recipients, and the aggregate digest lands on its own.',
+      'It is the only year-keyed digest — every fire re-computes for the current calendar leave year and the email says so ("Leave year 2026"), instead of pretending balances follow the reporting period.',
+      'The digest carries the balance-sheet view: tracked rows, liability days, committed %, over-drawn count, pending days and exhausted/low counts as headline stats, plus an entitlement-by-leave-type table — aggregates only, never employee names or ids.',
+      'A failed send still surfaces honestly: the schedule row stamps FAILED and the creator gets a HIGH-priority alert (dev/CI without RESEND_API_KEY shows the same path).',
+    ],
+  },
+  {
     version: '2.36.0',
     title: 'Leave balances gain a correction path — click a row for history, then adjust entitlement with a full audit trail',
     bullets: [

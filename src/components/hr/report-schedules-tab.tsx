@@ -103,6 +103,7 @@ const REPORT_OPTIONS = [
   { value: 'turnover', label: 'Turnover' },
   { value: 'time-to-hire', label: 'Time to hire' },
   { value: 'statutory-liability', label: 'Statutory liability' },
+  { value: 'leave-utilisation', label: 'Leave balances (leave-year keyed)' },
 ];
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -811,7 +812,8 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
             </DialogTitle>
             <DialogDescription>
               Emails the aggregate report on a repeating schedule. Digests contain aggregates only —
-              never employee names, national IDs or raw ids. Times are UTC.
+              never employee names, national IDs or raw ids. Times are UTC. Leave balances digests
+              are keyed to the current calendar leave year instead of the period above.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3.5">
