@@ -135,8 +135,35 @@ was remediated exactly as scoped, in two layers:
 | v2.24.0 route groups | 81 | 100 | 96 | 100 | 320 ms | boot cost down; LCP still fetch-gated |
 | **v2.24.0 SSR home** | **94** | **100** | 96 | 100 | **170 ms** | LCP 3.9 → 2.5 s; HTML carries the dashboard |
 
+**v2.28.0 — SSR COMPLETION across the whole portal.** The remaining five
+interactivity-bearing pages (payslips, attendance, leave, goals, documents)
+are now server components too, closing the "remain client components" caveat
+above:
+
+- Every page resolves its session through the shared `loadSelfPortal` guard
+  (`self-portal.tsx`) — one implementation of the signed-in / module-enabled /
+  employee-linked contract (previously inlined only on the home page, with
+  subtly divergent fallbacks on the client pages).
+- Read paths call the SAME services the API routes expose
+  (`listMyPayslips`, `listMyAttendance`, `listMyLeave`, `listMyGoalProgress`,
+  `listMyPerformanceReviews`, `listMyDocuments`) — the HTML carries the
+  payload, LCP ≈ FCP on all six portal routes.
+- Interactivity stays client-side where it belongs: the payslip breakdown
+  dialog (cache-first, offline fallback), the leave request dialog and the
+  review acknowledge button now `router.refresh()` the server render after a
+  successful POST instead of re-fetching JSON by hand.
+- The offline contracts are preserved: payslips mirror the freshly served
+  list into the SAME `mbt_self_payslips_cache_v1` key via a cache-writer
+  island, and the breakdown dialog still opens from
+  `mbt_self_payslip_v1:<id>` when offline; the offline banner now tracks the
+  browser's real connection state instead of a failed fetch.
+- All six pages share one `SelfPageHeader` (gradient icon tile + title +
+  supporting line + optional action slot) — the portal finally reads as one
+  product.
+
 Notes: attendance clock times render with an explicit Africa/Nairobi
 timezone (previously viewer-local — a silent drift for devices off Kenyan
 time). Remaining headroom is the Next.js App Router runtime itself
 (~224 KiB framework chunk, irreducible) and the residual hydration work of
-the client-side portal pages — micro-optimisations only from here.
+the interactive islands (payslip dialog, leave form, acknowledge buttons) —
+micro-optimisations only from here.

@@ -51,3 +51,15 @@ export function parseDigestNotificationExtras(raw: unknown): DigestNotificationE
 
   return extras;
 }
+
+/**
+ * v2.28.0: notification-center "Email failed" filter predicate — true for
+ * HR digest copies whose email delivery FAILED. Pure and fail-soft: any
+ * non-row input (or a digest without a FAILED stamp) is simply not matched,
+ * so the filter can never crash the feed, only narrow it.
+ */
+export function isFailedEmailDigest(input: unknown): boolean {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
+  const row = input as Record<string, unknown>;
+  return row.type === 'hr_digest' && row.emailStatus === 'FAILED';
+}

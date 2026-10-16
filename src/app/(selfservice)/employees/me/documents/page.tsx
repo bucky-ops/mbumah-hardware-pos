@@ -1,14 +1,17 @@
-'use client';
-
-// MBUMAH HARDWARE POS - /employees/me/documents (v2.19.0)
+// MBUMAH HARDWARE POS - /employees/me/documents (v2.28.0, SERVER-RENDERED)
 // Own document metadata (type, verification status, expiry). Notes are
 // HR-only and never rendered here; files download only through the
 // permission-gated HR document route.
+//
+// v2.28.0 SSR COMPLETION: previously a client component that fetched
+// /api/self-service/me/documents after paint; now server-renders through the
+// SAME listMyDocuments service the API route exposes. Pure read - no client
+// island needed. The 90-day expiry warning moves server-side with it.
 
-import { useEffect, useState } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { FileText, TriangleAlert } from 'lucide-react';
-import { apiGet, EmptyState, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { listMyDocuments } from '@/lib/hr/self-service';
+import { EmptyState, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { SelfPageHeader, loadSelfPortal } from '../self-portal';
 
 interface DocumentDto {
   id: string;
@@ -27,48 +30,53 @@ function isExpiringSoon(iso: string | null): boolean {
   return d < ninety && d > Date.now() - 24 * 3600 * 1000;
 }
 
-export default function MyDocuments() {
-  const [docs, setDocs] = useState<DocumentDto[] | null>(null);
-  const [error, setError] = useState('');
+export const dynamic = 'force-dynamic';
 
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      try {
-        const d = await apiGet<DocumentDto[]>('/api/self-service/me/documents');
-        if (active) setDocs(d);
-      } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : 'Could not load documents.');
-      }
-    };
-    void run();
-    return () => {
-      active = false;
-    };
-  }, []);
+export default async function MyDocuments() {
+  const guard = await loadSelfPortal('hr.documents.read.own');
+  if (!guard.ok) return guard.note;
+
+  let docs: DocumentDto[];
+  try {
+    docs = (await listMyDocuments(guard.employee)) as unknown as DocumentDto[];
+  } catch {
+    return (
+      <div className="space-y-4">
+        <SelfPageHeader
+          icon={<FileText className="h-5 w-5" />}
+          tone="from-slate-500/15 to-zinc-500/15 text-slate-600 dark:text-slate-300"
+          title="My documents"
+          description="Contracts and certificates HR has filed for you."
+        />
+        <ErrorNote message="Could not load your documents. Try again in a moment." />
+      </div>
+    );
+  }
+
+  const expiringCount = docs.filter((d) => isExpiringSoon(d.expiryDate)).length;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-          <FileText className="h-5 w-5 text-slate-500" aria-hidden /> My documents
-        </h1>
-        <p className="text-sm text-muted-foreground">Contracts and certificates HR has filed for you.</p>
-      </div>
+      <SelfPageHeader
+        icon={<FileText className="h-5 w-5" />}
+        tone="from-slate-500/15 to-zinc-500/15 text-slate-600 dark:text-slate-300"
+        title="My documents"
+        description={
+          expiringCount > 0
+            ? `Contracts and certificates HR has filed for you — ${expiringCount} expiring soon.`
+            : 'Contracts and certificates HR has filed for you.'
+        }
+      />
 
-      {error ? <ErrorNote message={error} /> : null}
-
-      {!docs ? (
-        <div className="space-y-2">
-          <Skeleton className="h-16 rounded-xl" />
-          <Skeleton className="h-16 rounded-xl" />
-        </div>
-      ) : docs.length === 0 ? (
+      {docs.length === 0 ? (
         <EmptyState icon={<FileText className="h-8 w-8" aria-hidden />} title="No documents yet" hint="HR-uploaded documents will appear here." />
       ) : (
         <ul className="space-y-2" aria-label="My documents">
           {docs.map((d) => (
-            <li key={d.id} className="rounded-xl border bg-card px-3.5 py-3 shadow-sm">
+            <li
+              key={d.id}
+              className="rounded-xl border bg-card px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md"
+            >
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{d.fileName}</p>
