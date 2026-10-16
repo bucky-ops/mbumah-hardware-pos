@@ -65,11 +65,14 @@ vi.mock('@/lib/hr/reports', () => ({
 }));
 
 import {
+  deleteSchedule,
   listScheduleDeliveries,
   nextScheduleRunAt,
   previewScheduleDigest,
+  updateSchedule,
 } from '@/lib/hr/report-schedule-service';
 import type { HrScheduleError } from '@/lib/hr/report-schedule-service';
+import { hrAudit } from '@/lib/hr/audit';
 
 const ORG = 'org_mbumah';
 const SCHEDULE_ID = 'sched-1';
@@ -309,5 +312,93 @@ describe('previewScheduleDigest', () => {
     expect(preview.headlines).toEqual([]);
     // Still no side effects on the skipped path.
     expect(db.hrReportSchedule.update).not.toHaveBeenCalled();
+  });
+});
+
+// ── v2.26.0: write scope (PATCH/DELETE) ─────────────────────────────────
+
+describe('updateSchedule / deleteSchedule fail-closed scope', () => {
+  beforeEach(() => {
+    db.hrReportSchedule.update.mockResolvedValue(scheduleRow());
+  });
+
+  it('403 when a BRANCH manager patches an org-wide schedule (previously writable)', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow({ storeId: null }));
+    await expect(
+      updateSchedule(ORG, BM_ACTOR, SCHEDULE_ID, { recipients: ['bm@mbumahhardware.co.ke'] }),
+    ).rejects.toMatchObject({ code: 'STORE_SCOPE_FORBIDDEN', status: 403 } as Partial<HrScheduleError>);
+    // The escalation attempt must not reach the database.
+    expect(db.hrReportSchedule.update).not.toHaveBeenCalled();
+  });
+
+  it('403 when a BRANCH manager patches another branch\'s schedule', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow({ storeId: 'store_thika' }));
+    await expect(
+      updateSchedule(ORG, BM_ACTOR, SCHEDULE_ID, { active: false }),
+    ).rejects.toMatchObject({ status: 403 } as Partial<HrScheduleError>);
+    expect(db.hrReportSchedule.update).not.toHaveBeenCalled();
+  });
+
+  it('BRANCH manager may patch their OWN branch\'s schedule; recipients are normalized', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow({ storeId: 'store_juja_main' }));
+    // Invalid address → 422 (no write, no audit).
+    await expect(
+      updateSchedule(ORG, BM_ACTOR, SCHEDULE_ID, {
+        recipients: ['owner@mbumahhardware.co.ke', 'bad-address'],
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_RECIPIENT', status: 422 } as Partial<HrScheduleError>);
+    expect(db.hrReportSchedule.update).not.toHaveBeenCalled();
+
+    // Valid input: trim + lowercase + dedupe before the write.
+    await expect(
+      updateSchedule(ORG, BM_ACTOR, SCHEDULE_ID, {
+        recipients: ['  Owner@MbumahHardware.co.ke ', 'owner@mbumahhardware.co.ke'],
+      }),
+    ).resolves.toBeDefined();
+    const write = db.hrReportSchedule.update.mock.calls[0][0] as { data: { recipients: string } };
+    expect(JSON.parse(write.data.recipients)).toEqual(['owner@mbumahhardware.co.ke']);
+    // Audit carries the REAL actor, not the synthetic SYSTEM identity.
+    expect(hrAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user_bm', actorRole: 'BRANCH_MANAGER', action: 'UPDATE' }),
+    );
+  });
+
+  it('org roles may still patch org-wide schedules', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow({ storeId: null }));
+    await expect(
+      updateSchedule(ORG, ORG_ACTOR, SCHEDULE_ID, { hourUtc: 5 }),
+    ).resolves.toBeDefined();
+    expect(db.hrReportSchedule.update).toHaveBeenCalled();
+  });
+
+  it('403 when a BRANCH manager deletes an org-wide schedule; audit uses the real role on success', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow({ storeId: null }));
+    await expect(deleteSchedule(ORG, BM_ACTOR, SCHEDULE_ID)).rejects.toMatchObject({
+      code: 'STORE_SCOPE_FORBIDDEN',
+      status: 403,
+    } as Partial<HrScheduleError>);
+    expect(db.hrReportSchedule.update).not.toHaveBeenCalled();
+
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow({ storeId: 'store_juja_main' }));
+    await deleteSchedule(ORG, BM_ACTOR, SCHEDULE_ID);
+    expect(db.hrReportSchedule.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ active: false }),
+      }),
+    );
+    expect(hrAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user_bm', actorRole: 'BRANCH_MANAGER', action: 'DELETE' }),
+    );
+  });
+
+  it('404 when the schedule does not exist (before any scope check)', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(null);
+    await expect(updateSchedule(ORG, ORG_ACTOR, 'missing', { active: true })).rejects.toMatchObject({
+      code: 'SCHEDULE_NOT_FOUND',
+      status: 404,
+    } as Partial<HrScheduleError>);
+    await expect(deleteSchedule(ORG, ORG_ACTOR, 'missing')).rejects.toMatchObject({
+      status: 404,
+    } as Partial<HrScheduleError>);
   });
 });

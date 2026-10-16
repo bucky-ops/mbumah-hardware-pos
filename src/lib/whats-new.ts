@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.26.0',
+    title: 'Delivery ops console: see every email that left the building, and manage digest recipients in place',
+    bullets: [
+      'New "Email delivery log" card in the Admin tab: every outbound email attempt — receipts, low-stock alerts, HR digests — with its SENT/FAILED outcome, filters, paging and the exact error when a send failed.',
+      'Expand any log row to see the provider messageId, the schedule it belonged to, and who triggered it.',
+      'Scheduled digests now have a "Recipients" editor right on the card: add or remove addresses with live validation (invalid ones turn red), dedupe handled for you, and the next scheduled fire picks the list up automatically.',
+      'Security hardening: branch managers can no longer edit, delete or re-address schedules outside their own branch — schedule writes now enforce the same fail-closed branch scope as sending and previews do.',
+      'Schedule pause/delete audit entries now record who actually performed the action instead of a generic system identity.',
+    ],
+  },
+  {
     version: '2.25.0',
     title: 'Every email is now accountable: delivery history for your digests, and a dry-run preview before you send',
     bullets: [

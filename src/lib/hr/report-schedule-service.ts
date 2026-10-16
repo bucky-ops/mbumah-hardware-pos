@@ -247,7 +247,7 @@ export async function createSchedule(
 
 export async function updateSchedule(
   organizationId: string,
-  actorId: string,
+  actor: { id: string; role: string; storeId: string | null },
   id: string,
   patch: Partial<ScheduleInput> & { active?: boolean },
 ) {
@@ -257,6 +257,7 @@ export async function updateSchedule(
   if (!existing) {
     throw new HrScheduleError('SCHEDULE_NOT_FOUND', 'Schedule not found.', 404);
   }
+  assertScheduleScope(existing, actor);
   const merged: ScheduleInput = {
     reportKey: patch.reportKey ?? existing.reportKey,
     frequency: patch.frequency ?? existing.frequency,
@@ -280,11 +281,12 @@ export async function updateSchedule(
     },
   });
   await hrAudit({
-    actorId,
-    actorRole: 'SYSTEM',
+    actorId: actor.id,
+    actorRole: actor.role,
     action: 'UPDATE',
     resourceType: HrEntityType.REPORT_SCHEDULE,
     resourceId: row.id,
+    storeId: row.storeId ?? undefined,
     metadata: {
       active: row.active,
       reportKey: row.reportKey,
@@ -295,25 +297,53 @@ export async function updateSchedule(
   return row;
 }
 
-export async function deleteSchedule(organizationId: string, actorId: string, id: string) {
+export async function deleteSchedule(
+  organizationId: string,
+  actor: { id: string; role: string; storeId: string | null },
+  id: string,
+) {
   const existing = await db.hrReportSchedule.findFirst({
     where: { id, organizationId, deletedAt: null },
   });
   if (!existing) {
     throw new HrScheduleError('SCHEDULE_NOT_FOUND', 'Schedule not found.', 404);
   }
+  assertScheduleScope(existing, actor);
   await db.hrReportSchedule.update({
     where: { id: existing.id },
     data: { deletedAt: new Date(), active: false },
   });
   await hrAudit({
-    actorId,
-    actorRole: 'SYSTEM',
+    actorId: actor.id,
+    actorRole: actor.role,
     action: 'DELETE',
     resourceType: HrEntityType.REPORT_SCHEDULE,
     resourceId: existing.id,
+    storeId: existing.storeId ?? undefined,
     metadata: { reportKey: existing.reportKey, softDeleted: true },
   });
+}
+
+/**
+ * v2.26.0: fail-closed row scope for schedule writes (PATCH/DELETE), closing
+ * the gap that let a BRANCH_MANAGER edit or delete org-wide and other-branch
+ * schedules — e.g. adding their own address to an ORG-scope digest and
+ * receiving aggregates of branches they must never see. Mirrors the scope
+ * rules of sendScheduleNow / previewScheduleDigest / listScheduleDeliveries:
+ * org roles may touch any schedule of their organization; a BRANCH manager
+ * may only touch their own branch's schedule (org-wide = out of scope).
+ */
+function assertScheduleScope(
+  row: { id: string; storeId: string | null },
+  actor: { id: string; role: string; storeId: string | null },
+): void {
+  if (actor.role === 'BRANCH_MANAGER' && row.storeId !== actor.storeId) {
+    throw new HrScheduleError(
+      'STORE_SCOPE_FORBIDDEN',
+      'Branch managers can only manage schedules for their own branch.',
+      403,
+    );
+  }
 }
 
 function safeParseRecipients(raw: string): string[] {

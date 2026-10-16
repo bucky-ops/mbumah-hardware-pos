@@ -28,6 +28,8 @@ import { UpdatesSafetySection } from '@/components/admin/updates-safety-section'
 import { FleetRemoteOpsSection } from '@/components/admin/fleet-remote-ops-section';
 // v2.14.0: Power-On Self-Test card (boot diagnostics + engraved-admin self-heal).
 import { SystemHealthSection } from '@/components/admin/system-health-section';
+// v2.26.0: read-only email delivery log over /api/notifications/logs.
+import { EmailDeliveryLogSection } from '@/components/admin/email-delivery-log-section';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -1810,6 +1812,11 @@ export default function AdminTab() {
       {/* System Health - Power-On Self-Test (v2.14.0, auto-refresh 60s)      */}
       {/* ================================================================== */}
       <SystemHealthSection />
+
+      {/* ================================================================== */}
+      {/* Email delivery log (v2.26.0) - every outbound attempt + outcome     */}
+      {/* ================================================================== */}
+      <EmailDeliveryLogSection />
 
       {/* ================================================================== */}
       {/* User Management & Quick Actions Row                                 */}

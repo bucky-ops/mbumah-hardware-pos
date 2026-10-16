@@ -27,6 +27,8 @@ import {
   CalendarRange,
   CalendarSync,
   CircleAlert,
+  CircleCheck,
+  CircleX,
   Clock3,
   Eye,
   History,
@@ -37,6 +39,7 @@ import {
   PlusCircle,
   Send,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, formatDate } from '@/components/hr/self-service-ui';
 
@@ -142,6 +145,37 @@ function healthDots(rows: DeliveryRow[]): Array<{ id: string; status: string; ti
     }));
 }
 
+// v2.26.0: client-side mirror of the service's EMAIL_RE so the recipient
+// editor gives instant per-address feedback (the server re-validates anyway).
+const RECIPIENT_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export interface ParsedRecipientDraft {
+  valid: string[];
+  invalid: string[];
+}
+
+function parseRecipientsDraft(draft: string): ParsedRecipientDraft {
+  const tokens = draft
+    .split(/[;,\n]/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  for (const token of tokens) {
+    const lower = token.toLowerCase();
+    if (RECIPIENT_RE.test(lower) && lower.length <= 254) {
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        valid.push(lower);
+      }
+    } else {
+      invalid.push(token);
+    }
+  }
+  return { valid, invalid };
+}
+
 function frequencyDetail(s: ScheduleRow): string {
   if (s.frequency === 'WEEKLY') return `Every ${WEEKDAYS[s.weekday ?? 0] ?? '?'}`;
   if (s.frequency === 'MONTHLY') return `Day ${s.dayOfMonth ?? 1} of each month`;
@@ -183,6 +217,12 @@ export function ReportSchedulesTab() {
   const [historyRows, setHistoryRows] = useState<DeliveryRow[] | null>(null);
   const [historyError, setHistoryError] = useState('');
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // v2.26.0: per-schedule recipient management (PATCH …/schedules/[id]).
+  const [recipientsTarget, setRecipientsTarget] = useState<ScheduleRow | null>(null);
+  const [recipientsDraft, setRecipientsDraft] = useState('');
+  const [recipientsBusy, setRecipientsBusy] = useState(false);
+  const [recipientsError, setRecipientsError] = useState('');
 
   const storeNameFor = useCallback(
     (id: string | null): string | null => (id ? (stores.find((s) => s.id === id)?.name ?? null) : null),
@@ -337,6 +377,32 @@ export function ReportSchedulesTab() {
     }
   };
 
+  // v2.26.0: open the recipient editor prefilled one address per line.
+  const openRecipients = (s: ScheduleRow) => {
+    setRecipientsTarget(s);
+    setRecipientsDraft(s.recipients.join('\n'));
+    setRecipientsError('');
+  };
+
+  // v2.26.0: save via PATCH — the server re-validates + enforces the fail-closed
+  // schedule scope (a BRANCH manager editing an org-wide schedule gets a 403).
+  const saveRecipients = async () => {
+    if (!recipientsTarget) return;
+    const { valid, invalid } = parseRecipientsDraft(recipientsDraft);
+    if (valid.length === 0 || invalid.length > 0) return;
+    setRecipientsBusy(true);
+    setRecipientsError('');
+    try {
+      await apiSend(`/api/hr/reports/schedules/${recipientsTarget.id}`, 'PATCH', { recipients: valid });
+      setRecipientsTarget(null);
+      await load();
+    } catch (e) {
+      setRecipientsError(e instanceof Error ? e.message : 'Could not update the recipients.');
+    } finally {
+      setRecipientsBusy(false);
+    }
+  };
+
   const summary = useMemo(() => {
     const list = rows ?? [];
     return {
@@ -450,16 +516,24 @@ export function ReportSchedulesTab() {
                   <p className="mb-1 font-medium text-muted-foreground">Recipients</p>
                   <div className="flex flex-wrap gap-1">
                     {s.recipients.length === 0 ? (
-                      <span className="text-muted-foreground">None configured</span>
+                      <button
+                        type="button"
+                        onClick={() => openRecipients(s)}
+                        className="text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                      >
+                        None configured — add recipients
+                      </button>
                     ) : (
                       s.recipients.map((r) => (
-                        <span
+                        <button
                           key={r}
-                          className="rounded-md border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
-                          title={r}
+                          type="button"
+                          onClick={() => openRecipients(s)}
+                          className="rounded-md border bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-sky-300 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          title={`${r} — click to manage recipients`}
                         >
                           {r}
-                        </span>
+                        </button>
                       ))
                     )}
                   </div>
@@ -555,6 +629,18 @@ export function ReportSchedulesTab() {
                   </div>
                 ) : null}
                 <div className="flex items-center justify-end gap-1.5 border-t pt-2">
+                  {/* v2.26.0: manage this schedule's recipients (PATCH round-trip). */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openRecipients(s)}
+                    disabled={busy || sendingId !== null}
+                    className="h-7 gap-1 px-2 text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                    aria-label={`Manage ${s.reportLabel} recipients`}
+                  >
+                    <Users className="h-3 w-3" aria-hidden />
+                    Recipients
+                  </Button>
                   {/* v2.25.0: dry-run preview — what the next email would contain. */}
                   <Button
                     size="sm"
@@ -880,6 +966,98 @@ export function ReportSchedulesTab() {
             <Button variant="outline" size="sm" onClick={() => setPreviewOpen(false)}>
               Close
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.26.0: recipient management dialog — live per-address validation, */}
+      {/* dedupe, and a PATCH round-trip; scope errors surface inline. */}
+      <Dialog open={recipientsTarget !== null} onOpenChange={(o) => { if (!o) setRecipientsTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-emerald-500" aria-hidden /> Manage recipients
+              {recipientsTarget ? (
+                <span className="text-sm font-normal text-muted-foreground">· {recipientsTarget.reportLabel}</span>
+              ) : null}
+            </DialogTitle>
+            <DialogDescription>
+              One address per line (or comma-separated). The digest sends aggregates only — never names or raw ids.
+              Changes apply to every future send, including the next scheduled fire.
+            </DialogDescription>
+          </DialogHeader>
+
+          {recipientsError ? <ErrorNote message={recipientsError} /> : null}
+
+          <div className="grid gap-3.5">
+            <div className="space-y-1.5">
+              <Label htmlFor="recipients-edit">Addresses</Label>
+              <Textarea
+                id="recipients-edit"
+                value={recipientsDraft}
+                onChange={(e) => setRecipientsDraft(e.target.value)}
+                rows={4}
+                aria-required
+                placeholder={'owner@mbumahhardware.co.ke\nhr@mbumahhardware.co.ke'}
+                className="font-mono text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Duplicates and spacing are handled for you; at most 20 addresses.
+              </p>
+            </div>
+
+            {/* Live validation preview */}
+            {(() => {
+              const { valid, invalid } = parseRecipientsDraft(recipientsDraft);
+              return (
+                <div className="rounded-md border bg-muted/30 px-2.5 py-2 text-xs" aria-live="polite">
+                  <p className="mb-1 font-medium text-muted-foreground">
+                    Will send to {valid.length} recipient{valid.length === 1 ? '' : 's'}
+                    {valid.length >= 20 ? ' (cap reached — extras will be dropped)' : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {valid.map((r) => (
+                      <span key={r} className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <CircleCheck className="h-3 w-3" aria-hidden /> {r}
+                      </span>
+                    ))}
+                    {invalid.map((r) => (
+                      <span key={r} className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 font-mono text-[11px] text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300" title="Not a valid email address">
+                        <CircleX className="h-3 w-3" aria-hidden /> {r}
+                      </span>
+                    ))}
+                    {valid.length === 0 && invalid.length === 0 ? (
+                      <span className="text-muted-foreground">No addresses yet.</span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRecipientsTarget(null)} disabled={recipientsBusy}>
+              Cancel
+            </Button>
+            {(() => {
+              const { valid, invalid } = parseRecipientsDraft(recipientsDraft);
+              const changed = recipientsTarget ? valid.join(',') !== recipientsTarget.recipients.join(',') : true;
+              return (
+                <Button
+                  size="sm"
+                  onClick={() => void saveRecipients()}
+                  disabled={recipientsBusy || valid.length === 0 || invalid.length > 0 || !changed}
+                >
+                  {recipientsBusy ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Saving…
+                    </>
+                  ) : (
+                    'Save recipients'
+                  )}
+                </Button>
+              );
+            })()}
           </DialogFooter>
         </DialogContent>
       </Dialog>
