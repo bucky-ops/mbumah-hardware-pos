@@ -230,6 +230,7 @@ model User {
   generatedTrialBalanceSnapshots TrialBalanceSnapshot[] @relation("TrialBalanceGeneratedBy")
   createdBudgets          Budget[]            @relation("BudgetCreatedBy")
   auditLogs               AuditLog[]
+  notificationLogs        NotificationLog[]
   // ── Purchase Order relations ──────────────────────────────────────────────
   createdPOs              PurchaseOrder[]     @relation("POCreatedBy")
   approvedPOs             PurchaseOrder[]     @relation("POApprovedBy")
@@ -2760,6 +2761,43 @@ model Notification {
   @@index([priority])
   @@index([createdAt])
   @@map("notifications")
+}
+
+// ============================================================================
+// v2.25.0 - EMAIL DELIVERY LOG (NotificationLog)
+// ============================================================================
+//
+// Durable record of every outbound email attempt made by the central email
+// service (src/lib/email-service.ts → logNotification): receipts, low-stock
+// alerts, HR report digests, etc. The write is best-effort (never blocks or
+// fails the send itself), but the rows are the source of truth for:
+//   • /api/notifications/logs (SUPER_ADMIN / STORE_OWNER delivery audit)
+//   • per-schedule digest delivery history on /hr/reports → Schedules
+//     (rows are correlated to their schedule via metadata.scheduleId, which
+//     the digest sender stamps on every send).
+//
+// userId is a plain nullable FK with onDelete: SetNull on purpose: the email
+// service may attribute a send to users that no longer exist, and delivery
+// history must survive user deletion — the same pattern as SystemLog.user.
+model NotificationLog {
+  id        String    @id @default(cuid())
+  userId    String?
+  type      String    @default("UNKNOWN") // RECEIPT, LOW_STOCK, DAILY_REPORT, WELCOME, HR_REPORT_DIGEST, ...
+  recipient String // comma-joined address list for multi-recipient sends
+  subject   String
+  status    String    @default("PENDING") // PENDING | SENT | FAILED
+  error     String? // provider error message when status = FAILED
+  metadata  String? // JSON string (scheduleId, reportKey, messageId, ...)
+  sentAt    DateTime? // set when status = SENT
+  createdAt DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([status, createdAt])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notification_logs")
 }
 
 // ============================================================================

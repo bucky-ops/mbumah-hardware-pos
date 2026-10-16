@@ -846,3 +846,186 @@ export async function sendScheduleNow(
     notificationId,
   };
 }
+
+// ── v2.25.0: delivery observability ─────────────────────────────────────────
+
+/**
+ * Next UTC instant at which a schedule is due, computed from its frequency
+ * slot AFTER the last run (a manual send never moves the cadence, so the
+ * next slot must clear both `from` and `lastRunAt`). Pure — used by the
+ * Schedules-tab dry-run preview; mirrors isScheduleDue's slot semantics:
+ *   • DAILY  → tomorrow's (or today's) send hour
+ *   • WEEKLY → the next occurrence of the configured weekday at the send hour
+ *   • MONTHLY→ the configured day (1-28) of this or the next month
+ */
+export function nextScheduleRunAt(
+  schedule: { frequency: string; weekday: number | null; dayOfMonth: number | null; hourUtc: number; lastRunAt: Date | null },
+  from: Date = new Date(),
+): Date {
+  const floor = Math.max(from.getTime(), schedule.lastRunAt?.getTime() ?? 0);
+
+  // Candidate slot instants at the schedule's send hour, day by day.
+  const slotFor = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), schedule.hourUtc, 0, 0));
+
+  if (schedule.frequency === 'DAILY') {
+    let candidate = slotFor(from);
+    if (candidate.getTime() <= floor) candidate = slotFor(new Date(from.getTime() + 24 * 3600 * 1000));
+    return candidate;
+  }
+
+  if (schedule.frequency === 'WEEKLY') {
+    const weekday = Math.min(Math.max(schedule.weekday ?? 0, 0), 6);
+    for (let i = 0; i < 8; i += 1) {
+      const day = new Date(from.getTime() + i * 24 * 3600 * 1000);
+      const candidate = slotFor(day);
+      if (candidate.getUTCDay() === weekday && candidate.getTime() > floor) return candidate;
+    }
+    // Unreachable (a week always contains the weekday) — defensive fallback.
+    return new Date(floor + 7 * 24 * 3600 * 1000);
+  }
+
+  // MONTHLY: first slot on/after `from` whose UTC date matches the config.
+  const dayOfMonth = Math.min(Math.max(schedule.dayOfMonth ?? 1, 1), 28);
+  for (let monthShift = 0; monthShift <= 2; monthShift += 1) {
+    const candidate = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + monthShift, dayOfMonth, schedule.hourUtc, 0, 0));
+    if (candidate.getTime() > floor) return candidate;
+  }
+  return new Date(floor + 30 * 24 * 3600 * 1000);
+}
+
+export interface ScheduleDeliveryRow {
+  id: string;
+  status: string; // SENT | FAILED | PENDING
+  recipient: string;
+  subject: string;
+  error: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  recipients: number; // parsed from metadata for convenience
+  manual: boolean; // manual "send now" vs scheduled sweep
+}
+
+/**
+ * Delivery history for one schedule: the last HR_REPORT_DIGEST
+ * NotificationLog rows correlated via metadata.scheduleId (stamped by the
+ * digest sender on every send since the digest feature shipped).
+ *
+ * Scope: fail-closed, identical to sendScheduleNow — the schedule must sit
+ * inside the actor's visibility (a BRANCH manager may only read their own
+ * branch's schedule; an org-wide schedule is out of their scope).
+ * Read-only: no stamps, no audit, no side effects.
+ */
+export async function listScheduleDeliveries(
+  organizationId: string,
+  actor: { id: string; role: string; storeId: string | null },
+  id: string,
+  limit: number = 10,
+): Promise<ScheduleDeliveryRow[]> {
+  const row = await db.hrReportSchedule.findFirst({
+    where: { id, organizationId, deletedAt: null },
+  });
+  if (!row) {
+    throw new HrScheduleError('SCHEDULE_NOT_FOUND', 'Schedule not found.', 404);
+  }
+  if (actor.role === 'BRANCH_MANAGER' && row.storeId !== actor.storeId) {
+    throw new HrScheduleError(
+      'STORE_SCOPE_FORBIDDEN',
+      'Branch managers can only view delivery history for their own branch.',
+      403,
+    );
+  }
+
+  const capped = Math.min(Math.max(Math.trunc(limit) || 10, 1), 50);
+  const logs = await db.notificationLog.findMany({
+    where: {
+      type: 'HR_REPORT_DIGEST',
+      metadata: { contains: `"scheduleId":"${row.id}"` },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: capped,
+  });
+
+  return logs.map((log) => {
+    let meta: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(log.metadata ?? '{}') as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) meta = parsed as Record<string, unknown>;
+    } catch {
+      meta = {};
+    }
+    return {
+      id: log.id,
+      status: log.status,
+      recipient: log.recipient,
+      subject: log.subject,
+      error: log.error,
+      sentAt: log.sentAt ? log.sentAt.toISOString() : null,
+      createdAt: log.createdAt.toISOString(),
+      recipients: typeof meta.recipientCount === 'number' ? meta.recipientCount : log.recipient.split(',').filter(Boolean).length,
+      manual: meta.manual === true,
+    };
+  });
+}
+
+export interface SchedulePreview {
+  schedule: ScheduleView;
+  reportLabel: string;
+  /** Null when the digest cannot be produced (no data / compute error). */
+  periodLabel: string | null;
+  scopeLabel: string | null;
+  headlines: Array<{ label: string; value: string }>;
+  table: { caption: string; columns: string[]; rows: string[][] } | null;
+  recipients: string[];
+  nextRunAt: string;
+  /** Non-null when the digest cannot be produced (no data / compute error). */
+  unavailableReason: string | null;
+}
+
+/**
+ * v2.25.0: dry-run digest preview. Computes EXACTLY what the next email
+ * would contain — through the same governed report functions and scope as a
+ * real send — without sending anything, writing any log/notification, or
+ * touching lastRunAt/lastStatus. Read-only by construction.
+ */
+export async function previewScheduleDigest(
+  organizationId: string,
+  actor: { id: string; role: string; storeId: string | null },
+  id: string,
+  now: Date = new Date(),
+): Promise<SchedulePreview> {
+  const row = await db.hrReportSchedule.findFirst({
+    where: { id, organizationId, deletedAt: null },
+  });
+  if (!row) {
+    throw new HrScheduleError('SCHEDULE_NOT_FOUND', 'Schedule not found.', 404);
+  }
+  if (actor.role === 'BRANCH_MANAGER' && row.storeId !== actor.storeId) {
+    throw new HrScheduleError(
+      'STORE_SCOPE_FORBIDDEN',
+      'Branch managers can only preview digests for their own branch.',
+      403,
+    );
+  }
+
+  const recipients = safeParseRecipients(row.recipients);
+  let digest: HrReportDigestData | null = null;
+  let unavailableReason: string | null = null;
+  try {
+    digest = await buildDigestData(row, now);
+    if (!digest) unavailableReason = 'Report returned no data for this scope and period.';
+  } catch (error) {
+    unavailableReason = error instanceof Error ? error.message : 'Digest computation failed.';
+  }
+
+  return {
+    schedule: toScheduleView(row),
+    reportLabel: REPORT_LABELS[row.reportKey as HrScheduleReportKey] ?? row.reportKey,
+    periodLabel: digest?.periodLabel ?? null,
+    scopeLabel: digest?.scopeLabel ?? null,
+    headlines: digest?.headline ?? [],
+    table: digest?.table ?? null,
+    recipients,
+    nextRunAt: nextScheduleRunAt(row, now).toISOString(),
+    unavailableReason,
+  } as SchedulePreview;
+}

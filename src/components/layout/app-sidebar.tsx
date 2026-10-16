@@ -358,8 +358,10 @@ export function AppSidebar() {
                 size="icon"
                 className="shrink-0 text-slate-400 hover:text-white relative"
                 onClick={() => setNotificationOpen(true)}
+                aria-label={`Notifications${notificationCount.unread > 0 ? ` (${notificationCount.unread} unread)` : ''}`}
+                aria-haspopup="dialog"
               >
-                <Bell className="h-4 w-4" />
+                <Bell className="h-4 w-4" aria-hidden />
                 {notificationCount.unread > 0 ? (
                   <span key={notifBadgeKey} className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
                     {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
@@ -399,8 +401,10 @@ export function AppSidebar() {
                     size="icon"
                     className="text-slate-400 hover:text-white relative h-8 w-8"
                     onClick={() => setNotificationOpen(true)}
+                    aria-label={`Notifications${notificationCount.unread > 0 ? ` (${notificationCount.unread} unread)` : ''}`}
+                    aria-haspopup="dialog"
                   >
-                    <Bell className="h-4 w-4" />
+                    <Bell className="h-4 w-4" aria-hidden />
                     {notificationCount.unread > 0 && (
                       <span key={`collapsed-${notifBadgeKey}`} className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[8px] font-bold text-white px-0.5 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
                         {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
