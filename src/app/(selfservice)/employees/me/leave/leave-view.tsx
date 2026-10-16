@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarPlus, Palmtree } from 'lucide-react';
+import { CalendarOff, CalendarPlus, Loader2, Palmtree } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 
 export interface BalanceDto {
@@ -51,6 +51,26 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  // v2.33.0: self-withdrawal — the portal can finally CANCEL a pending
+  // request (the API always allowed the owner; there was just no button).
+  // The approvers group is notified with a violet Withdrawn row and the
+  // pending days release back to the balance via the aggregate recompute.
+  const [withdrawTarget, setWithdrawTarget] = useState<RequestDto | null>(null);
+
+  const withdraw = async () => {
+    if (!withdrawTarget) return;
+    setBusy(true);
+    setError('');
+    try {
+      await apiSend('/api/leaves', 'PUT', { action: 'CANCEL', leaveRequestId: withdrawTarget.id });
+      setWithdrawTarget(null);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const [leaveTypeId, setLeaveTypeId] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -135,7 +155,22 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                     {r.type}
                     {r.halfDay ? ' (half day)' : ''} · {Number(r.workingDays)} day{Number(r.workingDays) === 1 ? '' : 's'}
                   </p>
-                  <StatusBadge status={r.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={r.status} />
+                    {/* v2.33.0: withdraw while the request is still pending —
+                        managers no longer need to be asked to "remove it". */}
+                    {r.status === 'PENDING' ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1 border-violet-300 px-2 text-xs text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                        onClick={() => setWithdrawTarget(r)}
+                        disabled={busy}
+                      >
+                        <CalendarOff className="h-3 w-3" aria-hidden /> Withdraw
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {formatDate(r.startDate)} → {formatDate(r.endDate)}
@@ -151,6 +186,39 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
           </ul>
         </section>
       )}
+
+      {/* Withdraw-confirm dialog (v2.33.0 self-cancel direction). */}
+      <Dialog open={!!withdrawTarget} onOpenChange={(v) => !v && setWithdrawTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarOff className="h-4 w-4 text-violet-600" /> Withdraw leave request
+            </DialogTitle>
+            <DialogDescription>
+              {withdrawTarget
+                ? `${withdrawTarget.type} · ${formatDate(withdrawTarget.startDate)} → ${formatDate(withdrawTarget.endDate)} · ${Number(withdrawTarget.workingDays)} day(s)`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30">
+            <p className="text-sm">Your request will be withdrawn without a manager decision.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The {withdrawTarget ? Number(withdrawTarget.workingDays) : 0} pending day(s) release straight back to your balance, and your approver is told the slot is free again.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWithdrawTarget(null)} disabled={busy}>Keep request</Button>
+            <Button
+              disabled={busy}
+              className="bg-violet-600 text-white hover:bg-violet-700"
+              onClick={() => void withdraw()}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarOff className="h-4 w-4" aria-hidden />}
+              Withdraw request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Request dialog */}
       <Dialog open={open} onOpenChange={setOpen}>

@@ -43,6 +43,7 @@ const VALID_TYPES = new Set([
   'TIER_UPGRADE',
   'LEAVE_DECISION',
   'LEAVE_REQUEST',
+  'LEAVE_CANCEL',
   'TEST',
 ]);
 

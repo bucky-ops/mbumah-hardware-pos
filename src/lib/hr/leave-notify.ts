@@ -16,8 +16,13 @@
 //   3. Metadata the notification-center row parser uses for the
 //      Approved/Declined chips.
 //
-// CANCEL is intentionally not notified: it is a self-action by the employee,
-// so a self-notification would be noise.
+// v2.33.0: CANCEL is now notified too - the v2.32.0 stance ("a self-action is
+// noise") only covered the employee-self-cancel case. Two real gaps remained:
+// when a MANAGER cancels a pending request the employee never hears about it,
+// and when the employee self-cancels the approvals group still holds a slot
+// on their radar until they stumble across the desk. The notifier therefore
+// routes the copy in the OPPOSITE direction of who acted (see
+// notifyLeaveRequestCancelled in leave-service.ts).
 
 /** Marker written into Notification.metadata JSON - the feed query filters
  *  leave-decision rows from digest rows with a `contains` on this string. */
@@ -28,7 +33,12 @@ export const LEAVE_DECISION_METADATA_MARKER = 'leave_decision';
  *  the parsed `kind`. */
 export const LEAVE_REQUEST_METADATA_MARKER = 'leave_request';
 
-export type LeaveNotificationKind = 'leave_decision' | 'leave_request';
+/** v2.33.0: marker for CANCEL rows (either direction - manager cancels a
+ *  pending request, or the employee withdraws it). The feed maps the parsed
+ *  `kind` to the 'leave_cancel' surface with violet accents. */
+export const LEAVE_CANCEL_METADATA_MARKER = 'leave_cancel';
+
+export type LeaveNotificationKind = 'leave_decision' | 'leave_request' | 'leave_cancel';
 
 export type LeaveDecisionStatus = 'APPROVED' | 'REJECTED';
 
@@ -166,6 +176,11 @@ export interface LeaveDecisionExtras {
   leaveRequestId?: string;
   status?: string;
   decidedByLabel?: string;
+  /** v2.33.0: who cancelled (display label) on leave_cancel rows. */
+  cancelledByLabel?: string;
+  /** v2.33.0: true when a manager cancelled (row addresses the employee);
+   *  false/absent = employee self-withdrawal (row addresses approvers). */
+  cancelledByManager?: boolean;
 }
 
 /** Fail-soft metadata parser for the notification feed (same contract as
@@ -177,10 +192,17 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
     if (!parsed || typeof parsed !== 'object') return {};
     const rec = parsed as Record<string, unknown>;
     const out: LeaveDecisionExtras = {};
-    if (rec.kind === 'leave_decision' || rec.kind === 'leave_request') out.kind = rec.kind;
+    if (
+      rec.kind === 'leave_decision' ||
+      rec.kind === 'leave_request' ||
+      rec.kind === 'leave_cancel'
+    )
+      out.kind = rec.kind;
     if (typeof rec.leaveRequestId === 'string') out.leaveRequestId = rec.leaveRequestId;
     if (typeof rec.status === 'string') out.status = rec.status;
     if (typeof rec.decidedByLabel === 'string') out.decidedByLabel = rec.decidedByLabel;
+    if (typeof rec.cancelledByLabel === 'string') out.cancelledByLabel = rec.cancelledByLabel;
+    if (typeof rec.cancelledByManager === 'boolean') out.cancelledByManager = rec.cancelledByManager;
     return out;
   } catch {
     return {};
@@ -272,6 +294,109 @@ export function leaveSubmissionCopy(input: LeaveSubmissionCopyInput): LeaveSubmi
     ...(reason ? [`Reason: ${reason}`] : []),
     ``,
     `Open the Payroll tab - Leave desk to approve or decline this request.`,
+  ].join('\n');
+
+  return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
+export interface LeaveCancelCopyInput {
+  firstName: string;
+  lastName: string;
+  leaveTypeName: string;
+  /** ISO date strings as stored on the LeaveRequest row. */
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  /** Who cancelled: "employee" (self-withdrawal) or a display label for a
+   *  manager cancel - drives the email badge copy. */
+  cancelledByManager: boolean;
+  /** Optional actor display label ("cancelled by …" footer). */
+  cancelledByLabel?: string | null;
+}
+
+export interface LeaveCancelCopy {
+  title: string;
+  message: string;
+  notifType: 'INFO';
+  priority: 'NORMAL';
+  emailSubject: string;
+  emailText: string;
+  emailHtml: string;
+}
+
+/** v2.33.0: build every copy surface for one leave CANCELLATION. One pure
+ *  builder serves BOTH routing directions (see notifyLeaveRequestCancelled):
+ *  the badge and footer wording adapts to who cancelled, everything else is
+ *  shared. Violet accents (#7c3aed family) - the fourth leave surface color
+ *  after emerald/amber (decisions) and sky (submissions). */
+export function leaveCancelledCopy(input: LeaveCancelCopyInput): LeaveCancelCopy {
+  const { firstName, lastName, leaveTypeName, startDate, endDate, workingDays, cancelledByManager, cancelledByLabel } =
+    input;
+
+  const name = `${firstName} ${lastName}`.trim();
+  const range = `${formatLeaveDay(startDate)} - ${formatLeaveDay(endDate)}`;
+  const days = `${workingDays} day${workingDays === 1 ? '' : 's'}`;
+
+  const title = cancelledByManager
+    ? `Leave request cancelled - ${leaveTypeName}`
+    : `Leave request withdrawn - ${leaveTypeName}`;
+
+  const message = cancelledByManager
+    ? `${name}: your ${leaveTypeName} request for ${days} (${range}) was cancelled by a manager. The days are back in your available balance.`
+    : `${name} withdrew their ${leaveTypeName} request for ${days} (${range}). The pending days are released back to their balance - no decision needed.`;
+
+  const emailSubject = cancelledByManager
+    ? `Leave request cancelled - ${name} (${days} ${leaveTypeName})`
+    : `Leave request withdrawn - ${name} (${days} ${leaveTypeName})`;
+  const accent = '#6d28d9';
+  const accentBg = '#f5f3ff';
+  const accentBorder = '#ddd6fe';
+  const badge = cancelledByManager ? 'CANCELLED' : 'WITHDRAWN';
+  const heading = cancelledByManager ? 'Leave request cancelled' : 'Leave request withdrawn';
+
+  const rows: Array<[string, string]> = [
+    ['Employee', escapeHtml(name)],
+    ['Leave type', escapeHtml(leaveTypeName)],
+    ['Dates', escapeHtml(range)],
+    ['Working days', escapeHtml(days)],
+  ];
+
+  const footer = cancelledByLabel
+    ? `<p style="margin:12px 0 0;color:#6b7280;font-size:12px;">Cancelled by ${escapeHtml(cancelledByLabel)}.</p>`
+    : '';
+
+  const closing = cancelledByManager
+    ? 'Open your self-service portal to review your leave balances.'
+    : 'No action needed - the request no longer appears on the Leave desk.';
+
+  const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+  <div style="background:${accentBg};padding:16px 20px;border-bottom:1px solid ${accentBorder};">
+    <span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${accent};color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.02em;">${badge}</span>
+    <h2 style="margin:10px 0 0;font-size:18px;color:#111827;">${heading}</h2>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
+    ${rows
+      .map(
+        ([k, v]) =>
+          `<tr><td style="padding:8px 20px;color:#6b7280;width:120px;white-space:nowrap;">${k}</td><td style="padding:8px 20px 8px 0;font-weight:600;color:#111827;">${v}</td></tr>`
+      )
+      .join('\n    ')}
+  </table>
+  <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f9fafb;">
+    <p style="margin:0;color:#6b7280;font-size:12px;">${closing}</p>
+    ${footer}
+  </div>
+</div>`;
+
+  const emailText = [
+    `${heading} - MBUMAH HARDWARE`,
+    ``,
+    `Employee: ${name}`,
+    `Leave type: ${leaveTypeName}`,
+    `Dates: ${range}`,
+    `Working days: ${days}`,
+    ``,
+    closing,
   ].join('\n');
 
   return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };

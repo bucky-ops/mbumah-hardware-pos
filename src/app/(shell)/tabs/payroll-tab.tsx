@@ -1035,6 +1035,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const [detail, setDetail] = useState<LeaveRequest | null>(null);
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
 
   // GET /api/leaves returns { success, data: [...], balances?: [...],
   // leaveTypes: [...] } — apiFetch would drop the side payloads, so this
@@ -1056,13 +1057,20 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   });
   const leaveTypes = Array.isArray(leaveTypesData) ? leaveTypesData : [];
 
-  // PUT /api/leaves requires UPPERCASE actions ('APPROVE' | 'REJECT') —
-  // the lowercase values this tab used to send were rejected with 400.
+  // PUT /api/leaves requires UPPERCASE actions ('APPROVE' | 'REJECT' |
+  // 'CANCEL') — the lowercase values this tab used to send were rejected
+  // with 400. v2.33.0 adds CANCEL (manager cancels a pending or approved
+  // request; the employee's balance is recomputed and the employee is
+  // notified with a violet Cancelled bell row).
   const actionMutation = useMutation({
-    mutationFn: ({ action, leaveRequestId, rejectionReason }: { action: 'APPROVE' | 'REJECT'; leaveRequestId: string; rejectionReason?: string }) =>
+    mutationFn: ({ action, leaveRequestId, rejectionReason }: { action: 'APPROVE' | 'REJECT' | 'CANCEL'; leaveRequestId: string; rejectionReason?: string }) =>
       apiFetch('/api/leaves', { method: 'PUT', body: JSON.stringify({ action, leaveRequestId, rejectionReason }) }),
     onSuccess: (_data, vars) => {
-      toast.success(vars.action === 'APPROVE' ? 'Leave request approved — balance updated' : 'Leave request rejected');
+      toast.success(
+        vars.action === 'APPROVE' ? 'Leave request approved — balance updated' :
+        vars.action === 'CANCEL' ? 'Leave request cancelled — days returned to the balance and the employee notified' :
+        'Leave request rejected',
+      );
       qc.invalidateQueries({ queryKey: ['payroll-leaves', storeId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1076,6 +1084,16 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const openReject = (l: LeaveRequest) => {
     setRejectReason('');
     setRejectTarget(l);
+  };
+
+  // v2.33.0: manager cancel — confirm first (cancelling an APPROVED request
+  // takes leave away the employee may already be planning around).
+  const confirmCancel = () => {
+    if (!cancelTarget) return;
+    actionMutation.mutate(
+      { action: 'CANCEL', leaveRequestId: cancelTarget.id },
+      { onSuccess: () => setCancelTarget(null) },
+    );
   };
 
   const confirmReject = () => {
@@ -1212,7 +1230,36 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                   >
                                     <X className="h-4 w-4" />
                                   </Button>
+                                  {/* v2.33.0: managers may cancel a pending
+                                      request (slot freed, employee notified). */}
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0 text-violet-600 hover:text-violet-700 hover:bg-violet-500/10"
+                                    title="Cancel request — days return to the balance and the employee is notified"
+                                    aria-label={`Cancel leave for ${l.employeeName}`}
+                                    onClick={() => setCancelTarget(l)}
+                                    disabled={actionMutation.isPending}
+                                  >
+                                    <Ban className="h-4 w-4" />
+                                  </Button>
                                 </>
+                              ) : l.status === 'APPROVED' ? (
+                                /* v2.33.0: an approved request can still be
+                                    cancelled (plans change) — same confirm
+                                    dialog, stronger copy for the taken-away
+                                    leave case. */
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0 text-violet-600 hover:text-violet-700 hover:bg-violet-500/10"
+                                  title="Cancel approved leave — the employee is notified"
+                                  aria-label={`Cancel approved leave for ${l.employeeName}`}
+                                  onClick={() => setCancelTarget(l)}
+                                  disabled={actionMutation.isPending}
+                                >
+                                  <Ban className="h-4 w-4" />
+                                </Button>
                               ) : (
                                 <span className="text-xs text-muted-foreground px-2">—</span>
                               )}
@@ -1362,6 +1409,16 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetail(null)}>Close</Button>
+            {detail && (detail.status === 'PENDING' || detail.status === 'APPROVED') && (
+              <Button
+                variant="outline"
+                className="text-violet-600 hover:text-violet-700 hover:bg-violet-500/10"
+                disabled={actionMutation.isPending}
+                onClick={() => { const target = detail; setDetail(null); setCancelTarget(target); }}
+              >
+                <Ban className="h-4 w-4 mr-1.5" /> Cancel request
+              </Button>
+            )}
             {detail && detail.status === 'PENDING' && (
               <>
                 <Button
@@ -1422,6 +1479,50 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
             >
               {actionMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <X className="h-4 w-4 mr-1.5" />}
               Reject request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.33.0: Cancel-confirm dialog — cancelling (unlike rejecting) has
+          no reason field by design; the copy states the consequences: the
+          balance heals via the aggregate recompute and BOTH sides hear about
+          it (employee bell row for manager cancels, approvals group for
+          self-withdrawals). Stronger wording when the target was APPROVED —
+          the employee may already be planning around that leave. */}
+      <Dialog open={!!cancelTarget} onOpenChange={(v) => !v && setCancelTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ban className="h-4 w-4 text-violet-600" /> Cancel leave request
+            </DialogTitle>
+            <DialogDescription>
+              {cancelTarget
+                ? `${cancelTarget.employeeName} · ${cancelTarget.leaveTypeName} · ${formatDate(cancelTarget.startDate)} → ${formatDate(cancelTarget.endDate)}`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50 dark:bg-violet-950/30 p-3 space-y-1.5">
+            <p className="text-sm text-foreground">
+              {cancelTarget?.status === 'APPROVED'
+                ? 'This leave is APPROVED — cancelling takes it back. Only cancel if plans genuinely changed.'
+                : 'This pending request will be withdrawn without a decision.'}
+            </p>
+            <ul className="text-xs text-muted-foreground space-y-0.5 list-disc pl-4">
+              <li>The {toNum(cancelTarget?.workingDays ?? 0)} day(s) return to the employee&apos;s available balance immediately.</li>
+              <li>The employee is notified with a Cancelled bell row in their portal.</li>
+              <li>The request stays on this desk, marked Cancelled, for the audit trail.</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={actionMutation.isPending}>Keep request</Button>
+            <Button
+              disabled={actionMutation.isPending}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+              onClick={confirmCancel}
+            >
+              {actionMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Ban className="h-4 w-4 mr-1.5" />}
+              Cancel request
             </Button>
           </DialogFooter>
         </DialogContent>

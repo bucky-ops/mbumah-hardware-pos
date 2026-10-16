@@ -70,6 +70,7 @@ const TYPE_FILTERS = [
   'TIER_UPGRADE',
   'LEAVE_DECISION',
   'LEAVE_REQUEST',
+  'LEAVE_CANCEL',
   'TEST',
 ] as const;
 
@@ -85,6 +86,7 @@ const TYPE_CHIP: Record<string, string> = {
   LOW_STOCK: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
   LEAVE_DECISION: 'bg-teal-100 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-900',
   LEAVE_REQUEST: 'bg-sky-100 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-900',
+  LEAVE_CANCEL: 'bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-900',
 };
 
 function fmtWhen(iso: string): string {
