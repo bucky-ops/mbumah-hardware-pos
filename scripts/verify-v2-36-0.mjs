@@ -53,6 +53,8 @@ check('drill-down 404 without existence leak', DD.includes("'Balance not found.'
 check('adjust route guarded by hrGuard hr.leave.balance.manage', ADJ.includes("hrGuard('hr.leave.balance.manage'"));
 check('adjust route maps VALIDATION/NOT_FOUND/FORBIDDEN', ADJ.includes("'VALIDATION' ? 400") && ADJ.includes("'NOT_FOUND' ? 404") && ADJ.includes(': 403'));
 check('adjust route requires balanceId', ADJ.includes('balanceId is required.'));
+check('outcome carries honest delivery facts (notified bell/email)', GOV.includes('notified: { bell: boolean; email: boolean }') && GOV.includes('notified: { bell: bellSent, email: emailSent }'));
+check('delivery legs capture results instead of swallowing', GOV.includes('.then(() => true)') && GOV.includes('.catch(() => false)'));
 
 console.log('== Reports page: clickable rows + drill-down dialog ==');
 const PAGE = read('src/app/(shell)/hr/reports/page.tsx') ?? '';
@@ -64,14 +66,16 @@ check('governance notes block rendered', PAGE.includes('Governance notes'));
 check('history list with status chips', PAGE.includes('leaveStatusTone') && PAGE.includes('Requests starting in'));
 check('adjust form: delta input + reason textarea + preview', PAGE.includes('adjust-delta') && PAGE.includes('adjust-reason') && PAGE.includes('Preview: allocated'));
 check('apply button role-gated copy', PAGE.includes('Apply adjustment') && PAGE.includes('restricted to HR managers and store owners'));
-check('submit posts to /api/hr/leave-balances/adjust', PAGE.includes("apiSend('/api/hr/leave-balances/adjust', 'POST'"));
+check('submit posts to /api/hr/leave-balances/adjust', PAGE.includes("'/api/hr/leave-balances/adjust', 'POST'"));
 check('non-adjusters see restricted copy', PAGE.includes('drill.data.canAdjust ?'));
+check('delivery chips rendered after apply', PAGE.includes('In-app notification sent') && PAGE.includes('Email sent') && PAGE.includes('No portal account — in-app notice skipped') && PAGE.includes('Email not delivered'));
 
 console.log('== Tests ==');
 const T = read('src/tests/hr/leave-balance-governance.test.ts') ?? '';
 check('scoping fail-closed tests', T.includes('returns null for a scopeless session') && T.includes('fails closed on a balanceId outside the caller scope'));
 check('validation rails test', T.includes('enforces the validation rails'));
 check('success path: math + notes + notify + email', T.includes('writes tenths-exact allocation') && T.includes('LEAVE_BALANCE_ADJUSTED'));
+check('honest delivery facts tests', T.includes('reports honest delivery') && T.includes('notified: { bell: false, email: true }'));
 check('flag rails parity test', T.includes('classifies OVERDRAWN / EXHAUSTED / LOW / OPEN like the report'));
 
 console.log('== Version lockstep ==');

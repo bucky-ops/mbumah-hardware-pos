@@ -36,6 +36,10 @@ import {
   ShieldCheck,
   Columns3,
   X,
+  Bell,
+  BellOff,
+  Mail,
+  MailX,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate, formatKes } from '@/components/hr/self-service-ui';
 import { ReportSchedulesTab } from '@/components/hr/report-schedules-tab';
@@ -339,6 +343,7 @@ export default function HrReportsPage() {
   const [adjustReason, setAdjustReason] = useState('');
   const [adjustBusy, setAdjustBusy] = useState(false);
   const [adjustError, setAdjustError] = useState('');
+  const [adjustResult, setAdjustResult] = useState<{ bell: boolean; email: boolean } | null>(null);
 
   const [hiddenCols, setHiddenCols] = useState<Record<string, boolean>>({});
   const [rejectTarget, setRejectTarget] = useState<ErasureDto['requests'][number] | null>(null);
@@ -418,6 +423,7 @@ export default function HrReportsPage() {
     setAdjustDelta('');
     setAdjustReason('');
     setAdjustError('');
+    setAdjustResult(null);
     try {
       const qs = `year=${encodeURIComponent(leaveYear)}&employeeCode=${encodeURIComponent(employeeCode)}&typeCode=${encodeURIComponent(typeCode)}`;
       const data = await apiGet<LeaveDrillDownDto>(`/api/hr/reports/leave-utilisation/drill-down?${qs}`);
@@ -438,7 +444,7 @@ export default function HrReportsPage() {
     setAdjustBusy(true);
     setAdjustError('');
     try {
-      await apiSend('/api/hr/leave-balances/adjust', 'POST', {
+      const outcome = await apiSend<{ notified?: { bell: boolean; email: boolean } }>('/api/hr/leave-balances/adjust', 'POST', {
         balanceId: drill.data.balance.id,
         deltaDays: Number(adjustDelta),
         reason: adjustReason,
@@ -447,6 +453,9 @@ export default function HrReportsPage() {
       setAdjustReason('');
       await loadLeaveUtil();
       await openDrill(drill.data.employee.code, drill.data.type.code);
+      // Set AFTER openDrill (which resets form state) so the delivery chips
+      // stay visible for the adjustment that was just applied.
+      setAdjustResult(outcome?.notified ?? { bell: false, email: false });
     } catch (e) {
       setAdjustError(e instanceof Error ? e.message : 'Adjustment failed.');
     } finally {
@@ -1077,6 +1086,28 @@ export default function HrReportsPage() {
                             );
                           })()}
                           {adjustError ? <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{adjustError}</p> : null}
+                          {adjustResult ? (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+                              {adjustResult.bell ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                                  <Bell className="h-3 w-3" aria-hidden /> In-app notification sent
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                  <BellOff className="h-3 w-3" aria-hidden /> No portal account — in-app notice skipped
+                                </span>
+                              )}
+                              {adjustResult.email ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                                  <Mail className="h-3 w-3" aria-hidden /> Email sent
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                                  <MailX className="h-3 w-3" aria-hidden /> Email not delivered
+                                </span>
+                              )}
+                            </div>
+                          ) : null}
                           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                             Every adjustment is written to the hash-chained audit trail with your reason, and the employee is notified. Corrections are restricted to HR managers and store owners.
                           </p>

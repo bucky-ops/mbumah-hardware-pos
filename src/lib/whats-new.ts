@@ -28,7 +28,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       'Every row in the "Leave balances" report is now clickable: a drill-down opens with the employee\'s balance components, governance notes and all leave requests starting in that year — status chips, date ranges, day counts and reasons in one place.',
       'HR managers and store owners can correct entitlements directly from the drill-down: enter signed days (±0.5 steps, ±365 cap), give a reason, preview the resulting balance, and apply — the row updates instantly in the report.',
       'Corrections are governed end to end: the reason is mandatory (8+ characters) and lands in both the hash-chained audit trail and the balance notes, allocated days can never go below zero, and accountants deliberately cannot rewrite entitlements.',
-      'The employee is kept in the loop: a bell notification and an email explain what changed, by how much and why — with a link straight to their leave page.',
+      'The employee is kept in the loop: a bell notification and an email explain what changed, by how much and why — with a link straight to their leave page. The dialog reports exactly what was delivered (in-app and email chips, or an explicit "no portal account" skip) instead of silently swallowing a failed send.',
     ],
   },
   {

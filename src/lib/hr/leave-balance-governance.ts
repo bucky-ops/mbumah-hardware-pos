@@ -234,6 +234,8 @@ export type AdjustLeaveBalanceOutcome =
       allocatedBefore: number;
       allocatedAfter: number;
       availableAfter: number;
+      /** What actually reached the employee — honest delivery facts, not intentions. */
+      notified: { bell: boolean; email: boolean };
     }
   | { ok: false; code: 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION'; error: string };
 
@@ -373,8 +375,15 @@ export async function adjustLeaveBalance(
   const recipientUserId = balance.employee.user?.id ?? null;
   const recipientEmail = balance.employee.email || balance.employee.user?.email || null;
 
+  // Delivery facts (v2.36.0 QA): an employee without a linked portal user
+  // can never receive the bell row, and a dead email channel must not be
+  // reported as delivered. Both legs are fail-tolerant AND honest — the
+  // outcome carries what ACTUALLY happened so the UI can show it.
+  let bellSent = false;
+  let emailSent = false;
+
   if (recipientUserId) {
-    await db.notification
+    bellSent = await db.notification
       .create({
         data: {
           storeId: balance.employee.storeId,
@@ -389,11 +398,12 @@ export async function adjustLeaveBalance(
           metadata,
         },
       })
-      .catch(() => undefined);
+      .then(() => true)
+      .catch(() => false);
   }
 
   if (recipientEmail && recipientEmail.includes('@')) {
-    await sendEmail({
+    emailSent = await sendEmail({
       to: recipientEmail,
       subject: `${notifTitle} — ${balance.leaveType.name} (${balance.leaveYear})`,
       text: `${notifMessage}.\n\nNew entitlement: ${allocatedAfter.toFixed(1)} days. This is a governed adjustment recorded in the audit trail; reply to HR if this looks wrong.`,
@@ -401,7 +411,9 @@ export async function adjustLeaveBalance(
       userId: recipientUserId ?? undefined,
       type: 'LEAVE_BALANCE_ADJUSTED',
       metadata: { balanceId: balance.id, year: balance.leaveYear },
-    }).catch(() => undefined);
+    })
+      .then(() => true)
+      .catch(() => false);
   }
 
   return {
@@ -413,5 +425,6 @@ export async function adjustLeaveBalance(
     allocatedBefore: r1(allocatedBefore),
     allocatedAfter,
     availableAfter,
+    notified: { bell: bellSent, email: emailSent },
   };
 }

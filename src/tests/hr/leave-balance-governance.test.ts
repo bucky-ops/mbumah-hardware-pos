@@ -239,6 +239,9 @@ describe('adjustLeaveBalance success path', () => {
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(sendEmail.mock.calls[0][0].to).toBe('emp@mbumah.co.ke');
     expect(sendEmail.mock.calls[0][0].type).toBe('LEAVE_BALANCE_ADJUSTED');
+
+    // Honest delivery facts: linked portal user + reachable email.
+    expect(out.ok && out.notified.bell === true && out.notified.email === true).toBe(true);
   });
 
   it('tolerates a missing portal user and unreachable email (fail-tolerant)', async () => {
@@ -254,6 +257,22 @@ describe('adjustLeaveBalance success path', () => {
     });
     expect(out).toMatchObject({ ok: true, allocatedAfter: 19.5 });
     expect(out.ok && out.allocatedBefore === 21).toBe(true);
+    // Both channels down -> outcome must NOT claim delivery.
+    expect(out.ok && out.notified.bell === false && out.notified.email === false).toBe(true);
+  });
+
+  it('reports honest delivery: no portal user skips the bell, employee email still sent', async () => {
+    db.employeeLeaveBalance.findFirst.mockResolvedValue(
+      balanceRow({ employee: { id: 'emp-1', employeeCode: 'EMP-001', email: 'emp@mbumah.co.ke', storeId: 'store-1', user: null } }),
+    );
+    const out = await adjustLeaveBalance(orgSession as never, {
+      balanceId: 'bal-1',
+      deltaDays: 0.5,
+      reason: 'Day-of service recognition award',
+    });
+    expect(db.notification.create).not.toHaveBeenCalled();
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(out).toMatchObject({ ok: true, notified: { bell: false, email: true } });
   });
 });
 
