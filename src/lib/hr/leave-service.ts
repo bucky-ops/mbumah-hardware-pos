@@ -10,8 +10,10 @@ import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import {
   LEAVE_CANCEL_METADATA_MARKER,
+  LEAVE_ON_BEHALF_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   leaveCancelledCopy,
+  leaveOnBehalfCopy,
   leaveSubmissionCopy,
 } from './leave-notify';
 import { sendEmail } from '@/lib/email-service';
@@ -29,6 +31,15 @@ export interface RequestLeaveInput {
   /** v2.32.0: optional submitter email for the "submitted by …" footer on
    *  the manager notification email. */
   submitterEmail?: string;
+  /** v2.38.0: legacy HR-desk extras (POST /api/leaves). */
+  attachmentUrl?: string | null;
+  emergencyContact?: string | null;
+  /** v2.38.0: on-behalf filing — when set, the request was entered by HR in
+   *  the employee's name. The row is stamped (Entered by HR chip on every
+   *  surface) and the EMPLOYEE is notified (bell row + email), which is the
+   *  only leave surface addressed to someone who did not originate it. */
+  enteredById?: string | null;
+  enteredByName?: string | null;
 }
 
 function countWorkingDays(from: Date, to: Date, halfDay: boolean): number {
@@ -83,7 +94,12 @@ export async function requestLeave(input: RequestLeaveInput) {
       halfDay: input.halfDay === true,
       status: 'PENDING',
       reason: input.reason ?? null,
+      attachmentUrl: input.attachmentUrl ?? null,
+      emergencyContact: input.emergencyContact ?? null,
+      enteredById: input.enteredById ?? null,
+      enteredByName: input.enteredByName ?? null,
     },
+    include: { leaveType: { select: { name: true, code: true } } },
   });
 
   // v2.32.0 FIX (QA-caught): the stored pendingDays aggregate was only
@@ -107,7 +123,7 @@ export async function requestLeave(input: RequestLeaveInput) {
     resourceId: request.id,
     storeId: input.storeId,
     reason: 'Leave request submitted.',
-    metadata: { employeeId: input.employeeId, workingDays, year },
+    metadata: { employeeId: input.employeeId, workingDays, year, onBehalfOf: input.enteredById ? input.enteredByName ?? 'HR' : undefined },
   });
 
   // v2.32.0: notify the store's decision-capable users (employee → manager
@@ -125,9 +141,70 @@ export async function requestLeave(input: RequestLeaveInput) {
       reason: input.reason ?? null,
       submitterUserId: input.actorId,
       submitterEmail: input.submitterEmail ?? null,
+      enteredByLabel: input.enteredByName ?? null,
     });
   } catch {
     // Submission delivery is best-effort by design.
+  }
+
+  // v2.38.0: on-behalf filing — the EMPLOYEE learns a request was entered
+  // in their name. Bell row to the linked user (if any) + best-effort email
+  // to the employee address. Skipped for self-filed requests (no marker —
+  // the employee authored it) and never fails the submission itself.
+  if (input.enteredById) {
+    try {
+      const target = await db.employee.findUnique({
+        where: { id: input.employeeId },
+        select: { id: true, firstName: true, lastName: true, email: true, user: { select: { id: true } } },
+      });
+      if (target && target.user?.id !== input.enteredById) {
+        const onBehalfCopy = leaveOnBehalfCopy({
+          firstName: target.firstName,
+          lastName: target.lastName,
+          leaveTypeName: request.leaveType.name,
+          startDate: input.startDate.toISOString(),
+          endDate: input.endDate.toISOString(),
+          workingDays,
+          enteredByLabel: input.enteredByName ?? 'HR',
+          reason: input.reason ?? null,
+        });
+
+        if (target.user?.id) {
+          await db.notification.create({
+            data: {
+              storeId: input.storeId,
+              userId: target.user.id,
+              title: onBehalfCopy.title,
+              message: onBehalfCopy.message,
+              type: onBehalfCopy.notifType,
+              category: 'HR',
+              priority: onBehalfCopy.priority,
+              actionUrl: '/employees/me/leave',
+              actionLabel: 'View my leave',
+              metadata: JSON.stringify({
+                kind: LEAVE_ON_BEHALF_METADATA_MARKER,
+                leaveRequestId: request.id,
+                enteredByName: input.enteredByName ?? undefined,
+              }),
+            },
+          });
+        }
+
+        if (target.email) {
+          await sendEmail({
+            to: target.email,
+            subject: onBehalfCopy.emailSubject,
+            html: onBehalfCopy.emailHtml,
+            text: onBehalfCopy.emailText,
+            userId: target.user?.id ?? undefined,
+            type: 'LEAVE_REQUEST',
+            metadata: { leaveRequestId: request.id, onBehalfOf: input.enteredByName ?? undefined },
+          }).catch(() => undefined);
+        }
+      }
+    } catch {
+      // On-behalf delivery is best-effort by design.
+    }
   }
   return request;
 }
@@ -149,6 +226,10 @@ export async function notifyLeaveRequestSubmitted(params: {
   reason?: string | null;
   submitterUserId: string;
   submitterEmail?: string | null;
+  /** v2.38.0: HR filer display name when the request was entered on behalf
+   *  of the employee — shown on the approver email/bell so the approvals
+   *  group knows the employee never typed the request. */
+  enteredByLabel?: string | null;
 }): Promise<void> {
   const [employee, leaveType] = await Promise.all([
     db.employee.findUnique({ where: { id: params.employeeId }, select: { firstName: true, lastName: true } }),
@@ -176,6 +257,7 @@ export async function notifyLeaveRequestSubmitted(params: {
     workingDays: params.workingDays,
     reason: params.reason ?? null,
     submittedByLabel: params.submitterEmail ?? null,
+    enteredByLabel: params.enteredByLabel ?? null,
   });
 
   await db.notification.createMany({

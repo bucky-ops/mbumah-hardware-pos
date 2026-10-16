@@ -14,6 +14,7 @@ import { parseDigestNotificationExtras } from '@/lib/hr/digest-notification-view
 import {
   LEAVE_CANCEL_METADATA_MARKER,
   LEAVE_DECISION_METADATA_MARKER,
+  LEAVE_ON_BEHALF_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
@@ -32,7 +33,9 @@ export interface NotificationData {
   // for the store's decision-capable users (targetTab → Payroll Leave desk).
   // v2.33.0: 'leave_cancel' - cancellation rows (manager-cancel or employee
   // withdrawal) with violet accents + Cancelled chip.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel';
+  // v2.38.0: 'leave_on_behalf' - employee-facing rows for requests HR filed
+  // in their name; violet surface, portal deep link.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -313,6 +316,11 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
     // while browsing another branch.
     // v2.31.0: leave-decision rows share category HR - they are excluded here
     // (metadata marker) and surfaced by section 9 as their own feed type.
+    // v2.38.0 QA FIX: the NOT filter only excluded 'leave_decision', so
+    // every marker written since (leave_request, leave_cancel,
+    // leave_on_behalf) was ALSO swept in here and rendered TWICE — once as
+    // a fake hr_digest row and once as its real leave surface. Exclude all
+    // four leave markers; section 9 owns them.
     if (session?.userId) {
       try {
         const hrDigestNotifications = await runWithoutTenant(() =>
@@ -321,7 +329,14 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               category: 'HR',
               userId: session.userId,
               createdAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
-              NOT: { metadata: { contains: LEAVE_DECISION_METADATA_MARKER } },
+              NOT: {
+                OR: [
+                  { metadata: { contains: LEAVE_DECISION_METADATA_MARKER } },
+                  { metadata: { contains: LEAVE_REQUEST_METADATA_MARKER } },
+                  { metadata: { contains: LEAVE_CANCEL_METADATA_MARKER } },
+                  { metadata: { contains: LEAVE_ON_BEHALF_METADATA_MARKER } },
+                ],
+              },
             },
             orderBy: { createdAt: 'desc' },
             take: 15,
@@ -373,6 +388,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 { metadata: { contains: LEAVE_DECISION_METADATA_MARKER } },
                 { metadata: { contains: LEAVE_REQUEST_METADATA_MARKER } },
                 { metadata: { contains: LEAVE_CANCEL_METADATA_MARKER } },
+                // v2.38.0: the employee-facing rows for requests HR filed
+                // in their name.
+                { metadata: { contains: LEAVE_ON_BEHALF_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -418,6 +436,24 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               actionUrl: n.actionUrl ?? undefined,
               actionLabel: n.actionLabel ?? undefined,
               leaveStatus: 'CANCELLED',
+            });
+          } else if (kind === 'leave_on_behalf') {
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_on_behalf',
+              title: n.title,
+              description: n.message,
+              // The employee does not need to act, but the row must stand
+              // out from self-filed requests — violet "Entered by HR"
+              // surface with the portal deep link (review or withdraw
+              // while PENDING).
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: '',
+              category: 'HR',
+              actionUrl: n.actionUrl ?? undefined,
+              actionLabel: n.actionLabel ?? undefined,
             });
           } else {
             const declined = n.type === 'WARNING' || extras.status === 'REJECTED';

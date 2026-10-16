@@ -2869,7 +2869,9 @@ export interface NotificationItem {
   // for the store's decision-capable users (targetTab → Payroll Leave desk).
   // v2.33.0: 'leave_cancel' - cancellation rows (either direction) with
   // violet accents and the Cancelled chip.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel';
+  // v2.38.0: 'leave_on_behalf' - employee-facing rows for requests HR filed
+  // in their name (violet user-check, "Entered by HR" chip, portal link).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';

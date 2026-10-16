@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, RefreshCw } from 'lucide-react';
+import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, RefreshCw, UserCheck } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 
 export interface BalanceDto {
@@ -40,6 +40,9 @@ export interface RequestDto {
   status: string;
   reason: string | null;
   rejectionReason: string | null;
+  /** v2.38.0: HR filer display name when the request was entered on behalf
+   *  of the employee (null = self-filed) — renders the violet chip. */
+  enteredByName?: string | null;
 }
 export interface LeaveDto {
   balances: BalanceDto[];
@@ -225,6 +228,13 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {formatDate(r.startDate)} → {formatDate(r.endDate)}
                 </p>
+                {/* v2.38.0: the employee should always be able to tell apart
+                    requests they typed from requests HR entered for them. */}
+                {r.enteredByName ? (
+                  <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900">
+                    <UserCheck className="h-3 w-3" aria-hidden /> Filed by HR · {r.enteredByName}
+                  </p>
+                ) : null}
                 {r.reason ? <p className="mt-1 text-xs text-muted-foreground">“{r.reason}”</p> : null}
                 {r.rejectionReason ? (
                   <div className="mt-1 rounded-lg bg-rose-50 px-2 py-1.5 dark:bg-rose-950/40">
