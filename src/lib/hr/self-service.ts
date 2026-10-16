@@ -318,6 +318,29 @@ export async function listMyPayslips(employee: SelfEmployee, year?: number): Pro
   }));
 }
 
+/**
+ * v2.29.0: distinct payroll years the employee has payslips for, newest
+ * first — drives the SSR year switcher on /employees/me/payslips. Derived
+ * from the same 60-row window the list endpoint reads, so a year only
+ * appears here if it actually has payslips the employee can open.
+ */
+export async function listMyPayslipYears(employee: SelfEmployee): Promise<number[]> {
+  const rows = await db.payrollDetail.findMany({
+    where: { employeeId: employee.id },
+    orderBy: { createdAt: 'desc' },
+    take: 60,
+    select: { payrollRun: { select: { payrollPeriod: { select: { startDate: true } } } } },
+  });
+  const years = new Set<number>();
+  for (const row of rows) {
+    const start = row.payrollRun.payrollPeriod.startDate;
+    // getUTCFullYear: payroll periods are stored UTC-midnight (the list
+    // endpoint filters with Date.UTC bounds), so the bucket must match.
+    years.add(start.getUTCFullYear());
+  }
+  return [...years].sort((a, b) => b - a);
+}
+
 /** Full own-payslip view: breakdown + plain-language trace (spec rule 7). */
 export async function getMyPayslip(
   employee: SelfEmployee,

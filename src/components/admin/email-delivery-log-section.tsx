@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ChevronUp,
   Clock3,
+  Download,
   Inbox,
   Mail,
   MailWarning,
@@ -150,15 +151,28 @@ export function EmailDeliveryLogSection() {
               Read-only; rows are written by the email service itself.
             </CardDescription>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => void query.refetch()}
-            className="h-8 gap-1.5 text-xs"
-            aria-label="Refresh email delivery log"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${query.isFetching ? 'animate-spin' : ''}`} aria-hidden /> Refresh
-          </Button>
+          <div className="flex items-center gap-1">
+            {/* v2.29.0: CSV export — a plain anchor so the browser handles the
+                download natively; the href carries the ACTIVE filters, so the
+                export always matches what is on screen. */}
+            <a
+              href={`/api/notifications/logs?format=csv&${params.toString()}`}
+              download
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground shadow-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Export the filtered delivery log as CSV"
+            >
+              <Download className="h-3.5 w-3.5 text-sky-500" aria-hidden /> Export CSV
+            </a>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void query.refetch()}
+              className="h-8 gap-1.5 text-xs"
+              aria-label="Refresh email delivery log"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${query.isFetching ? 'animate-spin' : ''}`} aria-hidden /> Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}

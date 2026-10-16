@@ -22,6 +22,15 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.29.0',
+    title: 'Payslips by year, leave balances for everyone, and a CSV export for the email log',
+    bullets: [
+      'Payslips now have a year switcher: jump to any year you were paid in, with a running total of what each view adds up to.',
+      'Leave balances are provisioned for every employee — you can now actually request leave from the portal.',
+      'Admins can export the email delivery log to CSV (with the active filters applied) for offline audits.',
+    ],
+  },
+  {
     version: '2.28.0',
     title: 'The whole self-service portal now opens instantly — and failed digest emails are one tap away',
     bullets: [
