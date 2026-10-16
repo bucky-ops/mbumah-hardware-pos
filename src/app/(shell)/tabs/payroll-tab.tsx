@@ -35,6 +35,7 @@ import {
   CheckCircle, XCircle, Clock3, FileText, User,
   IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play, UserX, Ban,
   CalendarPlus, UserCheck, Info,
+  UserCog, Link2, Unlink, ShieldCheck,
 } from 'lucide-react';
 
 import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf, previewWorkingDays } from '@/lib/leave-tab';
@@ -489,6 +490,9 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(EMPTY_FORM);
   const [detailEmployee, setDetailEmployee] = useState<Employee | null>(null);
+  // v2.39.0: governed portal-account linking — the dialog binds a portal User
+  // to an Employee so personal leave/payroll bells actually reach someone.
+  const [linkTarget, setLinkTarget] = useState<Employee | null>(null);
 
   const { data: employeesData, isLoading, error } = useQuery<Employee[]>({
     queryKey: ['payroll-employees', storeId],
@@ -554,6 +558,21 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
 
   const activeCount = employees.filter((e) => e.status === 'ACTIVE').length;
   const onLeaveCount = employees.filter((e) => e.status === 'ON_LEAVE').length;
+  // v2.39.0: portal-link coverage — how many of the directory's employees
+  // actually receive in-app notifications today.
+  const portalLinkedCount = employees.filter((e) => e.userId).length;
+  // userIds currently bound to ANY employee — the picker greys these out
+  // (1:1 is enforced server-side; this mirrors it client-side). Deps stay on
+  // the raw query result (stable reference), not the conditional array.
+  const linkedUserIds = useMemo(
+    () =>
+      new Set(
+        (Array.isArray(employeesData) ? employeesData : [])
+          .map((e) => e.userId)
+          .filter(Boolean) as string[],
+      ),
+    [employeesData],
+  );
   const monthlyPayroll = employees
     .filter((e) => e.status === 'ACTIVE')
     .reduce((sum, e) => sum + toNum(e.basicSalary) + toNum(e.houseAllowance) + toNum(e.transportAllowance) + toNum(e.medicalAllowance) + toNum(e.otherAllowances), 0);
@@ -626,11 +645,12 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Stats — v2.39.0 adds the portal-coverage card */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard icon={Users} label="Total Employees" value={employees.length} accent="border-l-blue-500" />
         <StatCard icon={CheckCircle} label="Active" value={activeCount} accent="border-l-green-500" />
         <StatCard icon={CalendarDays} label="On Leave" value={onLeaveCount} accent="border-l-amber-500" />
+        <StatCard icon={Link2} label="Portal Linked" value={portalLinkedCount} accent="border-l-emerald-500" />
         <StatCard icon={Banknote} label="Monthly Payroll" value={formatKES(monthlyPayroll)} accent="border-l-purple-500" />
       </div>
 
@@ -680,6 +700,13 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
           <CardTitle className="text-base flex items-center gap-2">
             <Users className="h-4 w-4" /> Employee Directory
             <Badge variant="secondary" className="ml-auto">{filtered.length}</Badge>
+            {/* v2.39.0: notification-reach badge — linked vs total. */}
+            <span
+              className="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+              title="Employees whose portal account is linked — they receive in-app leave and payroll notifications"
+            >
+              <Link2 className="h-3 w-3" aria-hidden /> {portalLinkedCount}/{employees.length} portal
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -706,6 +733,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                     <th className="px-2 py-2 font-medium text-muted-foreground hidden lg:table-cell">Hired</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground text-right">Monthly Gross</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground">Status</th>
+                    <th className="px-2 py-2 font-medium text-muted-foreground hidden xl:table-cell">Portal</th>
                     <th className="px-2 py-2 font-medium text-muted-foreground text-right">Actions</th>
                   </tr>
                 </thead>
@@ -742,6 +770,25 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                       <td className="px-2 py-2.5 hidden lg:table-cell text-xs text-muted-foreground">{formatDate(e.hireDate)}</td>
                       <td className="px-2 py-2.5 text-right font-medium">{formatKES(monthlyGross(e))}</td>
                       <td className="px-2 py-2.5"><StatusBadge status={e.status} /></td>
+                      {/* v2.39.0: portal-access column — who actually gets bells. */}
+                      <td className="px-2 py-2.5 hidden xl:table-cell">
+                        {e.user && e.userId ? (
+                          <span
+                            className="inline-flex max-w-40 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"
+                            title={`Portal account: ${e.user.email}`}
+                          >
+                            <UserCheck className="h-3 w-3 shrink-0" aria-hidden />
+                            <span className="truncate">{e.user.email}</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border"
+                            title="No portal account linked — this employee cannot receive in-app notifications"
+                          >
+                            <Unlink className="h-3 w-3" aria-hidden /> No portal
+                          </span>
+                        )}
+                      </td>
                       <td className="px-2 py-2.5">
                         <div className="flex items-center justify-end gap-1">
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDetailEmployee(e)} title="View">
@@ -749,6 +796,17 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                           </Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(e)} title="Edit">
                             <Edit className="h-4 w-4" />
+                          </Button>
+                          {/* v2.39.0: governed link/unlink of the portal account. */}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={`h-8 w-8 ${e.userId ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10' : 'text-muted-foreground hover:text-foreground'}`}
+                            onClick={() => setLinkTarget(e)}
+                            title={e.userId ? 'Manage portal account link' : 'Link portal account'}
+                            aria-label={`${e.userId ? 'Manage' : 'Link'} portal account for ${e.fullName}`}
+                          >
+                            <UserCog className="h-4 w-4" />
                           </Button>
                           {e.status !== 'TERMINATED' && (
                             <Button
@@ -790,7 +848,223 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
 
       {/* Detail Dialog */}
       <EmployeeDetailDialog employee={detailEmployee} onClose={() => setDetailEmployee(null)} />
+
+      {/* v2.39.0: governed portal-account link dialog */}
+      <PortalLinkDialog
+        open={!!linkTarget}
+        employee={linkTarget}
+        storeId={storeId}
+        linkedUserIds={linkedUserIds}
+        onClose={() => setLinkTarget(null)}
+      />
     </div>
+  );
+}
+
+// v2.39.0: Portal Account Linking Dialog — binds a portal User to an
+// Employee through POST/DELETE /api/employees/[id]/portal-link. The leave
+// lifecycle (decision fan-out, on-behalf bells) resolves this link at fire
+// time, so linking is what turns "HR filed for me" into an actual bell row.
+function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
+  open: boolean;
+  employee: Employee | null;
+  storeId: string;
+  linkedUserIds: Set<string>;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [pickUserId, setPickUserId] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+
+  const { data: usersEnv, isLoading: usersLoading } = useQuery<
+    Array<{ id: string; name: string; email: string; role: string; isActive: boolean; store?: { name: string } | null }>
+  >({
+    queryKey: ['portal-link-users', storeId],
+    queryFn: () => apiFetch(`/api/users?storeId=${storeId}&isActive=true&limit=200`),
+    enabled: open && !!employee && !employee.userId,
+  });
+  const allUsers = Array.isArray(usersEnv) ? usersEnv : [];
+
+  const candidates = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return (Array.isArray(usersEnv) ? usersEnv : []).filter((u) => {
+      if (linkedUserIds.has(u.id) && u.id !== employee?.userId) return false;
+      if (!q) return true;
+      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.role.toLowerCase().includes(q);
+    });
+  }, [usersEnv, linkedUserIds, userSearch, employee?.userId]);
+
+  const linkMutation = useMutation({
+    mutationFn: async (userId: string): Promise<{ message?: string }> =>
+      apiFetch(`/api/employees/${employee?.id}/portal-link`, { method: 'POST', body: JSON.stringify({ userId }) }),
+    onSuccess: (res: { message?: string }) => {
+      toast.success(res?.message || 'Portal account linked');
+      qc.invalidateQueries({ queryKey: ['payroll-employees', storeId] });
+      qc.invalidateQueries({ queryKey: ['payroll-leave-roster', storeId] });
+      setPickUserId('');
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: async (): Promise<{ message?: string }> => apiFetch(`/api/employees/${employee?.id}/portal-link`, { method: 'DELETE' }),
+    onSuccess: (res: { message?: string }) => {
+      toast.success(res?.message || 'Portal account unlinked');
+      qc.invalidateQueries({ queryKey: ['payroll-employees', storeId] });
+      qc.invalidateQueries({ queryKey: ['payroll-leave-roster', storeId] });
+      onClose();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const busy = linkMutation.isPending || unlinkMutation.isPending;
+
+  function handleUnlink() {
+    if (!employee?.user) return;
+    if (window.confirm(`Unlink ${employee.user.email} from ${employee.fullName}? They will stop receiving in-app leave and payroll notifications.`)) {
+      unlinkMutation.mutate();
+    }
+  }
+
+  const roleTone = (role: string): string =>
+    role === 'SUPER_ADMIN' || role === 'STORE_OWNER'
+      ? 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900'
+      : role === 'BRANCH_MANAGER' || role === 'HR_MANAGER'
+        ? 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900'
+        : 'bg-muted text-muted-foreground ring-border';
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <UserCog className="h-4 w-4 text-emerald-600" aria-hidden /> Portal account
+          </DialogTitle>
+          <DialogDescription>
+            {employee
+              ? <>Bind a login to <span className="font-medium text-foreground">{employee.fullName}</span> — linked accounts receive personal leave and payroll notifications in the app.</>
+              : 'Bind a login to this employee.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {employee && (
+          <div className="space-y-3.5">
+            {/* Current binding */}
+            {employee.user && employee.userId ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+                      <ShieldCheck className="h-4 w-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{employee.user.name || employee.user.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">{employee.user.email}</p>
+                    </div>
+                    <Badge variant="outline" className={`ml-1 shrink-0 text-[10px] ring-1 ${roleTone(employee.user.role)}`}>
+                      {employee.user.role.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={handleUnlink}
+                    className="h-8 shrink-0 gap-1.5 border-rose-200 px-2.5 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-900 dark:text-rose-400 dark:hover:bg-rose-950/40"
+                  >
+                    {unlinkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" aria-hidden />}
+                    Unlink
+                  </Button>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+                  This account gets a bell row whenever leave is filed for, decided on, or cancelled for {employee.firstName} — plus payroll run notifications.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs leading-relaxed text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                  <span className="font-semibold">Not linked.</span> Without a linked account this employee never sees in-app notifications — HR filings on their behalf are silent for them (email still goes out if an address is on file).
+                </div>
+
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Search active users by name, email or role..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+
+                  {usersLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading users…
+                    </div>
+                  ) : candidates.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                      {allUsers.length === 0
+                        ? 'No active users found for this store. Create user accounts first (Settings → Users).'
+                        : 'Every active user in this store already has an employee record. Unlink one first, or create a new user.'}
+                    </div>
+                  ) : (
+                    <div className="max-h-56 space-y-1.5 overflow-y-auto custom-scrollbar pr-1" role="listbox" aria-label="Candidate portal users">
+                      {candidates.map((u) => {
+                        const selected = pickUserId === u.id;
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            onClick={() => setPickUserId(selected ? '' : u.id)}
+                            className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left transition-colors ${
+                              selected
+                                ? 'border-violet-400 bg-violet-50 ring-1 ring-violet-300 dark:border-violet-700 dark:bg-violet-950/40 dark:ring-violet-800'
+                                : 'border-border hover:bg-muted/50'
+                            }`}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+                                {initialsOf(u.name || u.email)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{u.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                            </div>
+                            <Badge variant="outline" className={`shrink-0 text-[10px] ring-1 ${roleTone(u.role)}`}>
+                              {u.role.replace('_', ' ')}
+                            </Badge>
+                            {selected && <Check className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>Close</Button>
+          {!employee?.userId && (
+            <Button
+              size="sm"
+              disabled={!pickUserId || busy}
+              onClick={() => linkMutation.mutate(pickUserId)}
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {linkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" aria-hidden />}
+              Link account
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1070,16 +1344,21 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const leaveTypes = Array.isArray(leaveTypesData) ? leaveTypesData : [];
 
   // v2.38.0: roster for the on-behalf picker — ACTIVE employees of the
-  // store, loaded only while the dialog is open.
+  // store, loaded only while the dialog is open. v2.39.0 also carries the
+  // portal-link state so the dialog can warn when a bell row will NOT fire.
   const { data: rosterEnv, isLoading: rosterLoading } = useQuery({
     queryKey: ['payroll-leave-roster', storeId],
     queryFn: () =>
-      apiFetchEnvelope<{ success: boolean; data: Array<{ id: string; firstName: string; lastName: string; jobTitle: string | null; employeeCode: string | null }> }>(
+      apiFetchEnvelope<{ success: boolean; data: Array<{ id: string; firstName: string; lastName: string; jobTitle: string | null; employeeCode: string | null; userId: string | null }> }>(
         `/api/employees?storeId=${storeId}&status=ACTIVE&limit=500`,
       ),
     enabled: newOpen && !!storeId,
   });
   const roster = Array.isArray(rosterEnv?.data) ? rosterEnv.data : [];
+  const rosterLinkState = useMemo(
+    () => new Map((Array.isArray(rosterEnv?.data) ? rosterEnv.data : []).map((r) => [r.id, r.userId])),
+    [rosterEnv],
+  );
 
   // v2.38.0: live balance preview for the picked employee — the governed
   // /api/leave/balances read (same figure the portal and the service guard
@@ -1664,11 +1943,21 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                 <SelectContent className="max-h-64">
                   {roster.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
-                      {r.firstName} {r.lastName}{r.employeeCode ? ` · ${r.employeeCode}` : ''}{r.jobTitle ? ` — ${r.jobTitle}` : ''}
+                      {r.firstName} {r.lastName}{r.employeeCode ? ` · ${r.employeeCode}` : ''}{r.jobTitle ? ` — ${r.jobTitle}` : ''}{r.userId ? ' · portal linked' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {/* v2.39.0: set expectations at filing time — no linked account
+                  means the employee's bell row is skipped (email only). */}
+              {newEmployeeId && rosterLinkState.get(newEmployeeId) == null ? (
+                <p className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 text-[11px] leading-relaxed text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                  <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                  <span>
+                    {roster.find((r) => r.id === newEmployeeId)?.firstName ?? 'This employee'} has no linked portal account — no in-app bell will be sent (email only, if an address is on file). Link one from the Employee directory (UserCog action).
+                  </span>
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-1.5">

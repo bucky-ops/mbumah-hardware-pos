@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.39.0',
+    title: 'Link portal accounts to employees — the governed switch that turns on personal notifications',
+    bullets: [
+      'The Employee directory gains a "Portal" column and a UserCog action: bind a login to any employee and they start receiving personal in-app notifications — leave filed for them, decisions, cancellations and payroll runs — which previously required a direct database edit.',
+      'Linking is governed and validated: only store owners, HR managers and super admins can manage links; the account must be active and from the employee\'s own store; one account can only be linked to one employee (a friendly conflict message names the other employee); terminated employees cannot be linked.',
+      'The link dialog shows the live binding with role badges, a searchable picker of active store users with already-linked accounts filtered out, an amber warning when the employee would otherwise stay silent, and a confirm step before unlinking.',
+      'Filing leave on behalf now sets expectations up front: the roster marks portal-linked employees and the dialog warns when the chosen employee has no linked account (email-only delivery). The HR desk also tracks coverage with a "Portal Linked" stat card and an "N of M portal" badge.',
+    ],
+  },
+  {
     version: '2.38.0',
     title: 'HR can file leave on behalf of an employee — with the employee notified and the request clearly marked',
     bullets: [
