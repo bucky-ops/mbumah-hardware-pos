@@ -5,9 +5,12 @@
 // (scheduleId / manual / emailStatus) rendered by the notification center.
 // The feed must NEVER break on malformed metadata — every bad shape degrades
 // to an empty extras object.
+//
+// v2.28.0 adds isFailedEmailDigest: the pure predicate behind the
+// notification center's "Email failed" filter tab.
 
 import { describe, it, expect } from 'vitest';
-import { parseDigestNotificationExtras } from '@/lib/hr/digest-notification-view';
+import { parseDigestNotificationExtras, isFailedEmailDigest } from '@/lib/hr/digest-notification-view';
 
 describe('parseDigestNotificationExtras', () => {
   it('parses a complete metadata payload', () => {
@@ -65,5 +68,32 @@ describe('parseDigestNotificationExtras', () => {
       scheduleId: 'sched-3',
       emailStatus: 'SENT',
     });
+  });
+});
+
+describe('isFailedEmailDigest', () => {
+  it('matches only hr_digest rows whose email delivery FAILED', () => {
+    expect(isFailedEmailDigest({ type: 'hr_digest', emailStatus: 'FAILED' })).toBe(true);
+  });
+
+  it('does not match SENT digests, non-digest rows, or rows without a stamp', () => {
+    expect(isFailedEmailDigest({ type: 'hr_digest', emailStatus: 'SENT' })).toBe(false);
+    expect(isFailedEmailDigest({ type: 'hr_digest' })).toBe(false);
+    expect(isFailedEmailDigest({ type: 'security', emailStatus: 'FAILED' })).toBe(false);
+    expect(isFailedEmailDigest({ type: 'out_of_stock', emailStatus: 'FAILED' })).toBe(false);
+  });
+
+  it('is fail-soft on malformed rows (null / scalar / array)', () => {
+    expect(isFailedEmailDigest(null)).toBe(false);
+    expect(isFailedEmailDigest(undefined)).toBe(false);
+    expect(isFailedEmailDigest('hr_digest')).toBe(false);
+    expect(isFailedEmailDigest(42)).toBe(false);
+    expect(isFailedEmailDigest([{ type: 'hr_digest', emailStatus: 'FAILED' }])).toBe(false);
+  });
+
+  it('ignores extra truthy junk in matching rows (predicate, not validator)', () => {
+    expect(
+      isFailedEmailDigest({ type: 'hr_digest', emailStatus: 'FAILED', severity: 'info', junk: true }),
+    ).toBe(true);
   });
 });

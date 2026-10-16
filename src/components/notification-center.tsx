@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore, useAuthStore, type AppTab } from '@/lib/stores';
 import { notificationsApi, formatDateTime, formatRelativeTime, type NotificationItem } from '@/lib/api';
+import { isFailedEmailDigest } from '@/lib/hr/digest-notification-view';
 import { useNotificationReadState } from '@/lib/notification-read-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,10 +22,10 @@ import {
   PackageX, AlertTriangle, AlertOctagon, CircleDollarSign,
   UserPlus, Receipt, CheckCheck, BellRing, Filter, X,
   MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield, BarChart3, ArrowRight,
-  CalendarSync,
+  CalendarSync, MailX,
 } from 'lucide-react';
 
-type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security';
+type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security' | 'email_failed';
 
 // v2.12.7 (PR C): Security filter tab
 // Roles allowed to see the Security tab + the merged recent SecurityEvent feed
@@ -210,13 +211,17 @@ export function NotificationCenter({
     [allNotifications, dismissedIds]
   );
 
-  // Apply severity filter - 'security' narrows to SECURITY-category items.
+  // Apply severity filter - 'security' narrows to SECURITY-category items,
+  // 'email_failed' (v2.28.0) narrows to digest copies whose email FAILED.
   const filteredNotifications = useMemo(() => {
     if (filter === 'all') return activeNotifications;
     if (filter === 'security') {
       return activeNotifications.filter(
         (n) => n.category === 'SECURITY' || n.type === 'security'
       );
+    }
+    if (filter === 'email_failed') {
+      return activeNotifications.filter((n) => isFailedEmailDigest(n));
     }
     return activeNotifications.filter((n) => n.severity === filter);
   }, [activeNotifications, filter]);
@@ -227,6 +232,9 @@ export function NotificationCenter({
       return dismissedNotifications.filter(
         (n) => n.category === 'SECURITY' || n.type === 'security'
       );
+    }
+    if (filter === 'email_failed') {
+      return dismissedNotifications.filter((n) => isFailedEmailDigest(n));
     }
     return dismissedNotifications.filter((n) => n.severity === filter);
   }, [dismissedNotifications, filter]);
@@ -343,6 +351,16 @@ export function NotificationCenter({
           ).length,
         }]
       : []),
+    // v2.28.0: "Email failed" tab — appears only when the feed actually
+    // carries digest copies (it is meaningless otherwise), narrowing to the
+    // rows whose email delivery FAILED so a broken send is one tap away.
+    ...(activeNotifications.some((n) => n.type === 'hr_digest')
+      ? [{
+          id: 'email_failed' as NotificationFilter,
+          label: 'Email failed',
+          count: activeNotifications.filter((n) => isFailedEmailDigest(n)).length,
+        }]
+      : []),
   ];
 
   return (
@@ -431,6 +449,10 @@ export function NotificationCenter({
                 {/* v2.12.7 (PR C): red shield marker on the Security tab. */}
                 {tab.id === 'security' && (
                   <Shield className={`h-3 w-3 mr-1 ${filter === tab.id ? 'text-primary-foreground' : 'text-red-500'}`} />
+                )}
+                {/* v2.28.0: mail-x marker on the Email failed tab. */}
+                {tab.id === 'email_failed' && (
+                  <MailX className={`h-3 w-3 mr-1 ${filter === tab.id ? 'text-primary-foreground' : 'text-rose-500'}`} />
                 )}
                 {tab.label}
                 {tab.count > 0 && (

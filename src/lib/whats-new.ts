@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.28.0',
+    title: 'The whole self-service portal now opens instantly — and failed digest emails are one tap away',
+    bullets: [
+      'Payslips, attendance, leave, goals and documents now load server-side: the page arrives with your data already in it, no spinner on any portal tab.',
+      'The notification center gains an "Email failed" filter that appears whenever report digests are in your feed — tap it to see exactly which digest emails did not go out.',
+      'Requesting leave and acknowledging reviews feel snappier: the page refreshes in place after you submit.',
+      'Every portal page now shares the same header design — the workspace finally reads as one product.',
+      'Offline payslips still work exactly as before: cached lists and cached breakdowns open even without a connection.',
+    ],
+  },
+  {
     version: '2.27.0',
     title: 'Know exactly who got the digest — and jump from a notification straight to its schedule',
     bullets: [

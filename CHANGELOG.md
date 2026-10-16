@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.28.0] Self-service SSR completion: the whole portal server-renders, plus the notification "Email failed" filter
+
+Feature release (post-EMS polish round). Closes the longest-standing item on the self-service list (carried since v2.24.0): the five remaining client-side portal pages — payslips, attendance, leave, goals, documents — are now server components behind one shared guard, so every `/employees/me/*` route arrives with its data already in the HTML. The notification center gains an "Email failed" filter so a broken digest send is one tap away.
+
+### Added
+- **SSR completion across the self-service portal**: `payslips`, `attendance`, `leave`, `goals` and `documents` are now server components (`export const dynamic = 'force-dynamic'`) that render through the SAME services the API routes expose (`listMyPayslips`, `listMyAttendance`, `listMyLeave`, `listMyGoalProgress` + `listMyPerformanceReviews`, `listMyDocuments`) — LCP ≈ FCP on all six portal routes, matching the v2.24.0 home-page remediation. The API routes remain for the interactive islands and programmatic consumers.
+- **Shared portal guard** (`self-portal.tsx`): one `loadSelfPortal(permission)` implementation of the signed-in → module-enabled → employee-linked contract, shared by all six pages (previously inlined only on the home page; the client pages rendered bare error notes with a sign-in affordance divergence). The guard returns the resolved employee or the ready-to-render `PortalNote`.
+- **Notification-center "Email failed" filter**: a new filter tab (rose `MailX` marker) that narrows the feed — active AND dismissed lists — to digest copies whose email delivery FAILED, backed by the pure fail-soft predicate `isFailedEmailDigest` in `digest-notification-view.ts`. The tab appears only when the feed actually carries `hr_digest` rows, so it is never dead chrome.
+- **Styling pass (shared header)**: all six portal pages now render one `SelfPageHeader` — gradient icon tile (per-page tone), title, supporting line, optional action slot — plus per-card polish: payslip cards carry status accent rails (emerald POSTED / amber LOCKED), attendance tiles and rows gain hover states and tabular numerals, leave/goal/document cards gain consistent hover elevation, and the attendance month line names the month explicitly.
+- **scripts/verify-v2-28-0.mjs** (`npm run verify:v2-28-0`): static checks over the shared guard, the five SSR pages (server-only, force-dynamic, permission, service), the preserved offline contracts (cache keys `mbt_self_payslips_cache_v1` / `mbt_self_payslip_v1:<id>`, connection-tracked offline banner), the POST-then-`router.refresh()` flows, the filter predicate + tab gating, and version metadata.
+- **Tests**: 4 new cases (862 total) covering `isFailedEmailDigest` — matching rows, non-matching rows (SENT / no stamp / other types), fail-soft behavior on malformed input (null / scalar / array), and junk-tolerant matching.
+
+### Changed
+- **Leave request and review acknowledge flows** now `router.refresh()` the server render after a successful POST instead of hand-refetching JSON — the dialog closes onto freshly server-rendered balances/requests/reviews.
+- **Payslips offline banner** now tracks the browser's real connection (`online`/`offline` events) instead of a failed fetch — accurate now that the list itself is server-rendered; the offline cache-first behavior of the breakdown dialog is unchanged.
+- **docs/hr/self-service.md**: the "portal pages remain client components" caveat is replaced by the v2.28.0 SSR-completion section (guard consolidation, service-rendered reads, preserved offline contracts, shared header).
+
 ## [2.27.0] Delivery intelligence: per-recipient delivery expansion, digest rows that link to their schedule
 
 Feature release (post-EMS polish round). Closes the two remaining delivery-observability gaps from the v2.25.0/v2.26.0 loop: a delivery attempt now expands to show exactly which addresses it was addressed to, and the notification center's digest copies finally tell you what happened to the email — and jump straight to the schedule that produced them.
