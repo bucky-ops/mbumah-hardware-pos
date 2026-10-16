@@ -553,6 +553,7 @@ export async function requestMyLeave(
     endDate,
     halfDay: input.halfDay === true,
     reason: typeof input.reason === 'string' ? input.reason.trim() || undefined : undefined,
+    submitterEmail: session.email, // v2.32.0: manager notification footer
   }).catch((error: unknown) => {
     // leave-service throws plain Errors with CODE: prefixes; normalise.
     if (error instanceof StageGError) throw error;
