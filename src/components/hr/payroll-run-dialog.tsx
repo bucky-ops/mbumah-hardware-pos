@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Banknote, Check, CheckCircle2, FileDown, Loader2, Lock, Play, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, CheckCircle2, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/hr/payroll/page';
 
 /** Colored payment status chips (v2.21.0 styling pass). */
@@ -83,6 +83,24 @@ interface RunDetail {
   payrollPeriod: { name: string; payDate: string | null; startDate: string; endDate: string };
 }
 
+interface B2CPayslipState {
+  payrollDetailId: string;
+  attempts: number;
+  lastStatus: string | null;
+  lastAttemptAt: string | null;
+  lastResultDesc: string | null;
+  settled: boolean;
+}
+
+interface B2CDisbursementState {
+  pendingWithoutAttempt: number;
+  processing: number;
+  staleProcessing: number;
+  failed: number;
+  completed: number;
+  perPayslip: B2CPayslipState[];
+}
+
 interface RunDetailResponse {
   data: RunDetail;
   can: {
@@ -93,6 +111,8 @@ interface RunDetailResponse {
     correct: boolean;
     isPreparer: boolean;
   };
+  /** v2.22.0 additive PII-free B2C disbursement state (null-safe for old runs). */
+  disbursement?: B2CDisbursementState | null;
 }
 
 interface PayslipRow {
@@ -112,12 +132,16 @@ interface TraceResponse {
 
 interface B2CSummary {
   mode: 'daraja' | 'mock';
-  eligible: number;
-  initiated: number;
-  alreadyInitiated: number;
-  skipped: Array<{ employeeCode: string; reason: string }>;
-  failed: Array<{ employeeCode: string; code: string; message: string }>;
-  receipts: Array<{ employeeCode: string; receipt: string }>;
+  eligible?: number;
+  initiated?: number;
+  alreadyInitiated?: number;
+  skipped?: Array<{ employeeCode: string; reason: string }>;
+  failed?: Array<{ employeeCode: string; code: string; message: string }>;
+  receipts?: Array<{ employeeCode: string; receipt: string }>;
+  /** refresh-stuck result (mode: refresh-stuck). */
+  queried?: number;
+  settled?: number;
+  message?: string;
 }
 
 export function PayrollRunDialog({
@@ -140,6 +164,7 @@ export function PayrollRunDialog({
   const [traceLoading, setTraceLoading] = useState(false);
   const [b2cOpen, setB2cOpen] = useState(false);
   const [b2cSummary, setB2cSummary] = useState<B2CSummary | null>(null);
+  const [b2cMode, setB2cMode] = useState<'all' | 'retry-failed'>('all');
 
   const load = useCallback(async (id: string) => {
     setError(null);
@@ -179,6 +204,25 @@ export function PayrollRunDialog({
     [payslips],
   );
   const pendingTotal = useMemo(() => pendingPayslips.reduce((s, p) => s + p.totals.net, 0), [pendingPayslips]);
+
+  // v2.22.0 B2C recovery affordances, derived from the run's disbursement block.
+  const disbursement = detail?.disbursement ?? null;
+  const b2cStateByPayslip = useMemo(() => {
+    const map = new Map<string, B2CPayslipState>();
+    for (const s of disbursement?.perPayslip ?? []) map.set(s.payrollDetailId, s);
+    return map;
+  }, [disbursement]);
+  const failedRetryable = useMemo(
+    () =>
+      (payslips ?? []).filter(
+        (p) =>
+          p.payment.status === 'PENDING' &&
+          p.totals.net > 0 &&
+          b2cStateByPayslip.get(p.id)?.lastStatus === 'FAILED',
+      ),
+    [payslips, b2cStateByPayslip],
+  );
+  const stuckProcessing = disbursement?.staleProcessing ?? 0;
 
   if (!runId) return null;
 
@@ -244,8 +288,8 @@ export function PayrollRunDialog({
 
   const stage = lifecycleStage(status);
 
-  const runB2C = async () => {
-    const result = await act('disburse-mpesa', {});
+  const runB2C = async (mode: 'all' | 'retry-failed' | 'refresh-stuck') => {
+    const result = await act('disburse-mpesa', { mode });
     if (result?.ok) {
       const data = (result.body as { data?: B2CSummary }).data;
       if (data) setB2cSummary(data);
@@ -392,12 +436,37 @@ export function PayrollRunDialog({
                     size="sm"
                     onClick={() => {
                       setB2cSummary(null);
+                      setB2cMode('all');
                       setB2cOpen(true);
                     }}
                     disabled={busy}
                     className="gap-1.5 border-emerald-300 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
                   >
                     <Smartphone className="h-3.5 w-3.5" /> Disburse via M-Pesa
+                  </Button>
+                )}
+                {(status === 'POSTED' || status === 'LOCKED') && can?.disburse && failedRetryable.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runB2C('retry-failed')}
+                    disabled={busy}
+                    title={`Re-send the ${failedRetryable.length} payslip(s) whose last B2C attempt failed. Never touches payslips that are already paid or being processed.`}
+                    className="gap-1.5 border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Retry failed ({failedRetryable.length})
+                  </Button>
+                )}
+                {(status === 'POSTED' || status === 'LOCKED') && can?.disburse && stuckProcessing > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runB2C('refresh-stuck')}
+                    disabled={busy}
+                    title="Re-query Safaricom for disbursements that never reported a result. Payslips settle automatically when the result re-arrives."
+                    className="gap-1.5"
+                  >
+                    <Loader2 className="h-3.5 w-3.5" /> Check status ({stuckProcessing})
                   </Button>
                 )}
                 {['DRAFT', 'REJECTED', 'PENDING_APPROVAL', 'APPROVED'].includes(status) && can?.approve && (
@@ -487,6 +556,31 @@ export function PayrollRunDialog({
                             <TableCell className="text-right font-semibold tabular-nums">{kes(p.totals.net)}</TableCell>
                             <TableCell>
                               <PaymentBadge status={p.payment.status} reference={p.payment.reference} />
+                              {(() => {
+                                const st = b2cStateByPayslip.get(p.id);
+                                if (!st || st.settled || !st.lastStatus) return null;
+                                if (st.lastStatus === 'FAILED') {
+                                  return (
+                                    <span
+                                      className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                                      title={st.lastResultDesc || 'Last M-Pesa B2C attempt failed — use Retry failed to re-send.'}
+                                    >
+                                      <AlertTriangle className="h-3 w-3" aria-hidden /> B2C failed · retry ready
+                                    </span>
+                                  );
+                                }
+                                if (st.lastStatus === 'PROCESSING') {
+                                  return (
+                                    <span
+                                      className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-sky-700 dark:text-sky-400"
+                                      title={`M-Pesa B2C attempt ${st.attempts} in progress${st.lastAttemptAt ? ` since ${new Date(st.lastAttemptAt).toLocaleTimeString()}` : ''}.`}
+                                    >
+                                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> B2C processing{st.attempts > 1 ? ` · ${st.attempts} attempts` : ''}
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </TableCell>
                             <TableCell className="space-x-1 text-right whitespace-nowrap">
                               <Button variant="ghost" size="sm" onClick={() => void showTrace(p.id)}>
@@ -528,7 +622,7 @@ export function PayrollRunDialog({
           </div>
         )}
 
-        {/* M-Pesa B2C disbursement confirm (v2.21.0) */}
+        {/* M-Pesa B2C disbursement confirm (v2.21.0, retry-aware v2.22.0) */}
         <Dialog open={b2cOpen} onOpenChange={setB2cOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -542,6 +636,23 @@ export function PayrollRunDialog({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
+              {b2cMode === 'all' && failedRetryable.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setB2cOpen(false);
+                    void runB2C('retry-failed');
+                  }}
+                  disabled={busy}
+                  className="flex w-full items-center gap-2 rounded-md border border-amber-300 bg-amber-50/70 px-3 py-2 text-left text-xs text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <span>
+                    <span className="font-semibold">{failedRetryable.length} payslip(s)</span> already have a failed B2C
+                    attempt — you can re-send just those instead.
+                  </span>
+                </button>
+              )}
               <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                 <p>
                   <span className="font-semibold tabular-nums">{pendingPayslips.length}</span> payslip(s) ·
@@ -564,7 +675,7 @@ export function PayrollRunDialog({
                 <Button
                   size="sm"
                   disabled={busy || pendingPayslips.length === 0}
-                  onClick={() => void runB2C()}
+                  onClick={() => void runB2C('all')}
                   className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
                 >
                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Smartphone className="h-3.5 w-3.5" aria-hidden />}
@@ -575,13 +686,13 @@ export function PayrollRunDialog({
           </DialogContent>
         </Dialog>
 
-        {/* M-Pesa B2C result summary */}
+        {/* M-Pesa B2C result summary (v2.22.0: disburse / retry / refresh) */}
         {b2cSummary && (
           <Dialog open onOpenChange={(v) => !v && setB2cSummary(null)}>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  {b2cSummary.failed.length === 0 ? (
+                  {(b2cSummary.failed?.length ?? 0) === 0 ? (
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   ) : (
                     <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
@@ -589,17 +700,26 @@ export function PayrollRunDialog({
                   M-Pesa disbursement {b2cSummary.mode === 'mock' ? '(mock mode)' : 'sent'}
                 </DialogTitle>
                 <DialogDescription>
-                  {b2cSummary.initiated} initiated · {b2cSummary.alreadyInitiated} already active ·{' '}
-                  {b2cSummary.skipped.length} skipped · {b2cSummary.failed.length} failed
-                  {b2cSummary.mode === 'daraja' && ' · payslips settle when Safaricom reports the result'}
+                  {b2cSummary.queried !== undefined ? (
+                    <>
+                      {b2cSummary.queried} re-queried · {b2cSummary.settled ?? 0} settled ·{' '}
+                      {b2cSummary.message}
+                    </>
+                  ) : (
+                    <>
+                      {b2cSummary.initiated ?? 0} initiated · {b2cSummary.alreadyInitiated ?? 0} already active ·{' '}
+                      {b2cSummary.skipped?.length ?? 0} skipped · {b2cSummary.failed?.length ?? 0} failed
+                      {b2cSummary.mode === 'daraja' && ' · payslips settle when Safaricom reports the result'}
+                    </>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <div className="max-h-72 space-y-3 overflow-y-auto text-sm">
-                {b2cSummary.receipts.length > 0 && (
+                {(b2cSummary.receipts?.length ?? 0) > 0 && (
                   <div>
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Completed (mock receipts)</p>
                     <ul className="space-y-1">
-                      {b2cSummary.receipts.map((r) => (
+                      {b2cSummary.receipts?.map((r) => (
                         <li key={r.employeeCode} className="flex items-center justify-between gap-2 rounded-md border bg-emerald-50/60 px-2.5 py-1.5 dark:border-emerald-900 dark:bg-emerald-950/30">
                           <span className="font-medium">{r.employeeCode}</span>
                           <span className="font-mono text-xs text-emerald-700 dark:text-emerald-300">{r.receipt}</span>
@@ -608,11 +728,11 @@ export function PayrollRunDialog({
                     </ul>
                   </div>
                 )}
-                {b2cSummary.skipped.length > 0 && (
+                {(b2cSummary.skipped?.length ?? 0) > 0 && (
                   <div>
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Skipped</p>
                     <ul className="space-y-1">
-                      {b2cSummary.skipped.map((s) => (
+                      {b2cSummary.skipped?.map((s) => (
                         <li key={s.employeeCode} className="rounded-md border px-2.5 py-1.5">
                           <span className="font-medium">{s.employeeCode}</span>
                           <span className="text-muted-foreground"> — {s.reason}</span>
@@ -621,11 +741,11 @@ export function PayrollRunDialog({
                     </ul>
                   </div>
                 )}
-                {b2cSummary.failed.length > 0 && (
+                {(b2cSummary.failed?.length ?? 0) > 0 && (
                   <div>
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Failed</p>
                     <ul className="space-y-1">
-                      {b2cSummary.failed.map((f) => (
+                      {b2cSummary.failed?.map((f) => (
                         <li key={f.employeeCode} className="rounded-md border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 dark:border-rose-900 dark:bg-rose-950/30">
                           <span className="font-medium">{f.employeeCode}</span>
                           <span className="text-rose-700 dark:text-rose-300"> — {f.message}</span>

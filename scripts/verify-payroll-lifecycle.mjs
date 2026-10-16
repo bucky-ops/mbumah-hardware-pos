@@ -122,8 +122,10 @@ check('corrections panel exists', existsSync(join(root, 'src/components/hr/payro
 
 console.log('[5/5] Schema + tests');
 const schema = read('prisma/schema.prisma');
-check('PayrollRun idempotencyKey unique', schema.includes('idempotencyKey    String? @unique'));
-check('PayrollDetail payslipNumber unique', schema.includes('payslipNumber           String? @unique'));
+// Whitespace-tolerant (prisma format realigns columns): match the
+  // field within the PayrollRun model block via a type-agnostic regex.
+  check('PayrollRun idempotencyKey unique', /idempotencyKey\s+String\?\s+@unique/.test(schema));
+check('PayrollDetail payslipNumber unique', /payslipNumber\s+String\?\s+@unique/.test(schema));
 check('PayrollCorrection model exists', schema.includes('model PayrollCorrection'));
 check('sequence table for payslip numbers', read('src/lib/sequence.ts').includes("PS: 'payroll_details'"));
 const test = read('src/tests/lib/payroll-run-lifecycle.test.ts');

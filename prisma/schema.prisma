@@ -47,6 +47,8 @@ model Organization {
   recruitmentJobs      RecruitmentJob[]
   reviewCycles         ReviewCycle[]
   hrSettings           HrSetting[]
+  // EMS v2.22.0: scheduled HR report email digests.
+  hrReportSchedules    HrReportSchedule[]
 
   stores   Store[]
   users    User[]
@@ -3671,4 +3673,39 @@ model ErasureRequest {
   @@index([organizationId, status])
   @@index([employeeId])
   @@map("hr_erasure_requests")
+}
+
+/// EMS v2.22.0: scheduled HR report digests. A schedule picks one aggregate
+/// report (headcount, employment cost, absence, turnover, time-to-hire,
+/// statutory liability), a frequency and a recipient list; the nightly cron
+/// sweep computes the report server-side (aggregates only — the same
+/// fail-closed scope rules as the interactive routes) and emails the digest.
+/// Delivery failures are recorded on the row (lastStatus/lastError) so the
+/// Reports UI can surface them without touching NotificationLog.
+model HrReportSchedule {
+  id              String    @id @default(cuid())
+  organizationId  String
+  storeId         String? // null = org-wide scope
+  reportKey       String // headcount | employment-cost | absence | turnover | time-to-hire | statutory-liability
+  frequency       String    @default("WEEKLY") // DAILY | WEEKLY | MONTHLY
+  // Recipients as a JSON string array (String for SQLite parity). Emails are
+  // validated at write time; no employee PII beyond the address itself.
+  recipients      String
+  weekday         Int? // 0 (Sun) .. 6 (Sat), UTC - WEEKLY only
+  dayOfMonth      Int? // 1..28, UTC - MONTHLY only
+  hourUtc         Int       @default(2) // 0..23, UTC send hour
+  active          Boolean   @default(true)
+  lastRunAt       DateTime?
+  lastStatus      String? // SENT | FAILED | SKIPPED
+  lastError       String?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime? // soft delete keeps the audit trail intact
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, active])
+  @@index([active, lastRunAt])
+  @@map("hr_report_schedules")
 }

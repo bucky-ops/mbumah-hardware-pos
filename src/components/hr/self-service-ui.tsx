@@ -17,11 +17,11 @@ export async function apiGet<T>(url: string): Promise<T> {
   return json.data as T;
 }
 
-export async function apiSend<T>(url: string, method: 'POST' | 'PATCH', body?: unknown): Promise<T> {
+export async function apiSend<T>(url: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: T; error?: string; code?: string };

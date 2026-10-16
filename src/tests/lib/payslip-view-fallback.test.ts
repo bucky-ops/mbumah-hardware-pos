@@ -7,7 +7,7 @@
 // failure mode observed in QA when a trace stub did not match the schema.
 
 import { describe, it, expect } from 'vitest';
-import { buildPayslipView, parseTrace } from '@/lib/hr/payroll/payslip-view';
+import { buildPayslipView, parseTrace, describePayslip } from '@/lib/hr/payroll/payslip-view';
 
 const EMPLOYEE = {
   id: 'emp-1',
@@ -78,6 +78,57 @@ describe('parseTrace shape gate', () => {
     });
     const parsed = parseTrace(trace);
     expect(parsed?.grossCents).toBe(11660000);
+  });
+});
+
+describe('parseTrace legacy-shape normalisation (v2.22.0)', () => {
+  it('normalises a QA-fixture trace missing rateTableIds/deductions/trace (QA-caught 500)', () => {
+    // Exact shape qa-seed-stage-h-dev.mjs wrote before v2.22.0: earnings +
+    // engineSteps only. describePayslip previously crashed on
+    // result.rateTableIds.length and the route returned a 500.
+    const legacy = JSON.stringify({
+      grossCents: 11660000,
+      totalDeductionsCents: 3016960,
+      netCents: 8643040,
+      earnings: [{ code: 'BASIC', label: 'Basic salary', amountCents: 8165000 }],
+      engineSteps: ['resolveRates', 'computePayslip'],
+    });
+    const parsed = parseTrace(legacy);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.rateTableIds).toEqual([]);
+    expect(parsed?.deductions).toEqual([]);
+    expect(parsed?.employerContributions).toEqual([]);
+    // Legacy string steps are lifted to the {step, detail} contract.
+    expect(parsed?.trace).toEqual([
+      { step: 'resolveRates', detail: '' },
+      { step: 'computePayslip', detail: '' },
+    ]);
+    // The plain-language describer must survive (it is what 500'd).
+    expect(parsed).not.toBeNull();
+    const sentences = describePayslip(parsed as NonNullable<typeof parsed>);
+    expect(sentences.length).toBeGreaterThan(0);
+    expect(sentences.some((s) => s.includes('KES 116,600.00'))).toBe(true);
+  });
+
+  it('derives netCents from the identity when missing', () => {
+    const legacy = JSON.stringify({
+      grossCents: 10000000,
+      totalDeductionsCents: 1500000,
+      earnings: [{ code: 'BASIC', label: 'Basic salary', amountCents: 10000000 }],
+    });
+    expect(parseTrace(legacy)?.netCents).toBe(8500000);
+  });
+
+  it('treats non-numeric totals as 0 without crashing', () => {
+    const weird = JSON.stringify({
+      grossCents: 10000000,
+      totalDeductionsCents: 'n/a',
+      netCents: 'n/a',
+      earnings: [{ code: 'BASIC', label: 'Basic salary', amountCents: 10000000 }],
+    });
+    const parsed = parseTrace(weird);
+    expect(parsed?.totalDeductionsCents).toBe(0);
+    expect(parsed?.netCents).toBe(10000000);
   });
 });
 

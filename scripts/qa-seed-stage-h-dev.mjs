@@ -69,9 +69,9 @@ async function main() {
           netPay: l.net,
           daysWorked: 22,
           daysPresent: 22,
-          // Full-shaped StoredPayslipResult (v2.21.0): the payslip view parses
-          // this first and falls back to the stored columns when it does not
-          // match, so the stub must carry the real cents to render amounts.
+          // Full engine-shaped PayslipResult (v2.22.0): same keys the payroll
+          // engine writes — trace is the step log, rateTableIds recorded — so
+          // the trace dialog exercises the canonical shape, not a fixture.
           computationTrace: JSON.stringify({
             grossCents: Math.round(l.gross * 100),
             totalDeductionsCents: Math.round(l.ded * 100),
@@ -88,7 +88,12 @@ async function main() {
               { code: 'NSSF_T1', label: 'NSSF (employee)', amountCents: Math.round(l.nssf * 100) },
             ],
             employerContributions: [],
-            engineSteps: ['resolveRates', 'computePayslip'],
+            trace: [
+              { step: 'resolveRates', detail: 'Active rate tables resolved for the period.' },
+              { step: 'computePayslip', detail: 'Statutory lines computed in engine order.' },
+            ],
+            rateTableIds: [],
+            roundingAdjustmentCents: 0,
           }),
         },
       });

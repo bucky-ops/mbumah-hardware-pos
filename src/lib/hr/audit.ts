@@ -37,6 +37,8 @@ export const HrEntityType = {
   PAYSLIP: 'PayrollDetail',
   PAYROLL_CORRECTION: 'PayrollCorrection',
   DATA_EXPORT: 'DataExport',
+  // v2.22.0: scheduled HR report email digests.
+  REPORT_SCHEDULE: 'HrReportSchedule',
 } as const;
 
 export type HrEntityTypeValue = (typeof HrEntityType)[keyof typeof HrEntityType];
