@@ -13,6 +13,16 @@
  * Backend APIs (all require Bearer + CSRF headers, return { success, data }):
  *   /api/employees, /api/leave-types, /api/leaves,
  *   /api/payroll/periods, /api/payroll/runs, /api/attendance
+ *
+ * CONTRACT NOTE (v2.30.0): GET /api/leaves and GET /api/attendance return
+ * FLAT DTOs (employeeName / employeeJobTitle / leaveTypeName at the top
+ * level — NO nested `employee` / `leaveType` objects). The Leave + Attendance
+ * sub-tabs used to read the nested shape and crashed the whole tab on the
+ * first row of data; the static contract test
+ * src/tests/lib/payroll-tab-contracts.test.ts pins this. PUT /api/leaves
+ * requires UPPERCASE actions ('APPROVE' | 'REJECT') and persists
+ * rejectionReason on reject. Balance side-payloads ride outside `data`, so
+ * that query uses apiFetchEnvelope.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -25,6 +35,8 @@ import {
   CheckCircle, XCircle, Clock3, FileText, User,
   IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play, UserX, Ban,
 } from 'lucide-react';
+
+import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf } from '@/lib/leave-tab';
 
 import { useAppStore } from '@/lib/stores';
 import { formatKES, formatDate, formatDateTime } from '@/lib/api';
@@ -120,16 +132,49 @@ interface LeaveType {
   isActive: boolean;
 }
 
+// Matches the FLAT DTO returned by GET /api/leaves (employeeName/
+// leaveTypeName at the top level — there is no nested `employee` object;
+// reading one was the v2.29.x Payroll-tab crash).
 interface LeaveRequest {
   id: string;
-  employee: { id: string; firstName: string; lastName: string; jobTitle: string | null };
-  leaveType: { id: string; name: string; code: string; isPaid: boolean };
+  employeeId: string;
+  employeeName: string;
+  employeeJobTitle: string | null;
+  photoUrl: string | null;
+  leaveTypeId: string;
+  leaveTypeName: string;
+  leaveTypeCode: string;
+  isPaid: boolean;
+  isStatutory: boolean;
   startDate: string;
   endDate: string;
-  days: number;
+  returnDate: string | null;
+  workingDays: number;
+  halfDay: boolean;
   status: string;
   reason: string | null;
+  rejectionReason: string | null;
+  approvedAt: string | null;
+  emergencyContact: string | null;
   createdAt: string;
+}
+
+// Matches the per-employee balance rows returned as `balances` by
+// GET /api/leaves?balances=true.
+interface LeaveBalance {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  leaveTypeId: string;
+  leaveTypeName: string;
+  leaveTypeCode: string;
+  leaveYear: number;
+  allocatedDays: number;
+  usedDays: number;
+  pendingDays: number;
+  carryForwardDays: number;
+  encashedDays: number;
+  availableDays: number;
 }
 
 interface PayrollPeriod {
@@ -172,14 +217,27 @@ interface PayrollRun {
   createdAt: string;
 }
 
+// Matches the FLAT DTO returned by GET /api/attendance (employeeName at the
+// top level — no nested `employee` object). Decimal columns (workingHours /
+// overtimeHours / lateMinutes) serialize as STRINGS through Response.json —
+// read them through toNum(), never .toFixed() them directly (the v2.30.0
+// QA round caught `workingHours.toFixed is not a function` crashing the
+// whole Payroll tab on the first attendance record).
 interface AttendanceRecord {
   id: string;
-  employee: { id: string; firstName: string; lastName: string; jobTitle: string | null };
+  employeeId: string;
+  employeeName: string;
+  employeeJobTitle: string | null;
+  photoUrl: string | null;
   date: string;
   checkIn: string | null;
   checkOut: string | null;
-  workingHours: number | null;
+  breakHours: number | string | null;
+  workingHours: number | string | null;
+  overtimeHours: number | string | null;
+  lateMinutes: number | string | null;
   status: string;
+  source: string | null;
   notes: string | null;
 }
 
@@ -203,6 +261,29 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
     throw new Error(json.error || json.detail?.message || 'Request failed');
   }
   return json.data as T;
+}
+
+// Like apiFetch but returns the FULL response envelope ({ success, data,
+// ...sidePayloads }). Needed for endpoints that return more than `data` —
+// GET /api/leaves?balances=true also carries `balances` + `leaveTypes`.
+async function apiFetchEnvelope<T extends { success?: boolean }>(url: string, options?: RequestInit): Promise<T> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+  const csrfToken =
+    typeof document !== 'undefined'
+      ? document.cookie.match(/csrf_token=([^;]+)/)?.[1]
+      : undefined;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+  const res = await fetch(url, { ...options, headers });
+  const json = await res.json();
+  if (!json.success) {
+    throw new Error(json.error || json.detail?.message || 'Request failed');
+  }
+  return json as T;
 }
 
 // Status badge helpers
@@ -951,13 +1032,23 @@ function DetailItem({ icon: Icon, label, value, highlight }: {
 function LeaveSubTab({ storeId }: { storeId: string }) {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [detail, setDetail] = useState<LeaveRequest | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
-  const { data: leavesData, isLoading, error } = useQuery<LeaveRequest[]>({
+  // GET /api/leaves returns { success, data: [...], balances?: [...],
+  // leaveTypes: [...] } — apiFetch would drop the side payloads, so this
+  // query uses apiFetchEnvelope to also read the per-employee balances.
+  const { data: leavesEnvelope, isLoading, error } = useQuery({
     queryKey: ['payroll-leaves', storeId],
-    queryFn: () => apiFetch(`/api/leaves?storeId=${storeId}&balances=true`),
+    queryFn: () =>
+      apiFetchEnvelope<{ success: boolean; data: LeaveRequest[]; balances?: LeaveBalance[] }>(
+        `/api/leaves?storeId=${storeId}&balances=true`,
+      ),
     enabled: !!storeId,
   });
-  const leaves = Array.isArray(leavesData) ? leavesData : [];
+  const leaves = Array.isArray(leavesEnvelope?.data) ? leavesEnvelope.data : [];
+  const balances = Array.isArray(leavesEnvelope?.balances) ? leavesEnvelope.balances : [];
 
   const { data: leaveTypesData } = useQuery<LeaveType[]>({
     queryKey: ['payroll-leave-types'],
@@ -965,11 +1056,13 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   });
   const leaveTypes = Array.isArray(leaveTypesData) ? leaveTypesData : [];
 
+  // PUT /api/leaves requires UPPERCASE actions ('APPROVE' | 'REJECT') —
+  // the lowercase values this tab used to send were rejected with 400.
   const actionMutation = useMutation({
-    mutationFn: ({ action, leaveRequestId }: { action: string; leaveRequestId: string }) =>
-      apiFetch('/api/leaves', { method: 'PUT', body: JSON.stringify({ action, leaveRequestId }) }),
+    mutationFn: ({ action, leaveRequestId, rejectionReason }: { action: 'APPROVE' | 'REJECT'; leaveRequestId: string; rejectionReason?: string }) =>
+      apiFetch('/api/leaves', { method: 'PUT', body: JSON.stringify({ action, leaveRequestId, rejectionReason }) }),
     onSuccess: (_data, vars) => {
-      toast.success(`Leave request ${vars.action}d successfully`);
+      toast.success(vars.action === 'APPROVE' ? 'Leave request approved — balance updated' : 'Leave request rejected');
       qc.invalidateQueries({ queryKey: ['payroll-leaves', storeId] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -978,6 +1071,20 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const filtered = leaves.filter((l) => statusFilter === 'ALL' || l.status === statusFilter);
   const pendingCount = leaves.filter((l) => l.status === 'PENDING').length;
   const approvedCount = leaves.filter((l) => l.status === 'APPROVED').length;
+  const pendingDays = leaves.filter((l) => l.status === 'PENDING').reduce((s, l) => s + toNum(l.workingDays), 0);
+
+  const openReject = (l: LeaveRequest) => {
+    setRejectReason('');
+    setRejectTarget(l);
+  };
+
+  const confirmReject = () => {
+    if (!rejectTarget || !rejectReason.trim()) return;
+    actionMutation.mutate(
+      { action: 'REJECT', leaveRequestId: rejectTarget.id, rejectionReason: rejectReason.trim() },
+      { onSuccess: () => { setRejectTarget(null); } },
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -985,19 +1092,19 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
         <StatCard icon={CalendarDays} label="Total Requests" value={leaves.length} accent="border-l-blue-500" />
         <StatCard icon={Clock3} label="Pending" value={pendingCount} accent="border-l-amber-500" />
         <StatCard icon={CheckCircle} label="Approved" value={approvedCount} accent="border-l-green-500" />
-        <StatCard icon={FileText} label="Leave Types" value={leaveTypes.length} accent="border-l-purple-500" />
+        <StatCard icon={Clock} label="Days Pending" value={pendingDays % 1 === 0 ? pendingDays : pendingDays.toFixed(1)} accent="border-l-purple-500" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Leave Requests - 2/3 width */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 overflow-hidden">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" /> Leave Requests
               </CardTitle>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">All</SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
@@ -1028,38 +1135,92 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((l) => (
-                      <tr key={l.id} className="border-b hover:bg-muted/40">
-                        <td className="px-2 py-2.5">
-                          <p className="font-medium">{l.employee.firstName} {l.employee.lastName}</p>
-                          <p className="text-xs text-muted-foreground">{l.employee.jobTitle || 'Staff'}</p>
-                        </td>
-                        <td className="px-2 py-2.5 hidden sm:table-cell">
-                          <Badge variant="outline" className={l.leaveType.isPaid ? 'border-green-300 text-green-700' : ''}>
-                            {l.leaveType.name}
-                          </Badge>
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <p className="text-xs">{formatDate(l.startDate)} → {formatDate(l.endDate)}</p>
-                          <p className="text-xs text-muted-foreground">{l.days} day(s)</p>
-                        </td>
-                        <td className="px-2 py-2.5"><StatusBadge status={l.status} /></td>
-                        <td className="px-2 py-2.5">
-                          {l.status === 'PENDING' ? (
-                            <div className="flex items-center justify-end gap-1">
-                              <Button size="sm" variant="ghost" className="h-8 text-green-600 hover:text-green-700" onClick={() => actionMutation.mutate({ action: 'approve', leaveRequestId: l.id })} disabled={actionMutation.isPending}>
-                                <Check className="h-4 w-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-8 text-red-600 hover:text-red-700" onClick={() => actionMutation.mutate({ action: 'reject', leaveRequestId: l.id })} disabled={actionMutation.isPending}>
-                                <X className="h-4 w-4" />
-                              </Button>
+                    {filtered.map((l) => {
+                      const statusRail =
+                        l.status === 'PENDING' ? 'border-l-2 border-l-amber-400' :
+                        l.status === 'APPROVED' ? 'border-l-2 border-l-green-500' :
+                        l.status === 'REJECTED' ? 'border-l-2 border-l-red-400' : 'border-l-2 border-l-transparent';
+                      return (
+                        <tr key={l.id} className={`border-b hover:bg-muted/40 transition-colors ${statusRail}`}>
+                          <td className="px-2 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-7 w-7">
+                                <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+                                  {initialsOf(l.employeeName)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{l.employeeName}</p>
+                                <p className="text-xs text-muted-foreground truncate">{l.employeeJobTitle || 'Staff'}</p>
+                              </div>
                             </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground block text-right">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-2 py-2.5 hidden sm:table-cell">
+                            <Badge variant="outline" className={`text-xs ${leaveTypeStyle(l.leaveTypeCode)}`}>
+                              {l.leaveTypeName}
+                            </Badge>
+                            {l.halfDay && <p className="text-[10px] text-muted-foreground mt-0.5">half day</p>}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <p className="text-xs tabular-nums">{formatDate(l.startDate)} → {formatDate(l.endDate)}</p>
+                            <p className="text-xs text-muted-foreground tabular-nums">
+                              {toNum(l.workingDays) % 1 === 0 ? toNum(l.workingDays) : toNum(l.workingDays).toFixed(1)} day(s)
+                              {l.status === 'REJECTED' && l.rejectionReason ? ' · reason given' : ''}
+                            </p>
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <StatusBadge status={l.status} />
+                            {l.status === 'REJECTED' && l.rejectionReason && (
+                              <p className="text-[10px] text-muted-foreground mt-1 max-w-32 truncate" title={l.rejectionReason}>
+                                {l.rejectionReason}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                                title="View details"
+                                aria-label={`View details for ${l.employeeName}`}
+                                onClick={() => setDetail(l)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              {l.status === 'PENDING' ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-500/10"
+                                    title="Approve request"
+                                    aria-label={`Approve leave for ${l.employeeName}`}
+                                    onClick={() => actionMutation.mutate({ action: 'APPROVE', leaveRequestId: l.id })}
+                                    disabled={actionMutation.isPending}
+                                  >
+                                    {actionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-500/10"
+                                    title="Reject request (reason required)"
+                                    aria-label={`Reject leave for ${l.employeeName}`}
+                                    onClick={() => openReject(l)}
+                                    disabled={actionMutation.isPending}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <span className="text-xs text-muted-foreground px-2">—</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1067,38 +1228,215 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
           </CardContent>
         </Card>
 
-        {/* Leave Types - 1/3 width */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Leave Types
-            </CardTitle>
-            <CardDescription className="text-xs">Organisation-wide leave policy</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar">
-              {leaveTypes.map((lt) => (
-                <div key={lt.id} className="rounded-lg border p-3 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-medium text-sm">{lt.name}</p>
-                    <Badge variant="outline" className="text-xs">{lt.code}</Badge>
+        {/* Balances + Leave Types - 1/3 width */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <PiggyBank className="h-4 w-4" /> Balances {new Date().getUTCFullYear()}
+              </CardTitle>
+              <CardDescription className="text-xs">Entitlement usage per employee &amp; type</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+                {balances.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    No balances provisioned for {new Date().getUTCFullYear()} yet.
+                  </p>
+                ) : (
+                  balances.map((b) => {
+                    const tone = balanceTone(toNum(b.usedDays), toNum(b.allocatedDays), toNum(b.carryForwardDays));
+                    const util = balanceUtilization(toNum(b.usedDays), toNum(b.allocatedDays), toNum(b.carryForwardDays));
+                    const pct = Math.round(util * 100);
+                    return (
+                      <div key={b.id} className="rounded-lg border p-2.5 space-y-1.5 hover:border-border/80 hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-medium truncate">{b.employeeName}</p>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{b.leaveTypeCode}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums">
+                          <span className="text-muted-foreground">
+                            {toNum(b.availableDays) % 1 === 0 ? toNum(b.availableDays) : toNum(b.availableDays).toFixed(1)} of{' '}
+                            {(toNum(b.allocatedDays) + toNum(b.carryForwardDays)) % 1 === 0
+                              ? toNum(b.allocatedDays) + toNum(b.carryForwardDays)
+                              : (toNum(b.allocatedDays) + toNum(b.carryForwardDays)).toFixed(1)} d available
+                          </span>
+                          <span className={tone.text}>{pct}% used</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden" role="presentation">
+                          <div className={`h-full rounded-full transition-all ${tone.bar}`} style={{ width: `${Math.max(pct, util > 0 ? 4 : 0)}%` }} />
+                        </div>
+                        {toNum(b.pendingDays) > 0 && (
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 tabular-nums">
+                            {toNum(b.pendingDays)} d pending approval
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-4 w-4" /> Leave Types
+              </CardTitle>
+              <CardDescription className="text-xs">Organisation-wide leave policy</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+                {leaveTypes.map((lt) => (
+                  <div key={lt.id} className="rounded-lg border p-3 space-y-1.5 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-sm">{lt.name}</p>
+                      <Badge variant="outline" className="text-xs">{lt.code}</Badge>
+                    </div>
+                    {lt.description && <p className="text-xs text-muted-foreground">{lt.description}</p>}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <Badge variant="secondary" className="text-xs">{lt.defaultDaysPerYear} days/yr</Badge>
+                      {lt.isPaid && <Badge variant="outline" className="text-xs text-green-600 border-green-300">Paid</Badge>}
+                      {lt.isStatutory && <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">Statutory</Badge>}
+                      {lt.carryForwardAllowed && <Badge variant="outline" className="text-xs text-purple-600 border-purple-300">Carry Fwd</Badge>}
+                    </div>
                   </div>
-                  {lt.description && <p className="text-xs text-muted-foreground">{lt.description}</p>}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    <Badge variant="secondary" className="text-xs">{lt.defaultDaysPerYear} days/yr</Badge>
-                    {lt.isPaid && <Badge variant="outline" className="text-xs text-green-600 border-green-300">Paid</Badge>}
-                    {lt.isStatutory && <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">Statutory</Badge>}
-                    {lt.carryForwardAllowed && <Badge variant="outline" className="text-xs text-purple-600 border-purple-300">Carry Fwd</Badge>}
-                  </div>
+                ))}
+                {leaveTypes.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No leave types configured.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Request details dialog */}
+      <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2.5">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                  {detail ? initialsOf(detail.employeeName) : '?'}
+                </AvatarFallback>
+              </Avatar>
+              <span>Leave request</span>
+            </DialogTitle>
+            <DialogDescription>
+              {detail ? `${detail.employeeName} · ${detail.employeeJobTitle || 'Staff'}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <DetailField label="Type" value={detail.leaveTypeName} hint={detail.leaveTypeCode} />
+                <DetailField label="Status" value={detail.status} />
+                <DetailField label="From" value={formatDate(detail.startDate)} />
+                <DetailField label="To" value={formatDate(detail.endDate)} />
+                <DetailField label="Working days" value={toNum(detail.workingDays) % 1 === 0 ? String(toNum(detail.workingDays)) : toNum(detail.workingDays).toFixed(1)} />
+                <DetailField label="Paid" value={detail.isPaid ? 'Yes' : 'Unpaid'} />
+                {detail.halfDay && <DetailField label="Half day" value="Yes" />}
+                {detail.returnDate && <DetailField label="Expected return" value={formatDate(detail.returnDate)} />}
+              </div>
+              {detail.reason && (
+                <div className="rounded-lg border bg-muted/30 p-2.5">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Employee&apos;s reason</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{detail.reason}</p>
                 </div>
-              ))}
-              {leaveTypes.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">No leave types configured.</p>
+              )}
+              {detail.rejectionReason && (
+                <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-2.5">
+                  <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Rejection reason</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{detail.rejectionReason}</p>
+                </div>
+              )}
+              {detail.emergencyContact && (
+                <DetailField label="Emergency contact during leave" value={detail.emergencyContact} />
+              )}
+              {detail.approvedAt && (
+                <p className="text-xs text-muted-foreground">Decided {formatDateTime(detail.approvedAt)}</p>
               )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetail(null)}>Close</Button>
+            {detail && detail.status === 'PENDING' && (
+              <>
+                <Button
+                  variant="outline"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-500/10"
+                  disabled={actionMutation.isPending}
+                  onClick={() => { const target = detail; setDetail(null); openReject(target); }}
+                >
+                  <X className="h-4 w-4 mr-1.5" /> Reject
+                </Button>
+                <Button
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  disabled={actionMutation.isPending}
+                  onClick={() => actionMutation.mutate({ action: 'APPROVE', leaveRequestId: detail.id }, { onSuccess: () => setDetail(null) })}
+                >
+                  <Check className="h-4 w-4 mr-1.5" /> Approve
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject-reason dialog — the API persists rejectionReason; managers
+          must state it so the employee sees WHY (shown on rejected rows). */}
+      <Dialog open={!!rejectTarget} onOpenChange={(v) => !v && setRejectTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject leave request</DialogTitle>
+            <DialogDescription>
+              {rejectTarget
+                ? `${rejectTarget.employeeName} · ${rejectTarget.leaveTypeName} · ${formatDate(rejectTarget.startDate)} → ${formatDate(rejectTarget.endDate)}`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="reject-reason">Reason (required)</Label>
+              <Textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g. Year-end stock take — annual leave is frozen for that week."
+                rows={3}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                The employee sees this reason next to the rejected request in their portal.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectTarget(null)} disabled={actionMutation.isPending}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={actionMutation.isPending || !rejectReason.trim()}
+              onClick={confirmReject}
+            >
+              {actionMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <X className="h-4 w-4 mr-1.5" />}
+              Reject request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/** Small label/value row used inside the leave request details dialog. */
+function DetailField({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-lg border p-2 min-w-0">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium truncate" title={value}>{value}</p>
+      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -1518,7 +1856,7 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
   const presentToday = todayRecords.filter((r) => r.status === 'PRESENT' || r.status === 'LATE').length;
   const lateToday = todayRecords.filter((r) => r.status === 'LATE').length;
   const avgHours = records.length > 0
-    ? (records.reduce((s, r) => s + (r.workingHours || 0), 0) / records.length).toFixed(1)
+    ? (records.reduce((s, r) => s + toNum(r.workingHours), 0) / records.length).toFixed(1)
     : '0.0';
 
   return (
@@ -1600,15 +1938,28 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
                 </thead>
                 <tbody>
                   {records.map((r) => (
-                    <tr key={r.id} className="border-b hover:bg-muted/40">
+                    <tr key={r.id} className={`border-b hover:bg-muted/40 transition-colors ${r.status === 'LATE' ? 'border-l-2 border-l-amber-400' : 'border-l-2 border-l-transparent'}`}>
                       <td className="px-2 py-2.5">
-                        <p className="font-medium">{r.employee.firstName} {r.employee.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{r.employee.jobTitle || 'Staff'}</p>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-7 w-7">
+                            <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+                              {initialsOf(r.employeeName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{r.employeeName}</p>
+                            <p className="text-xs text-muted-foreground truncate">{r.employeeJobTitle || 'Staff'}</p>
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-2 py-2.5 text-xs">{formatDate(r.date)}</td>
-                      <td className="px-2 py-2.5 text-xs">{r.checkIn ? formatDateTime(r.checkIn) : '-'}</td>
-                      <td className="px-2 py-2.5 text-xs">{r.checkOut ? formatDateTime(r.checkOut) : '-'}</td>
-                      <td className="px-2 py-2.5 text-right font-medium">{r.workingHours ? `${r.workingHours.toFixed(1)}h` : '-'}</td>
+                      <td className="px-2 py-2.5 text-xs tabular-nums">{formatDate(r.date)}</td>
+                      <td className="px-2 py-2.5 text-xs tabular-nums">{r.checkIn ? formatDateTime(r.checkIn) : '-'}</td>
+                      <td className="px-2 py-2.5 text-xs tabular-nums">{r.checkOut ? formatDateTime(r.checkOut) : '-'}</td>
+                      <td className="px-2 py-2.5 text-right font-medium tabular-nums">
+                        {toNum(r.workingHours) > 0 ? `${toNum(r.workingHours).toFixed(1)}h` : '-'}
+                        {toNum(r.overtimeHours) > 0 ? <span className="block text-[10px] text-emerald-600 dark:text-emerald-400">+{toNum(r.overtimeHours).toFixed(1)}h OT</span> : null}
+                        {toNum(r.lateMinutes) > 0 ? <span className="block text-[10px] text-amber-600 dark:text-amber-400">{toNum(r.lateMinutes)}m late</span> : null}
+                      </td>
                       <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>
                     </tr>
                   ))}

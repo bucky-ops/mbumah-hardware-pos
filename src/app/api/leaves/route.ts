@@ -16,6 +16,7 @@ import {
   updateLeaveBalanceOnStatusChange,
   calculateWorkingDays,
 } from '@/lib/payroll-helpers';
+import { recomputeBalances } from '@/lib/hr/leave-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,7 +114,9 @@ async function listLeavesHandler(
       pendingDays: b.pendingDays,
       carryForwardDays: b.carryForwardDays,
       encashedDays: b.encashedDays,
-      availableDays: Math.round((b.allocatedDays + b.carryForwardDays - b.usedDays - b.pendingDays) * 100) / 100,
+      // Decimal-safe: Decimal + Decimal CONCATENATES at runtime ("21" + "0"
+      // = "210") — coerce before the arithmetic (v2.30.0).
+      availableDays: Math.round((Number(b.allocatedDays) + Number(b.carryForwardDays) - Number(b.usedDays) - Number(b.pendingDays)) * 100) / 100,
     }));
   }
 
@@ -248,7 +251,9 @@ async function createLeaveHandler(
   const balance = await getOrCreateLeaveBalance(employeeId, leaveTypeId, leaveYear);
   await db.employeeLeaveBalance.update({
     where: { id: balance.id },
-    data: { pendingDays: Math.round((balance.pendingDays + workingDays) * 100) / 100 },
+    // Decimal-safe: pendingDays is a Decimal (string valueOf) — a bare `+`
+    // would CONCATENATE ("3" + 2 = "32") once pendingDays is non-zero.
+    data: { pendingDays: Math.round((Number(balance.pendingDays) + workingDays) * 100) / 100 },
   });
 
   await systemLog({
@@ -385,8 +390,17 @@ async function updateLeaveHandler(
     },
   });
 
-  // Update the leave balance
+  // Update the leave balance: the incremental transition applies the delta
+  // immediately (v2.30.0: Decimal-safe via leaveStatusTransitionDelta), then
+  // the aggregate-derived recompute rewrites the stored aggregates straight
+  // from the request table — idempotent, and it HEALS any drift left by the
+  // old string-concatenation bug (approved leave never incremented usedDays).
   await updateLeaveBalanceOnStatusChange(leaveRequestId, newStatus, oldStatus);
+  await recomputeBalances(
+    leaveRequest.employeeId,
+    leaveRequest.leaveTypeId,
+    new Date(leaveRequest.startDate).getUTCFullYear(),
+  ).catch(() => undefined);
 
   await systemLog({
     action: `LEAVE_REQUEST_${newStatus}`,

@@ -22,6 +22,18 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.30.0',
+    title: 'The Payroll tab leave desk actually works now — approve, reject with a reason, and see every balance',
+    bullets: [
+      'Fixed: opening Payroll → Leave (or Attendance) with any data crashed the whole tab. It renders reliably now, with avatars, status rails and type-colored badges.',
+      'Fixed: the Approve/Reject buttons never worked — they sent the wrong action codes, and approvals silently failed to deduct used days from the balance (a long-standing data bug, now healed on every decision).',
+      'Rejecting a request now asks for a reason — the employee sees it as "Declined: …" in their portal, and rejected rows show it inline.',
+      'New Balances panel: every employee\'s entitlement usage per leave type with color-coded progress bars and pending-day counts.',
+      'New View dialog on each request: full context (reason, half day, expected return, emergency contact, decision history) before you decide.',
+      'Attendance rows now surface overtime hours and late minutes at a glance.',
+    ],
+  },
+  {
     version: '2.29.0',
     title: 'Payslips by year, leave balances for everyone, and a CSV export for the email log',
     bullets: [
