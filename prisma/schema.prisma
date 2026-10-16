@@ -1850,6 +1850,14 @@ model LeaveRequest {
   // Emergency contact during leave (optional)
   emergencyContact String?
 
+  // v2.38.0: on-behalf filing marker (both null = self-filed via the
+  // portal). enteredById keeps the audit link to the HR user who filed the
+  // request in the employee's name; enteredByName is denormalised so every
+  // list surface (HR desk rows, portal cards, approval emails) can render
+  // the "Entered by HR" chip without an extra join.
+  enteredById   String? // User ID of the HR filer when filed on behalf
+  enteredByName String? // Display name of the filer ("Entered by HR · …")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

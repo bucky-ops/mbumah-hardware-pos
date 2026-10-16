@@ -72,3 +72,25 @@ export function initialsOf(name: string): string {
   const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? '') : (parts[0][1] ?? '');
   return (first + last).toUpperCase() || '?';
 }
+
+/**
+ * v2.38.0: client-side mirror of the service's countWorkingDays — the exact
+ * same weekend-skipping, UTC-anchored arithmetic the governed requestLeave()
+ * path applies, so the HR desk's on-behalf dialog previews the day count the
+ * server will store (half-day = whole range minus 0.5, matching the portal).
+ * Invalid or inverted ranges yield 0; presentation never throws.
+ */
+export function previewWorkingDays(fromStr: string, toStr: string, halfDay: boolean): number {
+  if (!fromStr || !toStr) return 0;
+  const from = new Date(`${fromStr}T00:00:00.000Z`);
+  const to = new Date(`${toStr}T00:00:00.000Z`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to < from) return 0;
+  let days = 0;
+  const cursor = new Date(from);
+  while (cursor <= to) {
+    const day = cursor.getUTCDay();
+    if (day !== 0 && day !== 6) days += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return Math.max(0, halfDay ? days - 0.5 : days);
+}

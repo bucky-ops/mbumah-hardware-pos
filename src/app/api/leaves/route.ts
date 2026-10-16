@@ -12,11 +12,9 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess, requireRole } from '@/lib/auth';
 import {
-  getOrCreateLeaveBalance,
   updateLeaveBalanceOnStatusChange,
-  calculateWorkingDays,
 } from '@/lib/payroll-helpers';
-import { recomputeBalances, notifyLeaveRequestSubmitted, notifyLeaveRequestCancelled } from '@/lib/hr/leave-service';
+import { recomputeBalances, requestLeave, notifyLeaveRequestCancelled } from '@/lib/hr/leave-service';
 import { toNum } from '@/lib/decimal-safe';
 import {
   LEAVE_DECISION_METADATA_MARKER,
@@ -89,6 +87,10 @@ async function listLeavesHandler(
     emergencyContact: r.emergencyContact,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    // v2.38.0: HR-filer display name when the request was entered on behalf
+    // of the employee (null = self-filed via the portal). Rendered as the
+    // violet "Entered by HR" chip on the HR desk and the portal.
+    enteredByName: r.enteredByName,
   }));
 
   // Optionally include leave balances for the filtered employees
@@ -156,6 +158,16 @@ export const GET = withErrorBoundary(
 );
 
 // POST: Submit a new leave request
+// v2.38.0 REWRITE: the legacy handler hand-rolled its own creation (with a
+// half-day arithmetic that diverged from the governed path and a manual
+// pendingDays increment the v2.32.0 heal had to keep repairing) and had NO
+// role gate — any same-store user could file leave for ANY colleague
+// (horizontal authz gap, the same class the CANCEL fix closed in v2.33.0).
+// Now: decision-capable roles file for anyone in their store; everyone else
+// may only file for their own linked employee. Creation itself is delegated
+// to requestLeave() so balances, recompute, audit and every notification
+// leg (approvers + on-behalf employee notice) behave identically to the
+// portal path.
 async function createLeaveHandler(
   request: NextRequest,
   session: { userId: string; role: string; storeId: string | null; email: string }
@@ -188,10 +200,17 @@ async function createLeaveHandler(
     );
   }
 
-  // Verify employee + leave type
+  // Verify employee + leave type (with the linked user for the ownership
+  // gate and the on-behalf marker decision below)
   const employee = await db.employee.findFirst({
-    where: { id: employeeId, storeId },
-    select: { id: true, firstName: true, lastName: true, status: true },
+    where: { id: employeeId, storeId, deletedAt: null },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      status: true,
+      user: { select: { id: true } },
+    },
   });
   if (!employee) {
     return Response.json(
@@ -211,108 +230,100 @@ async function createLeaveHandler(
     );
   }
 
-  // Compute working days (excludes weekends)
-  const workingDays = calculateWorkingDays(start, end) * (halfDay ? 0.5 : 1);
+  // v2.38.0 AUTHZ (mirrors the v2.33.0 CANCEL gate): decision-capable roles
+  // file for any employee in their store (that is the on-behalf workflow);
+  // every other role may only file for THEMSELVES.
+  const isDecisionCapable = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'].includes(session.role);
+  const isSelf = employee.user?.id === session.userId;
+  if (!isDecisionCapable && !isSelf) {
+    return Response.json(
+      { success: false, error: 'You can only file leave requests for yourself.' },
+      { status: 403 }
+    );
+  }
 
-  // Check leave balance (for paid, non-unlimited leave types)
-  // v2.31.0: defaultDaysPerYear is a Decimal column (valueOf is a STRING) -
-  // read through toNum so the guard compares numbers, not coerced strings.
-  if (toNum(leaveType.defaultDaysPerYear) > 0) {
-    const leaveYear = start.getFullYear();
-    const balance = await getOrCreateLeaveBalance(employeeId, leaveTypeId, leaveYear);
-    if (balance.available < workingDays) {
+  // On-behalf marker: set whenever a decision-capable filer enters the
+  // request for someone else. Filing for your own linked employee stays a
+  // self-filed request (no marker, no self-notification).
+  const onBehalf = isDecisionCapable && !isSelf;
+  let enteredByName: string | null = null;
+  if (onBehalf) {
+    const actor = await db.user.findUnique({
+      where: { id: session.userId },
+      select: { name: true, email: true },
+    });
+    enteredByName = actor?.name?.trim() || actor?.email || session.email || 'HR';
+  }
+
+  // Create via the governed service path (balance guard + idempotent
+  // recompute + audit + approver fan-out + on-behalf employee notice).
+  let created: Awaited<ReturnType<typeof requestLeave>>;
+  try {
+    created = await requestLeave({
+      employeeId,
+      storeId,
+      actorId: session.userId,
+      actorRole: session.role,
+      leaveTypeId,
+      startDate: start,
+      endDate: end,
+      halfDay: halfDay === true,
+      reason: typeof reason === 'string' && reason.trim() ? reason.trim() : undefined,
+      attachmentUrl: typeof attachmentUrl === 'string' && attachmentUrl.trim() ? attachmentUrl.trim() : null,
+      emergencyContact: typeof emergencyContact === 'string' && emergencyContact.trim() ? emergencyContact.trim() : null,
+      submitterEmail: session.email || undefined,
+      enteredById: onBehalf ? session.userId : null,
+      enteredByName,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Leave request could not be created.';
+    if (message.startsWith('INSUFFICIENT_LEAVE_BALANCE')) {
       return Response.json(
-        {
-          success: false,
-          error: `Insufficient leave balance. Requested ${workingDays} day(s), available ${balance.available} day(s) for ${leaveType.name} in ${leaveYear}.`,
-          code: 'INSUFFICIENT_BALANCE',
-          requested: workingDays,
-          available: balance.available,
-        },
+        { success: false, error: message.replace('INSUFFICIENT_LEAVE_BALANCE: ', 'Insufficient leave balance. '), code: 'INSUFFICIENT_BALANCE' },
         { status: 400 }
       );
     }
+    if (message.includes('Employee not found')) {
+      return Response.json({ success: false, error: 'Employee not found for this store.' }, { status: 404 });
+    }
+    if (message.includes('PERIOD_MISMATCH') || message.includes('endDate')) {
+      return Response.json({ success: false, error: message }, { status: 400 });
+    }
+    return Response.json({ success: false, error: message }, { status: 400 });
   }
-
-  // Create the request
-  const leaveRequest = await db.leaveRequest.create({
-    data: {
-      employeeId,
-      leaveTypeId,
-      storeId,
-      startDate: start,
-      endDate: end,
-      returnDate: new Date(end.getTime() + 24 * 60 * 60 * 1000), // day after end
-      workingDays,
-      halfDay: halfDay || false,
-      status: 'PENDING',
-      reason: reason || null,
-      attachmentUrl: attachmentUrl || null,
-      emergencyContact: emergencyContact || null,
-    },
-    include: {
-      leaveType: { select: { name: true, code: true } },
-    },
-  });
-
-  // Add to pendingDays on the balance
-  const leaveYear = start.getFullYear();
-  const balance = await getOrCreateLeaveBalance(employeeId, leaveTypeId, leaveYear);
-  await db.employeeLeaveBalance.update({
-    where: { id: balance.id },
-    // Decimal-safe: pendingDays is a Decimal (string valueOf) — a bare `+`
-    // would CONCATENATE ("3" + 2 = "32") once pendingDays is non-zero.
-    data: { pendingDays: Math.round((Number(balance.pendingDays) + workingDays) * 100) / 100 },
-  });
 
   await systemLog({
     action: 'LEAVE_REQUEST_SUBMITTED',
     component: LogComponent.SYSTEM,
     severity: LogSeverity.INFO,
-    message: `Leave request submitted: ${employee.firstName} ${employee.lastName} requested ${workingDays} day(s) of ${leaveType.name} (${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)})`,
+    message: `Leave request submitted: ${employee.firstName} ${employee.lastName} requested ${toNum(created.workingDays)} day(s) of ${created.leaveType.name} (${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)})${onBehalf ? ` - entered by HR (${enteredByName}) on behalf of the employee` : ''}`,
     storeId,
     userId: session.userId,
-    metadata: { leaveRequestId: leaveRequest.id, employeeId, leaveTypeId, workingDays },
-  });
-
-  // v2.32.0: submission notifications (employee → manager direction, the
-  // mirror of the v2.31.0 decision notifications). The shared helper resolves
-  // every active decision-capable user of the store (SUPER_ADMIN /
-  // STORE_OWNER / BRANCH_MANAGER / ACCOUNTANT) plus all SUPER_ADMINs anywhere
-  // (they may decide cross-store), excludes the submitter, writes one durable
-  // bell row per approver and sends ONE grouped email. Best-effort: a
-  // notification or email failure must never surface as a failed submission.
-  try {
-    await notifyLeaveRequestSubmitted({
-      leaveRequestId: leaveRequest.id,
-      storeId,
+    metadata: {
+      leaveRequestId: created.id,
       employeeId,
       leaveTypeId,
-      startDate: start,
-      endDate: end,
-      workingDays,
-      reason: reason || null,
-      submitterUserId: session.userId,
-      submitterEmail: session.email || null,
-    });
-  } catch {
-    // Submission delivery is best-effort by design.
-  }
+      workingDays: toNum(created.workingDays),
+      onBehalfOf: onBehalf ? enteredByName : undefined,
+    },
+  });
 
   return Response.json({
     success: true,
     data: {
-      id: leaveRequest.id,
-      employeeId: leaveRequest.employeeId,
-      leaveTypeId: leaveRequest.leaveTypeId,
-      leaveTypeName: leaveRequest.leaveType.name,
-      startDate: leaveRequest.startDate.toISOString(),
-      endDate: leaveRequest.endDate.toISOString(),
-      workingDays: leaveRequest.workingDays,
-      halfDay: leaveRequest.halfDay,
-      status: leaveRequest.status,
-      reason: leaveRequest.reason,
-      createdAt: leaveRequest.createdAt.toISOString(),
+      id: created.id,
+      employeeId: created.employeeId,
+      leaveTypeId: created.leaveTypeId,
+      leaveTypeName: created.leaveType.name,
+      startDate: created.startDate.toISOString(),
+      endDate: created.endDate.toISOString(),
+      workingDays: created.workingDays,
+      halfDay: created.halfDay,
+      status: created.status,
+      reason: created.reason,
+      enteredByName: created.enteredByName,
+      enteredBy: onBehalf,
+      createdAt: created.createdAt.toISOString(),
     },
   }, { status: 201 });
 }

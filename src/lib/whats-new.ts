@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.38.0',
+    title: 'HR can file leave on behalf of an employee — with the employee notified and the request clearly marked',
+    bullets: [
+      'The Leave desk gains a "New request" button for walk-up and phone-in leave: pick the employee, type and dates, and the dialog previews the working-day count (weekends skipped) and the live available balance before you file.',
+      'The employee is told immediately — a portal bell row and an email explain who filed the request, the days and the reason, and they can withdraw it themselves while it is still pending.',
+      'Every surface marks the request "Entered by HR": violet chips on the HR desk rows and detail dialog, a "Filed by HR" badge on the employee\'s portal card, and an "Entered by" line on the approver email — no more guessing which requests the employee actually typed.',
+      'Filing is governed: the old open endpoint let any same-store user file leave for any colleague — now non-manager filers are restricted to their own requests, HR filers face the same balance guard as the portal (no overdrafts on behalf), and every entry lands in the audit trail.',
+    ],
+  },
+  {
     version: '2.37.0',
     title: 'Leave balances join the scheduled digest pack — the year-keyed balance sheet can now land in the right inbox on autopilot',
     bullets: [

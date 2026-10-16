@@ -518,6 +518,10 @@ export async function listMyLeave(employee: SelfEmployee): Promise<{
       halfDay: r.halfDay,
       status: r.status,
       reason: r.reason ?? null,
+      // v2.38.0: HR filer display name when the request was entered on
+      // behalf of the employee (null = self-filed) — renders the violet
+      // "Filed by HR" chip on the portal card.
+      enteredByName: r.enteredByName ?? null,
       rejectionReason: r.status === 'REJECTED' ? r.rejectionReason ?? null : null,
       createdAt: r.createdAt.toISOString(),
     })),

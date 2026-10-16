@@ -38,7 +38,13 @@ export const LEAVE_REQUEST_METADATA_MARKER = 'leave_request';
  *  `kind` to the 'leave_cancel' surface with violet accents. */
 export const LEAVE_CANCEL_METADATA_MARKER = 'leave_cancel';
 
-export type LeaveNotificationKind = 'leave_decision' | 'leave_request' | 'leave_cancel';
+/** v2.38.0: marker for ON-BEHALF rows — the employee-facing notification
+ *  written when HR files a leave request in the employee's name. The row
+ *  deep-links the portal leave page so the employee can review (or
+ *  withdraw, while PENDING) a request they never typed. */
+export const LEAVE_ON_BEHALF_METADATA_MARKER = 'leave_on_behalf';
+
+export type LeaveNotificationKind = 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf';
 
 export type LeaveDecisionStatus = 'APPROVED' | 'REJECTED';
 
@@ -181,6 +187,9 @@ export interface LeaveDecisionExtras {
   /** v2.33.0: true when a manager cancelled (row addresses the employee);
    *  false/absent = employee self-withdrawal (row addresses approvers). */
   cancelledByManager?: boolean;
+  /** v2.38.0: HR filer display name on leave_on_behalf rows (the employee
+   *  notification for a request HR entered on their behalf). */
+  enteredByName?: string;
 }
 
 /** Fail-soft metadata parser for the notification feed (same contract as
@@ -195,7 +204,8 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
     if (
       rec.kind === 'leave_decision' ||
       rec.kind === 'leave_request' ||
-      rec.kind === 'leave_cancel'
+      rec.kind === 'leave_cancel' ||
+      rec.kind === 'leave_on_behalf'
     )
       out.kind = rec.kind;
     if (typeof rec.leaveRequestId === 'string') out.leaveRequestId = rec.leaveRequestId;
@@ -203,6 +213,7 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
     if (typeof rec.decidedByLabel === 'string') out.decidedByLabel = rec.decidedByLabel;
     if (typeof rec.cancelledByLabel === 'string') out.cancelledByLabel = rec.cancelledByLabel;
     if (typeof rec.cancelledByManager === 'boolean') out.cancelledByManager = rec.cancelledByManager;
+    if (typeof rec.enteredByName === 'string') out.enteredByName = rec.enteredByName;
     return out;
   } catch {
     return {};
@@ -221,6 +232,10 @@ export interface LeaveSubmissionCopyInput {
   reason?: string | null;
   /** Optional submitter display label ("submitted by …" footer). */
   submittedByLabel?: string | null;
+  /** v2.38.0: display name of the HR filer when the request was entered on
+   *  behalf of the employee. Adds an "Entered by" email row and a footer
+   *  note so approvers know the employee never typed this request. */
+  enteredByLabel?: string | null;
 }
 
 export interface LeaveSubmissionCopy {
@@ -238,7 +253,7 @@ export interface LeaveSubmissionCopy {
  *  that deep-links their workspace's Payroll tab (targetTab, set by the
  *  route) and one grouped email. */
 export function leaveSubmissionCopy(input: LeaveSubmissionCopyInput): LeaveSubmissionCopy {
-  const { firstName, lastName, leaveTypeName, startDate, endDate, workingDays, reason, submittedByLabel } = input;
+  const { firstName, lastName, leaveTypeName, startDate, endDate, workingDays, reason, submittedByLabel, enteredByLabel } = input;
 
   const name = `${firstName} ${lastName}`.trim();
   const range = `${formatLeaveDay(startDate)} - ${formatLeaveDay(endDate)}`;
@@ -246,7 +261,8 @@ export function leaveSubmissionCopy(input: LeaveSubmissionCopyInput): LeaveSubmi
 
   const title = `New leave request - ${name}`;
   const reasonSuffix = reason ? ` Reason: ${reason}` : '';
-  const message = `${name} requested ${leaveTypeName} for ${days} (${range}). Review it on the Leave desk.${reasonSuffix}`;
+  const onBehalfSuffix = enteredByLabel ? ` Entered by HR (${enteredByLabel}).` : '';
+  const message = `${name} requested ${leaveTypeName} for ${days} (${range}). Review it on the Leave desk.${reasonSuffix}${onBehalfSuffix}`;
 
   const emailSubject = `Leave request pending review - ${name} (${days} ${leaveTypeName})`;
   const accent = '#0369a1';
@@ -260,10 +276,13 @@ export function leaveSubmissionCopy(input: LeaveSubmissionCopyInput): LeaveSubmi
     ['Working days', escapeHtml(days)],
   ];
   if (reason) rows.push(['Reason', escapeHtml(reason)]);
+  if (enteredByLabel) rows.push(['Entered by', `${escapeHtml(enteredByLabel)} (HR — on behalf of the employee)`]);
 
-  const footer = submittedByLabel
-    ? `<p style="margin:12px 0 0;color:#6b7280;font-size:12px;">Submitted by ${escapeHtml(submittedByLabel)}.</p>`
-    : '';
+  const footer = enteredByLabel
+    ? `<p style="margin:12px 0 0;color:#6b7280;font-size:12px;">Entered by HR (${escapeHtml(enteredByLabel)}) on behalf of the employee — the employee has been notified.</p>`
+    : submittedByLabel
+      ? `<p style="margin:12px 0 0;color:#6b7280;font-size:12px;">Submitted by ${escapeHtml(submittedByLabel)}.</p>`
+      : '';
 
   const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
   <div style="background:${accentBg};padding:16px 20px;border-bottom:1px solid ${accentBorder};">
@@ -398,6 +417,98 @@ export function leaveCancelledCopy(input: LeaveCancelCopyInput): LeaveCancelCopy
     ``,
     closing,
   ].join('\n');
+
+  return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
+// ── v2.38.0: ON-BEHALF SUBMISSION (employee-facing copy) ──────────────────
+
+export interface LeaveOnBehalfCopyInput {
+  /** The EMPLOYEE's name (the person the request is FOR). */
+  firstName: string;
+  lastName: string;
+  leaveTypeName: string;
+  /** ISO date strings as stored on the LeaveRequest row. */
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  /** Display name of the HR filer ("Filed by <name>"). */
+  enteredByLabel: string;
+  /** Optional reason the HR filer recorded for the employee. */
+  reason?: string | null;
+}
+
+export interface LeaveOnBehalfCopy {
+  title: string;
+  message: string;
+  notifType: 'INFO';
+  priority: 'NORMAL';
+  emailSubject: string;
+  emailText: string;
+  emailHtml: string;
+}
+
+/** Build every copy surface for the employee-facing notification written
+ *  when HR files a leave request in the employee's name (v2.38.0). Violet
+ *  accent language to match the "Entered by HR" chips on every surface —
+ *  this is the only leave surface addressed to the employee that they did
+ *  NOT originate, so the copy is explicit about who filed it and what
+ *  happens next (pending review, withdrawable while PENDING). */
+export function leaveOnBehalfCopy(input: LeaveOnBehalfCopyInput): LeaveOnBehalfCopy {
+  const { firstName, lastName, leaveTypeName, startDate, endDate, workingDays, enteredByLabel, reason } = input;
+
+  const name = `${firstName} ${lastName}`.trim();
+  const range = `${formatLeaveDay(startDate)} - ${formatLeaveDay(endDate)}`;
+  const days = `${workingDays} day${workingDays === 1 ? '' : 's'}`;
+
+  const title = `Leave request filed for you - ${leaveTypeName}`;
+  const reasonSuffix = reason ? ` Reason recorded: "${reason}".` : '';
+  const message = `${enteredByLabel} filed a ${leaveTypeName} request for you (${days}, ${range}). It is now pending manager review.${reasonSuffix}`;
+
+  const emailSubject = `Leave request filed for you - ${name} (${days} ${leaveTypeName})`;
+  const accent = '#6d28d9';
+  const accentBg = '#f5f3ff';
+  const accentBorder = '#ddd6fe';
+
+  const rows: Array<[string, string]> = [
+    ['Leave type', escapeHtml(leaveTypeName)],
+    ['Dates', escapeHtml(range)],
+    ['Working days', escapeHtml(days)],
+    ['Filed by', `${escapeHtml(enteredByLabel)} (HR)`],
+  ];
+  if (reason) rows.push(['Reason', escapeHtml(reason)]);
+
+  const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+  <div style="background:${accentBg};padding:16px 20px;border-bottom:1px solid ${accentBorder};">
+    <span style="display:inline-block;padding:2px 10px;border-radius:999px;background:${accent};color:#ffffff;font-size:12px;font-weight:700;letter-spacing:0.02em;">ENTERED BY HR</span>
+    <h2 style="margin:10px 0 0;font-size:18px;color:#111827;">Leave request filed for you</h2>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:14px;color:#374151;">
+    ${rows
+      .map(
+        ([k, v]) =>
+          `<tr><td style="padding:8px 20px;color:#6b7280;width:120px;white-space:nowrap;">${k}</td><td style="padding:8px 20px 8px 0;font-weight:600;color:#111827;">${v}</td></tr>`
+      )
+      .join('\n    ')}
+  </table>
+  <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f9fafb;">
+    <p style="margin:0;color:#6b7280;font-size:12px;">The request is pending manager review. You can withdraw it from your self-service portal while it is still pending.</p>
+  </div>
+</div>`;
+
+  const emailText = [
+    `Leave request filed for you - MBUMAH HARDWARE`,
+    ``,
+    `Leave type: ${leaveTypeName}`,
+    `Dates: ${range}`,
+    `Working days: ${days}`,
+    `Filed by: ${enteredByLabel} (HR)`,
+    reason ? `Reason: ${reason}` : null,
+    ``,
+    `The request is pending manager review. You can withdraw it from your self-service portal while it is still pending.`,
+  ]
+    .filter((l) => l !== null)
+    .join('\n');
 
   return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
 }

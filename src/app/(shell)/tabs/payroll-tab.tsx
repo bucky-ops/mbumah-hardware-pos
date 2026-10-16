@@ -34,9 +34,10 @@ import {
   Banknote, Phone, Mail, Briefcase,
   CheckCircle, XCircle, Clock3, FileText, User,
   IdCard, Building2, AlertTriangle, Calendar, PiggyBank, Play, UserX, Ban,
+  CalendarPlus, UserCheck, Info,
 } from 'lucide-react';
 
-import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf } from '@/lib/leave-tab';
+import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf, previewWorkingDays } from '@/lib/leave-tab';
 
 import { useAppStore } from '@/lib/stores';
 import { formatKES, formatDate, formatDateTime } from '@/lib/api';
@@ -157,6 +158,8 @@ interface LeaveRequest {
   approvedAt: string | null;
   emergencyContact: string | null;
   createdAt: string;
+  /** v2.38.0: HR filer display name when entered on behalf (null = self-filed). */
+  enteredByName?: string | null;
 }
 
 // Matches the per-employee balance rows returned as `balances` by
@@ -1037,6 +1040,15 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const [rejectReason, setRejectReason] = useState('');
   const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
 
+  // v2.38.0: on-behalf filing dialog state.
+  const [newOpen, setNewOpen] = useState(false);
+  const [newEmployeeId, setNewEmployeeId] = useState('');
+  const [newTypeId, setNewTypeId] = useState('');
+  const [newStart, setNewStart] = useState('');
+  const [newEnd, setNewEnd] = useState('');
+  const [newHalfDay, setNewHalfDay] = useState(false);
+  const [newReason, setNewReason] = useState('');
+
   // GET /api/leaves returns { success, data: [...], balances?: [...],
   // leaveTypes: [...] } — apiFetch would drop the side payloads, so this
   // query uses apiFetchEnvelope to also read the per-employee balances.
@@ -1056,6 +1068,40 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
     queryFn: () => apiFetch('/api/leave-types'),
   });
   const leaveTypes = Array.isArray(leaveTypesData) ? leaveTypesData : [];
+
+  // v2.38.0: roster for the on-behalf picker — ACTIVE employees of the
+  // store, loaded only while the dialog is open.
+  const { data: rosterEnv, isLoading: rosterLoading } = useQuery({
+    queryKey: ['payroll-leave-roster', storeId],
+    queryFn: () =>
+      apiFetchEnvelope<{ success: boolean; data: Array<{ id: string; firstName: string; lastName: string; jobTitle: string | null; employeeCode: string | null }> }>(
+        `/api/employees?storeId=${storeId}&status=ACTIVE&limit=500`,
+      ),
+    enabled: newOpen && !!storeId,
+  });
+  const roster = Array.isArray(rosterEnv?.data) ? rosterEnv.data : [];
+
+  // v2.38.0: live balance preview for the picked employee — the governed
+  // /api/leave/balances read (same figure the portal and the service guard
+  // use), so the dialog shows EXACTLY what the server will enforce.
+  const { data: previewEnv, isLoading: previewLoading } = useQuery({
+    queryKey: ['payroll-leave-balance-preview', newEmployeeId],
+    queryFn: () =>
+      apiFetchEnvelope<{ success: boolean; data: Array<{ leaveTypeId: string; allocatedDays: unknown; carryForwardDays: unknown; usedDays: unknown; pendingDays: unknown }> }>(
+        `/api/leave/balances?employeeId=${newEmployeeId}`,
+      ),
+    enabled: newOpen && !!newEmployeeId,
+  });
+  const previewBalances = Array.isArray(previewEnv?.data) ? previewEnv.data : [];
+  const previewRow = previewBalances.find((b) => b.leaveTypeId === newTypeId);
+  const previewEntitlement = previewRow ? toNum(previewRow.allocatedDays) + toNum(previewRow.carryForwardDays) : null;
+  const previewAvailable =
+    previewRow && previewEntitlement !== null
+      ? previewEntitlement - toNum(previewRow.usedDays) - toNum(previewRow.pendingDays)
+      : null;
+  const previewDays = previewWorkingDays(newStart, newEnd, newHalfDay);
+  const previewInsufficient = previewAvailable !== null && previewDays > previewAvailable;
+  const newFormReady = !!newEmployeeId && !!newTypeId && previewDays > 0 && !!newStart && newStart <= newEnd && !previewInsufficient;
 
   // PUT /api/leaves requires UPPERCASE actions ('APPROVE' | 'REJECT' |
   // 'CANCEL') — the lowercase values this tab used to send were rejected
@@ -1104,6 +1150,38 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
     );
   };
 
+  // v2.38.0: on-behalf submission — POST /api/leaves now runs through the
+  // governed service path; the response 403s for non-decision-capable
+  // filers targeting a colleague and 400s INSUFFICIENT_BALANCE (mirrored
+  // client-side by the disabled submit + rose preview above).
+  const newRequestMutation = useMutation({
+    mutationFn: (payload: { employeeId: string; leaveTypeId: string; startDate: string; endDate: string; halfDay: boolean; reason?: string }) =>
+      apiFetch('/api/leaves', { method: 'POST', body: JSON.stringify({ storeId, ...payload }) }),
+    onSuccess: (_data, vars) => {
+      const who = roster.find((r) => r.id === vars.employeeId);
+      toast.success(`Leave request filed for ${who ? `${who.firstName} ${who.lastName}` : 'the employee'} — they have been notified`);
+      setNewOpen(false);
+      setNewEmployeeId('');
+      setNewTypeId('');
+      setNewStart('');
+      setNewEnd('');
+      setNewHalfDay(false);
+      setNewReason('');
+      qc.invalidateQueries({ queryKey: ['payroll-leaves', storeId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const openNewRequest = () => {
+    setNewEmployeeId('');
+    setNewTypeId('');
+    setNewStart('');
+    setNewEnd('');
+    setNewHalfDay(false);
+    setNewReason('');
+    setNewOpen(true);
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1121,16 +1199,29 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
               <CardTitle className="text-base flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" /> Leave Requests
               </CardTitle>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All</SelectItem>
-                  <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="APPROVED">Approved</SelectItem>
-                  <SelectItem value="REJECTED">Rejected</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                {/* v2.38.0: file a request ON BEHALF of an employee — the
+                    walk-up / phone-in path. The employee is notified and
+                    every surface marks the request "Entered by HR". */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5 border-violet-300 px-2.5 text-xs text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                  onClick={openNewRequest}
+                >
+                  <CalendarPlus className="h-3.5 w-3.5" aria-hidden /> New request
+                </Button>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="APPROVED">Approved</SelectItem>
+                    <SelectItem value="REJECTED">Rejected</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -1170,6 +1261,14 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                               <div className="min-w-0">
                                 <p className="font-medium truncate">{l.employeeName}</p>
                                 <p className="text-xs text-muted-foreground truncate">{l.employeeJobTitle || 'Staff'}</p>
+                                {/* v2.38.0: HR-filer marker — the approvals
+                                    desk can always tell entered-for requests
+                                    from self-filed ones. */}
+                                {l.enteredByName ? (
+                                  <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-px text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900">
+                                    <UserCheck className="h-2.5 w-2.5" aria-hidden /> HR · {l.enteredByName}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
                           </td>
@@ -1386,6 +1485,17 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                 <DetailField label="Paid" value={detail.isPaid ? 'Yes' : 'Unpaid'} />
                 {detail.halfDay && <DetailField label="Half day" value="Yes" />}
                 {detail.returnDate && <DetailField label="Expected return" value={formatDate(detail.returnDate)} />}
+                {/* v2.38.0: who actually entered this request. */}
+                {detail.enteredByName && (
+                  <div className="col-span-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-2 dark:border-violet-900 dark:bg-violet-950/30">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                      <UserCheck className="h-3.5 w-3.5" aria-hidden /> Entered by HR · {detail.enteredByName}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-violet-600/80 dark:text-violet-400/80">
+                      The employee was notified when this request was filed on their behalf.
+                    </p>
+                  </div>
+                )}
               </div>
               {detail.reason && (
                 <div className="rounded-lg border bg-muted/30 p-2.5">
@@ -1523,6 +1633,158 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
             >
               {actionMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Ban className="h-4 w-4 mr-1.5" />}
               Cancel request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.38.0: on-behalf filing dialog — HR enters a request in an
+          employee's name (walk-up / phone-in). Balance preview reads the
+          governed /api/leave/balances figure; working days mirror the
+          service's weekend-skipping arithmetic; the submit is disabled
+          while the preview exceeds the available balance (the server
+          enforces the same rule with INSUFFICIENT_BALANCE). */}
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarPlus className="h-4 w-4 text-violet-600" /> File a leave request for an employee
+            </DialogTitle>
+            <DialogDescription>
+              For walk-up and phone-in requests. The employee is notified immediately and the request is marked &ldquo;Entered by HR&rdquo; on every surface.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3.5">
+            <div className="space-y-1.5">
+              <Label htmlFor="onbehalf-employee">Employee</Label>
+              <Select value={newEmployeeId} onValueChange={setNewEmployeeId}>
+                <SelectTrigger id="onbehalf-employee" className="w-full">
+                  <SelectValue placeholder={rosterLoading ? 'Loading roster…' : 'Select employee'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {roster.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.firstName} {r.lastName}{r.employeeCode ? ` · ${r.employeeCode}` : ''}{r.jobTitle ? ` — ${r.jobTitle}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="onbehalf-type">Leave type</Label>
+              <Select value={newTypeId} onValueChange={setNewTypeId}>
+                <SelectTrigger id="onbehalf-type" className="w-full">
+                  <SelectValue placeholder="Select leave type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leaveTypes.map((lt) => (
+                    <SelectItem key={lt.id} value={lt.id}>
+                      {lt.name} · {lt.defaultDaysPerYear} d/yr{lt.isPaid ? '' : ' · unpaid'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="onbehalf-start">Start date</Label>
+                <Input id="onbehalf-start" type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="onbehalf-end">End date</Label>
+                <Input id="onbehalf-end" type="date" value={newEnd} min={newStart || undefined} onChange={(e) => setNewEnd(e.target.value)} />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={newHalfDay} onCheckedChange={(v) => setNewHalfDay(v === true)} />
+              Half day (the range is credited minus half a day)
+            </label>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="onbehalf-reason">Reason (recorded for the employee)</Label>
+              <Textarea
+                id="onbehalf-reason"
+                value={newReason}
+                onChange={(e) => setNewReason(e.target.value)}
+                placeholder="e.g. Family trip upcountry — phoned in on Monday morning."
+                rows={2}
+              />
+            </div>
+
+            {/* Live preview strip — days + balance rail. */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">Working days (weekends skipped)</span>
+                <span className="font-semibold tabular-nums" data-testid="onbehalf-days-preview">
+                  {previewDays % 1 === 0 ? previewDays : previewDays.toFixed(1)} day{previewDays === 1 ? '' : 's'}
+                </span>
+              </div>
+              {newEmployeeId && newTypeId ? (
+                previewRow ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Available balance for this type</span>
+                      <span className={`font-semibold tabular-nums ${previewInsufficient ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {previewAvailable !== null && (previewAvailable % 1 === 0 ? previewAvailable : previewAvailable.toFixed(1))} of{' '}
+                        {previewEntitlement !== null && (previewEntitlement % 1 === 0 ? previewEntitlement : previewEntitlement.toFixed(1))} d
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden" role="presentation">
+                      <div
+                        className={`h-full rounded-full transition-all ${previewInsufficient ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${previewEntitlement && previewEntitlement > 0 ? Math.min(100, Math.max(0, ((previewAvailable ?? 0) / previewEntitlement) * 100)) : 0}%` }}
+                      />
+                    </div>
+                    {previewInsufficient ? (
+                      <p className="flex items-start gap-1.5 text-xs text-rose-600 dark:text-rose-400">
+                        <AlertTriangle className="h-3.5 w-3.5 mt-px shrink-0" aria-hidden />
+                        Requested {previewDays} d exceeds the {previewAvailable} d available — the server will reject this submission.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : previewLoading ? (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading balance…
+                  </p>
+                ) : (
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 mt-px shrink-0" aria-hidden />
+                    No tracked balance for this employee &amp; type yet — the request is still balance-checked on submit.
+                  </p>
+                )
+              ) : (
+                <p className="text-xs text-muted-foreground">Pick an employee and a leave type to preview the balance.</p>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 dark:border-violet-900 dark:bg-violet-950/30">
+              <p className="flex items-start gap-1.5 text-xs text-violet-700 dark:text-violet-300">
+                <UserCheck className="h-3.5 w-3.5 mt-px shrink-0" aria-hidden />
+                The employee gets a portal notification and an email — they can withdraw the request while it is pending.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewOpen(false)} disabled={newRequestMutation.isPending}>Cancel</Button>
+            <Button
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+              disabled={!newFormReady || newRequestMutation.isPending}
+              onClick={() =>
+                newRequestMutation.mutate({
+                  employeeId: newEmployeeId,
+                  leaveTypeId: newTypeId,
+                  startDate: new Date(`${newStart}T00:00:00.000Z`).toISOString(),
+                  endDate: new Date(`${newEnd}T00:00:00.000Z`).toISOString(),
+                  halfDay: newHalfDay,
+                  ...(newReason.trim() ? { reason: newReason.trim() } : {}),
+                })
+              }
+            >
+              {newRequestMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CalendarPlus className="h-4 w-4 mr-1.5" />}
+              File request
             </Button>
           </DialogFooter>
         </DialogContent>
