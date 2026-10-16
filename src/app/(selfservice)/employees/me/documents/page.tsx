@@ -10,7 +10,8 @@
 
 import { FileText, TriangleAlert } from 'lucide-react';
 import { listMyDocuments } from '@/lib/hr/self-service';
-import { EmptyState, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { EmptyState, ErrorNote, StatusBadge } from '@/components/hr/self-service-ui';
+import { formatDate } from '@/components/hr/self-service-format';
 import { SelfPageHeader, loadSelfPortal } from '../self-portal';
 
 interface DocumentDto {
