@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Building2,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -47,6 +48,12 @@ interface ScheduleRow {
   lastError: string | null;
   createdAt: string;
   storeId: string | null;
+}
+
+interface StoreOption {
+  id: string;
+  name: string;
+  code: string | null;
 }
 
 const REPORT_OPTIONS = [
@@ -84,6 +91,7 @@ function hourLabel(hourUtc: number): string {
 
 export function ReportSchedulesTab() {
   const [rows, setRows] = useState<ScheduleRow[] | null>(null);
+  const [stores, setStores] = useState<StoreOption[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
@@ -95,12 +103,23 @@ export function ReportSchedulesTab() {
     dayOfMonth: '1',
     hourUtc: '2',
     recipients: '',
+    storeId: 'all',
   });
+
+  const storeNameFor = useCallback(
+    (id: string | null): string | null => (id ? (stores.find((s) => s.id === id)?.name ?? null) : null),
+    [stores],
+  );
 
   const load = useCallback(async () => {
     try {
       setError('');
-      setRows(await apiGet<ScheduleRow[]>('/api/hr/reports/schedules'));
+      const [scheduleRows, storeOptions] = await Promise.all([
+        apiGet<ScheduleRow[]>('/api/hr/reports/schedules'),
+        apiGet<StoreOption[]>('/api/hr/stores').catch(() => [] as StoreOption[]),
+      ]);
+      setRows(scheduleRows);
+      setStores(storeOptions);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load schedules.');
       setRows([]);
@@ -125,6 +144,7 @@ export function ReportSchedulesTab() {
           .split(/[,;\n]/)
           .map((r) => r.trim())
           .filter(Boolean),
+        storeId: form.storeId === 'all' ? null : form.storeId,
       });
       setOpen(false);
       setForm((f) => ({ ...f, recipients: '' }));
@@ -239,6 +259,11 @@ export function ReportSchedulesTab() {
                   <span className="inline-flex items-center gap-1">
                     <CalendarRange className="h-3 w-3" aria-hidden /> {hourLabel(s.hourUtc)}
                   </span>
+                  {s.storeId ? (
+                    <span className="inline-flex items-center gap-1" title="Digest is scoped to this branch's aggregates">
+                      <Building2 className="h-3 w-3" aria-hidden /> {storeNameFor(s.storeId) ?? 'Branch'}
+                    </span>
+                  ) : null}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2.5 px-4 pb-4">
@@ -343,6 +368,25 @@ export function ReportSchedulesTab() {
                 </SelectContent>
               </Select>
             </div>
+            {stores.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="sched-store">Branch scope</Label>
+                <Select value={form.storeId} onValueChange={(v) => setForm((f) => ({ ...f, storeId: v }))}>
+                  <SelectTrigger id="sched-store" aria-label="Branch scope of the digest">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All branches (organization)</SelectItem>
+                    {stores.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Branch-scoped digests contain that branch&apos;s aggregates only.</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="sched-freq">Frequency</Label>

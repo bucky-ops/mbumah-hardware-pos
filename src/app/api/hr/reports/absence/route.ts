@@ -1,7 +1,7 @@
 // GET /api/hr/reports/absence?from=&to= — absence report
 
 import { hrGuard } from '@/lib/hr/guard';
-import { absenceReport, parsePeriod } from '@/lib/hr/reports';
+import { absenceReport, parsePeriod, validateReportStore, resolveReportScope } from '@/lib/hr/reports';
 import { toErrorResponse } from '@/lib/hr/stage-g-shared';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,10 @@ export const GET = hrGuard('hr.report.branch', REPORT_ROLES)(async (request, ses
   try {
     const url = new URL(request.url);
     const period = parsePeriod(url.searchParams.get('from'), url.searchParams.get('to'));
-    const data = await absenceReport(session, period);
+    // v2.23.0: optional per-branch drill-down (ORG scope only, fail-closed).
+    const scope = resolveReportScope(session);
+    const store = await validateReportStore(session, scope, url.searchParams.get('storeId'));
+    const data = await absenceReport(session, period, { storeId: store?.id ?? null });
     if (!data) {
       return Response.json(
         { success: false, error: 'You do not have permission to view reports.', code: 'PERMISSION_DENIED' },

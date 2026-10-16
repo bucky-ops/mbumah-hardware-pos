@@ -179,6 +179,25 @@ export function AlertPopupHost() {
     }
   }, []);
 
+  // v2.23.0 perf: the first poll used to fire on mount, right when React is
+  // hydrating and painting (measurable TBT/LCP cost on lightweight pages
+  // like /employees/me). Defer polling until the page reports idle - the
+  // 60s refetchInterval keeps everything unchanged after that.
+  const [pollIdleArmed, setPollIdleArmed] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || pollIdleArmed) return;
+    const arm = () => setPollIdleArmed(true);
+    if ('requestIdleCallback' in window) {
+      const handle = requestIdleCallback(arm, { timeout: 4000 });
+      return () => cancelIdleCallback(handle);
+    }
+    // Fallback for engines without requestIdleCallback (narrowed `never`
+    // after the `in` guard above, hence the local alias).
+    const idleFallback = setTimeout as typeof globalThis.setTimeout;
+    const t = idleFallback(arm, 2000);
+    return () => clearTimeout(t);
+  }, [isAuthenticated, pollIdleArmed]);
+
   // Poll store notifications; pop NEW critical/warning ones for 45s
   useQuery({
     queryKey: ['alert-popup-notifications', currentStoreId],
@@ -211,7 +230,7 @@ export function AlertPopupHost() {
       return res?.data ?? null;
     },
     refetchInterval: 60_000,
-    enabled: isAuthenticated && !!currentStoreId,
+    enabled: isAuthenticated && !!currentStoreId && pollIdleArmed,
     staleTime: 30_000,
   });
 

@@ -12,7 +12,7 @@
 import { db, runWithoutTenant } from '@/lib/db';
 import { requireAuth, getSessionFromRequest } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
-import { hrSummaryForOrgConsole } from '@/lib/hr/reports';
+import { hrSummaryForOrgConsole, hrPerStoreForOrgConsole } from '@/lib/hr/reports';
 import { isHrModuleEnabled } from '@/lib/hr/feature-flag';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import type { NextRequest } from 'next/server';
@@ -141,6 +141,9 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
     // alerts. Computed only when the HR module is on and the caller holds an
     // hr report permission; otherwise the block is omitted (tiles hidden).
     let hr: Awaited<ReturnType<typeof hrSummaryForOrgConsole>> = null;
+    // v2.23.0: per-branch drill-down rows (ORG scope only; null for branch
+    // callers). Additive — a failure never breaks the console payload.
+    let hrPerStore: Awaited<ReturnType<typeof hrPerStoreForOrgConsole>> = null;
     try {
       const session = await getSessionFromRequest(request);
       if (
@@ -149,9 +152,11 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
         (hasHrPermission(session.role, 'hr.report.branch') || hasHrPermission(session.role, 'hr.report.all'))
       ) {
         hr = await hrSummaryForOrgConsole(session);
+        hrPerStore = await hrPerStoreForOrgConsole(session);
       }
     } catch {
       hr = null; // tiles are additive — never break the console payload
+      hrPerStore = null;
     }
 
     return Response.json({
@@ -160,6 +165,7 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
         generatedAt: new Date().toISOString(),
         totals,
         hr,
+        hrPerStore,
         stores: storeRows,
         recentAudit,
       },

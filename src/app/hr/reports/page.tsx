@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
   BarChart3,
+  Building2,
   Coins,
   CalendarClock,
   CalendarX2,
@@ -31,6 +32,7 @@ import {
   Printer,
   ShieldCheck,
   Columns3,
+  X,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate, formatKes } from '@/components/hr/self-service-ui';
 import { ReportSchedulesTab } from '@/components/hr/report-schedules-tab';
@@ -152,6 +154,42 @@ export default function HrReportsPage() {
     window.history.replaceState(null, '', url.toString());
   };
 
+  // v2.23.0: per-branch drill-down (?storeId=... from the org console's
+  // "People & payroll by branch" table). ORG-scope callers only — the API
+  // rejects narrowing for branch-scoped sessions fail-closed. The chip below
+  // the toolbar shows the active branch and clears the filter.
+  const [storeId, setStoreId] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState<string | null>(null);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('storeId');
+    if (requested) setStoreId(requested);
+  }, []);
+  useEffect(() => {
+    if (!storeId) {
+      setStoreName(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stores = await apiGet<Array<{ id: string; name: string; code: string | null }>>('/api/hr/stores');
+        if (!cancelled) setStoreName(stores.find((s) => s.id === storeId)?.name ?? null);
+      } catch {
+        if (!cancelled) setStoreName(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId]);
+  const changeStoreId = (next: string | null) => {
+    setStoreId(next);
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set('storeId', next);
+    else url.searchParams.delete('storeId');
+    window.history.replaceState(null, '', url.toString());
+  };
+
   const [headcount, setHeadcount] = useState<HeadcountDto | null>(null);
   const [cost, setCost] = useState<EmploymentCostDto | null>(null);
   const [absence, setAbsence] = useState<AbsenceDto | null>(null);
@@ -170,7 +208,7 @@ export default function HrReportsPage() {
     setBusy(true);
     setError('');
     try {
-      const qs = `from=${new Date(from).toISOString()}&to=${new Date(`${to}T23:59:59.999Z`).toISOString()}`;
+      const qs = `from=${new Date(from).toISOString()}&to=${new Date(`${to}T23:59:59.999Z`).toISOString()}${storeId ? `&storeId=${encodeURIComponent(storeId)}` : ''}`;
       const [h, c, a, t, g, s] = await Promise.all([
         apiGet<HeadcountDto>(`/api/hr/reports/headcount?${qs}`),
         apiGet<EmploymentCostDto>(`/api/hr/reports/employment-cost?${qs}`),
@@ -190,7 +228,7 @@ export default function HrReportsPage() {
     } finally {
       setBusy(false);
     }
-  }, [from, to]);
+  }, [from, to, storeId]);
 
   const loadP10 = useCallback(async (year: string) => {
     setError('');
@@ -310,6 +348,26 @@ export default function HrReportsPage() {
       </div>
 
       {error ? <ErrorNote message={error} /> : null}
+
+      {/* v2.23.0: active per-branch filter chip (deep-linked from the org
+          console drill-down; clears back to the whole organization). */}
+      {storeId ? (
+        <div className="flex items-center gap-2 print:hidden" role="status">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
+            <Building2 className="h-3.5 w-3.5" aria-hidden />
+            Branch: {storeName ?? storeId}
+            <button
+              type="button"
+              onClick={() => changeStoreId(null)}
+              aria-label="Clear branch filter and show the whole organization"
+              className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-sky-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-sky-900/70"
+            >
+              <X className="h-3 w-3" aria-hidden />
+            </button>
+          </span>
+          <span className="text-xs text-muted-foreground">Report tables are narrowed to this branch (organization scope only).</span>
+        </div>
+      ) : null}
 
       <Tabs value={tab} onValueChange={changeTab} className="space-y-4">
         <TabsList className="flex-wrap print:hidden">

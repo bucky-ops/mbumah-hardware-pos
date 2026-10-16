@@ -185,16 +185,45 @@ export function toScheduleView(row: {
   };
 }
 
+/**
+ * v2.23.0: scope-aware storeId enforcement. BRANCH-scope schedule owners are
+ * PINNED to their own store (a manager must never schedule a digest for a
+ * branch they cannot see); ORG-scope owners may target any store of their
+ * organization (validated) or leave it org-wide.
+ */
+export async function resolveScheduleStore(
+  actor: { role: string; storeId: string | null; organizationId: string },
+  storeId: string | null | undefined,
+): Promise<string | null> {
+  if (actor.role === 'BRANCH_MANAGER') {
+    if (storeId && storeId !== actor.storeId) {
+      throw new HrScheduleError('STORE_SCOPE_FORBIDDEN', 'Branch managers can only schedule digests for their own branch.', 403);
+    }
+    return actor.storeId;
+  }
+  if (!storeId) return null;
+  const store = await db.store.findFirst({
+    where: { id: storeId, organizationId: actor.organizationId },
+    select: { id: true },
+  });
+  if (!store) {
+    throw new HrScheduleError('STORE_NOT_FOUND', 'Branch not found in this organization.', 404);
+  }
+  return store.id;
+}
+
 export async function createSchedule(
   organizationId: string,
   actorId: string,
   input: ScheduleInput,
+  actor?: { role: string; storeId: string | null; organizationId: string },
 ) {
   const v = validateScheduleInput(input);
+  const storeId = actor ? await resolveScheduleStore(actor, v.storeId) : (v.storeId ?? null);
   const row = await db.hrReportSchedule.create({
     data: {
       organizationId,
-      storeId: v.storeId ?? null,
+      storeId,
       reportKey: v.reportKey,
       frequency: v.frequency,
       recipients: JSON.stringify(v.recipients),
@@ -210,8 +239,8 @@ export async function createSchedule(
     action: 'CREATE',
     resourceType: HrEntityType.REPORT_SCHEDULE,
     resourceId: row.id,
-    storeId: v.storeId ?? undefined,
-    metadata: { reportKey: v.reportKey, frequency: v.frequency, recipientCount: v.recipients.length, hourUtc: v.hourUtc },
+    storeId: row.storeId ?? undefined,
+    metadata: { reportKey: v.reportKey, frequency: v.frequency, recipientCount: v.recipients.length, hourUtc: v.hourUtc, storeScoped: Boolean(row.storeId) },
   });
   return row;
 }

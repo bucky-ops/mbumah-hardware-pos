@@ -16,6 +16,7 @@ import {
   ArrowUpRight,
   Building2,
   CalendarClock,
+  ChevronDown,
   CircleDollarSign,
   Clock,
   LayoutDashboard,
@@ -85,6 +86,18 @@ interface OrgSummary {
     latestPayroll: { periodName: string; status: string; createdAt: string } | null;
     expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
   } | null;
+  /** v2.23.0: per-branch drill-down rows (ORG scope only; null otherwise). */
+  hrPerStore:
+    | Array<{
+        storeId: string;
+        storeName: string;
+        headcountActive: number;
+        monthEmploymentCost: number;
+        monthAbsenceRatePct: number;
+        latestPayroll: { periodName: string; status: string; createdAt: string } | null;
+        expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
+      }>
+    | null;
   recentAudit: Array<{
     id: string;
     storeId: string | null;
@@ -220,6 +233,9 @@ export function OrgConsole() {
   const [expertError, setExpertError] = useState('');
   const [expertList, setExpertList] = useState<BranchDiagnostic[] | null>(null);
   const [copyConfirmation, setCopyConfirmation] = useState('');
+  // v2.23.0: per-branch HR drill-down visibility (collapsed until asked for —
+  // the console opens with the summary tiles; the table is one click away).
+  const [hrPerStoreOpen, setHrPerStoreOpen] = useState(false);
 
   function findDiagnosticFor(
     list: BranchDiagnostic[],
@@ -477,6 +493,90 @@ export function OrgConsole() {
               </Link>{' '}
               workspace.
             </p>
+            {summary.hrPerStore && summary.hrPerStore.length > 0 ? (
+              <div className="mt-3 overflow-hidden rounded-lg border">
+                <button
+                  type="button"
+                  onClick={() => setHrPerStoreOpen((v) => !v)}
+                  aria-expanded={hrPerStoreOpen}
+                  className="flex w-full items-center justify-between gap-2 bg-muted/40 px-3.5 py-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                    People &amp; payroll by branch ({summary.hrPerStore.length})
+                    <span className="font-normal text-muted-foreground/80">
+                      — headcount, cost, absence, latest run, expiry alerts per branch
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 transition-transform duration-200 ${hrPerStoreOpen ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {hrPerStoreOpen ? (
+                  <div className="max-h-96 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-card">
+                        <tr className="border-b text-left text-xs text-muted-foreground">
+                          <th className="px-3.5 py-2 font-medium">Branch</th>
+                          <th className="px-3 py-2 text-right font-medium">Headcount</th>
+                          <th className="px-3 py-2 text-right font-medium">Cost (month)</th>
+                          <th className="px-3 py-2 text-right font-medium">Absence</th>
+                          <th className="px-3 py-2 font-medium">Latest payroll</th>
+                          <th className="px-3 py-2 text-right font-medium">Expiry alerts</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.hrPerStore.map((row) => {
+                          const alerts = row.expiryAlerts.documentsExpiring90Days + row.expiryAlerts.assetsOverdue;
+                          return (
+                            <tr key={row.storeId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
+                              <td className="px-3.5 py-2">
+                                <Link
+                                  href={`/hr/reports?tab=headcount&storeId=${row.storeId}`}
+                                  title={`Open the headcount report narrowed to ${row.storeName}`}
+                                  className="font-medium underline-offset-2 hover:underline"
+                                >
+                                  {row.storeName}
+                                </Link>
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums">{row.headcountActive}</td>
+                              <td className="px-3 py-2 text-right tabular-nums">{formatKES(row.monthEmploymentCost)}</td>
+                              <td className={`px-3 py-2 text-right tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-medium text-amber-600 dark:text-amber-400' : ''}`}>
+                                {row.monthAbsenceRatePct}%
+                              </td>
+                              <td className="px-3 py-2">
+                                {row.latestPayroll ? (
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className="text-xs text-muted-foreground">{row.latestPayroll.periodName}</span>
+                                    <span
+                                      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                                        row.latestPayroll.status === 'LOCKED' || row.latestPayroll.status === 'POSTED'
+                                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                          : row.latestPayroll.status === 'VOIDED'
+                                            ? 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300'
+                                            : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                                      }`}
+                                    >
+                                      {row.latestPayroll.status.toLowerCase()}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">no runs yet</span>
+                                )}
+                              </td>
+                              <td className={`px-3 py-2 text-right tabular-nums ${alerts > 0 ? 'font-medium text-amber-600 dark:text-amber-400' : ''}`}>
+                                {alerts}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </section>
         ) : null}
 

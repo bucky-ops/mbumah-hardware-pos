@@ -223,7 +223,7 @@ export default function EmployeeHome() {
                 <p className="min-w-0 truncate text-sm font-medium">{g.title}</p>
                 <StatusBadge status={g.status} />
               </div>
-              <ProgressMeter pct={g.progressPct} tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'} />
+              <ProgressMeter pct={g.progressPct} label={`Progress on ${g.title}`} tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'} />
               <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
                 <span>{Number(g.currentValue).toLocaleString()} / {Number(g.targetValue).toLocaleString()}</span>
                 <span>due {formatDate(g.dueDate)}</span>

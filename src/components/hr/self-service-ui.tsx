@@ -100,10 +100,13 @@ export function ProgressMeter({
   pct,
   tone = 'info',
   className = '',
+  label,
 }: {
   pct: number;
   tone?: Tone;
   className?: string;
+  /** v2.23.0: accessible name (Lighthouse a11y: aria-progressbar-name). */
+  label?: string;
 }) {
   const fill: Record<Tone, string> = {
     neutral: 'bg-slate-400 dark:bg-slate-500',
@@ -116,6 +119,7 @@ export function ProgressMeter({
   return (
     <div
       role="progressbar"
+      aria-label={label ?? `${Math.round(pct)}% complete`}
       aria-valuenow={Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}

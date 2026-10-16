@@ -107,7 +107,7 @@ export default function MyGoals() {
                 </div>
                 <StatusBadge status={g.status} />
               </div>
-              <ProgressMeter pct={g.progressPct} tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'} />
+              <ProgressMeter pct={g.progressPct} label={`Progress on ${g.title}`} tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'} />
               <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
                 <span>
                   <strong className="text-foreground">{Number(g.currentValue).toLocaleString()}</strong> of{' '}

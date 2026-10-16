@@ -27,8 +27,75 @@ export function resolveReportScope(session: Session): ReportScope | null {
   return null;
 }
 
-function scopeWhere(session: Session, scope: ReportScope): Prisma.EmployeeWhereInput {
-  return scope === 'BRANCH' ? { storeId: session.storeId as string } : { store: { organizationId: session.organizationId } };
+function scopeWhere(
+  session: Session,
+  scope: ReportScope,
+  storeId?: string | null,
+): Prisma.EmployeeWhereInput {
+  const base =
+    scope === 'BRANCH'
+      ? { storeId: session.storeId as string }
+      : { store: { organizationId: session.organizationId } };
+  // v2.23.0: an ORG-scope caller may narrow every report to one branch.
+  // The storeId is validated against the caller's organization by
+  // validateReportStore before it reaches here, and even a hostile value
+  // cannot WIDEN access: the org-membership condition stays ANDed.
+  if (scope === 'ORG' && storeId) {
+    return { storeId, store: { organizationId: session.organizationId } };
+  }
+  return base;
+}
+
+/**
+ * Run-level store filter (payroll tables filter through payrollRun.storeId)
+ * with the same v2.23.0 narrowing semantics as scopeWhere.
+ */
+function runStoreFilter(
+  session: Session,
+  scope: ReportScope,
+  storeId?: string | null,
+): { storeId: string } | { store: { organizationId: string } } {
+  if (scope === 'BRANCH') return { storeId: session.storeId as string };
+  if (scope === 'ORG' && storeId) {
+    return { storeId, store: { organizationId: session.organizationId } };
+  }
+  return { store: { organizationId: session.organizationId } };
+}
+
+/**
+ * v2.23.0: validate an explicit per-branch drill-down for a report caller.
+ * Only ORG-scope sessions may narrow (BRANCH scope is already the caller's
+ * own store); the store must belong to the caller's organization or the
+ * request is rejected fail-closed.
+ */
+export async function validateReportStore(
+  session: Session,
+  scope: ReportScope | null,
+  storeId: string | null | undefined,
+): Promise<{ id: string; name: string } | null> {
+  if (!storeId) return null;
+  if (scope !== 'ORG') {
+    throw new StoreNarrowingError('STORE_NARROWING_FORBIDDEN', 'Per-branch drill-down requires organization scope.', 403);
+  }
+  const store = await db.store.findFirst({
+    where: { id: storeId, organizationId: session.organizationId },
+    select: { id: true, name: true },
+  });
+  if (!store) {
+    throw new StoreNarrowingError('STORE_NOT_FOUND', 'Branch not found in this organization.', 404);
+  }
+  return store;
+}
+
+export class StoreNarrowingError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+    this.name = 'StoreNarrowingError';
+  }
 }
 
 function money(value: unknown): number {
@@ -62,10 +129,14 @@ export function parsePeriod(fromRaw?: string | null, toRaw?: string | null): Rep
 
 // ── 1. Headcount ────────────────────────────────────────────────────────────
 
-export async function headcountReport(session: Session, period: ReportPeriod) {
+export async function headcountReport(
+  session: Session,
+  period: ReportPeriod,
+  opts?: { storeId?: string | null },
+) {
   const scope = resolveReportScope(session);
   if (!scope) return null;
-  const where = { deletedAt: null, ...scopeWhere(session, scope) };
+  const where = { deletedAt: null, ...scopeWhere(session, scope, opts?.storeId) };
 
   const [all, hires, exits, byType, byStore] = await Promise.all([
     db.employee.findMany({ where, select: { status: true, hireDate: true, terminationDate: true } }),
@@ -108,10 +179,14 @@ export async function headcountReport(session: Session, period: ReportPeriod) {
 
 // ── 2. Employment cost ──────────────────────────────────────────────────────
 
-export async function employmentCostReport(session: Session, period: ReportPeriod) {
+export async function employmentCostReport(
+  session: Session,
+  period: ReportPeriod,
+  opts?: { storeId?: string | null },
+) {
   const scope = resolveReportScope(session);
   if (!scope) return null;
-  const storeFilter = scope === 'BRANCH' ? { storeId: session.storeId as string } : { store: { organizationId: session.organizationId } };
+  const storeFilter = runStoreFilter(session, scope, opts?.storeId);
 
   // Posted (or later) runs in the period. Gross + employer statutory parts
   // come straight from the stored PayrollDetail lines.
@@ -177,7 +252,11 @@ export async function employmentCostReport(session: Session, period: ReportPerio
 
 // ── 3. Absence ──────────────────────────────────────────────────────────────
 
-export async function absenceReport(session: Session, period: ReportPeriod) {
+export async function absenceReport(
+  session: Session,
+  period: ReportPeriod,
+  opts?: { storeId?: string | null },
+) {
   const scope = resolveReportScope(session);
   if (!scope) return null;
   const storeFilter = scope === 'BRANCH' ? { storeId: session.storeId as string } : { store: { organizationId: session.organizationId } };
@@ -197,7 +276,7 @@ export async function absenceReport(session: Session, period: ReportPeriod) {
       },
       select: { workingDays: true, employeeId: true },
     }),
-    db.employee.count({ where: { status: 'ACTIVE', ...scopeWhere(session, scope) } }),
+    db.employee.count({ where: { status: 'ACTIVE', ...scopeWhere(session, scope, opts?.storeId) } }),
   ]);
 
   const byStatus = records.map((r) => ({ status: r.status, days: r._count._all }));
@@ -229,10 +308,14 @@ export async function absenceReport(session: Session, period: ReportPeriod) {
 
 // ── 4. Turnover ─────────────────────────────────────────────────────────────
 
-export async function turnoverReport(session: Session, period: ReportPeriod) {
+export async function turnoverReport(
+  session: Session,
+  period: ReportPeriod,
+  opts?: { storeId?: string | null },
+) {
   const scope = resolveReportScope(session);
   if (!scope) return null;
-  const where = { deletedAt: null, ...scopeWhere(session, scope) };
+  const where = { deletedAt: null, ...scopeWhere(session, scope, opts?.storeId) };
 
   const [exits, activeNow, hiresInPeriod] = await Promise.all([
     db.employee.findMany({
@@ -287,23 +370,30 @@ export async function turnoverReport(session: Session, period: ReportPeriod) {
 
 // ── 5. Time to hire ─────────────────────────────────────────────────────────
 
-export async function timeToHireReport(session: Session, period: ReportPeriod) {
+export async function timeToHireReport(
+  session: Session,
+  period: ReportPeriod,
+  opts?: { storeId?: string | null },
+) {
   const scope = resolveReportScope(session);
   if (!scope) return null;
 
   // Converted applicants: application createdAt -> offer accepted (respondedAt)
   // is the pipeline measure; the converted employee's hireDate cross-checks it.
   // NOTE: Applicant has no `store` relation — scope by storeId (resolved to
-  // the organization's stores for ORG scope, the session store for BRANCH).
+  // the organization's stores for ORG scope, the session store for BRANCH,
+  // or the validated drill-down branch for the v2.23.0 narrowing).
   const applicantStoreIds =
     scope === 'BRANCH'
       ? [session.storeId as string]
-      : (
-          await db.store.findMany({
-            where: { organizationId: session.organizationId },
-            select: { id: true },
-          })
-        ).map((s) => s.id);
+      : opts?.storeId
+        ? [opts.storeId]
+        : (
+            await db.store.findMany({
+              where: { organizationId: session.organizationId },
+              select: { id: true },
+            })
+          ).map((s) => s.id);
   const converted = await db.applicant.findMany({
     where: {
       status: 'HIRED',
@@ -349,10 +439,14 @@ export async function timeToHireReport(session: Session, period: ReportPeriod) {
 
 // ── 6. Statutory liability ──────────────────────────────────────────────────
 
-export async function statutoryLiabilityReport(session: Session, period: ReportPeriod) {
+export async function statutoryLiabilityReport(
+  session: Session,
+  period: ReportPeriod,
+  opts?: { storeId?: string | null },
+) {
   const scope = resolveReportScope(session);
   if (!scope) return null;
-  const storeFilter = scope === 'BRANCH' ? { storeId: session.storeId as string } : { store: { organizationId: session.organizationId } };
+  const storeFilter = runStoreFilter(session, scope, opts?.storeId);
 
   const details = await db.payrollDetail.findMany({
     where: {
@@ -422,16 +516,23 @@ export async function statutoryLiabilityReport(session: Session, period: ReportP
 
 // ── 7. Org-console HR summary (tiles) ───────────────────────────────────────
 
-export async function hrSummaryForOrgConsole(session: Session) {
+export async function hrSummaryForOrgConsole(session: Session, opts?: { storeId?: string | null }) {
   const scope = resolveReportScope(session);
   if (!scope) return null;
   const now = new Date();
   const monthStartD = monthStart(now.getUTCFullYear(), now.getUTCMonth());
   const ninetyDays = new Date(Date.now() + 90 * 24 * 3600 * 1000);
-  const storeFilter = scope === 'BRANCH' ? { storeId: session.storeId as string } : { store: { organizationId: session.organizationId } };
+  // v2.23.0: storeId narrowing flows through the same validated path as the
+  // interactive reports (see scopeWhere) so every tile can drill per branch.
+  const storeFilter =
+    scope === 'BRANCH'
+      ? { storeId: session.storeId as string }
+      : opts?.storeId
+        ? { storeId: opts.storeId, store: { organizationId: session.organizationId } }
+        : { store: { organizationId: session.organizationId } };
 
   const [activeEmployees, monthDetails, absenceThisMonth, expiringDocs, overdueAssets, latestRun] = await Promise.all([
-    db.employee.count({ where: { status: 'ACTIVE', deletedAt: null, ...scopeWhere(session, scope) } }),
+    db.employee.count({ where: { status: 'ACTIVE', deletedAt: null, ...scopeWhere(session, scope, opts?.storeId) } }),
     db.payrollDetail.findMany({
       where: {
         payrollRun: { status: { in: ['POSTED', 'LOCKED'] }, payrollPeriod: { startDate: { gte: monthStartD } }, ...storeFilter },
@@ -444,10 +545,10 @@ export async function hrSummaryForOrgConsole(session: Session) {
       _count: { _all: true },
     }),
     db.employeeDocument.count({
-      where: { expiryDate: { lte: ninetyDays, gte: now }, deletedAt: null, employee: scopeWhere(session, scope) },
+      where: { expiryDate: { lte: ninetyDays, gte: now }, deletedAt: null, employee: scopeWhere(session, scope, opts?.storeId) },
     }),
     db.assetAssignment.count({
-      where: { status: 'ASSIGNED', dueReturnOn: { lt: now }, deletedAt: null, employee: scopeWhere(session, scope) },
+      where: { status: 'ASSIGNED', dueReturnOn: { lt: now }, deletedAt: null, employee: scopeWhere(session, scope, opts?.storeId) },
     }),
     db.payrollRun.findFirst({
       where: { ...storeFilter },
@@ -473,6 +574,92 @@ export async function hrSummaryForOrgConsole(session: Session) {
       : null,
     expiryAlerts: { documentsExpiring90Days: expiringDocs, assetsOverdue: overdueAssets },
   };
+}
+
+/**
+ * v2.23.0: per-branch breakdown for the org console "People & payroll"
+ * drill-down. ORG-scope only (BRANCH callers already see their own store in
+ * the main tiles — a per-store table would be a single row of the same
+ * numbers). Aggregates only: rows carry store names, never employee PII.
+ * Every metric mirrors the org-level tile definitions exactly.
+ */
+export async function hrPerStoreForOrgConsole(
+  session: Session,
+): Promise<Array<{
+  storeId: string;
+  storeName: string;
+  headcountActive: number;
+  monthEmploymentCost: number;
+  monthAbsenceRatePct: number;
+  latestPayroll: { periodName: string; status: string; createdAt: string } | null;
+  expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
+}> | null> {
+  const scope = resolveReportScope(session);
+  if (scope !== 'ORG') return null;
+  const now = new Date();
+  const monthStartD = monthStart(now.getUTCFullYear(), now.getUTCMonth());
+  const ninetyDays = new Date(Date.now() + 90 * 24 * 3600 * 1000);
+
+  const stores = await db.store.findMany({
+    where: { organizationId: session.organizationId },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+
+  const orgEmployeeWhere = { store: { organizationId: session.organizationId } };
+
+  // One grouped query for headcount + one for month cost; the per-store
+  // absence/expiry/latest-payroll metrics stay small per-store counts so the
+  // exact tile definitions are reused verbatim (no duplicate formulas).
+  const [headcountByStore, costRows] = await Promise.all([
+    db.employee.groupBy({
+      by: ['storeId'],
+      where: { status: 'ACTIVE', deletedAt: null, store: { organizationId: session.organizationId } },
+      _count: { _all: true },
+    }),
+    db.payrollDetail.groupBy({
+      by: ['storeId'],
+      where: {
+        payrollRun: { status: { in: ['POSTED', 'LOCKED'] }, payrollPeriod: { startDate: { gte: monthStartD } }, store: { organizationId: session.organizationId } },
+      },
+      _sum: { grossPay: true, nssf: true, housingLevy: true },
+    }),
+  ]);
+
+  const headcountMap = new Map(headcountByStore.map((r) => [r.storeId, r._count._all]));
+  const costMap = new Map(
+    costRows.map((r) => [
+      r.storeId,
+      Math.round((money(r._sum.grossPay) + money(r._sum.nssf) + money(r._sum.housingLevy)) * 100) / 100,
+    ]),
+  );
+
+  return Promise.all(
+    stores.map(async (store) => {
+      const [recorded, absent, expiringDocs, overdueAssets, latestRun] = await Promise.all([
+        db.attendanceRecord.count({ where: { date: { gte: monthStartD }, employee: { ...orgEmployeeWhere, storeId: store.id } } }),
+        db.attendanceRecord.count({ where: { date: { gte: monthStartD }, status: 'ABSENT', employee: { ...orgEmployeeWhere, storeId: store.id } } }),
+        db.employeeDocument.count({ where: { expiryDate: { lte: ninetyDays, gte: now }, deletedAt: null, employee: { ...orgEmployeeWhere, storeId: store.id } } }),
+        db.assetAssignment.count({ where: { status: 'ASSIGNED', dueReturnOn: { lt: now }, deletedAt: null, employee: { ...orgEmployeeWhere, storeId: store.id } } }),
+        db.payrollRun.findFirst({
+          where: { storeId: store.id },
+          orderBy: { createdAt: 'desc' },
+          select: { status: true, createdAt: true, payrollPeriod: { select: { name: true } } },
+        }),
+      ]);
+      return {
+        storeId: store.id,
+        storeName: store.name,
+        headcountActive: headcountMap.get(store.id) ?? 0,
+        monthEmploymentCost: costMap.get(store.id) ?? 0,
+        monthAbsenceRatePct: recorded ? Math.round((absent / recorded) * 1000) / 10 : 0,
+        latestPayroll: latestRun
+          ? { periodName: latestRun.payrollPeriod.name, status: latestRun.status, createdAt: latestRun.createdAt.toISOString() }
+          : null,
+        expiryAlerts: { documentsExpiring90Days: expiringDocs, assetsOverdue: overdueAssets },
+      };
+    }),
+  );
 }
 
 // ── 8. P10 export (from stored lines, never recomputed) ─────────────────────

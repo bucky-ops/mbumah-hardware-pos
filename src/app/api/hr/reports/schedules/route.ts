@@ -4,6 +4,8 @@
 //        email addresses only, no employee data).
 // POST → create a schedule. Aggregates-only contract unchanged: the digest
 //        itself is computed at send time through the governed report service.
+// v2.23.0: storeId enforcement is scope-aware — BRANCH managers are pinned
+// to their own store; ORG scopes may target any store of their organization.
 
 import { hrGuard } from '@/lib/hr/guard';
 import {
@@ -33,15 +35,22 @@ export const POST = hrGuard('hr.report.branch', REPORT_ROLES)(async (request, se
     storeId?: string | null;
   };
   try {
-    const row = await createSchedule(session.organizationId, session.userId, {
-      reportKey: String(body.reportKey ?? ''),
-      frequency: String(body.frequency ?? 'WEEKLY'),
-      recipients: Array.isArray(body.recipients) ? body.recipients.map(String) : [],
-      weekday: body.weekday ?? null,
-      dayOfMonth: body.dayOfMonth ?? null,
-      hourUtc: body.hourUtc ?? 2,
-      storeId: body.storeId ?? null,
-    });
+    const row = await createSchedule(
+      session.organizationId,
+      session.userId,
+      {
+        reportKey: String(body.reportKey ?? ''),
+        frequency: String(body.frequency ?? 'WEEKLY'),
+        recipients: Array.isArray(body.recipients) ? body.recipients.map(String) : [],
+        weekday: body.weekday ?? null,
+        dayOfMonth: body.dayOfMonth ?? null,
+        hourUtc: body.hourUtc ?? 2,
+        storeId: body.storeId ?? null,
+      },
+      // v2.23.0: scope-aware store enforcement (BRANCH managers pinned to
+      // their own store; ORG scopes validated against the organization).
+      { role: session.role, storeId: session.storeId, organizationId: session.organizationId },
+    );
     return Response.json({ success: true, data: toScheduleView(row) }, { status: 201 });
   } catch (error) {
     if (error instanceof HrScheduleError) {
