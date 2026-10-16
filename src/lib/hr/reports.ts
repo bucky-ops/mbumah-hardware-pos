@@ -27,7 +27,7 @@ export function resolveReportScope(session: Session): ReportScope | null {
   return null;
 }
 
-function scopeWhere(
+export function scopeWhere(
   session: Session,
   scope: ReportScope,
   storeId?: string | null,
