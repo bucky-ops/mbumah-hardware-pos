@@ -127,12 +127,28 @@ function downloadCSV(filename: string, header: string[], rows: unknown[][]): voi
   URL.revokeObjectURL(url);
 }
 
+const REPORT_TAB_KEYS = ['headcount', 'cost', 'absence', 'turnover', 'tth', 'statutory', 'p10', 'privacy'] as const;
+
 export default function HrReportsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [from, setFrom] = useState(() => new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toISOString().slice(0, 10));
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [p10Year, setP10Year] = useState(String(new Date().getUTCFullYear()));
+  // v2.21.0: deep-linkable tabs (?tab=cost from the org console tiles). Read
+  // window.location on mount (client-only, no Suspense boundary required)
+  // and keep the URL in sync so a refreshed tab stays bookmarkable.
+  const [tab, setTab] = useState<string>('headcount');
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    if (requested && (REPORT_TAB_KEYS as readonly string[]).includes(requested)) setTab(requested);
+  }, []);
+  const changeTab = (next: string) => {
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', next);
+    window.history.replaceState(null, '', url.toString());
+  };
 
   const [headcount, setHeadcount] = useState<HeadcountDto | null>(null);
   const [cost, setCost] = useState<EmploymentCostDto | null>(null);
@@ -293,7 +309,7 @@ export default function HrReportsPage() {
 
       {error ? <ErrorNote message={error} /> : null}
 
-      <Tabs defaultValue="headcount" className="space-y-4">
+      <Tabs value={tab} onValueChange={changeTab} className="space-y-4">
         <TabsList className="flex-wrap print:hidden">
           <TabsTrigger value="headcount">Headcount</TabsTrigger>
           <TabsTrigger value="cost">Employment cost</TabsTrigger>

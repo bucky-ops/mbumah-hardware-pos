@@ -94,8 +94,15 @@ check('reports linked from /hr nav', (read('src/app/hr/layout.tsx') ?? '').inclu
 
 const pkg = JSON.parse(read('package.json'));
 check('verify:stage-h npm script wired', Boolean(pkg.scripts?.['verify:stage-h']));
-check('package version is 2.20.0', pkg.version === '2.20.0', pkg.version);
-check('mbumah.releaseVersion is 2.20.0', pkg.mbumah?.releaseVersion === '2.20.0', String(pkg.mbumah?.releaseVersion));
+// Forward-compatible version floor (same helper as verify-stage-g.mjs) so
+// later feature releases keep this gate green.
+function semverAtLeast(version, minimum) {
+  const [a, b, c] = String(version).split('.').map((n) => Number(n) || 0);
+  const [x, y, z] = minimum.split('.').map((n) => Number(n) || 0);
+  return a > x || (a === x && (b > y || (b === y && c >= z)));
+}
+check('package version >= 2.20.0 (Stage H baseline)', semverAtLeast(pkg.version, '2.20.0'), pkg.version);
+check('mbumah.releaseVersion >= 2.20.0 (Stage H baseline)', semverAtLeast(String(pkg.mbumah?.releaseVersion), '2.20.0'), String(pkg.mbumah?.releaseVersion));
 
 console.log('');
 if (failures > 0) {
