@@ -22,6 +22,16 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.36.0',
+    title: 'Leave balances gain a correction path — click a row for history, then adjust entitlement with a full audit trail',
+    bullets: [
+      'Every row in the "Leave balances" report is now clickable: a drill-down opens with the employee\'s balance components, governance notes and all leave requests starting in that year — status chips, date ranges, day counts and reasons in one place.',
+      'HR managers and store owners can correct entitlements directly from the drill-down: enter signed days (±0.5 steps, ±365 cap), give a reason, preview the resulting balance, and apply — the row updates instantly in the report.',
+      'Corrections are governed end to end: the reason is mandatory (8+ characters) and lands in both the hash-chained audit trail and the balance notes, allocated days can never go below zero, and accountants deliberately cannot rewrite entitlements.',
+      'The employee is kept in the loop: a bell notification and an email explain what changed, by how much and why — with a link straight to their leave page.',
+    ],
+  },
+  {
     version: '2.35.0',
     title: 'Leave balances become a governed report — liability days, over-draw flags and year-keyed exports',
     bullets: [

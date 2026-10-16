@@ -29,6 +29,8 @@ import {
   DoorOpen,
   Hourglass,
   Landmark,
+  History,
+  ChevronRight,
   FileSpreadsheet,
   Printer,
   ShieldCheck,
@@ -109,6 +111,41 @@ interface LeaveUtilDto {
   };
   byType: Array<{ type: string; code: string; allocated: number; carried: number; used: number; pending: number; available: number; committedPct: number }>;
   byStore: Array<{ store: string; allocated: number; carried: number; used: number; pending: number; available: number }>;
+}
+// v2.36.0: drill-down correction surface — the one DTO allowed to carry raw
+// ids, because it IS the correction path; still scope-guarded server-side
+// (fail-closed NOT_FOUND for rows outside the caller's branch).
+interface LeaveDrillDownDto {
+  scope: string;
+  year: number;
+  canAdjust: boolean;
+  employee: { id: string; code: string; title: string; employmentType: string; storeName: string };
+  type: { id: string; name: string; code: string };
+  balance: {
+    id: string;
+    allocated: number;
+    carried: number;
+    used: number;
+    pending: number;
+    encashed: number;
+    available: number;
+    committedPct: number;
+    flag: 'OVERDRAWN' | 'EXHAUSTED' | 'LOW' | 'OPEN';
+    notes: string | null;
+    updatedAt: string;
+  };
+  history: Array<{
+    id: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    workingDays: number;
+    halfDay: boolean;
+    reason: string | null;
+    rejectionReason: string | null;
+    createdAt: string;
+    approvedAt: string | null;
+  }>;
 }
 interface TurnoverDto extends Period {
   exits: number;
@@ -191,6 +228,32 @@ function utilRailTone(committedPct: number): string {
   return 'bg-emerald-500';
 }
 
+/** v2.36.0: chip tone for leave request statuses in the drill-down history. */
+function leaveStatusTone(status: string): string {
+  switch (status) {
+    case 'APPROVED':
+    case 'TAKEN':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300';
+    case 'PENDING':
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300';
+    case 'REJECTED':
+      return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300';
+    default:
+      return 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300';
+  }
+}
+
+/** v2.36.0: compact bordered stat chip used in the drill-down balance card. */
+function BalanceChip({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: string }) {
+  return (
+    <div className={`rounded-lg border px-2.5 py-2 ${tone ?? ''}`}>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold tabular-nums">{value}</p>
+      {hint ? <p className="text-[10px] leading-tight text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
 export default function HrReportsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -266,6 +329,16 @@ export default function HrReportsPage() {
   const [erasure, setErasure] = useState<ErasureDto | null>(null);
   const [leaveUtil, setLeaveUtil] = useState<LeaveUtilDto | null>(null);
   const [leaveYear, setLeaveYear] = useState(String(new Date().getUTCFullYear()));
+  // v2.36.0: drill-down correction surface (balance + history + adjust form).
+  const [drill, setDrill] = useState<{ open: boolean; loading: boolean; data: LeaveDrillDownDto | null }>({
+    open: false,
+    loading: false,
+    data: null,
+  });
+  const [adjustDelta, setAdjustDelta] = useState('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustBusy, setAdjustBusy] = useState(false);
+  const [adjustError, setAdjustError] = useState('');
 
   const [hiddenCols, setHiddenCols] = useState<Record<string, boolean>>({});
   const [rejectTarget, setRejectTarget] = useState<ErasureDto['requests'][number] | null>(null);
@@ -339,6 +412,48 @@ export default function HrReportsPage() {
   useEffect(() => {
     void loadErasure();
   }, [loadErasure]);
+  // v2.36.0: resolve one report row into the governed correction surface.
+  const openDrill = useCallback(async (employeeCode: string, typeCode: string) => {
+    setDrill({ open: true, loading: true, data: null });
+    setAdjustDelta('');
+    setAdjustReason('');
+    setAdjustError('');
+    try {
+      const qs = `year=${encodeURIComponent(leaveYear)}&employeeCode=${encodeURIComponent(employeeCode)}&typeCode=${encodeURIComponent(typeCode)}`;
+      const data = await apiGet<LeaveDrillDownDto>(`/api/hr/reports/leave-utilisation/drill-down?${qs}`);
+      setDrill({ open: true, loading: false, data });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load balance details.');
+      setDrill({ open: false, loading: false, data: null });
+    }
+  }, [leaveYear]);
+
+  const closeDrill = (open: boolean) => {
+    setDrill((d) => ({ ...d, open }));
+    if (!open) setAdjustError('');
+  };
+
+  const submitAdjust = async () => {
+    if (!drill.data) return;
+    setAdjustBusy(true);
+    setAdjustError('');
+    try {
+      await apiSend('/api/hr/leave-balances/adjust', 'POST', {
+        balanceId: drill.data.balance.id,
+        deltaDays: Number(adjustDelta),
+        reason: adjustReason,
+      });
+      setAdjustDelta('');
+      setAdjustReason('');
+      await loadLeaveUtil();
+      await openDrill(drill.data.employee.code, drill.data.type.code);
+    } catch (e) {
+      setAdjustError(e instanceof Error ? e.message : 'Adjustment failed.');
+    } finally {
+      setAdjustBusy(false);
+    }
+  };
+
   useEffect(() => {
     void loadLeaveUtil();
   }, [loadLeaveUtil]);
@@ -729,7 +844,9 @@ export default function HrReportsPage() {
                   <CardTitle className="flex items-center gap-2 text-sm">
                     <CalendarDays className="h-4 w-4 text-emerald-500" aria-hidden /> Per-employee balances
                   </CardTitle>
-                  <CardDescription>employeeCode + job title only — no names, no raw ids. OVERDRAWN rows need balance correction before further requests can be approved.</CardDescription>
+                  <CardDescription>
+                    employeeCode + job title only — no names, no raw ids. Click a row for the year&apos;s request history and balance correction; OVERDRAWN rows need a governed adjustment before further requests can be approved.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <TableToolbar
@@ -785,8 +902,22 @@ export default function HrReportsPage() {
                         </TableRow></TableHeader>
                         <TableBody>
                           {leaveUtil.rows.map((r) => (
-                            <TableRow key={`${r.employeeCode}-${r.typeCode}`}>
-                              <TableCell className={`font-medium tabular-nums ${col('code')}`}>{r.employeeCode}</TableCell>
+                            <TableRow
+                              key={`${r.employeeCode}-${r.typeCode}`}
+                              onClick={() => void openDrill(r.employeeCode, r.typeCode)}
+                              className={`cursor-pointer transition-colors hover:bg-emerald-500/[0.06] dark:hover:bg-emerald-400/[0.08] ${
+                                r.flag === 'OVERDRAWN'
+                                  ? 'bg-rose-500/[0.05] dark:bg-rose-400/[0.07]'
+                                  : ''
+                              }`}
+                              title="View request history & balance correction"
+                            >
+                              <TableCell className={`font-medium tabular-nums ${col('code')}`}>
+                                <span className="inline-flex items-center gap-1">
+                                  {r.employeeCode}
+                                  <ChevronRight className="h-3 w-3 text-muted-foreground/50" aria-hidden />
+                                </span>
+                              </TableCell>
                               <TableCell className={`max-w-44 truncate ${col('title')}`} title={r.jobTitle}>{r.jobTitle}</TableCell>
                               <TableCell className={`text-xs text-muted-foreground ${col('type')}`}>{r.storeName}</TableCell>
                               <TableCell className={col('ltype')}>{r.typeName}</TableCell>
@@ -812,8 +943,9 @@ export default function HrReportsPage() {
                                 </div>
                               </TableCell>
                               <TableCell className={col('flag')}>
-                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${utilFlagTone(r.flag)}`}>
+                                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${utilFlagTone(r.flag)}`}>
                                   {r.flag}
+                                  <ChevronRight className="h-3 w-3 opacity-60" aria-hidden />
                                 </span>
                               </TableCell>
                             </TableRow>
@@ -824,6 +956,151 @@ export default function HrReportsPage() {
                   )}
                 </CardContent>
               </Card>
+              {/* v2.36.0: drill-down — balance card + request history + governed correction */}
+              <Dialog open={drill.open} onOpenChange={closeDrill}>
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+                  {drill.loading || !drill.data ? (
+                    <div className="space-y-3 py-6">
+                      <DialogTitle className="sr-only">Leave balance details</DialogTitle>
+                      <Skeleton className="h-6 w-2/3" />
+                      <Skeleton className="h-20 w-full" />
+                      <Skeleton className="h-40 w-full" />
+                    </div>
+                  ) : (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle className="flex flex-wrap items-center gap-2 text-base">
+                          <CalendarDays className="h-4 w-4 text-emerald-500" aria-hidden />
+                          <span className="tabular-nums">{drill.data.employee.code}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span>{drill.data.type.name}</span>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${utilFlagTone(drill.data.balance.flag)}`}>
+                            {drill.data.balance.flag}
+                          </span>
+                        </DialogTitle>
+                        <DialogDescription>
+                          {drill.data.employee.title} · {drill.data.employee.employmentType.toLowerCase()} · {drill.data.employee.storeName} — leave year {drill.data.year}
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="grid grid-cols-3 gap-2 md:grid-cols-5">
+                        <BalanceChip
+                          label="Allocated"
+                          value={`${drill.data.balance.allocated.toFixed(1)}d`}
+                          hint={drill.data.balance.carried > 0 ? `+${drill.data.balance.carried.toFixed(1)} carried` : undefined}
+                        />
+                        <BalanceChip label="Used" value={`${drill.data.balance.used.toFixed(1)}d`} />
+                        <BalanceChip label="Pending" value={drill.data.balance.pending > 0 ? `${drill.data.balance.pending.toFixed(1)}d` : '—'} />
+                        <BalanceChip
+                          label="Available"
+                          value={`${drill.data.balance.available.toFixed(1)}d`}
+                          tone={
+                            drill.data.balance.available < 0
+                              ? 'border-rose-300 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/40'
+                              : 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40'
+                          }
+                        />
+                        <BalanceChip label="Encashed" value={drill.data.balance.encashed > 0 ? `${drill.data.balance.encashed.toFixed(1)}d` : '—'} />
+                      </div>
+
+                      {drill.data.balance.notes ? (
+                        <div className="rounded-lg border bg-muted/40 px-3 py-2">
+                          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            <ShieldCheck className="h-3 w-3" aria-hidden /> Governance notes
+                          </p>
+                          <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{drill.data.balance.notes}</p>
+                        </div>
+                      ) : null}
+
+                      <div className="rounded-lg border">
+                        <p className="flex items-center gap-1.5 border-b px-3 py-2 text-xs font-medium">
+                          <History className="h-3.5 w-3.5 text-sky-500" aria-hidden />
+                          Requests starting in {drill.data.year}
+                          <span className="ml-auto text-[11px] font-normal text-muted-foreground">{drill.data.history.length} recorded</span>
+                        </p>
+                        {drill.data.history.length === 0 ? (
+                          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                            No {drill.data.type.name} requests started in {drill.data.year}.
+                          </p>
+                        ) : (
+                          <ul className="max-h-52 divide-y overflow-y-auto">
+                            {drill.data.history.map((h) => (
+                              <li key={h.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-xs">
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${leaveStatusTone(h.status)}`}>{h.status}</span>
+                                <span className="tabular-nums">{formatDate(h.startDate)} → {formatDate(h.endDate)}</span>
+                                <span className="font-medium tabular-nums">{h.workingDays}d{h.halfDay ? ' (½)' : ''}</span>
+                                {h.reason ? <span className="w-full truncate text-muted-foreground" title={h.reason}>Reason: {h.reason}</span> : null}
+                                {h.rejectionReason ? <span className="w-full truncate text-rose-600 dark:text-rose-400" title={h.rejectionReason}>Rejected: {h.rejectionReason}</span> : null}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {drill.data.canAdjust ? (
+                        <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-900 dark:bg-violet-950/20">
+                          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium">
+                            <ShieldCheck className="h-3.5 w-3.5 text-violet-500" aria-hidden /> Governed balance correction
+                          </p>
+                          <div className="grid gap-2 sm:grid-cols-[130px_1fr]">
+                            <div className="space-y-1">
+                              <Label htmlFor="adjust-delta">Days (± 0.5)</Label>
+                              <Input
+                                id="adjust-delta"
+                                type="number"
+                                step="0.5"
+                                placeholder="e.g. 2 or -1.5"
+                                value={adjustDelta}
+                                onChange={(e) => setAdjustDelta(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="adjust-reason">Reason (required, audited)</Label>
+                              <Textarea
+                                id="adjust-reason"
+                                rows={2}
+                                placeholder="Why is entitlement being corrected?"
+                                value={adjustReason}
+                                onChange={(e) => setAdjustReason(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          {(() => {
+                            const d = Number(adjustDelta);
+                            if (!adjustDelta || !Number.isFinite(d)) return null;
+                            const newAllocated = Math.round((drill.data.balance.allocated + d) * 10) / 10;
+                            const newAvailable = Math.round((newAllocated + drill.data.balance.carried - drill.data.balance.used - drill.data.balance.pending) * 10) / 10;
+                            return (
+                              <p className={`mt-2 text-xs tabular-nums ${newAvailable < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                                Preview: allocated {drill.data.balance.allocated.toFixed(1)}d → <strong>{newAllocated.toFixed(1)}d</strong>, available {drill.data.balance.available.toFixed(1)}d → <strong>{newAvailable.toFixed(1)}d</strong>
+                              </p>
+                            );
+                          })()}
+                          {adjustError ? <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{adjustError}</p> : null}
+                          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                            Every adjustment is written to the hash-chained audit trail with your reason, and the employee is notified. Corrections are restricted to HR managers and store owners.
+                          </p>
+                          <div className="mt-3 flex justify-end gap-2">
+                            <Button variant="outline" size="sm" onClick={() => closeDrill(false)} disabled={adjustBusy}>Close</Button>
+                            <Button
+                              size="sm"
+                              className="bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
+                              onClick={() => void submitAdjust()}
+                              disabled={adjustBusy || adjustDelta === '' || adjustReason.trim().length < 8}
+                            >
+                              {adjustBusy ? 'Applying…' : 'Apply adjustment'}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                          Balance corrections are restricted to HR managers and store owners — contact them to fix an over-drawn balance.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </DialogContent>
+              </Dialog>
             </>
           )}
         </TabsContent>
