@@ -28,6 +28,15 @@ export function toErrorResponse(error: unknown): Response {
       { status: error.status },
     );
   }
+  // v2.23.0: per-branch report drill-down rejections (unknown store, or a
+  // BRANCH-scope caller trying to narrow) share the same JSON contract.
+  const narrowing = error as { name?: string; code?: string; status?: number; message?: string };
+  if (narrowing && narrowing.name === 'StoreNarrowingError') {
+    return Response.json(
+      { success: false, error: narrowing.message, code: narrowing.code },
+      { status: narrowing.status ?? 400 },
+    );
+  }
   return Response.json(
     { success: false, error: 'The request could not be completed.', code: 'INTERNAL_ERROR' },
     { status: 500 },

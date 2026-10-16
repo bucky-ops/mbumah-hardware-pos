@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Landmark, LayoutDashboard, Menu, PackageSearch, PieChart, Radio, ScrollText, Users, Wallet } from 'lucide-react';
+import { ChevronDown, Landmark, LayoutDashboard, Menu, PackageSearch, PieChart, Radio, ScrollText, Users, Wallet } from 'lucide-react';
 import { ActivityTimeline, ChatDrawer, DecisionSupport, LiveFeed } from '@/components/org/panels';
 import { StoreMatrix } from '@/components/org/store-matrix';
 import { ExpertModules } from '@/components/org/experts';
@@ -40,6 +40,97 @@ const SECTIONS = [
 const storeCodeOf = (s: StoreRow) => s.code ?? s.slug ?? s.id.slice(0, 3);
 const storeHref = (s: StoreRow) =>
   buildStoreWorkspaceUrl({ id: s.id, slug: s.slug, subdomain: s.subdomain }, { page: 'dashboard', forcePath: true });
+
+/**
+ * v2.23.0: "People & payroll by branch" drill-down (org console). Reads the
+ * additive hrPerStore block of /api/org/summary — the same aggregates as the
+ * HR tiles, one row per branch, deep-linked into the per-branch report view.
+ * Collapsed by default so the console keeps its expert-system density.
+ */
+function HrPerStorePanel({ rows }: { rows: NonNullable<OrgSummaryData['hrPerStore']> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <Users className="h-4 w-4 text-orange-500" aria-hidden="true" />
+          People &amp; payroll by branch ({rows.length})
+          <span className="hidden text-xs font-normal text-slate-400 sm:inline">
+            — headcount, cost, absence, latest run, expiry alerts per branch
+          </span>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="max-h-96 overflow-y-auto border-t border-slate-100">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white">
+              <tr className="border-b text-left text-[11px] uppercase tracking-wide text-slate-400">
+                <th className="px-4 py-2 font-medium">Branch</th>
+                <th className="px-3 py-2 text-right font-medium">Headcount</th>
+                <th className="px-3 py-2 text-right font-medium">Cost (month)</th>
+                <th className="px-3 py-2 text-right font-medium">Absence</th>
+                <th className="px-3 py-2 font-medium">Latest payroll</th>
+                <th className="px-4 py-2 text-right font-medium">Expiry alerts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const alerts = row.expiryAlerts.documentsExpiring90Days + row.expiryAlerts.assetsOverdue;
+                return (
+                  <tr key={row.storeId} className="border-b border-slate-50 transition-colors last:border-0 hover:bg-orange-50/40">
+                    <td className="px-4 py-2">
+                      <a
+                        href={`/hr/reports?tab=headcount&storeId=${row.storeId}`}
+                        title={`Open the headcount report narrowed to ${row.storeName}`}
+                        className="font-medium text-slate-700 underline-offset-2 hover:text-orange-600 hover:underline"
+                      >
+                        {row.storeName}
+                      </a>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{row.headcountActive}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{kes(row.monthEmploymentCost)}</td>
+                    <td className={`px-3 py-2 text-right tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-semibold text-amber-600' : 'text-slate-700'}`}>
+                      {row.monthAbsenceRatePct}%
+                    </td>
+                    <td className="px-3 py-2">
+                      {row.latestPayroll ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="text-xs text-slate-500">{row.latestPayroll.periodName}</span>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                              row.latestPayroll.status === 'LOCKED' || row.latestPayroll.status === 'POSTED'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : row.latestPayroll.status === 'VOIDED'
+                                  ? 'border-slate-200 bg-slate-50 text-slate-500'
+                                  : 'border-amber-200 bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            {row.latestPayroll.status.toLowerCase()}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">no runs yet</span>
+                      )}
+                    </td>
+                    <td className={`px-4 py-2 text-right tabular-nums ${alerts > 0 ? 'font-semibold text-amber-600' : 'text-slate-700'}`}>
+                      {alerts}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 export default function OrgConsolePage() {
   const [summary, setSummary] = useState<OrgSummaryData | null>(null);
@@ -301,6 +392,13 @@ export default function OrgConsolePage() {
           <div id="store-matrix">
             <SectionErrorBoundary sectionName="Store Intelligence Matrix">
               {summary ? <StoreMatrix stores={summary.stores} onToast={onToast} /> : <UnavailableCard message={summaryError ?? 'Loading store matrix...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
+            </SectionErrorBoundary>
+          </div>
+          <div id="hr-people">
+            <SectionErrorBoundary sectionName="People & payroll by branch">
+              {summary?.hrPerStore && summary.hrPerStore.length > 0 ? (
+                <HrPerStorePanel rows={summary.hrPerStore} />
+              ) : null}
             </SectionErrorBoundary>
           </div>
           <div id="experts">

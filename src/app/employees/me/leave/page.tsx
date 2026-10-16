@@ -125,7 +125,7 @@ export default function MyLeave() {
                   <p className="text-sm font-semibold">{b.name}</p>
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{b.code}</span>
                 </div>
-                <ProgressMeter pct={pct} tone={pct <= 15 ? 'bad' : pct <= 40 ? 'warn' : 'good'} />
+                <ProgressMeter pct={pct} label="Leave balance used" tone={pct <= 15 ? 'bad' : pct <= 40 ? 'warn' : 'good'} />
                 <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
                   <span>
                     <strong className="text-foreground">{Number(b.availableDays).toLocaleString()}</strong> of {allocated.toLocaleString()} days available

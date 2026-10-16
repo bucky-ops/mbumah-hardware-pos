@@ -90,3 +90,37 @@ states, system-adjacent font stack, no heavy client libraries beyond the
 shared shadcn/ui set, and offline caching that avoids refetch loops. If a
 production measurement lands below 90, the blocker and remediation are to be
 recorded here per the spec's "documented blocker" clause.
+
+### v2.23.0 measurement (authenticated production build)
+
+`scripts/qa-lighthouse-authed.mjs` runs the spec measurement end to end: it
+launches Chrome with a persistent profile + CDP, seeds the SPA's
+`mbt_token` session cookie via `document.cookie` on an origin page, then
+drives `lighthouse@12 --port` against the same instance so the instrumented
+tabs share the cookie jar (passing the cookie as an extra HTTP header does
+NOT persist across the page's own fetches — the first run measured a 401
+error state as the LCP element, which invalidated the scores).
+
+Results on the compile-mode production build (:3200), cashier session,
+mobile throttling:
+
+| Run | Performance | Accessibility | Best practices | SEO | TBT | Notes |
+|-----|-------------|---------------|----------------|-----|-----|-------|
+| v2.23.0 pre-fix | 73 | 95 | 96 | 100 | 580 ms | alert poll fired on mount |
+| v2.23.0 poll deferred | 78 | 95 | 96 | 100 | 370 ms | poll deferred to requestIdleCallback |
+| **v2.23.0 final** | **81** | **100** | 96 | 100 | 350 ms | progressbars carry accessible names; weighted a11y failures: none |
+
+Remaining gap to the 90 target (documented blocker, remediation scoped for a
+dedicated perf round):
+
+- The self-service portal renders inside the root SPA shell, so every page
+  boots the full POS runtime (auth + workspace stores, api layer, POS tab
+  registry, notification center) — ~2.3 s of main-thread work on the Lighthouse
+  mobile CPU, ~85% of the remaining LCP render delay. Reaching 90 requires
+  route-level bundle scoping (a slim layout for `/employees/me` that skips the
+  POS shell) rather than micro-optimisations; touching the root layout is a
+  cross-cutting change that needs its own QA pass across all workspaces.
+- Next impactful steps in priority order: (1) slim `/employees/me` layout
+  without Providers-dependent widgets (est. +8-12 perf), (2) split the shared
+  chunk the `unused-javascript` audit attributes 600 ms to (est. +3-5),
+  (3) modern browserslist targets to drop the legacy-JS tail (est. +2-3).

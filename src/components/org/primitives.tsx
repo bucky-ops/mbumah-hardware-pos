@@ -40,6 +40,16 @@ export interface OrgSummaryData {
     pendingMpesa: number;
   };
   stores: StoreRow[];
+  /** v2.23.0: per-branch HR drill-down rows (ORG scope + HR module on only). */
+  hrPerStore?: Array<{
+    storeId: string;
+    storeName: string;
+    headcountActive: number;
+    monthEmploymentCost: number;
+    monthAbsenceRatePct: number;
+    latestPayroll: { periodName: string; status: string; createdAt: string } | null;
+    expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
+  }>;
   recentAudit: Array<{
     id: string;
     storeId: string | null;
