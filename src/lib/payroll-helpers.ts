@@ -626,7 +626,7 @@ export async function processPayrollRun(
             return sum + Math.max(0, leaveDays);
           }, 0);
           const overtimeHours = attendanceRecords.reduce(
-            (sum, r) => sum + (r.overtimeHours || 0), 0
+            (sum, r) => sum + Number(r.overtimeHours || 0), 0
           );
 
           // Calculate pay
@@ -786,7 +786,13 @@ export async function getOrCreateLeaveBalance(
   if (existing) {
     return {
       ...existing,
-      available: round2(existing.allocatedDays + existing.carryForwardDays - existing.usedDays - existing.pendingDays),
+      // Decimal-safe: the raw fields are decimal.js objects (string valueOf),
+      // so a bare `+` CONCATENATES ("21" + "0" = "210"). Coerce first —
+      // `available` guards the POST leave-balance check downstream.
+      available: round2(
+        Number(existing.allocatedDays) + Number(existing.carryForwardDays) -
+        Number(existing.usedDays) - Number(existing.pendingDays),
+      ),
     };
   }
 
@@ -819,6 +825,38 @@ export async function getOrCreateLeaveBalance(
 }
 
 /**
+ * PURE: the balance delta a status transition implies, with the Decimal
+ * trap closed. Prisma returns Decimal columns as decimal.js objects whose
+ * valueOf() is a STRING, so `used + days` on two Decimals CONCATENATES
+ * ("0" + "2" = "02") and round2() then collapses it to 0 — the v2.29.x
+ * approve path silently never added usedDays (subtraction only worked
+ * because `-` coerces numerically). Every input here is coerced with
+ * Number() first, so the arithmetic is numeric regardless of what the
+ * client passes (Decimal object | string | number).
+ *
+ * Returns the (pendingDelta, usedDelta) to apply to the balance row.
+ */
+export function leaveStatusTransitionDelta(
+  oldStatus: string,
+  newStatus: string,
+  workingDays: number
+): { pendingDelta: number; usedDelta: number } {
+  const days = Math.max(0, Number(workingDays) || 0);
+  if (oldStatus === 'PENDING' && newStatus === 'APPROVED') {
+    return { pendingDelta: 0 - days, usedDelta: days };
+  }
+  if (oldStatus === 'PENDING' && (newStatus === 'REJECTED' || newStatus === 'CANCELLED')) {
+    return { pendingDelta: 0 - days, usedDelta: 0 };
+  }
+  if (oldStatus === 'APPROVED' && newStatus === 'CANCELLED') {
+    return { pendingDelta: 0, usedDelta: 0 - days };
+  }
+  // Other transitions (e.g. APPROVED → TAKEN) don't change the balance
+  // because the days were already counted as used on approval.
+  return { pendingDelta: 0, usedDelta: 0 };
+}
+
+/**
  * Update leave balances when a leave request status changes.
  *
  *   • On PENDING → adds `workingDays` to `pendingDays`
@@ -826,6 +864,9 @@ export async function getOrCreateLeaveBalance(
  *   • On REJECTED/CANCELLED → subtracts `workingDays` from `pendingDays`
  *
  * This keeps the balance accurate at every stage of the approval workflow.
+ * (v2.30.0: the deltas now go through the pure, Decimal-safe
+ * leaveStatusTransitionDelta — the old inline arithmetic string-concatenated
+ * Prisma Decimals on the approve path, so usedDays was never incremented.)
  */
 export async function updateLeaveBalanceOnStatusChange(
   leaveRequestId: string,
@@ -850,43 +891,23 @@ export async function updateLeaveBalanceOnStatusChange(
     leaveYear
   );
 
-  const days = request.workingDays;
+  const { pendingDelta, usedDelta } = leaveStatusTransitionDelta(
+    oldStatus,
+    newStatus,
+    request.workingDays as unknown as number
+  );
 
-  // Transition logic
-  if (oldStatus === 'PENDING' && newStatus === 'APPROVED') {
-    // Move from pending to used
+  if (pendingDelta !== 0 || usedDelta !== 0) {
     await runWithoutTenant(async () => {
       return db.employeeLeaveBalance.update({
         where: { id: balance.id },
         data: {
-          pendingDays: Math.max(0, round2(balance.pendingDays - days)),
-          usedDays: round2(balance.usedDays + days),
-        },
-      });
-    });
-  } else if (oldStatus === 'PENDING' && (newStatus === 'REJECTED' || newStatus === 'CANCELLED')) {
-    // Remove from pending
-    await runWithoutTenant(async () => {
-      return db.employeeLeaveBalance.update({
-        where: { id: balance.id },
-        data: {
-          pendingDays: Math.max(0, round2(balance.pendingDays - days)),
-        },
-      });
-    });
-  } else if (oldStatus === 'APPROVED' && newStatus === 'CANCELLED') {
-    // Remove from used (leave was approved but then cancelled before being taken)
-    await runWithoutTenant(async () => {
-      return db.employeeLeaveBalance.update({
-        where: { id: balance.id },
-        data: {
-          usedDays: Math.max(0, round2(balance.usedDays - days)),
+          pendingDays: Math.max(0, round2(Number(balance.pendingDays) + pendingDelta)),
+          usedDays: Math.max(0, round2(Number(balance.usedDays) + usedDelta)),
         },
       });
     });
   }
-  // Other transitions (e.g. APPROVED → TAKEN) don't change the balance
-  // because the days were already counted as used on approval.
 }
 
 /**
