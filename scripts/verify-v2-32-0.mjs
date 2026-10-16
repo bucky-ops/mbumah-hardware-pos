@@ -60,10 +60,15 @@ check('submission copy builder exists (pure module)', LN.includes('export functi
 check('submission marker constant is stable', LN.includes("LEAVE_REQUEST_METADATA_MARKER = 'leave_request'"));
 check('parser returns the kind selector', LN.includes("rec.kind === 'leave_decision' || rec.kind === 'leave_request'"));
 const LEV = read('src/app/api/leaves/route.ts') ?? '';
-check('POST /api/leaves notifies decision-capable users', LEV.includes("role: { in: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] }") && LEV.includes("id: { not: session.userId }"));
-check('POST writes one bell row per approver (createMany)', LEV.includes('db.notification.createMany') && LEV.includes('kind: LEAVE_REQUEST_METADATA_MARKER'));
-check('POST sends ONE grouped LEAVE_REQUEST email', LEV.includes("type: 'LEAVE_REQUEST'") && LEV.includes('approverEmails'));
-check('submission delivery is fail-soft', /Submission delivery is best-effort/.test(LEV));
+const LSV = read('src/lib/hr/leave-service.ts') ?? '';
+check('shared helper notifyLeaveRequestSubmitted lives in leave-service', LSV.includes('export async function notifyLeaveRequestSubmitted') && LSV.includes("role: { in: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] }") && LSV.includes('id: { not: params.submitterUserId }'));
+check('requestLeave notifies (portal + leave/requests paths covered)', LSV.includes('await notifyLeaveRequestSubmitted({') && LSV.includes('submitterUserId: input.actorId'));
+check('POST /api/leaves calls the same shared helper', LEV.includes('notifyLeaveRequestSubmitted({') && LEV.includes('submitterUserId: session.userId'));
+check('portal path forwards the submitter email', (read('src/lib/hr/self-service.ts') ?? '').includes('submitterEmail: session.email'));
+check('helper writes one bell row per approver (createMany)', LSV.includes('db.notification.createMany') && LSV.includes('kind: LEAVE_REQUEST_METADATA_MARKER'));
+check('helper sends ONE grouped LEAVE_REQUEST email', LSV.includes("type: 'LEAVE_REQUEST'") && LSV.includes('approverEmails'));
+check('submission delivery is fail-soft', /Submission delivery is best-effort/.test(LSV));
+check('QA-caught fix: requestLeave heals pendingDays via recomputeBalances', LSV.includes('await recomputeBalances(input.employeeId, input.leaveTypeId, year)') && /v2\.32\.0 FIX \(QA-caught\)/.test(LSV));
 const NF = read('src/app/api/notifications/route.ts') ?? '';
 check('feed pulls both leave markers', NF.includes('LEAVE_REQUEST_METADATA_MARKER') && NF.includes('OR: ['));
 check('feed maps submission rows to targetTab payroll', NF.includes("targetTab: 'payroll'") && NF.includes("type: 'leave_request'"));
@@ -85,10 +90,10 @@ check('expiresAt narrowed to string | Date | null', GFT.includes('const expiresA
 console.log('== Version lockstep ==');
 const pkg = JSON.parse(read('package.json') ?? '{}');
 const rel = pkg.mbumah ?? {};
-check('package.json version is 2.32.0', pkg.version === '2.32.0', pkg.version);
-check('mbumah.releaseVersion is 2.32.0', rel.releaseVersion === '2.32.0', rel.releaseVersion);
-check('mbumah.baseVersion is 2.32.0', rel.baseVersion === '2.32.0', rel.baseVersion);
-check("What's-New has a 2.32.0 entry", (read('src/lib/whats-new.ts') ?? '').includes("version: '2.32.0'"));
+check('package.json version is 2.32.1', pkg.version === '2.32.1', pkg.version);
+check('mbumah.releaseVersion is 2.32.1', rel.releaseVersion === '2.32.1', rel.releaseVersion);
+check('mbumah.baseVersion is 2.32.1', rel.baseVersion === '2.32.1', rel.baseVersion);
+check("What's-New has a 2.32.1 entry", (read('src/lib/whats-new.ts') ?? '').includes("version: '2.32.1'"));
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

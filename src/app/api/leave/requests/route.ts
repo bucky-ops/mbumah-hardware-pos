@@ -52,6 +52,7 @@ export const POST = hrGuard('hr.leave.request', ROLES)(
         endDate: new Date(body.endDate),
         halfDay: body.halfDay === true,
         reason: typeof body.reason === 'string' ? body.reason : undefined,
+        submitterEmail: session.email, // v2.32.0: manager notification footer
       });
       return Response.json({ success: true, data: { id: created.id, workingDays: Number(created.workingDays) } }, { status: 201 });
     } catch (error) {

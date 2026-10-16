@@ -8,6 +8,8 @@
 
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
+import { LEAVE_REQUEST_METADATA_MARKER, leaveSubmissionCopy } from './leave-notify';
+import { sendEmail } from '@/lib/email-service';
 
 export interface RequestLeaveInput {
   employeeId: string;
@@ -19,6 +21,9 @@ export interface RequestLeaveInput {
   endDate: Date;
   halfDay?: boolean;
   reason?: string;
+  /** v2.32.0: optional submitter email for the "submitted by …" footer on
+   *  the manager notification email. */
+  submitterEmail?: string;
 }
 
 function countWorkingDays(from: Date, to: Date, halfDay: boolean): number {
@@ -76,6 +81,19 @@ export async function requestLeave(input: RequestLeaveInput) {
     },
   });
 
+  // v2.32.0 FIX (QA-caught): the stored pendingDays aggregate was only
+  // incremented by the legacy HR-desk POST /api/leaves path — requestLeave
+  // (the portal and /api/leave/requests paths) never touched it, so the
+  // derived `available` figure overstated entitlement between submission and
+  // decision and a second overlapping request could over-commit. The
+  // idempotent, aggregate-derived recompute (same primitive the decision
+  // path uses) heals the row immediately and stays self-consistent.
+  try {
+    await recomputeBalances(input.employeeId, input.leaveTypeId, year);
+  } catch {
+    // Balance healing is best-effort; the request itself is already created.
+  }
+
   await hrAudit({
     actorId: input.actorId,
     actorRole: input.actorRole,
@@ -86,7 +104,105 @@ export async function requestLeave(input: RequestLeaveInput) {
     reason: 'Leave request submitted.',
     metadata: { employeeId: input.employeeId, workingDays, year },
   });
+
+  // v2.32.0: notify the store's decision-capable users (employee → manager
+  // direction). Best-effort: a notification failure must never fail the
+  // submission itself, so this is awaited inside its own try/catch.
+  try {
+    await notifyLeaveRequestSubmitted({
+      leaveRequestId: request.id,
+      storeId: input.storeId,
+      employeeId: input.employeeId,
+      leaveTypeId: input.leaveTypeId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      workingDays,
+      reason: input.reason ?? null,
+      submitterUserId: input.actorId,
+      submitterEmail: input.submitterEmail ?? null,
+    });
+  } catch {
+    // Submission delivery is best-effort by design.
+  }
   return request;
+}
+
+/** v2.32.0: submission notifications for a PENDING leave request — one
+ *  durable category-HR bell row per active decision-capable user
+ *  (SUPER_ADMIN / STORE_OWNER / BRANCH_MANAGER / ACCOUNTANT of the request's
+ *  store, plus all cross-store SUPER_ADMINs, submitter excluded) and ONE
+ *  grouped email. Shared by every submission path: requestLeave (portal +
+ *  leave/requests route) and the HR-desk POST /api/leaves. */
+export async function notifyLeaveRequestSubmitted(params: {
+  leaveRequestId: string;
+  storeId: string;
+  employeeId: string;
+  leaveTypeId: string;
+  startDate: Date;
+  endDate: Date;
+  workingDays: number;
+  reason?: string | null;
+  submitterUserId: string;
+  submitterEmail?: string | null;
+}): Promise<void> {
+  const [employee, leaveType] = await Promise.all([
+    db.employee.findUnique({ where: { id: params.employeeId }, select: { firstName: true, lastName: true } }),
+    db.leaveType.findUnique({ where: { id: params.leaveTypeId }, select: { name: true } }),
+  ]);
+  if (!employee || !leaveType) return;
+
+  const approvers = await db.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] },
+      id: { not: params.submitterUserId },
+      OR: [{ storeId: params.storeId }, { role: 'SUPER_ADMIN' }],
+    },
+    select: { id: true, email: true },
+  });
+  if (approvers.length === 0) return;
+
+  const copy = leaveSubmissionCopy({
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+    leaveTypeName: leaveType.name,
+    startDate: params.startDate.toISOString(),
+    endDate: params.endDate.toISOString(),
+    workingDays: params.workingDays,
+    reason: params.reason ?? null,
+    submittedByLabel: params.submitterEmail ?? null,
+  });
+
+  await db.notification.createMany({
+    data: approvers.map((u) => ({
+      storeId: params.storeId,
+      userId: u.id,
+      title: copy.title,
+      message: copy.message,
+      type: copy.notifType,
+      category: 'HR',
+      priority: copy.priority,
+      metadata: JSON.stringify({
+        kind: LEAVE_REQUEST_METADATA_MARKER,
+        leaveRequestId: params.leaveRequestId,
+        employeeId: params.employeeId,
+      }),
+    })),
+  });
+
+  const approverEmails = approvers
+    .map((u) => u.email)
+    .filter((e): e is string => typeof e === 'string' && e.includes('@'));
+  if (approverEmails.length > 0) {
+    await sendEmail({
+      to: approverEmails,
+      subject: copy.emailSubject,
+      html: copy.emailHtml,
+      text: copy.emailText,
+      type: 'LEAVE_REQUEST',
+      metadata: { leaveRequestId: params.leaveRequestId, employeeId: params.employeeId },
+    }).catch(() => undefined);
+  }
 }
 
 export async function decideLeaveRequest(

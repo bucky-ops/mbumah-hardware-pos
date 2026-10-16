@@ -22,6 +22,14 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.32.1',
+    title: 'Fixes: manager notifications now fire on portal leave requests, and pending days are always accurate',
+    bullets: [
+      'Fixed: submitting leave from the self-service portal did not notify managers — the notification only fired on the HR-desk path. All submission paths now notify the approvals group.',
+      'Fixed: pending leave days were not reflected in your balance until a manager decided — your available days could look higher than reality. Balances now recompute the moment you submit.',
+    ],
+  },
+  {
     version: '2.32.0',
     title: 'WhatsApp sharing works from every tab — and managers now hear about new leave requests',
     bullets: [
