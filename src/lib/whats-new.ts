@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.40.0',
+    title: 'Correct pending leave requests in place — no more cancel-and-refile',
+    bullets: [
+      'Pending leave requests gain an amber "Correct request" action on the Leave desk: fix the dates, half-day, leave type, reason or emergency contact directly — the request keeps its place in the approval flow instead of being cancelled and refiled.',
+      'The correction dialog shows what changes before you save: the working-day count recomputes live (weekends skipped), the available balance rail turns red when the corrected range would not fit, and Save stays disabled until something actually changed.',
+      'The employee is always told: a portal bell row and an email carry the full before → after summary (dates, days and type as they were vs now), who corrected it and an optional note explaining why.',
+      'Every corrected request is traceable: the desk row and detail dialog show a "Corrected by HR" chip with the note, the employee\'s portal card does the same, and the hash-chained audit trail records the before and after values.',
+      'Guardrails match the filing path: only pending requests can be corrected, only managers and HR roles can correct, and a leave-type change draws on the new type\'s balance without borrowing the old request\'s pending days.',
+    ],
+  },
+  {
     version: '2.39.0',
     title: 'Link portal accounts to employees — the governed switch that turns on personal notifications',
     bullets: [

@@ -2871,7 +2871,9 @@ export interface NotificationItem {
   // violet accents and the Cancelled chip.
   // v2.38.0: 'leave_on_behalf' - employee-facing rows for requests HR filed
   // in their name (violet user-check, "Entered by HR" chip, portal link).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf';
+  // v2.40.0: 'leave_edited' - requests HR corrected in place (indigo pencil,
+  // "Corrected by HR" chip, portal link).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';

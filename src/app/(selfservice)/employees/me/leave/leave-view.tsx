@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, RefreshCw, UserCheck } from 'lucide-react';
+import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, PenLine, RefreshCw, UserCheck } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 
 export interface BalanceDto {
@@ -43,6 +43,11 @@ export interface RequestDto {
   /** v2.38.0: HR filer display name when the request was entered on behalf
    *  of the employee (null = self-filed) — renders the violet chip. */
   enteredByName?: string | null;
+  /** v2.40.0: edit-window provenance (null = never corrected in place) —
+   *  renders the amber "Corrected by HR" chip with the optional note. */
+  editedAt?: string | null;
+  editedByName?: string | null;
+  editNote?: string | null;
 }
 export interface LeaveDto {
   balances: BalanceDto[];
@@ -234,6 +239,17 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                   <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900">
                     <UserCheck className="h-3 w-3" aria-hidden /> Filed by HR · {r.enteredByName}
                   </p>
+                ) : null}
+                {/* v2.40.0: correction provenance on the card — the employee
+                    sees who fixed the request (and why) without cross-
+                    referencing the bell row. */}
+                {r.editedByName ? (
+                  <div className="mt-1.5">
+                    <p className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                      <PenLine className="h-3 w-3" aria-hidden /> Corrected by HR · {r.editedByName}
+                    </p>
+                    {r.editNote ? <p className="mt-1 text-xs text-amber-700/90 dark:text-amber-300/90">Note: {r.editNote}</p> : null}
+                  </div>
                 ) : null}
                 {r.reason ? <p className="mt-1 text-xs text-muted-foreground">“{r.reason}”</p> : null}
                 {r.rejectionReason ? (

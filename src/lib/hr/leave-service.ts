@@ -10,9 +10,11 @@ import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import {
   LEAVE_CANCEL_METADATA_MARKER,
+  LEAVE_EDITED_METADATA_MARKER,
   LEAVE_ON_BEHALF_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   leaveCancelledCopy,
+  leaveEditedCopy,
   leaveOnBehalfCopy,
   leaveSubmissionCopy,
 } from './leave-notify';
@@ -426,6 +428,223 @@ export async function notifyLeaveRequestCancelled(params: {
       metadata: { leaveRequestId: params.leaveRequestId, employeeId: params.employeeId },
     }).catch(() => undefined);
   }
+}
+
+/** v2.40.0: governed edit window for PENDING leave requests. HR corrects
+ *  dates / half-day / type / reason / attachment IN PLACE instead of the
+ *  lossy cancel + refile dance (which would re-ping the whole approvals
+ *  group and orphan the original row). Rules:
+ *  - PENDING only — APPROVED/REJECTED/CANCELLED/TAKEN rows are frozen audit
+ *    history (decisions already moved balances; cancel remains the path).
+ *  - working days are recomputed with the same weekend-skipping arithmetic
+ *    as filing, and the balance guard mirrors requestLeave: the corrected
+ *    range must fit the available balance, counting the request's OWN
+ *    current pending days as headroom when the leave type is unchanged
+ *    (a type change draws on the target type's full availability).
+ *  - balances recompute for both the old and the new (type, year) — the
+ *    aggregate-derived recompute is idempotent, so pendingDays heal
+ *    immediately either way.
+ *  - the EMPLOYEE is always told: one bell row (linked user) + best-effort
+ *    email carrying the before → after summary, the editor's name and the
+ *    optional note. Never blocks or fails the correction itself.
+ *  Throws (all prefixed for route mapping): NOT_EDITABLE, PERIOD_MISMATCH,
+ *  INSUFFICIENT_LEAVE_BALANCE, Leave request not found. */
+export interface EditLeaveRequestInput {
+  requestId: string;
+  actorId: string;
+  actorRole: string;
+  /** Corrected range (required). */
+  startDate: Date;
+  endDate: Date;
+  halfDay?: boolean;
+  /** Optional type change — omit to keep the current leave type. */
+  leaveTypeId?: string;
+  /** Field updates — undefined = keep the stored value (the UI always sends
+   *  these explicitly, so undefined only happens for API callers). */
+  reason?: string;
+  emergencyContact?: string | null;
+  attachmentUrl?: string | null;
+  /** Display name of the editor for the employee-facing copy. */
+  editedByName?: string | null;
+  /** Optional note to the employee explaining the correction. */
+  editNote?: string | null;
+}
+
+export async function editLeaveRequest(input: EditLeaveRequestInput) {
+  const request = await db.leaveRequest.findUnique({
+    where: { id: input.requestId },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          user: { select: { id: true } },
+        },
+      },
+      leaveType: { select: { id: true, name: true } },
+    },
+  });
+  if (!request) throw new Error('Leave request not found.');
+  if (request.status !== 'PENDING') {
+    throw new Error(`NOT_EDITABLE: only pending requests can be edited — this one is ${request.status}.`);
+  }
+  if (input.endDate < input.startDate) {
+    throw new Error('endDate must be on or after startDate (PERIOD_MISMATCH).');
+  }
+
+  const newTypeId = input.leaveTypeId ?? request.leaveTypeId;
+  const workingDays = countWorkingDays(input.startDate, input.endDate, input.halfDay === true);
+  if (workingDays <= 0) throw new Error('Leave range contains no working days (PERIOD_MISMATCH).');
+
+  // Balance guard (mirrors requestLeave): the corrected range must fit the
+  // available balance of the TARGET type/year. The request's own current
+  // pending days are added back as headroom when the type is unchanged —
+  // the recompute after the update rewrites pendingDays from the table, so
+  // this is purely a pre-flight check, never a manual ledger write.
+  const oldYear = new Date(request.startDate).getUTCFullYear();
+  const newYear = input.startDate.getUTCFullYear();
+  const balance = await db.employeeLeaveBalance.findFirst({
+    where: { employeeId: request.employeeId, leaveTypeId: newTypeId, leaveYear: newYear },
+    select: { allocatedDays: true, carryForwardDays: true, usedDays: true, pendingDays: true },
+  });
+  if (balance) {
+    const sameTypeAndYear = newTypeId === request.leaveTypeId && oldYear === newYear;
+    const ownPending = sameTypeAndYear ? Number(request.workingDays) : 0;
+    const available =
+      Number(balance.allocatedDays) +
+      Number(balance.carryForwardDays) -
+      Number(balance.usedDays) -
+      Number(balance.pendingDays) +
+      ownPending;
+    if (workingDays > available) {
+      throw new Error(`INSUFFICIENT_LEAVE_BALANCE: corrected range needs ${workingDays} day(s), available ${available}.`);
+    }
+  }
+
+  const updated = await db.leaveRequest.update({
+    where: { id: input.requestId },
+    data: {
+      leaveTypeId: newTypeId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      returnDate: new Date(input.endDate.getTime() + 24 * 3600 * 1000),
+      workingDays,
+      halfDay: input.halfDay === true,
+      ...(input.reason !== undefined ? { reason: input.reason.trim() ? input.reason.trim() : null } : {}),
+      ...(input.emergencyContact !== undefined ? { emergencyContact: input.emergencyContact } : {}),
+      ...(input.attachmentUrl !== undefined ? { attachmentUrl: input.attachmentUrl } : {}),
+      editedAt: new Date(),
+      editedByName: input.editedByName ?? null,
+      editNote: input.editNote?.trim() ? input.editNote.trim() : null,
+    },
+    include: { leaveType: { select: { name: true, code: true } } },
+  });
+
+  // Heal both (type, year) rows touched by the correction — a type change
+  // frees pending days on the old type and reserves them on the new one.
+  const recomputes = new Set<string>();
+  recomputes.add(`${request.leaveTypeId}:${oldYear}`);
+  recomputes.add(`${newTypeId}:${newYear}`);
+  for (const key of recomputes) {
+    const [typeId, year] = key.split(':');
+    await recomputeBalances(request.employeeId, typeId, Number(year)).catch(() => undefined);
+  }
+
+  await hrAudit({
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    action: 'UPDATE',
+    resourceType: HrEntityType.EMPLOYEE,
+    resourceId: input.requestId,
+    storeId: request.storeId,
+    reason: 'Leave request corrected in place (edit window).',
+    metadata: {
+      employeeId: request.employeeId,
+      before: {
+        leaveTypeId: request.leaveTypeId,
+        startDate: request.startDate.toISOString(),
+        endDate: request.endDate.toISOString(),
+        workingDays: Number(request.workingDays),
+      },
+      after: {
+        leaveTypeId: newTypeId,
+        startDate: input.startDate.toISOString(),
+        endDate: input.endDate.toISOString(),
+        workingDays,
+      },
+      editNote: input.editNote ?? undefined,
+    },
+  });
+
+  // Employee notification — the other side always hears about a correction.
+  // Skipped only when the actor IS the employee's linked user (nobody is
+  // notified about their own action).
+  try {
+    if (request.employee.user?.id && request.employee.user.id !== input.actorId) {
+      const editedByName =
+        input.editedByName?.trim() ||
+        (await db.user
+          .findUnique({ where: { id: input.actorId }, select: { name: true, email: true } })
+          .then((u) => u?.name?.trim() || u?.email || null)
+          .catch(() => null)) ||
+        'HR';
+
+      const copy = leaveEditedCopy({
+        firstName: request.employee.firstName,
+        lastName: request.employee.lastName,
+        leaveTypeName: updated.leaveType.name,
+        startDate: input.startDate.toISOString(),
+        endDate: input.endDate.toISOString(),
+        workingDays,
+        previousLeaveTypeName: request.leaveType.name,
+        previousStartDate: request.startDate.toISOString(),
+        previousEndDate: request.endDate.toISOString(),
+        previousWorkingDays: Number(request.workingDays),
+        editedByLabel: editedByName,
+        editNote: input.editNote ?? null,
+      });
+
+      await db.notification.create({
+        data: {
+          storeId: request.storeId,
+          userId: request.employee.user.id,
+          title: copy.title,
+          message: copy.message,
+          type: copy.notifType,
+          category: 'HR',
+          priority: copy.priority,
+          actionUrl: '/employees/me/leave',
+          actionLabel: 'View my leave',
+          metadata: JSON.stringify({
+            kind: LEAVE_EDITED_METADATA_MARKER,
+            leaveRequestId: request.id,
+            employeeId: request.employeeId,
+            editedByName,
+          }),
+        },
+      });
+
+      const recipientEmail = request.employee.email || null;
+      if (recipientEmail) {
+        await sendEmail({
+          to: recipientEmail,
+          subject: copy.emailSubject,
+          html: copy.emailHtml,
+          text: copy.emailText,
+          userId: request.employee.user.id,
+          type: 'LEAVE_EDIT',
+          metadata: { leaveRequestId: request.id, employeeId: request.employeeId, editedByName },
+        }).catch(() => undefined);
+      }
+    }
+  } catch {
+    // Edit delivery is best-effort by design — the correction itself has
+    // already been applied, audited and recomputed by this point.
+  }
+
+  return updated;
 }
 
 export async function decideLeaveRequest(
