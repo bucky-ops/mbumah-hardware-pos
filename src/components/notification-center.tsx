@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore, useAuthStore, type AppTab } from '@/lib/stores';
 import { notificationsApi, formatDateTime, formatRelativeTime, type NotificationItem } from '@/lib/api';
@@ -19,7 +20,7 @@ import {
 import {
   PackageX, AlertTriangle, AlertOctagon, CircleDollarSign,
   UserPlus, Receipt, CheckCheck, BellRing, Filter, X,
-  MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield,
+  MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield, BarChart3, ArrowRight,
 } from 'lucide-react';
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security';
@@ -163,6 +164,8 @@ export function NotificationCenter({
   const [showDismissed, setShowDismissed] = useState(false);
   const { setActiveTab } = useAppStore();
   const queryClient = useQueryClient();
+  // v2.24.0: deep links (HR digest copies) navigate via the app router.
+  const router = useRouter();
 
   // v2.12.7 (PR C): Security tab is role-gated (SUPER_ADMIN/STORE_OWNER/
   // BRANCH_MANAGER) and merges recent SecurityEvent rows as read-only entries.
@@ -257,6 +260,15 @@ export function NotificationCenter({
 
   const handleNotificationClick = (notification: NotificationItem) => {
     markRead(notification.id);
+    // v2.24.0: rows carrying a deep link (HR digest copies) navigate to the
+    // exact surface (e.g. /hr/reports?tab=cost&storeId=...) - the POS tab
+    // switch only applies to rows that map onto this workspace's tabs.
+    if (notification.actionUrl) {
+      markAllRead([notification.id]);
+      onOpenChange(false);
+      router.push(notification.actionUrl);
+      return;
+    }
     const targetTab = notification.targetTab as AppTab | undefined;
     if (targetTab) {
       setActiveTab(targetTab);
@@ -290,6 +302,8 @@ export function NotificationCenter({
       case 'recent_transaction': return <Receipt className="h-4 w-4 text-blue-500" />;
       // v2.12.7 (PR C): security rows - red shield.
       case 'security': return <ShieldAlert className="h-4 w-4 text-red-500" />;
+      // v2.24.0: HR report digest copies - violet chart.
+      case 'hr_digest': return <BarChart3 className="h-4 w-4 text-violet-500" />;
     }
   };
 
@@ -493,6 +507,14 @@ export function NotificationCenter({
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                           {notification.description}
                         </p>
+                        {/* v2.24.0: digest rows carry a deep link - make the
+                            affordance visible (not hover-only) since opening
+                            the report IS the action for this row type. */}
+                        {notification.actionUrl ? (
+                          <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                            {notification.actionLabel ?? 'Open'} <ArrowRight className="h-3 w-3" aria-hidden />
+                          </p>
+                        ) : null}
                         <p className="text-[10px] text-muted-foreground/60 mt-1" title={formatDateTime(notification.timestamp)}>
                           {formatRelativeTime(notification.timestamp)}
                         </p>

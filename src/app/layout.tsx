@@ -3,7 +3,13 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { Providers } from "@/lib/providers";
+// v2.24.0 PERF SPLIT: <Providers> moved OUT of the root layout into the
+// (shell) route group (src/app/(shell)/layout.tsx). The root layout now
+// renders only the document shell (html/body/fonts/metadata); the POS
+// provider stack (React Query, auth stores, alert popups, toaster) is no
+// longer paid by lightweight surfaces - /employees/me mounts the slim
+// SelfServiceProviders instead (src/app/(selfservice)/layout.tsx). See
+// docs/hr/self-service.md for the measured Lighthouse impact.
 import { getEnv } from "@/lib/env";
 
 // Startup env validation
@@ -102,11 +108,12 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        <Providers>{children}</Providers>
+        {children}
         {/* Vercel Analytics & Speed Insights - placed as direct children of
-            <body> (outside <Providers>) per Vercel best practice. They don't
-            need React Query / Theme context, and isolating them here avoids
-            any provider-level hydration timing from affecting analytics init. */}
+            <body> (outside every provider stack) per Vercel best practice.
+            They don't need React Query / Theme context, and isolating them
+            here avoids any provider-level hydration timing from affecting
+            analytics init. */}
         <Analytics />
         <SpeedInsights />
       </body>

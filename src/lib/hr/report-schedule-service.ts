@@ -530,6 +530,83 @@ export interface ScheduleSweepResult {
   results: Array<{ id: string; reportKey: string; status: 'SENT' | 'FAILED' | 'SKIPPED'; error?: string; recipients: number }>;
 }
 
+// v2.24.0: schedule report keys -> /hr/reports deep-link tab ids (the UI
+// shortens 'employment-cost' to 'cost' and 'time-to-hire' to 'tth').
+export const REPORT_KEY_TO_TAB: Record<HrScheduleReportKey, string> = {
+  headcount: 'headcount',
+  'employment-cost': 'cost',
+  absence: 'absence',
+  turnover: 'turnover',
+  'time-to-hire': 'tth',
+  'statutory-liability': 'statutory',
+};
+
+function digestHeadlines(digest: HrReportDigestData): string {
+  return (digest.headline ?? [])
+    .slice(0, 3)
+    .map((h) => `${h.label}: ${h.value}`)
+    .join(' · ');
+}
+
+/**
+ * v2.24.0: mirror a digest outcome into the IN-APP notification center.
+ *
+ * Scheduled sends notify the schedule's creator; manual send-now notifies
+ * the actor. Success rows are quiet (category HR, priority NORMAL - they
+ * surface in the bell feed only); failures get priority HIGH so the alert
+ * popup host surfaces them to the person who owns the schedule. The digest
+ * itself is aggregate-only (same contract as the email), and the copy never
+ * blocks the digest flow: any notification failure is swallowed.
+ */
+async function writeDigestNotification(params: {
+  scheduleId: string;
+  reportKey: string;
+  storeId: string | null;
+  recipientUserId: string;
+  digest: HrReportDigestData | null;
+  email: { success: boolean; error?: string | null };
+  manual: boolean;
+}): Promise<string | null> {
+  try {
+    const tab = REPORT_KEY_TO_TAB[params.reportKey as HrScheduleReportKey];
+    const actionUrl = tab
+      ? `/hr/reports?tab=${tab}${params.storeId ? `&storeId=${params.storeId}` : ''}`
+      : '/hr/reports';
+    const label =
+      params.digest?.reportLabel ??
+      REPORT_LABELS[params.reportKey as HrScheduleReportKey] ??
+      params.reportKey;
+    const headlineText = params.digest ? digestHeadlines(params.digest) : 'No data for this period.';
+    const delivery = params.email.success
+      ? 'Email delivered.'
+      : `Email not delivered${params.email.error ? `: ${params.email.error}` : '.'}`;
+    const row = await db.notification.create({
+      data: {
+        storeId: params.storeId,
+        userId: params.recipientUserId,
+        title: `${label} digest — ${params.digest?.scopeLabel ?? 'All branches'}`.trim(),
+        message: `${params.digest?.periodLabel ?? ''} · ${headlineText} · ${delivery}${params.manual ? ' (manual send)' : ''}`,
+        type: 'SYSTEM',
+        category: 'HR',
+        priority: params.email.success ? 'NORMAL' : 'HIGH',
+        actionUrl,
+        actionLabel: 'Open report',
+        metadata: JSON.stringify({
+          scheduleId: params.scheduleId,
+          reportKey: params.reportKey,
+          manual: params.manual,
+          emailStatus: params.email.success ? 'SENT' : 'FAILED',
+        }),
+      },
+    });
+    return row.id;
+  } catch {
+    // The in-app copy is best-effort by design - the email + row stamping
+    // above are the source of truth.
+    return null;
+  }
+}
+
 /**
  * Run every due schedule. Call from the nightly cron (and the manual
  * `?force=1` path — force treats every active schedule as due WITHOUT
@@ -575,6 +652,16 @@ export async function runDueHrReportSchedules(
         });
         result.sent += 1;
         result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'SENT', recipients: recipients.length });
+        // v2.24.0: in-app copy for the schedule's creator (quiet, info-level).
+        await writeDigestNotification({
+          scheduleId: schedule.id,
+          reportKey: schedule.reportKey,
+          storeId: schedule.storeId,
+          recipientUserId: schedule.createdByUserId,
+          digest,
+          email: { success: true },
+          manual: false,
+        });
       } else {
         await db.hrReportSchedule.update({
           where: { id: schedule.id },
@@ -582,6 +669,17 @@ export async function runDueHrReportSchedules(
         });
         result.failed += 1;
         result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'FAILED', error: email.error, recipients: recipients.length });
+        // v2.24.0: failures surface at HIGH priority so the creator's alert
+        // popups catch a silently broken digest cadence.
+        await writeDigestNotification({
+          scheduleId: schedule.id,
+          reportKey: schedule.reportKey,
+          storeId: schedule.storeId,
+          recipientUserId: schedule.createdByUserId,
+          digest,
+          email: { success: false, error: email.error ?? 'Email send failed' },
+          manual: false,
+        });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Digest computation failed';
@@ -604,4 +702,147 @@ export async function runDueHrReportSchedules(
     }).catch(() => {});
   }
   return result;
+}
+
+// ── v2.24.0: manual "send now" ──────────────────────────────────────────────
+
+export type SendNowOutcome = 'SENT' | 'FAILED' | 'SKIPPED';
+
+export interface SendScheduleNowResult {
+  outcome: SendNowOutcome;
+  schedule: ScheduleView;
+  /** Aggregate-only digest summary (identical contract to the email). */
+  digestSummary: { reportLabel: string; periodLabel: string; scopeLabel: string; headlines: string[] } | null;
+  email: { success: boolean; error?: string };
+  notificationId: string | null;
+}
+
+/**
+ * Send one schedule's digest IMMEDIATELY, on demand.
+ *
+ * - Scope: the ROW's store must sit inside the actor's visibility - a
+ *   BRANCH manager may only send their own branch's schedule (an org-wide
+ *   schedule is out of their scope); org roles may send any schedule of
+ *   their organization.
+ * - Cadence: lastRunAt is NOT touched (a manual send is not a schedule
+ *   fire); lastStatus/lastError reflect the last attempt of any kind.
+ * - Audit: hrAudit EXECUTE with manualSend=true and the REAL actor.
+ * - In-app: the actor always gets a notification-center copy with the
+ *   digest headline + delivery status (so the flow is usable in dev/CI
+ *   where RESEND_API_KEY is not configured - the email failure is reported,
+ *   not hidden).
+ */
+export async function sendScheduleNow(
+  organizationId: string,
+  actor: { id: string; role: string; storeId: string | null },
+  id: string,
+  now: Date = new Date(),
+): Promise<SendScheduleNowResult> {
+  const row = await db.hrReportSchedule.findFirst({
+    where: { id, organizationId, deletedAt: null },
+  });
+  if (!row) {
+    throw new HrScheduleError('SCHEDULE_NOT_FOUND', 'Schedule not found.', 404);
+  }
+  if (actor.role === 'BRANCH_MANAGER' && row.storeId !== actor.storeId) {
+    throw new HrScheduleError(
+      'STORE_SCOPE_FORBIDDEN',
+      'Branch managers can only send digests for their own branch.',
+      403,
+    );
+  }
+
+  const recipients = safeParseRecipients(row.recipients);
+  let digest: HrReportDigestData | null = null;
+  let computeError: string | null = null;
+  try {
+    digest = await buildDigestData(row, now);
+  } catch (error) {
+    computeError = error instanceof Error ? error.message : 'Digest computation failed';
+  }
+
+  let outcome: SendNowOutcome;
+  let email: { success: boolean; error?: string } = { success: false };
+  let notificationId: string | null = null;
+
+  if (!digest) {
+    outcome = 'SKIPPED';
+    const reason = computeError ?? 'Report returned no data for scope.';
+    await db.hrReportSchedule.update({
+      where: { id: row.id },
+      data: { lastStatus: 'SKIPPED', lastError: reason.slice(0, 250) },
+    });
+    email = { success: false, error: reason };
+    notificationId = await writeDigestNotification({
+      scheduleId: row.id,
+      reportKey: row.reportKey,
+      storeId: row.storeId,
+      recipientUserId: actor.id,
+      digest: null,
+      email: { success: false, error: reason },
+      manual: true,
+    });
+  } else {
+    email = await sendEmail({
+      to: recipients,
+      subject: `${digest.reportLabel} digest — ${digest.organizationName} (${digest.periodLabel})`,
+      html: hrReportDigestTemplate(digest),
+      text: hrReportDigestText(digest),
+      type: 'HR_REPORT_DIGEST',
+      metadata: { scheduleId: row.id, reportKey: row.reportKey, manual: true, actorId: actor.id },
+    });
+    if (email.success) {
+      outcome = 'SENT';
+      await db.hrReportSchedule.update({
+        where: { id: row.id },
+        data: { lastStatus: 'SENT', lastError: null },
+      });
+    } else {
+      outcome = 'FAILED';
+      await db.hrReportSchedule.update({
+        where: { id: row.id },
+        data: { lastStatus: 'FAILED', lastError: (email.error ?? 'Email send failed').slice(0, 250) },
+      });
+    }
+    notificationId = await writeDigestNotification({
+      scheduleId: row.id,
+      reportKey: row.reportKey,
+      storeId: row.storeId,
+      recipientUserId: actor.id,
+      digest,
+      email,
+      manual: true,
+    });
+  }
+
+  await hrAudit({
+    actorId: actor.id,
+    actorRole: actor.role,
+    action: 'EXECUTE',
+    resourceType: HrEntityType.REPORT_SCHEDULE,
+    resourceId: row.id,
+    storeId: row.storeId ?? undefined,
+    metadata: {
+      manualSend: true,
+      reportKey: row.reportKey,
+      outcome,
+      recipientCount: recipients.length,
+      notificationId,
+    },
+  }).catch(() => {});
+
+  return {
+    outcome,
+    schedule: toScheduleView({ ...row, lastStatus: outcome === 'FAILED' ? 'FAILED' : outcome === 'SENT' ? 'SENT' : 'SKIPPED', lastError: email.error ?? null }),
+    digestSummary: digest
+      ? {
+          reportLabel: digest.reportLabel,
+          periodLabel: digest.periodLabel,
+          scopeLabel: digest.scopeLabel,
+          headlines: (digest.headline ?? []).map((h) => `${h.label}: ${h.value}`),
+        }
+      : null,
+    email,
+    notificationId,
+  };
 }

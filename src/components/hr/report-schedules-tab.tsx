@@ -25,10 +25,12 @@ import {
   CalendarDays,
   CalendarRange,
   CalendarSync,
+  Loader2,
   Mail,
   Pause,
   Play,
   PlusCircle,
+  Send,
   Trash2,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, formatDate } from '@/components/hr/self-service-ui';
@@ -95,6 +97,9 @@ export function ReportSchedulesTab() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  // v2.24.0: manual "send now" - per-row busy marker + inline result banner.
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sendNote, setSendNote] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
 
   const [form, setForm] = useState({
     reportKey: 'headcount',
@@ -182,6 +187,45 @@ export function ReportSchedulesTab() {
     }
   };
 
+  // v2.24.0: send this schedule's digest immediately (cadence untouched -
+  // the next scheduled slot stays where it was). The actor always receives
+  // a notification-center copy with the digest headline + delivery status.
+  const sendNow = async (s: ScheduleRow) => {
+    setSendingId(s.id);
+    setError('');
+    setSendNote(null);
+    try {
+      const res = await apiSend<{
+        outcome: 'SENT' | 'FAILED' | 'SKIPPED';
+        digestSummary: { reportLabel: string; periodLabel: string; scopeLabel: string; headlines: string[] } | null;
+        email: { success: boolean; error?: string };
+        notificationId: string | null;
+      }>(`/api/hr/reports/schedules/${s.id}/send-now`, 'POST');
+      const label = res.digestSummary?.reportLabel ?? s.reportLabel;
+      if (res.outcome === 'SENT') {
+        setSendNote({
+          tone: 'ok',
+          text: `${label} digest sent to ${s.recipients.length} recipient(s) - email delivered. A copy is in your notification center.`,
+        });
+      } else if (res.outcome === 'SKIPPED') {
+        setSendNote({
+          tone: 'warn',
+          text: `${label} digest not sent: ${res.email.error ?? 'no data for the period'}. A copy is in your notification center.`,
+        });
+      } else {
+        setSendNote({
+          tone: 'warn',
+          text: `${label} digest email failed (${res.email.error ?? 'delivery error'}) - the aggregate copy is in your notification center.`,
+        });
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send the digest.');
+    } finally {
+      setSendingId(null);
+    }
+  };
+
   const summary = useMemo(() => {
     const list = rows ?? [];
     return {
@@ -194,6 +238,30 @@ export function ReportSchedulesTab() {
   return (
     <div className="space-y-4">
       {error ? <ErrorNote message={error} /> : null}
+
+      {sendNote ? (
+        <div
+          role="status"
+          className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+            sendNote.tone === 'ok'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+              : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+          }`}
+        >
+          <span className="flex items-start gap-2">
+            <Send className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            {sendNote.text}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSendNote(null)}
+            aria-label="Dismiss send result"
+            className="rounded p-0.5 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -292,7 +360,12 @@ export function ReportSchedulesTab() {
                         <Badge variant="outline" className={`px-1 py-0 text-[10px] ${LAST_STATUS_STYLES[s.lastStatus] ?? ''}`}>
                           {s.lastStatus}
                         </Badge>
-                        <span className="text-muted-foreground">{s.lastRunAt ? formatDate(s.lastRunAt) : '—'}</span>
+                        <span
+                          className="text-muted-foreground"
+                          title="Date of the last scheduled fire. Manual sends update the status but never move the cadence."
+                        >
+                          {s.lastRunAt ? formatDate(s.lastRunAt) : '—'}
+                        </span>
                       </span>
                       {s.lastError ? (
                         <p className="mt-1 line-clamp-2 text-rose-600 dark:text-rose-400" title={s.lastError}>
@@ -305,11 +378,30 @@ export function ReportSchedulesTab() {
                   )}
                 </div>
                 <div className="flex items-center justify-end gap-1.5 border-t pt-2">
+                  {/* v2.24.0: manual on-demand send (cadence untouched). */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void sendNow(s)}
+                    disabled={busy || sendingId !== null}
+                    className="h-7 gap-1 px-2 text-xs text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+                    aria-label={`Send ${s.reportLabel} digest now`}
+                  >
+                    {sendingId === s.id ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Sending…
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-3 w-3" aria-hidden /> Send now
+                      </>
+                    )}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => void toggleActive(s)}
-                    disabled={busy}
+                    disabled={busy || sendingId !== null}
                     className="h-7 gap-1 px-2 text-xs"
                     aria-label={s.active ? `Pause ${s.reportLabel} schedule` : `Resume ${s.reportLabel} schedule`}
                   >
@@ -327,7 +419,7 @@ export function ReportSchedulesTab() {
                     size="sm"
                     variant="ghost"
                     onClick={() => void remove(s)}
-                    disabled={busy}
+                    disabled={busy || sendingId !== null}
                     className="h-7 gap-1 px-2 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400"
                     aria-label={`Delete ${s.reportLabel} schedule`}
                   >

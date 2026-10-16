@@ -1,17 +1,24 @@
-'use client';
+// Server-rendered view for the self-service home (v2.24.0).
+//
+// Pure presentational - no hooks, no client APIs - so the dashboard HTML
+// streams straight from the RSC render and the LCP paints with real content
+// (previously: skeleton -> hydrate -> fetch -> re-render gated the LCP
+// behind ~2 extra seconds on the Lighthouse mobile CPU).
+//
+// Timezone note: attendance clock-in/out render with an EXPLICIT
+// Africa/Nairobi timezone. The old client version formatted with the
+// viewer's local zone, which silently drifted for anyone whose device
+// wasn't on Kenyan time; the product is Kenya-only, so pinning the zone is
+// both a fix and a consistency guarantee between server and client renders.
 
-// MBUMAH HARDWARE POS - /employees/me dashboard (v2.19.0)
-// Mobile-first self-service home: profile, payslip peek, leave balances,
-// today's attendance, and goal progress. Caches the last payload to
-// localStorage so the page still renders when the device is offline.
-
-import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowRight, CalendarClock, Palmtree, WifiOff, Wallet, Target, UserRound } from 'lucide-react';
-import { apiGet, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatKes, formatDate } from '@/components/hr/self-service-ui';
+import { ArrowRight, CalendarClock, Palmtree, Wallet, Target, UserRound } from 'lucide-react';
+import { EmptyState, ProgressMeter, StatusBadge } from '@/components/hr/self-service-ui';
+// v2.24.0: formatters come from the DIRECTIVE-FREE module - a server
+// component may not call functions exported from a 'use client' module.
+import { formatKes, formatDate } from '@/components/hr/self-service-format';
 
-interface DashboardDto {
+export interface HomeDashboardDto {
   profile: {
     firstName: string;
     lastName: string;
@@ -31,90 +38,24 @@ interface DashboardDto {
   goals: Array<{ id: string; title: string; metricSource: string; status: string; targetValue: string; currentValue: string; progressPct: number; dueDate: string | null }>;
 }
 
-const CACHE_KEY = 'mbt_self_dashboard_cache_v1';
+const EAT = 'Africa/Nairobi';
 
-function readCache(): DashboardDto | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { at: number; data: DashboardDto };
-    return parsed.data ?? null;
-  } catch {
-    return null;
-  }
+function eatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-KE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: EAT,
+  });
 }
 
-export default function EmployeeHome() {
-  const [data, setData] = useState<DashboardDto | null>(null);
-  const [offline, setOffline] = useState(false);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    try {
-      const d = await apiGet<DashboardDto>('/api/self-service/me');
-      setData(d);
-      setOffline(false);
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: d }));
-      } catch {
-        /* storage full / private mode - ignore */
-      }
-    } catch (e) {
-      const cached = readCache();
-      if (cached) {
-        setData(cached);
-        setOffline(true);
-      } else {
-        setError(e instanceof Error ? e.message : 'Could not load your dashboard.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Hydration-safe cache hydration: apply the cached dashboard post-paint
-    // so the first client render matches the server HTML.
-    const cached = readCache();
-    if (cached) {
-      setData(cached);
-      setLoading(false);
-    }
-    void load();
-  }, [load]);
-
-  if (loading && !data) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-28 w-full rounded-2xl" />
-        <div className="grid grid-cols-2 gap-3">
-          <Skeleton className="h-24 rounded-2xl" />
-          <Skeleton className="h-24 rounded-2xl" />
-        </div>
-        <Skeleton className="h-40 w-full rounded-2xl" />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return <ErrorNote message={error || 'No dashboard data available.'} />;
-  }
-
+export function HomeView({ data }: { data: HomeDashboardDto }) {
   const { profile } = data;
   const initials = `${profile.firstName?.[0] ?? ''}${profile.lastName?.[0] ?? ''}`.toUpperCase();
   const primaryLeave = data.leave.balances[0];
   const latestPayslip = data.payslips[0];
 
   return (
-    <div className="space-y-4">
-      {offline ? (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300">
-          <WifiOff className="h-4 w-4" aria-hidden /> Offline — showing your last synced dashboard.
-        </div>
-      ) : null}
-      {error ? <ErrorNote message={error} /> : null}
-
+    <div className="space-y-4" data-testid="selfservice-home">
       {/* Profile hero */}
       <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 p-[1px] shadow-sm">
         <div className="rounded-2xl bg-card p-4 sm:p-5">
@@ -185,13 +126,13 @@ export default function EmployeeHome() {
             <div className="rounded-xl bg-muted/60 p-2.5">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">In</p>
               <p className="text-sm font-semibold">
-                {data.attendanceToday.checkIn ? new Date(data.attendanceToday.checkIn).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                {data.attendanceToday.checkIn ? eatTime(data.attendanceToday.checkIn) : '—'}
               </p>
             </div>
             <div className="rounded-xl bg-muted/60 p-2.5">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Out</p>
               <p className="text-sm font-semibold">
-                {data.attendanceToday.checkOut ? new Date(data.attendanceToday.checkOut).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                {data.attendanceToday.checkOut ? eatTime(data.attendanceToday.checkOut) : '—'}
               </p>
             </div>
             <div className="rounded-xl bg-muted/60 p-2.5">

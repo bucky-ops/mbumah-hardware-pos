@@ -27,6 +27,8 @@
 // proxy is a convenience, never the security boundary.
 
 import { type NextRequest } from 'next/server';
+// v2.24.0: cookies() for the RSC session path (getSessionFromCookies).
+import { cookies } from 'next/headers';
 import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent, hasPermission, type UserRole } from '@/lib/types';
@@ -107,6 +109,56 @@ export async function getSessionFromRequest(
   // resolving their session yields null → every guarded route answers 401.
   // The durable record of WHY is the SecurityEvent(ACCOUNT_LOCKED) row + the
   // SUPER_ADMIN notifications written at lock time.
+  if (isAccountLocked(session.user.id)) return null;
+
+  return {
+    userId: session.user.id,
+    email: session.user.email,
+    role: session.user.role,
+    storeId: session.user.storeId,
+    organizationId: session.user.organizationId,
+  };
+}
+
+/**
+ * v2.24.0: React Server Component session resolution (cookies() path).
+ *
+ * Same lookup semantics as getSessionFromRequest (Session row by mbt_token,
+ * active user, not expired, not abuse-locked) but reads the cookie via
+ * next/headers so SERVER COMPONENTS can render session-scoped HTML directly -
+ * e.g. the /employees/me home page now server-renders its dashboard payload
+ * (docs/hr/self-service.md Lighthouse remediation) instead of skeleton ->
+ * hydrate -> fetch -> re-render, which gated LCP behind ~2 extra seconds.
+ *
+ * There is no Authorization header in an RSC render, so only the cookie
+ * fallback applies here (the SPA sets mbt_token on login; Bearer-only
+ * clients keep using the API routes).
+ */
+export async function getSessionFromCookies(): Promise<AuthSession | null> {
+  const token = (await cookies()).get('mbt_token')?.value ?? null;
+  if (!token || token.trim().length === 0) return null;
+
+  const session = await db.session.findUnique({
+    where: { token },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          storeId: true,
+          organizationId: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (!session || !session.user || !session.user.isActive) return null;
+  if (session.expiresAt < new Date()) {
+    await db.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
   if (isAccountLocked(session.user.id)) return null;
 
   return {

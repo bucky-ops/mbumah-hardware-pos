@@ -18,10 +18,19 @@ export async function apiGet<T>(url: string): Promise<T> {
 }
 
 export async function apiSend<T>(url: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
+  // v2.24.0 QA fix: state-changing requests MUST always declare
+  // Content-Type: application/json — the proxy's validateContentType
+  // rejects a POST/PATCH with NO Content-Type (415 "Content-Type must be
+  // application/json"), and this helper used to omit the header whenever
+  // body was undefined. That silently broke every bodyless POST made
+  // through this helper (goal acknowledge, goal recompute, digest
+  // send-now). The main lib/api request() wrapper already always sets the
+  // header; this lean helper now matches that contract. DELETE is exempt
+  // server-side, but the header is harmless there too.
   const res = await fetch(url, {
     method,
     credentials: 'include',
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: T; error?: string; code?: string };
@@ -154,15 +163,8 @@ export function ErrorNote({ message }: { message: string }) {
   );
 }
 
-export function formatKes(value: string | number): string {
-  const n = typeof value === 'string' ? Number(value) : value;
-  if (!Number.isFinite(n)) return 'KSh 0';
-  return `KSh ${n.toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
-}
-
-export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
-}
+// v2.24.0: formatKes/formatDate moved to self-service-format.ts (pure, no
+// directive) so SERVER components can call them too - the RSC home page
+// must format without crossing the client boundary. Re-exported here so
+// every existing client import keeps working unchanged.
+export { formatKes, formatDate } from './self-service-format';
