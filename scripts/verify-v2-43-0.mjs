@@ -73,6 +73,9 @@ const P = read('src/app/(selfservice)/employees/me/leave/leave-view.tsx') ?? '';
 check('portal cards preview image attachments inline', P.includes('alt="Attached document preview"') && P.includes("r.attachmentUrl.startsWith('data:image/')"));
 
 console.log('== Governance untouched ==');
+const DBT = read('src/lib/db.ts') ?? '';
+check('employeeLeaveBalance NOT tenant-scoped (v2.43.0 QA fix: no storeId column)', !DBT.split('const STORE_SCOPED_MODELS = new Set<string>([')[1]?.split(']);')[0]?.replace(/\/\/.*$/gm, '').includes('employeeLeaveBalance'));
+check('exclusion documented inline', DBT.includes('employeeLeaveBalance is ALSO intentionally NOT here'));
 const LEAVES = read('src/app/api/leaves/route.ts') ?? '';
 check('v2.38.0 on-behalf authz intact', LEAVES.includes('You can only file leave requests for yourself.'));
 check('v2.33.0 CANCEL authz intact', LEAVES.includes('You can only cancel your own leave requests.'));

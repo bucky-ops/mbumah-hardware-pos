@@ -298,11 +298,19 @@ const STORE_SCOPED_MODELS = new Set<string>([
   // Payroll & HR (Phase 1 - ERP enhancement)
   // LeaveType is intentionally NOT here - it's organisation-wide policy,
   // not tenant-scoped data.
+  // employeeLeaveBalance is ALSO intentionally NOT here (v2.43.0 QA fix):
+  // the model carries NO storeId column - tenancy flows through the
+  // employee relation - so injecting one crashed EVERY store-bound
+  // (non-SUPER_ADMIN) session with PrismaClientValidationError ("Unknown
+  // argument `storeId`"): the desk's ?balances=true rail, and the
+  // balance guard / recompute inside edit + decide. Admin-only QA never
+  // saw it because SUPER_ADMIN sessions skip tenant injection. Any store
+  // isolation for balances is enforced by the routes themselves, which
+  // always derive employeeIds from store-scoped employee queries.
   "employee",
   "payrollPeriod",
   "payrollRun",
   "payrollDetail",
-  "employeeLeaveBalance",
   "leaveRequest",
   "attendanceRecord",
   // v2.1.0 Accounting module (ISO 9001 / ISO 27001)
