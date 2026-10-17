@@ -73,7 +73,7 @@ import {
   digestOrgAndScope,
   type DigestMeta,
 } from '@/lib/hr/report-schedule-service';
-import { digestToCsv } from '@/lib/hr/digest-csv';
+import { digestToCsv, tableToCsv } from '@/lib/hr/digest-csv';
 
 const SESSION = {
   userId: 'user-owner-1',
@@ -319,5 +319,87 @@ describe('digestToCsv on an AD_HOC payload', () => {
       expect(text.endsWith('\r\n')).toBe(true);
       expect(csv.byteSize).toBe(Buffer.byteLength(text, 'utf8'));
     });
+  });
+});
+
+// ── v2.58.0: the table section ──────────────────────────────────────────────
+describe('parseExportQuery: table section param (v2.58.0)', () => {
+  it('defaults to the full digest file when no table param is present', () => {
+    const ok = parseExportQuery(new URLSearchParams({ report: 'absence', from: '2026-01-01', to: '2026-01-31' }));
+    expect(ok).toMatchObject({ ok: true, reportKey: 'absence', section: 'digest' });
+  });
+
+  it('accepts table=1 and table=true as the table section', () => {
+    expect(
+      parseExportQuery(new URLSearchParams({ report: 'absence', from: '2026-01-01', to: '2026-01-31', table: '1' })),
+    ).toMatchObject({ ok: true, section: 'table' });
+    expect(
+      parseExportQuery(new URLSearchParams({ report: 'absence', from: '2026-01-01', to: '2026-01-31', table: 'true' })),
+    ).toMatchObject({ ok: true, section: 'table' });
+  });
+
+  it('refuses any other table value honestly (INVALID_SECTION)', () => {
+    const bad = parseExportQuery(new URLSearchParams({ report: 'absence', from: '2026-01-01', to: '2026-01-31', table: 'summary' }));
+    expect(bad).toMatchObject({ ok: false, status: 400, code: 'INVALID_SECTION' });
+  });
+
+  it('carries the section through the leave-utilisation year branch too', () => {
+    const ok = parseExportQuery(new URLSearchParams({ report: 'leave-utilisation', year: '2026', table: '1' }));
+    expect(ok).toMatchObject({ ok: true, reportKey: 'leave-utilisation', year: 2026, section: 'table', from: null, to: null });
+  });
+});
+
+// ── v2.58.0: tableToCsv — the governed file, table section only ────────────
+describe('tableToCsv: the digest file minus the Summary block', () => {
+  it('keeps the header block + table, drops Summary, and suffixes the filename with -table', () => {
+    headcountReport.mockResolvedValue(HEADCOUNT_ROW);
+    const now = new Date('2026-10-17T04:00:00.000Z');
+    return buildDigestPayload(SESSION as never, 'headcount', { from: new Date('2026-10-01T00:00:00.000Z'), to: new Date('2026-10-15T23:59:59.999Z') }, META, now).then((d) => {
+      expect(d).not.toBeNull();
+      const csv = d ? tableToCsv(d, now) : null;
+      if (!d || !csv) throw new Error('expected a digest payload and a table CSV for a populated headcount report');
+      expect(csv.filename).toBe('mbumah-headcount-2026-10-01_2026-10-15-table.csv');
+      const text = Buffer.from(csv.content, 'base64').toString('utf8');
+      expect(text).toContain('Report,Headcount');
+      expect(text).toContain('Period,2026-10-01 → 2026-10-15');
+      expect(text).toContain('By employment type');
+      // the Summary block is GONE — the table section is the file's payload
+      expect(text).not.toContain('Summary');
+      expect(text).not.toContain('Metric,Value');
+      expect(text.endsWith('\r\n')).toBe(true);
+      expect(csv.byteSize).toBe(Buffer.byteLength(text, 'utf8'));
+    });
+  });
+
+  it('returns null for a digest without a table (the route answers NO_TABLE_DATA)', () => {
+    const csv = tableToCsv({
+      reportLabel: 'Headcount',
+      organizationName: 'MBUMAH HARDWARE',
+      scopeLabel: 'All branches',
+      periodLabel: '2026-10-01 → 2026-10-15',
+      frequencyLabel: 'AD_HOC',
+      headline: [{ label: 'Active headcount', value: '5' }],
+      table: undefined,
+    }, new Date('2026-10-17T04:00:00.000Z'));
+    expect(csv).toBeNull();
+  });
+
+  it('guards a table cell that starts with a formula trigger (OWASP)', () => {
+    const csv = tableToCsv({
+      reportLabel: 'Absence',
+      organizationName: 'MBUMAH HARDWARE',
+      scopeLabel: 'All branches',
+      periodLabel: '2026-10-01 → 2026-10-31',
+      frequencyLabel: 'AD_HOC',
+      headline: [],
+      table: {
+        caption: 'Absence by status',
+        columns: ['Status', 'Days'],
+        rows: [['=SUM(A1:A2)', '12']],
+      },
+    }, new Date('2026-10-17T04:00:00.000Z'));
+    expect(csv).not.toBeNull();
+    const text = csv ? Buffer.from(csv.content, 'base64').toString('utf8') : '';
+    expect(text).toContain("'=SUM(A1:A2)");
   });
 });

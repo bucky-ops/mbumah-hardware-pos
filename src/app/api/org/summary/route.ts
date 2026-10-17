@@ -9,7 +9,7 @@
 // aggregates). Branch-only roles must never see organization-wide data
 // (spec: "Do not expose organization-wide data to branch-only users").
 
-import { db, runWithoutTenant } from '@/lib/db';
+import { rawDb, runWithoutTenant } from '@/lib/db';
 import { requireAuth, getSessionFromRequest } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { hrSummaryForOrgConsole, hrPerStoreForOrgConsole } from '@/lib/hr/reports';
@@ -28,10 +28,18 @@ function startOfToday(): Date {
 }
 
 async function orgSummaryHandler(request: NextRequest): Promise<Response> {
+  // v2.58.0: the org console aggregates ALL stores by contract — every read
+// below is org-wide (per-store loops / cross-store groupBys) guarded to
+// ORG_ROLES. The reads go through rawDb (the un-intercepted client) so the
+// v2.57.0 leak class (a runWithoutTenant bypass silently ignored inside a
+// Next.js request, AND-narrowing the query to the browsing store) can never
+// shrink an org total to one branch's numbers for a store-scoped viewer.
+// Read-only route: rawDb's missing immutability guard is irrelevant here.
+
   return runWithoutTenant(async () => {
     const today = startOfToday();
 
-    const stores = await db.store.findMany({
+    const stores = await rawDb.store.findMany({
       where: { status: { not: 'ARCHIVED' } },
       orderBy: { name: 'asc' },
       select: {
@@ -50,7 +58,7 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
     const [salesByStore, lowStockByStore, overdueRentalsByStore, debtByStore, pendingMpesaByStore, recentAudit] =
       await Promise.all([
         // Today's revenue per store (SALE type, settled payment statuses)
-        db.salesTransaction.groupBy({
+        rawDb.salesTransaction.groupBy({
           by: ['storeId'],
           where: {
             createdAt: { gte: today },
@@ -61,32 +69,32 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
           _count: { _all: true },
         }),
         // Low stock per store (at or below reorder level)
-        db.product.groupBy({
+        rawDb.product.groupBy({
           by: ['storeId'],
-          where: { quantityInStock: { lte: db.product.fields.reorderLevel }, isActive: true },
+          where: { quantityInStock: { lte: rawDb.product.fields.reorderLevel }, isActive: true },
           _count: { _all: true },
         }),
         // Overdue rentals per store
-        db.equipmentRental.groupBy({
+        rawDb.equipmentRental.groupBy({
           by: ['storeId'],
           where: { status: { in: ['ACTIVE', 'OVERDUE'] }, expectedReturnDate: { lt: new Date() } },
           _count: { _all: true },
         }),
         // Outstanding debt balances per store
-        db.debtLedger.groupBy({
+        rawDb.debtLedger.groupBy({
           by: ['storeId'],
           where: { status: { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] }, balance: { gt: 0 } },
           _sum: { balance: true },
           _count: { _all: true },
         }),
         // Pending M-Pesa payments per store
-        db.mpesaTransaction.groupBy({
+        rawDb.mpesaTransaction.groupBy({
           by: ['storeId'],
           where: { status: 'PENDING' },
           _count: { _all: true },
         }),
         // Recent audit events (org-wide, latest 10; AuditLog orders by timestamp)
-        db.auditLog.findMany({
+        rawDb.auditLog.findMany({
           orderBy: { timestamp: 'desc' },
           take: 10,
           select: {

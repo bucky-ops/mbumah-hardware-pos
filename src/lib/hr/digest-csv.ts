@@ -148,3 +148,65 @@ export function formatCsvSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
+
+// ── the table-section builder (v2.58.0) ────────────────────────────────────
+
+/**
+ * Build the TABLE-SECTION CSV for a report — the same governed file a digest
+ * email carries (header block, injection guard, honest filename), minus the
+ * Summary block, so a per-table "CSV" button on a report tab delivers the
+ * table the user is LOOKING at in the exact shape every other filing file
+ * uses. One builder on the server means a downloaded table can never
+ * disagree with the email, and the OWASP formula-injection guard applies to
+ * ad-hoc downloads too (the client-side builder it replaces had neither).
+ *
+ * Layout:
+ *   Report,<label>
+ *   Organization,<org>
+ *   Scope,<scope>
+ *   Period,<period>
+ *   Frequency,<frequency>
+ *   Generated (UTC),<iso timestamp>
+ *   (blank)
+ *   <table caption>
+ *   <column headers>
+ *   <table rows>
+ *
+ * Returns null when the digest carries no table (nothing to file at table
+ * granularity) — the route turns that into an honest 404 NO_TABLE_DATA.
+ */
+export function tableToCsv(
+  digest: HrReportDigestData,
+  generatedAt: Date = new Date(),
+): DigestCsvAttachment | null {
+  const table = digest.table;
+  if (!table || table.rows.length === 0) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  lines.push(csvRow(['Report', digest.reportLabel]));
+  lines.push(csvRow(['Organization', digest.organizationName]));
+  lines.push(csvRow(['Scope', digest.scopeLabel]));
+  lines.push(csvRow(['Period', digest.periodLabel]));
+  lines.push(csvRow(['Frequency', digest.frequencyLabel]));
+  lines.push(csvRow(['Generated (UTC)', generatedAt.toISOString()]));
+  lines.push('');
+  lines.push(csvRow([table.caption]));
+  lines.push(csvRow(table.columns));
+  for (const row of table.rows) {
+    lines.push(csvRow(row));
+  }
+
+  // RFC-4180: CRLF between records, trailing CRLF at end of file.
+  const csv = lines.join('\r\n') + '\r\n';
+  const byteSize = Buffer.byteLength(csv, 'utf8');
+  const period = periodFilenameFragment(digest.periodLabel) || 'period';
+  const filename = `mbumah-${slug(digest.reportLabel)}-${period}-table.csv`;
+
+  return {
+    filename,
+    content: Buffer.from(csv, 'utf8').toString('base64'),
+    byteSize,
+  };
+}

@@ -28,7 +28,7 @@ import {
   digestOrgAndScope,
   type HrScheduleReportKey,
 } from '@/lib/hr/report-schedule-service';
-import { digestToCsv } from '@/lib/hr/digest-csv';
+import { digestToCsv, tableToCsv } from '@/lib/hr/digest-csv';
 import { resolveReportScope, validateReportStore } from '@/lib/hr/reports';
 import { hrAudit, HrEntityType } from '@/lib/hr/audit';
 import { toErrorResponse } from '@/lib/hr/stage-g-shared';
@@ -45,10 +45,14 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * Pure query parsing/validation for the export endpoint (unit-tested).
  * Returns either a ready-to-compute request or a structured client error.
+ * v2.58.0: `section` — 'digest' (full file: header + Summary + table, the
+ * default) or 'table' (header + the report's single table, no Summary — the
+ * per-table CSV buttons on the report tabs deliver the SAME governed file,
+ * table-only).
  */
 export function parseExportQuery(
   params: URLSearchParams,
-): { ok: true; reportKey: HrScheduleReportKey; from: string | null; to: string | null; year: number | null; storeId: string | null } | { ok: false; status: number; code: string; error: string } {
+): { ok: true; reportKey: HrScheduleReportKey; from: string | null; to: string | null; year: number | null; storeId: string | null; section: 'digest' | 'table' } | { ok: false; status: number; code: string; error: string } {
   const reportRaw = (params.get('report') ?? '').trim();
   if (!reportRaw) {
     return { ok: false, status: 400, code: 'MISSING_REPORT', error: 'The report query parameter is required.' };
@@ -62,6 +66,17 @@ export function parseExportQuery(
     };
   }
   const reportKey = reportRaw as HrScheduleReportKey;
+
+  // v2.58.0: the section param is boolean-by-presence — any value other than
+  // '1'/'true' is refused honestly instead of silently meaning 'digest'.
+  const tableRaw = (params.get('table') ?? '').trim();
+  let section: 'digest' | 'table' = 'digest';
+  if (tableRaw) {
+    if (tableRaw !== '1' && tableRaw.toLowerCase() !== 'true') {
+      return { ok: false, status: 400, code: 'INVALID_SECTION', error: 'table must be 1 or true (the table section of the governed digest file).' };
+    }
+    section = 'table';
+  }
 
   const from = (params.get('from') ?? '').trim() || null;
   const to = (params.get('to') ?? '').trim() || null;
@@ -78,7 +93,7 @@ export function parseExportQuery(
       }
       year = Number(yearRaw);
     }
-    return { ok: true, reportKey, from: null, to: null, year, storeId: (params.get('storeId') ?? '').trim() || null };
+    return { ok: true, reportKey, from: null, to: null, year, storeId: (params.get('storeId') ?? '').trim() || null, section };
   }
 
   if (!from || !to) {
@@ -109,7 +124,7 @@ export function parseExportQuery(
       error: `The export period may span at most ${MAX_EXPORT_SPAN_DAYS} days.`,
     };
   }
-  return { ok: true, reportKey, from, to, year: null, storeId: (params.get('storeId') ?? '').trim() || null };
+  return { ok: true, reportKey, from, to, year: null, storeId: (params.get('storeId') ?? '').trim() || null, section };
 }
 
 export const GET = hrGuard('hr.report.branch', REPORT_ROLES)(async (request, session) => {
@@ -162,10 +177,10 @@ export const GET = hrGuard('hr.report.branch', REPORT_ROLES)(async (request, ses
       );
     }
 
-    const csv = digestToCsv(digest, now);
+    const csv = parsed.section === 'table' ? tableToCsv(digest, now) : digestToCsv(digest, now);
     if (!csv) {
       return Response.json(
-        { success: false, error: 'No report data for this period.', code: 'NO_REPORT_DATA' },
+        { success: false, error: parsed.section === 'table' ? 'This report has no table section for this period.' : 'No report data for this period.', code: parsed.section === 'table' ? 'NO_TABLE_DATA' : 'NO_REPORT_DATA' },
         { status: 404 },
       );
     }
@@ -184,6 +199,8 @@ export const GET = hrGuard('hr.report.branch', REPORT_ROLES)(async (request, ses
         year: parsed.year,
         scope: scopeLabel,
         format: 'csv',
+        // v2.58.0: which section of the governed file was filed.
+        section: parsed.section,
         byteSize: csv.byteSize,
         channel: 'ad_hoc_download',
       },
