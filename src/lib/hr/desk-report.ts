@@ -4,6 +4,12 @@
 // LeaveReviewVisit ledger over an EXPLICIT window (7, 14 or 30 EAT calendar
 // days, today included), optionally narrowed to one branch.
 //
+// v2.71.0: the report opens its ledger — the same one-pass derivation now
+// also produces the visit-scale LEDGER (every visit in the window, newest
+// first), and the view drills into any reviewer's own rows without a second
+// fetch: the roll-up and the drill-down can never disagree because both come
+// from the same read.
+//
 // WHY: the morning-note family (v2.67.0 strip, v2.68.0 bell) tells the org
 // what happened YESTERDAY; a filing desk needs more than yesterday. The
 // report answers the window questions in one printable page — totals, a
@@ -120,6 +126,8 @@ export function deskReportAvatarHue(name: string): string {
 
 /** One ledger row as the route selects it (visit-scale, already joined). */
 export interface DeskReportVisitRow {
+  /** The visit's own id — the drill-down ledger keys its rows with it. */
+  id: string;
   visitedByName: string;
   createdAt: Date;
   clearedRecheck: boolean;
@@ -151,6 +159,28 @@ export interface DeskReportReviewerRow {
   lastVisitAt: string | null;
 }
 
+/**
+ * One visit in the drill-down ledger (v2.71.0) — a compact, UI-ready mirror
+ * of a DeskReportVisitRow: the same facts the roll-up aggregates, per visit,
+ * newest first. The view filters this by reviewer; the CSV ignores it (the
+ * filed format stays the roll-up).
+ */
+export interface DeskReportVisitEntry {
+  id: string;
+  /** ISO instant of the visit. */
+  at: string;
+  /** EAT wall date key ('YYYY-MM-DD') — the desk's calendar. */
+  dayKey: string;
+  storeId: string;
+  storeName: string;
+  reviewer: string;
+  employeeName: string;
+  leaveTypeName: string;
+  status: string;
+  cleared: boolean;
+  requestId: string;
+}
+
 export interface DeskReportSeriesPoint {
   key: string;
   label: string;
@@ -175,6 +205,8 @@ export interface DeskReportData {
   reviewers: DeskReportReviewerRow[];
   series: DeskReportSeriesPoint[];
   topRequests: DeskReportRequestRow[];
+  /** v2.71.0 — every visit in the window, newest first (the drill-down). */
+  ledger: DeskReportVisitEntry[];
 }
 
 /**
@@ -216,6 +248,11 @@ export function deriveDeskReport(
     status: string; visits: number; last: Date | null;
   }>();
 
+  // v2.71.0: the drill-down ledger grows in the SAME pass — one row in, one
+  // entry out (plus the aggregates), so the ledger and the roll-up are
+  // derived from the same scan by construction.
+  const ledger: DeskReportVisitEntry[] = [];
+
   let clears = 0;
   for (const row of rows) {
     if (row.clearedRecheck) clears += 1;
@@ -228,6 +265,19 @@ export function deriveDeskReport(
 
     const storeName = row.leaveRequest.store?.name ?? row.leaveRequest.storeId;
     const storeId = row.leaveRequest.storeId;
+    ledger.push({
+      id: row.id,
+      at: row.createdAt.toISOString(),
+      dayKey,
+      storeId,
+      storeName,
+      reviewer: row.visitedByName,
+      employeeName: `${row.leaveRequest.employee.firstName} ${row.leaveRequest.employee.lastName}`,
+      leaveTypeName: row.leaveRequest.leaveType?.name ?? 'Leave',
+      status: row.leaveRequest.status,
+      cleared: row.clearedRecheck,
+      requestId: row.leaveRequestId,
+    });
     const branch = branchAgg.get(storeId) ?? {
       storeName, visits: 0, clears: 0, reviewers: new Set<string>(), requests: new Set<string>(), last: null as Date | null,
     };
@@ -306,6 +356,10 @@ export function deriveDeskReport(
     )
     .slice(0, DESK_REPORT_TOP_REQUESTS_LIMIT);
 
+  // Newest first, deterministic on its own (the pure module never relies on
+  // db ordering): latest instant wins, the id breaks exact ties.
+  ledger.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+
   return {
     window: {
       start: win.start.toISOString(),
@@ -323,7 +377,31 @@ export function deriveDeskReport(
     reviewers,
     series,
     topRequests,
+    ledger,
   };
+}
+
+// ── the drill-down (v2.71.0) ────────────────────────────────────────────────
+
+/**
+ * The reviewer drill-down: one reviewer's own visits from the ledger, in the
+ * ledger's order (newest first — the filter preserves it). The view calls
+ * this with the payload's ledger; an unknown reviewer derives to an honest
+ * empty list, never an error.
+ */
+export function deskReportReviewerLedger(
+  ledger: readonly DeskReportVisitEntry[],
+  reviewer: string,
+): DeskReportVisitEntry[] {
+  return ledger.filter((entry) => entry.reviewer === reviewer);
+}
+
+/**
+ * '10:00' — the EAT wall clock time of a visit, for the drill-down rows.
+ * The desk reads Nairobi time; a UTC slice would lie by three hours.
+ */
+export function deskReportVisitTime(at: string): string {
+  return new Date(new Date(at).getTime() + EAT_OFFSET_MS).toISOString().slice(11, 16);
 }
 
 // ── the CSV builder (v2.70.0) ───────────────────────────────────────────────

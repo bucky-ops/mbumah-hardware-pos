@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, BadgeCheck, Building2, CalendarRange, FileSpreadsheet, FileText, Printer,
+  ArrowLeft, BadgeCheck, Building2, CalendarRange, ChevronDown, FileSpreadsheet, FileText, Printer,
   RefreshCw, Sunrise, Users,
 } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
@@ -33,7 +33,10 @@ import { num, timeAgo } from '@/components/org/primitives';
 import {
   DESK_REPORT_WINDOW_DAYS,
   deskReportAvatarHue,
+  deskReportDayLabel,
+  deskReportReviewerLedger,
   deskReportShortStoreName,
+  deskReportVisitTime,
   type DeskReportPayload,
 } from '@/lib/hr/desk-report';
 
@@ -47,6 +50,8 @@ const REPORT_STATUS_CHIP: Record<string, string> = {
   CANCELLED: 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400',
 };
 
+const STATUS_CHIP_FALLBACK = 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400';
+
 export function DeskReportView() {
   const [days, setDays] = useState<number>(7);
   const [branch, setBranch] = useState<string | null>(null);
@@ -56,6 +61,10 @@ export function DeskReportView() {
   // v2.70.0: the CSV voice — a busy flag keeps the button honest while the
   // file downloads (the fetch carries the session cookie, same as the read).
   const [csvBusy, setCsvBusy] = useState(false);
+  // v2.71.0: the reviewer drill-down — the name of the reviewer whose ledger
+  // is open, or null. One drawer at a time; a scope change closes it (a new
+  // window/branch re-keys the whole report, drawer included).
+  const [openReviewer, setOpenReviewer] = useState<string | null>(null);
   const loadSeq = useRef(0);
 
   const load = useCallback(async (d: number, b: string | null) => {
@@ -98,12 +107,20 @@ export function DeskReportView() {
   const pickDays = (d: number) => {
     if (d === days) return;
     setDays(d);
+    setOpenReviewer(null);
     void load(d, branch);
   };
   const pickBranch = (id: string | null) => {
     if (id === branch) return;
     setBranch(id);
+    setOpenReviewer(null);
     void load(days, id);
+  };
+
+  // v2.71.0 — the report opens its ledger: one drawer at a time, toggling
+  // the open reviewer closed again.
+  const toggleReviewer = (name: string) => {
+    setOpenReviewer((cur) => (cur === name ? null : name));
   };
 
   // v2.70.0 — the report files itself: ?format=csv returns the SAME derived
@@ -369,28 +386,92 @@ export function DeskReportView() {
                 </div>
               </section>
 
-              {/* Reviewers — who did the desk work */}
+              {/* Reviewers — who did the desk work. v2.71.0: every row is a
+                  door — click it and the reviewer's own visits for this same
+                  window open beneath, straight from the same derivation. */}
               <section aria-label="Reviewers in this window" data-testid="desk-report-reviewers">
                 <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   <Users className="h-3.5 w-3.5" aria-hidden /> Reviewers ({data.reviewers.length})
+                  <span className="hidden font-normal normal-case tracking-normal text-slate-400 sm:inline print:hidden dark:text-slate-500">
+                    — click a reviewer to read their visits
+                  </span>
                 </h2>
                 <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 dark:divide-slate-800 dark:border-slate-800">
-                  {data.reviewers.map((r) => (
-                    <li key={r.name} data-testid="desk-report-reviewer-row" className="flex items-center gap-3 px-3 py-2">
-                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${deskReportAvatarHue(r.name)}`} aria-hidden="true">
-                        {r.name.trim().charAt(0).toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{r.name}</span>
-                      {r.clears > 0 ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-                          <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> {num(r.clears)} cleared
-                        </span>
-                      ) : null}
-                      <span className="shrink-0 text-xs tabular-nums text-slate-600 dark:text-slate-300">{num(r.visits)} visit{r.visits === 1 ? '' : 's'}</span>
-                      <span className="hidden shrink-0 text-xs tabular-nums text-slate-400 dark:text-slate-500 sm:inline">{r.branches} branch{r.branches === 1 ? '' : 'es'}</span>
-                      <span className="hidden shrink-0 text-[10px] tabular-nums text-slate-400 dark:text-slate-500 md:inline">last {r.lastVisitAt ? timeAgo(r.lastVisitAt) : '—'}</span>
-                    </li>
-                  ))}
+                  {data.reviewers.map((r) => {
+                    const open = openReviewer === r.name;
+                    const visits = deskReportReviewerLedger(data.ledger, r.name);
+                    return (
+                      <li key={r.name} data-testid="desk-report-reviewer-row" className="px-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleReviewer(r.name)}
+                          aria-expanded={open}
+                          data-testid="desk-report-reviewer-toggle"
+                          className="-mx-1 flex w-full items-center gap-3 rounded-lg px-1 py-2 text-left transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-emerald-500/5"
+                        >
+                          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${deskReportAvatarHue(r.name)}`} aria-hidden="true">
+                            {r.name.trim().charAt(0).toUpperCase()}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{r.name}</span>
+                          {r.clears > 0 ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                              <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> {num(r.clears)} cleared
+                            </span>
+                          ) : null}
+                          <span className="shrink-0 text-xs tabular-nums text-slate-600 dark:text-slate-300">{num(r.visits)} visit{r.visits === 1 ? '' : 's'}</span>
+                          <span className="hidden shrink-0 text-xs tabular-nums text-slate-400 dark:text-slate-500 sm:inline">{r.branches} branch{r.branches === 1 ? '' : 'es'}</span>
+                          <span className="hidden shrink-0 text-[10px] tabular-nums text-slate-400 dark:text-slate-500 md:inline">last {r.lastVisitAt ? timeAgo(r.lastVisitAt) : '—'}</span>
+                          <ChevronDown
+                            aria-hidden
+                            className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 dark:text-slate-500 ${open ? 'rotate-180' : ''}`}
+                          />
+                        </button>
+                        {open ? (
+                          <div
+                            data-testid="desk-report-reviewer-panel"
+                            className="mb-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2 print:hidden dark:border-emerald-500/20 dark:bg-emerald-500/5"
+                          >
+                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
+                              {r.name} · {num(visits.length)} visit{visits.length === 1 ? '' : 's'} in this window
+                            </p>
+                            {visits.length === 0 ? (
+                              <p data-testid="desk-report-reviewer-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
+                                No visits recorded for this reviewer in this window.
+                              </p>
+                            ) : (
+                              <ul className="space-y-1" data-testid="desk-report-reviewer-visits">
+                                {visits.map((v) => (
+                                  <li
+                                    key={v.id}
+                                    data-testid="desk-report-reviewer-visit"
+                                    className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md bg-white/80 px-2 py-1.5 text-xs dark:bg-slate-900/60"
+                                  >
+                                    <span className="shrink-0 font-medium tabular-nums text-slate-600 dark:text-slate-300">
+                                      {deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT
+                                    </span>
+                                    <span className="shrink-0 text-slate-400 dark:text-slate-500" title={v.storeName}>
+                                      {deskReportShortStoreName(v.storeName)}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
+                                      {v.employeeName}&apos;s {v.leaveTypeName}
+                                    </span>
+                                    {v.cleared ? (
+                                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                        <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> recheck cleared
+                                      </span>
+                                    ) : null}
+                                    <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium ${REPORT_STATUS_CHIP[v.status] ?? STATUS_CHIP_FALLBACK}`}>
+                                      {v.status.toLowerCase()}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
 
@@ -409,7 +490,7 @@ export function DeskReportView() {
                         <span className="font-semibold">{r.employeeName}</span>&apos;s {r.leaveTypeName}
                         {r.storeName ? <span className="text-slate-400 dark:text-slate-500"> · {r.storeName}</span> : null}
                       </span>
-                      <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium ${REPORT_STATUS_CHIP[r.status] ?? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400'}`}>
+                      <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium ${REPORT_STATUS_CHIP[r.status] ?? STATUS_CHIP_FALLBACK}`}>
                         {r.status.toLowerCase()}
                       </span>
                     </li>

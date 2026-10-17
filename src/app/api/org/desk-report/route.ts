@@ -66,6 +66,10 @@ async function deskReportHandler(request: Request): Promise<Response> {
       },
       orderBy: { createdAt: 'desc' },
       select: {
+        // v2.71.0: the visit's own id rides along so the drill-down ledger
+        // can key its rows (the JSON payload carries the ledger; the CSV
+        // ignores it — the filed format stays the roll-up).
+        id: true,
         visitedByName: true,
         createdAt: true,
         clearedRecheck: true,

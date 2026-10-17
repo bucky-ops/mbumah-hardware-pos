@@ -47,6 +47,8 @@ import {
   deskReportWindowLabel,
   deskReportShortStoreName,
   deskReportAvatarHue,
+  deskReportReviewerLedger,
+  deskReportVisitTime,
   deriveDeskReport,
   type DeskReportVisitRow,
 } from '@/lib/hr/desk-report';
@@ -57,6 +59,7 @@ let seq = 0;
 const row = (over: Partial<DeskReportVisitRow> = {}): DeskReportVisitRow => {
   seq += 1;
   return {
+    id: `visit-${seq}`,
     visitedByName: 'System Administrator',
     createdAt: new Date(Date.UTC(2026, 9, 16, 7, 0, 0)), // 10:00 EAT, Fri 16 Oct
     clearedRecheck: false,
@@ -637,5 +640,212 @@ describe('DeskReportView - the CSV button (v2.70.0)', () => {
   it('keeps the CSV button out of the print clone', () => {
     const toolbar = VIEW.slice(VIEW.indexOf('print:hidden'), VIEW.indexOf('desk-report-error'));
     expect(toolbar).toContain('desk-report-csv');
+  });
+});
+
+// ── 7. the drill-down ledger (v2.71.0) ──────────────────────────────────────
+
+describe('deriveDeskReport - the drill-down ledger (v2.71.0)', () => {
+  const now = new Date('2026-10-17T14:00:00Z');
+  const win7 = { ...deskReportWindow(now, 7), days: 7 };
+
+  it('derives one entry per row, mapped UI-ready, in the same pass', () => {
+    const report = deriveDeskReport(
+      [
+        row({ visitedByName: 'Grace Achieng', clearedRecheck: true }),
+        row({ visitedByName: 'System Administrator' }),
+      ],
+      win7,
+    );
+    expect(report.ledger).toHaveLength(2);
+    expect(report.totals.visits).toBe(report.ledger.length);
+    const first = report.ledger[0];
+    expect(first.id).toMatch(/^visit-/);
+    expect(first.dayKey).toBe('2026-10-16');
+    expect(first.storeId).toBe('store-juja');
+    expect(first.storeName).toBe('MBUMAH HARDWARE - Juja Main');
+    expect(first.employeeName).toBe('David Otieno');
+    expect(first.leaveTypeName).toBe('Sick Leave');
+    expect(first.status).toBe('PENDING');
+    expect(first.requestId).toMatch(/^req-/);
+    const cleared = report.ledger.find((e) => e.cleared);
+    expect(cleared?.reviewer).toBe('Grace Achieng');
+  });
+
+  it('orders the ledger newest first regardless of input order', () => {
+    const report = deriveDeskReport(
+      [
+        row({ id: 'visit-old', createdAt: new Date(Date.UTC(2026, 9, 12, 6, 0, 0)) }),
+        row({ id: 'visit-new', createdAt: new Date(Date.UTC(2026, 9, 16, 12, 0, 0)) }),
+        row({ id: 'visit-mid', createdAt: new Date(Date.UTC(2026, 9, 14, 9, 0, 0)) }),
+      ],
+      win7,
+    );
+    expect(report.ledger.map((e) => e.id)).toEqual(['visit-new', 'visit-mid', 'visit-old']);
+  });
+
+  it('breaks exact ties deterministically by id (never db-order dependent)', () => {
+    const same = new Date(Date.UTC(2026, 9, 16, 7, 0, 0));
+    const report = deriveDeskReport(
+      [row({ id: 'visit-b', createdAt: same }), row({ id: 'visit-a', createdAt: same })],
+      win7,
+    );
+    expect(report.ledger.map((e) => e.id)).toEqual(['visit-a', 'visit-b']);
+  });
+
+  it('an empty window derives an honest empty ledger', () => {
+    const report = deriveDeskReport([], win7);
+    expect(report.ledger).toEqual([]);
+  });
+
+  it('falls back honestly: no store name → the store id; no leave type → Leave', () => {
+    const report = deriveDeskReport(
+      [
+        row({
+          leaveRequest: {
+            status: 'PENDING',
+            storeId: 'store-raw-id',
+            store: null,
+            employee: { firstName: 'Ada', lastName: 'Wanjiku' },
+            leaveType: null,
+          },
+        }),
+      ],
+      win7,
+    );
+    expect(report.ledger[0].storeName).toBe('store-raw-id');
+    expect(report.ledger[0].leaveTypeName).toBe('Leave');
+  });
+});
+
+describe('deskReportReviewerLedger + deskReportVisitTime (v2.71.0)', () => {
+  const now = new Date('2026-10-17T14:00:00Z');
+  const win7 = { ...deskReportWindow(now, 7), days: 7 };
+
+  it('filters one reviewer out of the ledger, preserving the newest-first order', () => {
+    const report = deriveDeskReport(
+      [
+        row({ id: 'v1', visitedByName: 'Grace Achieng', createdAt: new Date(Date.UTC(2026, 9, 12, 6, 0, 0)) }),
+        row({ id: 'v2', visitedByName: 'System Administrator', createdAt: new Date(Date.UTC(2026, 9, 13, 6, 0, 0)) }),
+        row({ id: 'v3', visitedByName: 'Grace Achieng', createdAt: new Date(Date.UTC(2026, 9, 16, 6, 0, 0)) }),
+      ],
+      win7,
+    );
+    const grace = deskReportReviewerLedger(report.ledger, 'Grace Achieng');
+    expect(grace.map((e) => e.id)).toEqual(['v3', 'v1']);
+    expect(grace.every((e) => e.reviewer === 'Grace Achieng')).toBe(true);
+    expect(deskReportReviewerLedger(report.ledger, 'Nobody')).toEqual([]);
+  });
+
+  it('reads the EAT wall clock, not a UTC slice (07:00Z is 10:00 in Nairobi)', () => {
+    expect(deskReportVisitTime('2026-10-16T07:00:00.000Z')).toBe('10:00');
+    expect(deskReportVisitTime('2026-10-16T21:00:00.000Z')).toBe('00:00'); // next day EAT
+  });
+});
+
+describe('GET /api/org/desk-report - the ledger rides the payload (v2.71.0)', () => {
+  const RT = readRepo('src/app/api/org/desk-report/route.ts');
+
+  it('selects the visit id so the ledger can key its rows', () => {
+    expect(RT).toContain('id: true,');
+    expect(RT).toContain('the visit\'s own id rides along');
+  });
+
+  it('keeps JSON the default voice, the CSV voice untouched, and READ-ONLY', () => {
+    expect(RT).toMatch(/return Response\.json\(\{\s*success: true,\s*data,\s*\}\);/);
+    expect(RT).toContain("url.searchParams.get('format') === 'csv'");
+    expect(RT).not.toContain('createMany');
+  });
+});
+
+describe('DeskReportView - the reviewer drill-down (v2.71.0)', () => {
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('imports the ledger helpers and the chevron', () => {
+    expect(VIEW).toContain('deskReportReviewerLedger,');
+    expect(VIEW).toContain('deskReportVisitTime,');
+    expect(VIEW).toContain('deskReportDayLabel,');
+    expect(VIEW).toContain('ChevronDown,');
+  });
+
+  it('toggles one drawer at a time and closes it on a scope change', () => {
+    expect(VIEW).toContain('const toggleReviewer = (name: string)');
+    expect(VIEW).toContain('setOpenReviewer((cur) => (cur === name ? null : name));');
+    const pickDays = VIEW.split('const pickDays =')[1].split('const pickBranch =')[0];
+    const pickBranch = VIEW.split('const pickBranch =')[1].split('const toggleReviewer =')[0];
+    expect(pickDays).toContain('setOpenReviewer(null)');
+    expect(pickBranch).toContain('setOpenReviewer(null)');
+  });
+
+  it('exposes the door semantics (aria-expanded + testids)', () => {
+    expect(VIEW).toContain('aria-expanded={open}');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-toggle"');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-panel"');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-visits"');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-visit"');
+  });
+
+  it('renders visit rows with day + EAT time, branch, request, chips', () => {
+    expect(VIEW).toContain('{deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT');
+    expect(VIEW).toContain('{deskReportShortStoreName(v.storeName)}');
+    expect(VIEW).toContain("{v.employeeName}&apos;s {v.leaveTypeName}");
+    expect(VIEW).toContain('recheck cleared');
+    expect(VIEW).toContain('REPORT_STATUS_CHIP[v.status] ?? STATUS_CHIP_FALLBACK');
+  });
+
+  it('stays honest: count line, empty state, rotating chevron', () => {
+    expect(VIEW).toContain('in this window');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-empty"');
+    expect(VIEW).toContain('No visits recorded for this reviewer in this window.');
+    expect(VIEW).toContain('rotate-180');
+  });
+
+  it('keeps the drawer off the paper and hints the interaction on screen', () => {
+    const panel = VIEW.split('data-testid="desk-report-reviewer-panel"')[1].split('data-testid="desk-report-reviewer-visits"')[0];
+    expect(panel).toContain('print:hidden');
+    expect(VIEW).toContain('click a reviewer to read their visits');
+  });
+
+  it('wears the emerald family in dark mode', () => {
+    expect(VIEW).toContain('dark:border-emerald-500/20 dark:bg-emerald-500/5');
+    expect(VIEW).toContain('dark:bg-slate-900/60');
+  });
+});
+
+describe('release metadata - v2.71.0', () => {
+  it('leads What\'s-New with the drill-down story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.71.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.71.0'")).toBeLessThan(WN.indexOf("version: '2.70.0'"));
+    expect(WN).toContain('The report opens its ledger');
+    expect(WN).toMatch(/newest first/);
+    expect(WN).toMatch(/print:hidden|never reaches paper/i);
+  });
+
+  it('bumps package.json to at least 2.71.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.71.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.71.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.71.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-71-0']).toBe('node scripts/verify-v2-71-0.mjs');
+  });
+
+  it('keeps the prior report surfaces intact (CSV voice, panel door, print)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-csv"');
+    expect(VIEW).toContain("printReceiptElement('desk-report-content')");
+    const PANELS = readRepo('src/components/org/panels.tsx');
+    expect(PANELS).toContain('data-testid="desk-report-link"');
+    const MOD = readRepo('src/lib/hr/desk-report.ts');
+    expect(MOD).toContain("row(['Report', 'Desk report']);");
   });
 });
