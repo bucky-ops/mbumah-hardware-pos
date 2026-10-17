@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.77.0',
+    title: 'The shortcut sheet tells the whole story \u2014 the desk report\u2019s keys are discoverable, and the walk can be followed',
+    bullets: [
+      'The console\u2019s keyboard-shortcuts modal now has an "On the desk report" section: j walks the doors, k walks back, esc closes the drawer \u2014 labeled with where they work.',
+      'The j/k walk glides: the focused door scrolls smoothly to the nearest edge instead of jumping, so walking a long report reads like reading.',
+      'The walk is announced \u2014 a quiet aria-live region names each door ("Door 4 of 13 \u2014 Open \u2026\u2019s visits") so screen readers ride along.',
+      'Escape now returns you to the row that owned the drawer, the way a dialog returns focus to its trigger \u2014 and says so.',
+      'Silence stays honest: Escape with nothing open announces nothing, and the announcer is sr-only \u2014 ears get the walk, eyes keep the focus rings.',
+    ],
+  },
+  {
     version: '2.76.0',
     title: 'The shortcuts arrive — mark all releases read from the palette, and walk the report doors with j / k',
     bullets: [
