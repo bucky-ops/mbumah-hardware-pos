@@ -14,9 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Award, CalendarRange, CheckCircle2, Flag, Plus, RefreshCw, Star, Target } from 'lucide-react';
+import { Award, CalendarRange, CheckCircle2, Flag, Pencil, Plus, RefreshCw, Star, Target, X } from 'lucide-react';
 import {
   apiGet,
   apiSend,
@@ -49,9 +50,13 @@ interface ReviewDetailDto extends ReviewListItemDto {
   improvements: string | null;
   cycleStatus: string;
   canSubmit: boolean;
+  canEdit: boolean;
   canAcknowledge: boolean;
   canCalibrate: boolean;
 }
+
+const RATING_MAX = 5;
+const NARRATIVE_MAX = 4000;
 interface GoalDto {
   id: string;
   employeeName: string | null;
@@ -89,6 +94,14 @@ export default function PerformancePage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [detail, setDetail] = useState<ReviewDetailDto | null>(null);
+  // v2.87.0: the write half of the review dialog — the narratives are
+  // editable while the review is DRAFT or SUBMITTED and the viewer is the
+  // assigned reviewer (or HR); without this form a fresh draft dead-ends
+  // (canSubmit requires a rating nobody could write).
+  const [editing, setEditing] = useState(false);
+  const [editRating, setEditRating] = useState<number | null>(null);
+  const [editStrengths, setEditStrengths] = useState('');
+  const [editImprovements, setEditImprovements] = useState('');
 
   // form state
   const [cycleName, setCycleName] = useState('');
@@ -282,6 +295,7 @@ export default function PerformancePage() {
                               void run(async () => {
                                 const d = await apiGet<ReviewDetailDto>(`/api/hr/performance/reviews/${r.id}`);
                                 setDetail(d);
+                                setEditing(false);
                               })
                             }
                           >
@@ -538,8 +552,106 @@ export default function PerformancePage() {
                 </DialogTitle>
                 <DialogDescription>
                   Cycle: {detail.cycleName} ({detail.cycleStatus}) · the rating is only visible here, never in lists.
+                  {detail.canEdit ? ' Narratives stay editable while the review is a draft or awaiting acknowledgement.' : ''}
                 </DialogDescription>
               </DialogHeader>
+              {editing ? (
+                /* ── v2.87.0 EDIT MODE — the write half of the dialog ── */
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label>Overall rating</Label>
+                    <div className="flex items-center gap-1" role="radiogroup" aria-label="Overall rating of 5">
+                      {Array.from({ length: RATING_MAX }, (_, i) => i + 1).map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          role="radio"
+                          aria-checked={editRating === n}
+                          aria-label={`Rate ${n} of ${RATING_MAX}`}
+                          data-testid={`perf-rating-option-${n}`}
+                          disabled={busy}
+                          onClick={() => setEditRating(n)}
+                          className="rounded transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
+                        >
+                          <Star
+                            className={`h-6 w-6 ${editRating !== null && n <= editRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30 hover:text-amber-300'}`}
+                            aria-hidden
+                          />
+                        </button>
+                      ))}
+                      <span className="ml-1.5 text-sm text-muted-foreground tabular-nums">
+                        {editRating ?? 'Not set'} / {RATING_MAX}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="review-strengths">Strengths</Label>
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {editStrengths.length}/{NARRATIVE_MAX}
+                      </span>
+                    </div>
+                    <Textarea
+                      id="review-strengths"
+                      data-testid="perf-strengths-input"
+                      value={editStrengths}
+                      maxLength={NARRATIVE_MAX}
+                      onChange={(e) => setEditStrengths(e.target.value)}
+                      rows={4}
+                      placeholder="What does this employee do well?"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="review-improvements">Improvements</Label>
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {editImprovements.length}/{NARRATIVE_MAX}
+                      </span>
+                    </div>
+                    <Textarea
+                      id="review-improvements"
+                      data-testid="perf-improvements-input"
+                      value={editImprovements}
+                      maxLength={NARRATIVE_MAX}
+                      onChange={(e) => setEditImprovements(e.target.value)}
+                      rows={4}
+                      placeholder="Where should they grow next?"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="perf-cancel-edit"
+                      disabled={busy}
+                      onClick={() => setEditing(false)}
+                    >
+                      <X className="h-4 w-4" aria-hidden /> Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      data-testid="perf-save-draft"
+                      disabled={busy || editRating === null}
+                      onClick={() =>
+                        void run(async () => {
+                          const d = await apiSend<ReviewDetailDto>(`/api/hr/performance/reviews/${detail.id}`, 'PATCH', {
+                            action: 'UPDATE',
+                            overallRating: editRating,
+                            strengths: editStrengths,
+                            improvements: editImprovements,
+                          });
+                          setDetail(d);
+                          setEditing(false);
+                        })
+                      }
+                    >
+                      <CheckCircle2 className="h-4 w-4" aria-hidden /> Save draft
+                    </Button>
+                  </div>
+                </div>
+              ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-1.5" aria-label={`Overall rating ${detail.overallRating ?? 'not set'} of 5`}>
                   {[1, 2, 3, 4, 5].map((n) => (
@@ -563,8 +675,24 @@ export default function PerformancePage() {
                     <p className="whitespace-pre-wrap text-sm">{detail.improvements || '—'}</p>
                   </div>
                 </div>
-                {detail.canSubmit || detail.canCalibrate ? (
-                  <div className="flex gap-2">
+                {detail.canEdit || detail.canSubmit || detail.canCalibrate ? (
+                  <div className="flex flex-wrap gap-2">
+                    {detail.canEdit ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="perf-review-edit"
+                        disabled={busy}
+                        onClick={() => {
+                          setEditRating(detail.overallRating);
+                          setEditStrengths(detail.strengths ?? '');
+                          setEditImprovements(detail.improvements ?? '');
+                          setEditing(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden /> {detail.overallRating === null ? 'Write review' : 'Edit review'}
+                      </Button>
+                    ) : null}
                     {detail.canSubmit ? (
                       <Button
                         size="sm"
@@ -597,6 +725,7 @@ export default function PerformancePage() {
                   </div>
                 ) : null}
               </div>
+              )}
             </>
           ) : null}
         </DialogContent>

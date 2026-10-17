@@ -240,6 +240,14 @@ export interface ReviewDetailDto extends ReviewListItemDto {
   canSubmit: boolean;
   canAcknowledge: boolean;
   canCalibrate: boolean;
+  /**
+   * v2.87.0: the narratives are writable while the review is DRAFT or
+   * SUBMITTED and the viewer is the assigned reviewer (or HR) — the same
+   * rule updateReview enforces, surfaced so the dialog can offer the form
+   * before the rating exists (canSubmit alone would dead-end a fresh
+   * draft: it requires a rating nobody has written yet).
+   */
+  canEdit: boolean;
   isSelf: boolean;
 }
 
@@ -295,6 +303,9 @@ export async function getReviewDetail(reviewId: string, session: Session): Promi
       (canManage || review.reviewerUserId === session.userId) &&
       review.status === 'DRAFT' &&
       review.overallRating !== null,
+    canEdit:
+      (canManage || review.reviewerUserId === session.userId) &&
+      (review.status === 'DRAFT' || review.status === 'SUBMITTED'),
     canAcknowledge: review.status === 'SUBMITTED' && (isSelf || canManage),
     canCalibrate: canManage && review.status === 'ACKNOWLEDGED' && review.cycle.status === 'ACTIVE',
     isSelf,
