@@ -33,9 +33,12 @@ import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
 import {
   DESK_REPORT_ORG_ROLES,
+  deskReportCsvFilename,
+  deskReportToCsv,
   deriveDeskReport,
   deskReportWindow,
   resolveDeskReportDays,
+  type DeskReportPayload,
   type DeskReportVisitRow,
 } from '@/lib/hr/desk-report';
 
@@ -46,6 +49,9 @@ async function deskReportHandler(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const days = resolveDeskReportDays(url.searchParams.get('days'));
     const branch = url.searchParams.get('branch')?.trim() || null;
+    // v2.70.0: ?format=csv files the report — same read, same derivation,
+    // serialized through the shared deskReportToCsv builder instead of JSON.
+    const wantCsv = url.searchParams.get('format') === 'csv';
     const now = new Date();
     const window = deskReportWindow(now, days);
 
@@ -84,13 +90,36 @@ async function deskReportHandler(request: Request): Promise<Response> {
       ? (rows.find((r) => r.leaveRequest.storeId === branch)?.leaveRequest.store?.name ?? branch)
       : null;
 
+    const data: DeskReportPayload = {
+      generatedAt: now.toISOString(),
+      scope: { branch, branchName },
+      ...report,
+    };
+
+    // v2.70.0 — the CSV voice. The organization name rides the same
+    // fallback the digest service uses; the filename carries the window
+    // bounds so filed copies never overwrite each other.
+    if (wantCsv) {
+      const organizationName =
+        (await rawDb.organization.findFirst({ select: { name: true } }))?.name ?? 'MBUMAH Hardware';
+      const csv = deskReportToCsv(data, {
+        organizationName,
+        scopeLabel: branchName ? `Branch: ${branchName}` : 'All branches',
+        generatedAt: now,
+      });
+      return new Response(csv, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${deskReportCsvFilename(data)}"`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
+
     return Response.json({
       success: true,
-      data: {
-        generatedAt: now.toISOString(),
-        scope: { branch, branchName },
-        ...report,
-      },
+      data,
     });
   });
 }

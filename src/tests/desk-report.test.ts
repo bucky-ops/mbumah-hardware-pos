@@ -145,10 +145,11 @@ describe('deriveDeskReport - one pass over the window rows', () => {
   const win7 = { ...deskReportWindow(now, 7), days: 7 };
 
   it('totals visits, clears, distinct reviewers and distinct requests', () => {
+    const first = row({ clearedRecheck: true });
     const rows = [
-      row({ clearedRecheck: true }),
+      first,
       row({ visitedByName: 'Mbumah Hardware Owner', clearedRecheck: true }),
-      row({ leaveRequestId: 'req-1' }), // same request as the first row
+      row({ leaveRequestId: first.leaveRequestId }), // same request as the first row
     ];
     const report = deriveDeskReport(rows, win7);
     expect(report.totals).toEqual({ visits: 3, clears: 2, reviewers: 2, requests: 2 });
@@ -424,15 +425,21 @@ describe('release metadata - v2.69.0', () => {
     expect(WN).toMatch(/Most-visited|most-visited/i);
   });
 
-  it('bumps package.json to 2.69.0 (all three slots) and registers the verify script', () => {
+  it('bumps package.json to at least 2.69.0 (all three slots) and registers the verify script', () => {
     const PKG = JSON.parse(readRepo('package.json')) as {
       version: string;
       mbumah: { releaseVersion: string; baseVersion: string };
       scripts: Record<string, string>;
     };
-    expect(PKG.version).toBe('2.69.0');
-    expect(PKG.mbumah.releaseVersion).toBe('2.69.0');
-    expect(PKG.mbumah.baseVersion).toBe('2.69.0');
+    // v2.70.0 precedent: prior-release version pins loosen every round.
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.69.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.69.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.69.0')).toBe(true);
     expect(PKG.scripts['verify:v2-69-0']).toBe('node scripts/verify-v2-69-0.mjs');
   });
 
@@ -443,5 +450,192 @@ describe('release metadata - v2.69.0', () => {
     const RA = readRepo('src/app/api/org/review-activity/route.ts');
     expect(RA).toContain('await ensureDeskDigestNote({');
     expect(RA).toContain("const EAT_OFFSET_MS = 3 * 3_600_000;");
+  });
+});
+
+// ── 6. the CSV voice (v2.70.0) ──────────────────────────────────────────────
+
+import {
+  deskReportCsvFilename,
+  deskReportToCsv,
+} from '@/lib/hr/desk-report';
+
+describe('deskReportToCsv - the report files itself', () => {
+  const now = new Date('2026-10-17T14:00:00Z');
+  const win7 = { ...deskReportWindow(now, 7), days: 7 };
+  const report = deriveDeskReport(
+    [
+      row({ clearedRecheck: true, createdAt: new Date('2026-10-16T09:00:00Z') }),
+      row({ createdAt: new Date('2026-10-16T10:00:00Z') }),
+      row({
+        visitedByName: 'System',
+        createdAt: new Date('2026-10-12T08:00:00Z'),
+        leaveRequest: {
+          status: 'APPROVED', storeId: 'store-nak',
+          store: { name: 'MBUMAH HARDWARE - Nakuru Branch' },
+          employee: { firstName: 'Grace', lastName: 'Achieng' },
+          leaveType: { name: 'Annual Leave' },
+        },
+      }),
+    ],
+    win7,
+  );
+
+  it('keeps the same derivation as the JSON voice (totals match)', () => {
+    expect(deskReportToCsv(report, { organizationName: 'MBUMAH Hardware', scopeLabel: 'All branches' }))
+      .toContain('Visits,3');
+    expect(deskReportToCsv(report, { organizationName: 'MBUMAH Hardware', scopeLabel: 'All branches' }))
+      .toContain('Corrections answered,1');
+  });
+
+  it('opens with the house header block and scope line', () => {
+    const csv = deskReportToCsv(report, { organizationName: 'MBUMAH Hardware', scopeLabel: 'Branch: MBUMAH HARDWARE - Juja Main' });
+    const head = csv.split('\r\n').slice(0, 5);
+    expect(head[0]).toBe('Report,Desk report');
+    expect(head[1]).toBe('Organization,MBUMAH Hardware');
+    expect(head[2]).toBe('Scope,Branch: MBUMAH HARDWARE - Juja Main');
+    expect(head[3]).toBe(`Window,${report.window.label} (7 EAT days)`);
+    expect(head[4]).toMatch(/^Generated \(UTC\),2026-10-17T/);
+  });
+
+  it('carries a Summary block with the four totals', () => {
+    const csv = deskReportToCsv(report, { organizationName: 'O', scopeLabel: 'S' });
+    expect(csv).toContain('Summary\r\nMetric,Value\r\nVisits,3\r\nCorrections answered,1\r\nReviewers,2\r\nRequests touched,3');
+  });
+
+  it('files every window day with honest zeros, oldest first', () => {
+    const csv = deskReportToCsv(report, { organizationName: 'O', scopeLabel: 'S' });
+    const daySection = csv.slice(csv.indexOf('Day by day'), csv.indexOf('By branch'));
+    expect(daySection).toContain('Date,Day,Visits,Corrections answered');
+    expect(daySection).toContain('2026-10-11,Sun 11 Oct,0,0');
+    expect(daySection).toContain('2026-10-12,Mon 12 Oct,1,0');
+    expect(daySection).toContain('2026-10-16,Fri 16 Oct,2,1');
+    expect(daySection).toContain('2026-10-17,Sat 17 Oct,0,0');
+  });
+
+  it('serializes the per-branch, reviewer and request sections', () => {
+    const csv = deskReportToCsv(report, { organizationName: 'O', scopeLabel: 'S' });
+    expect(csv).toContain('Branch,Visits,Corrections answered,Reviewers,Requests,Last visit (UTC)');
+    expect(csv).toContain('MBUMAH HARDWARE - Juja Main,2,1,1,2,');
+    expect(csv).toContain('Name,Visits,Corrections answered,Branches,Last visit (UTC)');
+    expect(csv).toContain('System Administrator,2,1,1,');
+    expect(csv).toContain('Employee,Leave type,Branch,Status,Visits,Last visit (UTC)');
+    expect(csv).toContain('David Otieno,Sick Leave,MBUMAH HARDWARE - Juja Main,PENDING,1,');
+    expect(csv).toContain('Grace Achieng,Annual Leave,MBUMAH HARDWARE - Nakuru Branch,APPROVED,1,');
+  });
+
+  it('guards the formula-injection class through the shared escaper', () => {
+    const evil = deriveDeskReport(
+      [row({
+        visitedByName: '=HYPERLINK("http://evil")',
+        leaveRequest: {
+          status: 'PENDING', storeId: 'store-evil',
+          store: { name: '+cmd|\' /C calc\'!A0' },
+          employee: { firstName: 'A', lastName: 'B' },
+          leaveType: { name: 'Leave' },
+        },
+      })],
+      win7,
+    );
+    const csv = deskReportToCsv(evil, { organizationName: 'O', scopeLabel: 'S' });
+    // The guard prefixes the apostrophe (leading only), then RFC-4180
+    // quoting wraps the cell and doubles the inner quotes:
+    // "'=HYPERLINK(""http://evil"")"
+    expect(csv).toContain('"\'=HYPERLINK(""http://evil"")"');
+    expect(csv).toContain("'+cmd|' /C calc'!A0");
+  });
+
+  it('quotes cells that carry commas (RFC-4180)', () => {
+    const csv = deskReportToCsv(
+      deriveDeskReport([row({ leaveRequest: { status: 'PENDING', storeId: 's', store: { name: 'Juja, Main' }, employee: { firstName: 'A', lastName: 'B' }, leaveType: { name: 'Leave' } } })], win7),
+      { organizationName: 'O', scopeLabel: 'S' },
+    );
+    expect(csv).toContain('"Juja, Main",1,');
+  });
+
+  it('uses CRLF records and ends with a trailing CRLF', () => {
+    const csv = deskReportToCsv(report, { organizationName: 'O', scopeLabel: 'S' });
+    expect(csv).toContain('\r\n');
+    expect(csv.endsWith('\r\n')).toBe(true);
+    expect(csv.slice(-2)).not.toBe('\n\n');
+  });
+
+  it('files a quiet window honestly (header + zero series, no crash)', () => {
+    const quiet = deriveDeskReport([], win7);
+    const csv = deskReportToCsv(quiet, { organizationName: 'O', scopeLabel: 'All branches' });
+    expect(csv).toContain('Visits,0');
+    expect(csv).toContain('2026-10-11,Sun 11 Oct,0,0');
+    expect(csv).not.toContain('MBUMAH HARDWARE - Juja Main,');
+  });
+});
+
+describe('deskReportCsvFilename - filenames tell the truth', () => {
+  const now = new Date('2026-10-17T14:00:00Z');
+  const win7 = { ...deskReportWindow(now, 7), days: 7 };
+
+  it('carries the window length, bounds and org-wide scope', () => {
+    const report = deriveDeskReport([], win7);
+    const payload = { ...report, generatedAt: now.toISOString(), scope: { branch: null, branchName: null } };
+    expect(deskReportCsvFilename(payload)).toBe('mbumah-desk-report-7d-2026-10-11_2026-10-17-all-branches.csv');
+  });
+
+  it('uses the branch slug when narrowed', () => {
+    const report = deriveDeskReport([], win7);
+    const payload = { ...report, generatedAt: now.toISOString(), scope: { branch: 'store_juja_main', branchName: 'MBUMAH HARDWARE - Juja Main' } };
+    expect(deskReportCsvFilename(payload)).toBe('mbumah-desk-report-7d-2026-10-11_2026-10-17-store-juja-main.csv');
+  });
+});
+
+describe('GET /api/org/desk-report - the CSV voice (v2.70.0)', () => {
+  const RT = readRepo('src/app/api/org/desk-report/route.ts');
+
+  it('serves ?format=csv through the shared builder', () => {
+    expect(RT).toContain("url.searchParams.get('format') === 'csv'");
+    expect(RT).toContain('deskReportToCsv(data, {');
+    expect(RT).toContain('deskReportCsvFilename(data)');
+  });
+
+  it('stamps text/csv + attachment disposition + no-store', () => {
+    expect(RT).toContain("'Content-Type': 'text/csv; charset=utf-8'");
+    expect(RT).toMatch(/'Content-Disposition': `attachment; filename="\$\{deskReportCsvFilename\(data\)\}"`/);
+    expect(RT).toContain("'Cache-Control': 'no-store'");
+  });
+
+  it('resolves the organization name with the digest fallback', () => {
+    expect(RT).toContain('rawDb.organization.findFirst({ select: { name: true } })');
+    expect(RT).toContain("?? 'MBUMAH Hardware'");
+  });
+
+  it('stays READ-ONLY and keeps JSON the default voice', () => {
+    expect(RT).not.toContain('createMany');
+    expect(RT).toContain('scopeLabel: branchName ? `Branch: ${branchName}` : \'All branches\'');
+    expect(RT).toMatch(/return Response\.json\(\{\s*success: true,\s*data,\s*\}\);/);
+  });
+});
+
+describe('DeskReportView - the CSV button (v2.70.0)', () => {
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('downloads through ?format=csv with the session cookie', () => {
+    expect(VIEW).toContain('data-testid="desk-report-csv"');
+    expect(VIEW).toContain("&format=csv`");
+    expect(VIEW).toMatch(/fetch\(`\/api\/org\/desk-report\$\{query\}`, \{ credentials: 'include' \}\)/);
+  });
+
+  it('honors the route-stamped filename and cleans up the object URL', () => {
+    expect(VIEW).toMatch(/\/filename="(.+?)"\/\.exec\(disposition\)/);
+    expect(VIEW).toContain('URL.createObjectURL(blob)');
+    expect(VIEW).toContain('URL.revokeObjectURL(href)');
+  });
+
+  it('degrades honestly and keeps the busy state', () => {
+    expect(VIEW).toContain('Desk report CSV unavailable.');
+    expect(VIEW).toMatch(/disabled=\{csvBusy\}/);
+    expect(VIEW).toContain('Filing…');
+  });
+
+  it('keeps the CSV button out of the print clone', () => {
+    const toolbar = VIEW.slice(VIEW.indexOf('print:hidden'), VIEW.indexOf('desk-report-error'));
+    expect(toolbar).toContain('desk-report-csv');
   });
 });
