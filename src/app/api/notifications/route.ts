@@ -20,6 +20,7 @@ import {
   LEAVE_REQUEST_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
+import { PAYROLL_APPROVED_METADATA_MARKER } from '@/lib/hr/payroll/run-digest';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,10 @@ export interface NotificationData {
   // v2.43.0: 'leave_corrected' - approver-facing rows for the same
   // corrections (the approvals group was notified of the ORIGINAL request);
   // amber surface, targetTab → Payroll Leave desk.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected';
+  // v2.47.0: 'payroll_approved' - payroll-run approval digest rows (maker
+  // + the store's payroll group); emerald surface, targetTab → payroll
+  // Pay Runs desk, honest delivery chip from metadata.emailStatus.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -344,6 +348,8 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                   { metadata: { contains: LEAVE_ON_BEHALF_METADATA_MARKER } },
                   { metadata: { contains: LEAVE_EDITED_METADATA_MARKER } },
                   { metadata: { contains: LEAVE_CORRECTED_METADATA_MARKER } },
+                  // v2.47.0: payroll approval rows own their surface (section 9).
+                  { metadata: { contains: PAYROLL_APPROVED_METADATA_MARKER } },
                 ],
               },
             },
@@ -406,6 +412,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.43.0: the approver-facing rows for the same corrections
                 // (the approvals group re-checks before deciding).
                 { metadata: { contains: LEAVE_CORRECTED_METADATA_MARKER } },
+                // v2.47.0: payroll-run approval digest rows (maker + the
+                // store's payroll group) with the headline numbers.
+                { metadata: { contains: PAYROLL_APPROVED_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -499,6 +508,23 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               // "re-check before deciding" surface that deep-links the
               // Payroll tab's Leave desk, where the corrected row lives.
               severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: 'payroll',
+              category: 'HR',
+            });
+          } else if (kind === 'payroll_approved') {
+            notifications.push({
+              id: `payroll-${n.id}`,
+              type: 'payroll_approved',
+              title: n.title,
+              description: n.message,
+              // v2.47.0: the run you prepared (or co-own the payroll
+              // decision for) was approved — an emerald info row that
+              // deep-links the Payroll tab's Pay Runs desk, where the
+              // post / disburse actions live. A FAILED email delivery
+              // rides 'warning' so a broken send is never silent.
+              severity: extras.emailStatus === 'FAILED' ? 'warning' : 'info',
               timestamp: n.createdAt.toISOString(),
               isRead: false,
               targetTab: 'payroll',

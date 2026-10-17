@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.47.0',
+    title: 'A payroll approval now tells everyone who needs to know — with the numbers attached',
+    bullets: [
+      'The moment a payroll run is approved, the person who prepared it and the payroll approvers all get the headline numbers — employees, gross, deductions, net — in their notification bell and their inbox, without reopening the workspace.',
+      'The approval email carries a ready-to-file per-employee CSV (name, staff number, gross, deductions, net) built with the same clean-escaping machinery as the HR report digests — reconcile it in Excel or Google Sheets before you post.',
+      'The run dialog shows an honest "Approval digest" banner right after you approve: how many people were notified, whether the email was sent, and the exact CSV file that travelled with it.',
+      'The digest is strictly need-to-know: it goes only to the run\'s maker and the payroll approvers, and it never contains national IDs, bank details or payslip line items.',
+      'Approving stays instant no matter what: the digest is best-effort, so a mail hiccup is logged and flagged amber in the bell — it can never block or undo the approval itself.',
+    ],
+  },
+  {
     version: '2.46.0',
     title: 'Digest emails now arrive with the spreadsheet — plus no more silent admin resets',
     bullets: [

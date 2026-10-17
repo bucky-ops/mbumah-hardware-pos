@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
+import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/(shell)/hr/payroll/page';
 
 /** Colored payment status chips (v2.21.0 styling pass). */
@@ -150,6 +151,16 @@ interface B2CSummary {
   message?: string;
 }
 
+/** v2.47.0: fail-soft approval-digest result (POST .../approve body.digest). */
+interface DigestNotice {
+  notifiedUsers?: number;
+  emailRecipients?: number;
+  emailStatus: 'SENT' | 'FAILED' | 'SKIPPED';
+  emailError?: string;
+  csvFilename?: string;
+  csvByteSize?: number;
+}
+
 export function PayrollRunDialog({
   runId,
   onClose,
@@ -164,6 +175,9 @@ export function PayrollRunDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<ApiIssue[] | null>(null);
+  // v2.47.0: fail-soft approval-digest result surfaced by POST .../approve —
+  // an honest "who was told, did the email leave the building" banner.
+  const [digestNotice, setDigestNotice] = useState<DigestNotice | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [trace, setTrace] = useState<{ id: string; data: TraceResponse } | null>(null);
@@ -267,6 +281,16 @@ export function PayrollRunDialog({
       }
       if (action === 'validate') {
         setIssues(null);
+      }
+      // v2.47.0: capture the approval digest result (only the approve action
+      // returns one; the banner stays visible until the dialog reopens).
+      if (action === 'approve') {
+        const d = (respBody as { digest?: DigestNotice | null }).digest;
+        setDigestNotice(
+          d && typeof d === 'object' && 'emailStatus' in d
+            ? d
+            : { emailStatus: 'SKIPPED', notifiedUsers: 0, emailRecipients: 0 },
+        );
       }
       await load(runId);
       onChanged();
@@ -531,6 +555,33 @@ export function PayrollRunDialog({
                 <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
                   {error}
                 </p>
+              )}
+              {digestNotice && (
+                <div
+                  className={`mt-3 rounded-md border px-3 py-2 text-xs ${
+                    digestNotice.emailStatus === 'SENT'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                      : digestNotice.emailStatus === 'FAILED'
+                        ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300'
+                  }`}
+                  role="status"
+                >
+                  <span className="font-medium">Approval digest · </span>
+                  {digestNotice.notifiedUsers ? `${digestNotice.notifiedUsers} in-app notification(s)` : 'no in-app recipients'}
+                  {' · '}
+                  {digestNotice.emailStatus === 'SENT'
+                    ? `email sent to ${digestNotice.emailRecipients} recipient(s)`
+                    : digestNotice.emailStatus === 'FAILED'
+                      ? 'email could not be sent (logged for review)'
+                      : 'email skipped (no recipients configured)'}
+                  {digestNotice.csvFilename
+                    ? ` · CSV attached: ${digestNotice.csvFilename}${digestNotice.csvByteSize ? ` (${formatCsvSize(digestNotice.csvByteSize)})` : ''}`
+                    : ''}
+                  {digestNotice.emailStatus === 'FAILED' && digestNotice.emailError
+                    ? ` — ${digestNotice.emailError.slice(0, 140)}`
+                    : ''}
+                </div>
               )}
             </div>
 

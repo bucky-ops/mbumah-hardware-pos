@@ -291,8 +291,12 @@ describe('state machine', () => {
       runFixture({ status: 'PENDING_APPROVAL', preparedByUserId: 'user-1' }),
     );
     db.payrollRun.update.mockResolvedValue(runFixture({ status: 'APPROVED', approvedByUserId: 'user-2' }));
-    const updated = await approvePayrollRun({ ...CTX, actorId: 'user-2' }, 'run-1');
+    // v2.47.0: approvePayrollRun returns { run, digest } — the digest fan-out
+    // is best-effort (this mock has no store/user/notification models, so it
+    // resolves null via the catch) and must never fail the approval itself.
+    const { run: updated, digest } = await approvePayrollRun({ ...CTX, actorId: 'user-2' }, 'run-1');
     expect(updated.status).toBe('APPROVED');
+    expect(digest).toBeNull();
   });
 
   it('requires a rejection reason of at least 10 characters', async () => {
