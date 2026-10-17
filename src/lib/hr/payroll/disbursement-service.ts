@@ -48,6 +48,19 @@ export interface B2CDisburseSummary {
   backoffSkipped?: number;
   /** v2.33.0: candidates at the attempt ceiling - need human investigation. */
   maxAttemptSkipped?: number;
+  /**
+   * v2.50.0: per-payslip payment rows for the disbursement digest CSV —
+   * every eligible payslip in this batch with its outcome (PAID settled now,
+   * SENT in flight, FAILED, SKIPPED). Optional so older callers/records
+   * without the field stay valid.
+   */
+  results?: Array<{
+    employeeCode: string;
+    employeeName: string;
+    net: number;
+    status: 'PAID' | 'SENT' | 'FAILED' | 'SKIPPED';
+    receipt?: string | null;
+  }>;
 }
 
 /**
@@ -106,18 +119,24 @@ export async function disburseRunViaMpesa(
     skipped: [],
     failed: [],
     receipts: [],
+    // v2.50.0: per-payslip payment rows for the digest CSV.
+    results: [],
   };
 
   for (const detail of details) {
     const code = detail.employee.employeeCode || detail.employeeId;
+    const employeeName =
+      `${detail.employee.firstName ?? ''} ${detail.employee.lastName ?? ''}`.trim() || 'Unnamed employee';
+    const net = Number(detail.netPay);
     if (!detail.employee.phone) {
       summary.skipped.push({ employeeCode: code, reason: 'No M-Pesa phone number on the employee record.' });
+      summary.results?.push({ employeeCode: code, employeeName, net, status: 'SKIPPED' });
       continue;
     }
     try {
       const result = await initiatePayrollB2C({
         phone: detail.employee.phone,
-        amount: Number(detail.netPay),
+        amount: net,
         storeId: ctx.storeId,
         payrollDetailId: detail.id,
         employeeCode: code,
@@ -125,9 +144,11 @@ export async function disburseRunViaMpesa(
       });
       if (result.alreadyInitiated) {
         summary.alreadyInitiated += 1;
+        summary.results?.push({ employeeCode: code, employeeName, net, status: 'SENT' });
         continue;
       }
       summary.initiated += 1;
+      summary.results?.push({ employeeCode: code, employeeName, net, status: 'SENT' });
       if (result.mode === 'mock' && result.status === 'COMPLETED' && result.receiptNumber) {
         // MOCK: no webhook will arrive - settle the payslip now.
         await withImmutabilityBypass(async () =>
@@ -142,6 +163,11 @@ export async function disburseRunViaMpesa(
           'payroll_b2c_mock_settle',
         );
         summary.receipts.push({ employeeCode: code, receipt: result.receiptNumber });
+        const row = summary.results?.find((r) => r.employeeCode === code && r.status === 'SENT');
+        if (row) {
+          row.status = 'PAID';
+          row.receipt = `MPESA-${result.receiptNumber}`;
+        }
       }
     } catch (error) {
       summary.failed.push({
@@ -149,6 +175,7 @@ export async function disburseRunViaMpesa(
         code: 'B2C_INITIATION_FAILED',
         message: error instanceof Error ? error.message : 'Unknown B2C failure',
       });
+      summary.results?.push({ employeeCode: code, employeeName, net, status: 'FAILED' });
     }
   }
 

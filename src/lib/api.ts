@@ -2903,7 +2903,9 @@ export interface NotificationItem {
   // issued; sky surface, same desk).
   // v2.49.0: 'payslip_issued' - employee-facing personal rows (one per
   // portal-linked employee; teal surface, portal Payslips deep link).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued';
+  // v2.50.0: 'payroll_disbursed' - disbursement digest rows (M-Pesa B2C
+  // batch or manual confirmation; amber surface, Pay Runs desk).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';

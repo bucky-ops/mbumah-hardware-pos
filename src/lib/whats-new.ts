@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.50.0',
+    title: 'The money now announces its exit — disbursement batches land in the payroll group\u2019s bell and inbox',
+    bullets: [
+      'The moment an M-Pesa B2C batch (or a manual bank-run confirmation) settles a payroll run, everyone who co-owns the payroll decision gets a "Payroll disbursed" notification with the per-batch outcome: payments sent, settled, failed, skipped and the net total.',
+      'The disbursement email carries a ready-to-file per-payslip payment CSV (employee, staff number, net, status, M-Pesa receipt) — reconcile it against the M-Pesa statement or the bank run without retyping a line.',
+      'The channel is always named honestly: live M-Pesa B2C, simulated B2C, or manual confirmation — a simulated batch never reads like real money moved.',
+      'The run dialog now shows a "Disbursement digest" banner right after you disburse: who was told, whether the email left, and the exact CSV that travelled with it — mirroring the approval and posting banners.',
+      'Disbursing stays instant no matter what: the digest is best-effort, a mail hiccup is logged and flagged amber in the bell, and retries or stuck-refreshes never re-spam the group — only the full batch announces itself.',
+    ],
+  },
+  {
     version: '2.49.0',
     title: 'Your payslip now introduces itself — employees hear the moment their pay is official',
     bullets: [

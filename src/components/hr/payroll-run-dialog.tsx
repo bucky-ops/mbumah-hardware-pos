@@ -162,9 +162,11 @@ interface EmployeeNoticesNotice {
 
 /** v2.47.0: fail-soft approval-digest result (POST .../approve body.digest).
  *  v2.48.0: the same shape rides POST .../post — kind tells the banner
- *  which event it is announcing ("Approval digest" vs "Posting digest"). */
+ *  which event it is announcing ("Approval digest" vs "Posting digest").
+ *  v2.50.0: kind 'disbursed' — the money-left-the-door batch (B2C or
+ *  manual confirmation) shows the amber-tinged "Disbursement digest". */
 interface DigestNotice {
-  kind?: 'approval' | 'posted';
+  kind?: 'approval' | 'posted' | 'disbursed';
   notifiedUsers?: number;
   emailRecipients?: number;
   emailStatus: 'SENT' | 'FAILED' | 'SKIPPED';
@@ -306,6 +308,8 @@ export function PayrollRunDialog({
       // v2.48.0: the post action carries the posting digest the same way
       // (top-level body.digest) — but ONLY on a fresh post; the idempotent
       // replay path returns no digest, so a retried post shows no banner.
+      // v2.50.0: BOTH disburse actions (manual + M-Pesa batch) carry the
+      // disbursement digest the same way.
       if (action === 'approve' || action === 'post') {
         const d = (respBody as { digest?: DigestNotice | null }).digest;
         setDigestNotice(
@@ -320,6 +324,11 @@ export function PayrollRunDialog({
           const en = (respBody as { employeeNotices?: EmployeeNoticesNotice | null }).employeeNotices;
           setEmployeeNotices(en && typeof en === 'object' && typeof en.notifiedUsers === 'number' ? en : null);
         }
+      } else if (action === 'disburse' || action === 'disburse-mpesa') {
+        const d = (respBody as { digest?: DigestNotice | null }).digest;
+        setDigestNotice(
+          d && typeof d === 'object' && 'emailStatus' in d ? { ...d, kind: 'disbursed' } : null,
+        );
       }
       await load(runId);
       onChanged();
@@ -597,7 +606,11 @@ export function PayrollRunDialog({
                   role="status"
                 >
                   <span className="font-medium">
-                    {digestNotice.kind === 'posted' ? 'Posting digest · ' : 'Approval digest · '}
+                    {digestNotice.kind === 'posted'
+                      ? 'Posting digest · '
+                      : digestNotice.kind === 'disbursed'
+                        ? 'Disbursement digest · '
+                        : 'Approval digest · '}
                   </span>
                   {digestNotice.notifiedUsers ? `${digestNotice.notifiedUsers} in-app notification(s)` : 'no in-app recipients'}
                   {' · '}
