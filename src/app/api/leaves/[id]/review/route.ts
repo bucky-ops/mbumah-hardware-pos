@@ -5,6 +5,12 @@
 // reviewed by Grace" and the employee's portal card shows the same
 // reviewer. A review is a person reading, not a timer firing.
 //
+// v2.63.0: every visit is now also recorded in the LeaveReviewVisit ledger
+// (WHO looked, WHEN, whether THIS visit cleared a re-check marker), and the
+// response carries the visit history + total count so the desk dialog can
+// render the visit timeline — "three people looked at this" is now
+// distinguishable from "nobody has".
+//
 // The HR desk's detail dialog is the ONE place an approver actually reads a
 // request before deciding. Opening it stamps deskReviewedAt, which powers
 // the amber "re-check" chip on rows whose last correction has not been seen
@@ -112,6 +118,26 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
     },
     select: { id: true, deskReviewedAt: true, deskReviewedByName: true, editedAt: true },
   });
+
+  // v2.63.0: the desk keeps its own ledger — the stamp columns above only
+  // ever carry the LATEST visit (every re-open overwrites them), so the
+  // visit itself is now also recorded as a LeaveReviewVisit row: WHO
+  // looked, WHEN, and whether THIS visit cleared a pending re-check
+  // marker. Best-effort under its own guard by the same contract as every
+  // leave delivery: the stamp is already durable, a ledger failure must
+  // never fail the visit (the dialog still opens, the chip still clears).
+  try {
+    await db.leaveReviewVisit.create({
+      data: {
+        leaveRequestId: id,
+        visitedById: session.userId,
+        visitedByName: reviewerName,
+        clearedRecheck: hadPendingCorrection,
+      },
+    });
+  } catch {
+    // Visit-ledger write is best-effort by design.
+  }
 
   await systemLog({
     action: 'LEAVE_REVIEW_STAMPED',
@@ -226,6 +252,35 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
     }
   }
 
+  // v2.63.0: the dialog renders the visit timeline — the ledger rides the
+  // SAME response as the stamp (the dialog already POSTs on open), so no
+  // extra GET round-trip and the history is fresh the moment it opens.
+  // Newest first (the desk reads top-down), capped at the 8 most recent
+  // with the TOTAL count alongside so "12 visits" can render honestly
+  // without shipping all 12 rows.
+  let visitHistory: Array<{ visitedByName: string; visitedAt: string; clearedRecheck: boolean }> = [];
+  let visitCount = 0;
+  try {
+    const [rows, total] = await Promise.all([
+      db.leaveReviewVisit.findMany({
+        where: { leaveRequestId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: { visitedByName: true, createdAt: true, clearedRecheck: true },
+      }),
+      db.leaveReviewVisit.count({ where: { leaveRequestId: id } }),
+    ]);
+    visitHistory = rows.map((r) => ({
+      visitedByName: r.visitedByName,
+      visitedAt: r.createdAt.toISOString(),
+      clearedRecheck: r.clearedRecheck,
+    }));
+    visitCount = total;
+  } catch {
+    // History read is best-effort — an empty timeline must never fail the
+    // stamp response.
+  }
+
   return Response.json({
     success: true,
     data: {
@@ -236,6 +291,10 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
       // not older than any edit that already landed. Stated explicitly so
       // the client can update its row without recomputing the rule.
       needsRecheck: needsDeskRecheck(updated.editedAt, updated.deskReviewedAt),
+      // v2.63.0: the visit ledger — newest-first entries (capped at 8) plus
+      // the total visit count, rendered as the dialog's visit timeline.
+      visitHistory,
+      visitCount,
     },
   });
 }

@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.63.0',
+    title: 'The desk keeps its own ledger — every visit is on the record, and the dialog shows the trail',
+    bullets: [
+      'The desk receipt only ever carried the LATEST review — every re-open overwrote it. Now every desk visit is recorded: who looked, when, and how many times.',
+      'Open a request\'s detail dialog and the receipt grows a "Visit history" trail — each line names the reviewer with their avatar and the visit time.',
+      'Visits that cleared a re-check marker wear an emerald dot and a "Cleared a re-check" chip, so "three people looked at this" finally reads differently from "nobody has".',
+      'The count chip keeps the total honest ("12 visits") even when only the five most recent visits are listed — earlier visits stay on file.',
+      'The trail rides the same visit-stamp the desk already fires on open — no extra taps, the history is fresh the moment the dialog opens.',
+    ],
+  },
+  {
     version: '2.62.0',
     title: 'The correction answers to the room — the approvals group hears when their re-check is done',
     bullets: [

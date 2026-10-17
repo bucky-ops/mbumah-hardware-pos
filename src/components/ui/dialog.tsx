@@ -65,6 +65,15 @@ function DialogContent({
         aria-describedby={undefined}
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+          // Tall dialogs must never lose their action row: cap the content
+          // to the viewport and let IT scroll internally (portalled menus,
+          // selects and popovers escape this overflow context, so nested
+          // interactive surfaces keep working). Before this cap, dialogs
+          // taller than a small laptop window (e.g. the leave detail
+          // dialog with the visit ledger) rendered vertically centered
+          // with BOTH edges clipped and no scroll affordance — the
+          // Approve/Reject footer was unreachable.
+          "max-h-[92dvh] overflow-y-auto",
           className
         )}
         {...props}
