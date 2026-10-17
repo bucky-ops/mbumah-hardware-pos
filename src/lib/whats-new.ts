@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.88.0',
+    title: 'The cycle shows its shape \u2014 a calibration meter and reviews you can filter',
+    bullets: [
+      'Every review cycle row now wears a calibration meter: a progress bar plus "X of N calibrated" and the honest remainder (drafts, submitted, acknowledged) \u2014 you can see how far a cycle has walked without opening anything.',
+      'The meter is a door: "View reviews" on a cycle row jumps straight into the Reviews tab filtered to that cycle \u2014 the shape and its reviews are one click apart.',
+      'The Reviews tab grows real filters: a cycle picker and status chips (all / draft / submitted / acknowledged / calibrated), each chip carrying its live count so you know what a click will show before you make it.',
+      'A "Showing X of Y reviews" line and a one-tap "Clear filters" keep the picture honest \u2014 filtering never silently hides the rest of the list.',
+      'Counts stay honest and private: the meter counts statuses only \u2014 ratings and narratives never appear in any list, exactly as before.',
+    ],
+  },
+  {
     version: '2.87.0',
     title: 'The review gets written \u2014 and its subject reads it',
     bullets: [
