@@ -269,3 +269,59 @@ describe('v2.84.0 run-history surface contracts', () => {
     expect(DIALOG).toContain('{history.length > 0 && (');
   });
 });
+
+describe('v2.86.0 who\u2019s-next surface contracts', () => {
+  const LIST_ROUTE = readRepo('src/app/api/payroll/runs/route.ts');
+  const PAGE = readRepo('src/app/(shell)/hr/payroll/page.tsx');
+  const DIALOG = readRepo('src/components/hr/payroll-run-dialog.tsx');
+
+  it('the list route exposes the handover stamps additively', () => {
+    expect(LIST_ROUTE).toContain('submittedAt: r.submittedAt?.toISOString() ?? null,');
+    expect(LIST_ROUTE).toContain('submittedById: r.submittedById,');
+    expect(LIST_ROUTE).toContain('return Response.json({ success: true, data });');
+  });
+
+  it('the runs table says how long a waiting run has waited (EAT)', () => {
+    expect(PAGE).toContain("import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';");
+    expect(PAGE).toContain("run.status === 'PENDING_APPROVAL' && run.submittedAt && (");
+    expect(PAGE).toContain('waiting since {formatEatStamp(new Date(run.submittedAt))}');
+    expect(PAGE).toContain('data-testid="payroll-run-waiting-since"');
+    expect(PAGE).toContain('submittedAt: string | null;');
+    expect(PAGE).toContain('submittedById: string | null;');
+  });
+
+  it('the dialog wears the who\u2019s-next strip between the actions and the filing row', () => {
+    const stripAt = DIALOG.indexOf('data-testid="payroll-run-waiting-on"');
+    const actionsAt = DIALOG.indexOf("void act('void')");
+    const filingAt = DIALOG.indexOf('v2.53.0: filing row');
+    expect(stripAt).toBeGreaterThan(-1);
+    expect(actionsAt).toBeGreaterThan(-1);
+    expect(filingAt).toBeGreaterThan(-1);
+    expect(stripAt).toBeGreaterThan(actionsAt);
+    expect(stripAt).toBeLessThan(filingAt);
+  });
+
+  it('the strip reads the three seats apart, from the history\u2019s own facts', () => {
+    expect(DIALOG).toContain("const submittedEvent = history.find((e) => e.key === 'submitted');");
+    expect(DIALOG).toContain('const canWaitOnYou = Boolean(can?.approve && !can?.isPreparer);');
+    expect(DIALOG).toContain('Waiting on <span className="font-semibold">you</span>{handedPhrase}');
+    expect(DIALOG).toContain('Maker-checker: you prepared or submitted this run, so approval must come from a different user{handedPhrase}.');
+    expect(DIALOG).toContain('Waiting on an approver{handedPhrase}.');
+    expect(DIALOG).toContain("` \u2014 handed over by ${submittedBy}${submittedWhen}`");
+  });
+
+  it('the strip is indigo for the eligible checker, amber for the bound maker, muted for spectators', () => {
+    expect(DIALOG).toContain('border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300');
+    expect(DIALOG).toContain('border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300');
+    expect(DIALOG).toContain("'border-border bg-muted/40 text-muted-foreground'");
+    expect(DIALOG).toContain('<Hourglass className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />');
+  });
+
+  it('the strip never invents a wait: hidden without a handover, the old note is superseded', () => {
+    expect(DIALOG).toContain("status === 'PENDING_APPROVAL' && submittedEvent && (");
+    // The standalone maker-checker note is gone — the strip carries it now.
+    expect(DIALOG).not.toContain('so approval must come from a\n                  different user');
+    // The handover-actor phrases derive only from what the row stamps.
+    expect(DIALOG).toContain("submittedEvent?.actorLabel && submittedEvent.actorLabel !== '\u2014' ? submittedEvent.actorLabel : null");
+  });
+});

@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileArchive, FileDown, History, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileArchive, FileDown, History, Hourglass, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { downloadPayrollBundle } from '@/components/hr/payslip-bundle-download';
@@ -435,6 +435,22 @@ export function PayrollRunDialog({
   const parsedIssues: ApiIssue[] | null = issues ?? (run?.errorMessage ? tryParseIssues(run.errorMessage) : null);
   const history = detail?.history ?? [];
 
+  // v2.86.0: the who's-next derivation — a PENDING_APPROVAL run is somebody's
+  // move. The submitted event in the history already carries WHO handed it
+  // over and WHEN (EAT); the viewer's seat decides whose move it is.
+  const submittedEvent = history.find((e) => e.key === 'submitted');
+  const submittedBy =
+    submittedEvent?.actorLabel && submittedEvent.actorLabel !== '—' ? submittedEvent.actorLabel : null;
+  const submittedWhen = submittedEvent?.atIso
+    ? ` at ${formatEatStamp(new Date(submittedEvent.atIso))}`
+    : '';
+  const handedPhrase = submittedBy
+    ? ` — handed over by ${submittedBy}${submittedWhen}`
+    : submittedWhen
+      ? ` — handed over${submittedWhen}`
+      : '';
+  const canWaitOnYou = Boolean(can?.approve && !can?.isPreparer);
+
   const stage = lifecycleStage(status);
 
   const runB2C = async (mode: 'all' | 'retry-failed' | 'refresh-stuck', detailId?: string) => {
@@ -645,6 +661,34 @@ export function PayrollRunDialog({
                   </Button>
                 )}
               </div>
+              {/* v2.86.0: the who's-next strip — the handover names its waiter.
+                  An eligible checker sees "waiting on you"; the bound maker
+                  sees the honest maker-checker boundary; a viewer without the
+                  approve permission still sees that the run waits. Hidden
+                  when the history carries no handover — never invented. */}
+              {status === 'PENDING_APPROVAL' && submittedEvent && (
+                <div
+                  className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
+                    canWaitOnYou
+                      ? 'border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300'
+                      : can?.approve
+                        ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                        : 'border-border bg-muted/40 text-muted-foreground'
+                  }`}
+                  data-testid="payroll-run-waiting-on"
+                >
+                  <Hourglass className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <p className="leading-relaxed">
+                    {canWaitOnYou ? (
+                      <>Waiting on <span className="font-semibold">you</span>{handedPhrase} — your approval moves this run forward.</>
+                    ) : can?.approve ? (
+                      <>Maker-checker: you prepared or submitted this run, so approval must come from a different user{handedPhrase}.</>
+                    ) : (
+                      <>Waiting on an approver{handedPhrase}.</>
+                    )}
+                  </p>
+                </div>
+              )}
               {/* v2.53.0: filing row — the run's digest CSV, on demand. Visible
                   from approval onward (the route refuses earlier statuses
                   honestly); violet family = download-the-filing-file affordance.
@@ -710,12 +754,6 @@ export function PayrollRunDialog({
                 >
                   {bundleNote.text}
                 </div>
-              )}
-              {status === 'PENDING_APPROVAL' && can?.approve && can.isPreparer && (
-                <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                  Maker-checker: you prepared or submitted this run, so approval must come from a
-                  different user (e.g. the store owner or a super admin).
-                </p>
               )}
               {run.journalEntryId && (
                 <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">

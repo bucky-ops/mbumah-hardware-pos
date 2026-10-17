@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertTriangle, Banknote, CheckCircle2, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Wallet } from 'lucide-react';
+import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
@@ -42,6 +43,9 @@ export interface PayrollRunDto {
   errorMessage: string | null;
   preparedByUserId: string | null;
   approvedByUserId: string | null;
+  /** v2.86.0: the handover's stamp — the runs table says how long a run has waited. */
+  submittedAt: string | null;
+  submittedById: string | null;
   journalEntryId: string | null;
   createdAt: string;
   payrollPeriod: { name: string; payDate: string | null; startDate: string; endDate: string };
@@ -317,7 +321,19 @@ export default function HrPayrollPage() {
                           <TableCell>
                             <Badge variant="secondary" className="text-[11px]">{run.runType}</Badge>
                           </TableCell>
-                          <TableCell><StatusBadge status={run.status} styles={RUN_STATUS_STYLES} /></TableCell>
+                          <TableCell>
+                            <StatusBadge status={run.status} styles={RUN_STATUS_STYLES} />
+                            {/* v2.86.0: the waiting run wears its handover's age —
+                                the same EAT clock every filing surface uses. */}
+                            {run.status === 'PENDING_APPROVAL' && run.submittedAt && (
+                              <p
+                                className="mt-0.5 text-[10px] tabular-nums text-muted-foreground"
+                                data-testid="payroll-run-waiting-since"
+                              >
+                                waiting since {formatEatStamp(new Date(run.submittedAt))}
+                              </p>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">{kes(run.totalGross)}</TableCell>
                           <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
                             {kes(run.totalDeductions)}

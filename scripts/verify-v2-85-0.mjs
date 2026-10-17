@@ -33,10 +33,18 @@ const DIALOG = read('src/components/hr/payroll-run-dialog.tsx');
 const WN = read('src/lib/whats-new.ts');
 
 // ── 1. Version slots ────────────────────────────────────────────────────────
-check('version slots all read 2.85.0', () => {
-  assert(PKG.version === '2.85.0', `version=${PKG.version}`);
-  assert(PKG.mbumah.releaseVersion === '2.85.0', 'releaseVersion');
-  assert(PKG.mbumah.baseVersion === '2.85.0', 'baseVersion');
+// Re-anchored v2.86.0: atLeast semantics (a === pin breaks on every later
+// bump; the surface this round pinned is the 2.85.0 entry itself, checked
+// in the WN block below).
+const atLeast = (actual, floor) => {
+  const a = String(actual ?? '').split('.').map(Number);
+  const f = String(floor).split('.').map(Number);
+  return a.length === 3 && f.length === 3 && (a[0] > f[0] || (a[0] === f[0] && (a[1] > f[1] || (a[1] === f[1] && a[2] >= f[2]))));
+};
+check('version slots are at least 2.85.0', () => {
+  assert(atLeast(PKG.version, '2.85.0'), `version=${PKG.version}`);
+  assert(atLeast(PKG.mbumah.releaseVersion, '2.85.0'), 'releaseVersion');
+  assert(atLeast(PKG.mbumah.baseVersion, '2.85.0'), 'baseVersion');
 });
 
 // ── 2. What's-New 2.85.0 leads the feed ─────────────────────────────────────
