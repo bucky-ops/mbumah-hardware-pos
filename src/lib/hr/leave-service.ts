@@ -400,8 +400,11 @@ export async function notifyLeaveRequestCorrected(params: {
 }
 
 /** Roles that can decide leave - shared by the submission fan-out above and
- *  the cancel router below so both directions address the same group. */
-const DECISION_CAPABLE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
+ *  the cancel router below so both directions address the same group.
+ *  v2.62.0: exported — the review stamp route reuses the exact same set for
+ *  the review-answered fan-out, so the group told "a correction landed" and
+ *  the group later told "it was answered" can never drift apart. */
+export const DECISION_CAPABLE_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] as const;
 
 function isDecisionCapableRole(role: string): boolean {
   return (DECISION_CAPABLE_ROLES as readonly string[]).includes(role);

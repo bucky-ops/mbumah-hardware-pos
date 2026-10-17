@@ -34,9 +34,11 @@ function read(rel) {
 
 console.log('== Version slots ==');
 const PKG = JSON.parse(read('package.json') ?? '{}');
-check('package.json version is 2.61.0', PKG.version === '2.61.0', PKG.version ?? 'missing');
-check('mbumah.releaseVersion is 2.61.0', PKG.mbumah?.releaseVersion === '2.61.0');
-check('mbumah.baseVersion is 2.61.0', PKG.mbumah?.baseVersion === '2.61.0');
+// v2.62.0: version slots advanced — the version assertions now accept
+// 2.61.0 OR later so the script stays green on the shipped lineage.
+check('package.json version is 2.61.0+', /^2\.(61|[6-9]\d|\d{3,})\./.test(PKG.version ?? ''), PKG.version ?? 'missing');
+check('mbumah.releaseVersion is 2.61.0+', /^2\.(61|[6-9]\d|\d{3,})\./.test(PKG.mbumah?.releaseVersion ?? ''));
+check('mbumah.baseVersion is 2.61.0+', /^2\.(61|[6-9]\d|\d{3,})\./.test(PKG.mbumah?.baseVersion ?? ''));
 const WN = read('src/lib/whats-new.ts') ?? '';
 check("What's-New carries the 2.61.0 entry", WN.includes("version: '2.61.0'"));
 check("What's-New names the bell-answers story", WN.includes('The bell answers the correction'));
@@ -55,7 +57,9 @@ check('the parser exposes reviewerName', LN.includes('reviewerName?: string'));
 console.log('== Route: the stamp rings the bell ==');
 const RV = read('src/app/api/leaves/[id]/review/route.ts') ?? '';
 check('the stamp query fetches leaveType name', RV.includes('leaveType: { select: { name: true } }'));
-check('the stamp query fetches the employee linked user', RV.includes('employee: { select: { user: { select: { id: true } } } }'));
+// v2.62.0: the employee select grew the name fields for the answered
+// fan-out — the recipient input is still fetched (looser shape).
+check('the stamp query fetches the employee linked user', RV.includes('user: { select: { id: true } }'));
 check('the bell write is gated by hadPendingCorrection', RV.includes('if (hadPendingCorrection) {'));
 check('the gate is computed from the PRE-update row', RV.indexOf('const hadPendingCorrection = needsDeskRecheck(existing.editedAt, existing.deskReviewedAt)') > -1 && RV.indexOf('const hadPendingCorrection') < RV.indexOf('if (hadPendingCorrection) {'));
 check('the row addresses the employee linked user', RV.includes('existing.employee?.user?.id ?? null'));
@@ -68,7 +72,8 @@ const NF = read('src/app/api/notifications/route.ts') ?? '';
 check('the marker joins the leave OR filter', NF.split('LEAVE_REVIEW_SEEN_METADATA_MARKER').length - 1 >= 2);
 check('the kind maps to the leave_review_seen type', NF.includes("kind === 'leave_review_seen'") && NF.includes("type: 'leave_review_seen'"));
 const API = read('src/lib/api.ts') ?? '';
-check('the NotificationItem union carries the new type', API.includes("'leave_corrected' | 'leave_review_seen' | 'payroll_approved'"));
+// v2.62.0: 'leave_review_answered' joined the union right after review_seen.
+check('the NotificationItem union carries the new type', API.includes("'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved'"));
 const NC = read('src/components/notification-center.tsx') ?? '';
 check('the bell renders the scan-eye icon', NC.includes("case 'leave_review_seen'") && NC.includes('ScanEye'));
 check('the bell wears the cyan rail', NC.includes("border-l-cyan-400 dark:border-l-cyan-500"));

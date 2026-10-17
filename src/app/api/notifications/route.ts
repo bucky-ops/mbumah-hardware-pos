@@ -19,6 +19,7 @@ import {
   LEAVE_EDITED_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
   LEAVE_REVIEW_SEEN_METADATA_MARKER,
+  LEAVE_REVIEW_ANSWERED_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
 import {
@@ -68,7 +69,11 @@ export interface NotificationData {
   // desk visit CLEARS a pending correction (the re-check marker flips off);
   // cyan surface, deep link → the portal leave page where the "Seen by
   // {reviewer}" badge lives.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
+  // v2.62.0: 'leave_review_answered' - APPROVER-facing rows for the SAME
+  // clearing visit — "the correction you were told about was answered by
+  // {reviewer}"; emerald surface, deep link → the Payroll tab's Leave desk
+  // where the emerald dialog receipt carries the same story.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -464,6 +469,10 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.61.0: the employee-facing "your correction was seen"
                 // rows — the desk visit that cleared the marker, named.
                 { metadata: { contains: LEAVE_REVIEW_SEEN_METADATA_MARKER } },
+                // v2.62.0: the approver-facing "the correction you were told
+                // about was answered" rows — the same clearing visit, aimed
+                // at the group the amber leave_corrected rows went to.
+                { metadata: { contains: LEAVE_REVIEW_ANSWERED_METADATA_MARKER } },
                 // v2.47.0: payroll-run approval digest rows (maker + the
                 // store's payroll group) with the headline numbers.
                 { metadata: { contains: PAYROLL_APPROVED_METADATA_MARKER } },
@@ -595,6 +604,24 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               category: 'HR',
               actionUrl: n.actionUrl ?? undefined,
               actionLabel: n.actionLabel ?? undefined,
+            });
+          } else if (kind === 'leave_review_answered') {
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_review_answered',
+              title: n.title,
+              description: n.message,
+              // v2.62.0: the corrected request YOU were notified of was
+              // answered by the desk — an emerald receipt row (green light:
+              // the marker is cleared, decide on the corrected details) that
+              // routes the Payroll tab's Leave desk, where the dialog's
+              // emerald "Correction seen by {reviewer}" receipt lives — the
+              // same desk the amber leave_corrected row pointed at.
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: 'payroll',
+              category: 'HR',
             });
           } else if (kind === 'payroll_approved') {
             notifications.push({

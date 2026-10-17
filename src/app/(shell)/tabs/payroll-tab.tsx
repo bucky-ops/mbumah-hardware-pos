@@ -37,7 +37,7 @@ import {
   CalendarPlus, UserCheck, Info,
   UserCog, Link2, Unlink, ShieldCheck,
   Copy, RefreshCw, Wand2,
-  Paperclip,
+  Paperclip, BadgeCheck,
 } from 'lucide-react';
 
 import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf, previewWorkingDays } from '@/lib/leave-tab';
@@ -2451,17 +2451,34 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   correction is unseen, neutral once the visit is on record. */}
               {(() => {
                 const live = leaves.find((row) => row.id === detail.id) ?? detail;
+                // v2.62.0: an ANSWERED correction — the request was edited
+                // in place AND the desk visited after the edit (the shared
+                // rule says !needsRecheck). The neutral "Last reviewed by"
+                // receipt becomes an explicit answer to the amber
+                // correction notification: "seen by {reviewer}". Holds the
+                // ANSWER timestamp itself (truthy = answered) so the receipt
+                // body can format it without a non-null assertion.
+                const answeredCorrection =
+                  !live.needsRecheck && live.deskReviewedAt && live.editedAt
+                    ? live.deskReviewedAt
+                    : null;
                 return (
                   <div
                     className={`rounded-lg border p-2.5 ${
                       live.needsRecheck
                         ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40'
-                        : 'border-border bg-muted/40'
+                        : answeredCorrection
+                          ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/40'
+                          : 'border-border bg-muted/40'
                     }`}
                   >
                     <p
                       className={`text-xs font-medium mb-0.5 flex items-center gap-1.5 ${
-                        live.needsRecheck ? 'text-amber-800 dark:text-amber-300' : 'text-muted-foreground'
+                        live.needsRecheck
+                          ? 'text-amber-800 dark:text-amber-300'
+                          : answeredCorrection
+                            ? 'text-emerald-800 dark:text-emerald-300'
+                            : 'text-muted-foreground'
                       }`}
                     >
                       {/* v2.61.0: the amber state gets the same live pulse dot
@@ -2473,12 +2490,42 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
                         </span>
                       ) : null}
-                      <Eye className="h-3 w-3" aria-hidden /> Desk review
+                      {/* v2.62.0: the answered state wears the badge-check —
+                          the green-light heading that mirrors the emerald
+                          "Correction answered" bell chip. */}
+                      {answeredCorrection ? (
+                        <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+                      ) : null}
+                      <Eye className="h-3 w-3" aria-hidden /> {answeredCorrection ? 'Correction answered' : 'Desk review'}
                     </p>
                     {live.needsRecheck ? (
                       <p className="text-sm text-amber-900 dark:text-amber-200">
                         Corrected {detail.editedAt ? formatDateTime(detail.editedAt) : 'recently'} — no desk visit since. Opening this dialog marks it re-checked for every approver.
                       </p>
+                    ) : answeredCorrection ? (
+                      <div className="flex items-center gap-2">
+                        {/* v2.62.0: the answered receipt keeps the reviewer
+                            initial avatar — the same person the bell row,
+                            the portal badge and the audit log carry. */}
+                        {live.deskReviewedByName ? (
+                          <span
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-800"
+                            aria-hidden
+                          >
+                            {live.deskReviewedByName.trim().charAt(0).toUpperCase()}
+                          </span>
+                        ) : null}
+                        <p className="text-sm text-muted-foreground">
+                          Seen by
+                          {live.deskReviewedByName ? (
+                            <span className="font-medium text-foreground"> {live.deskReviewedByName}</span>
+                          ) : (
+                            ' the desk'
+                          )}
+                          {' · '}
+                          {formatDateTime(answeredCorrection)}
+                        </p>
+                      </div>
                     ) : live.deskReviewedAt ? (
                       <div className="flex items-center gap-2">
                         {/* v2.61.0: the reviewer wears an initial avatar —

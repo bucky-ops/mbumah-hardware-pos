@@ -100,9 +100,12 @@ describe('POST /api/leaves/[id]/review - the bell answers the correction (static
     expect(source).toContain('leaveReviewSeenCopy');
   });
 
-  it('the stamp query fetches the copy + recipient inputs (leaveType, employee user)', () => {
+  it('the stamp query fetches the copy + recipient inputs (leaveType, employee user, and since v2.62.0 the employee NAME)', () => {
     expect(source).toContain('leaveType: { select: { name: true } }');
-    expect(source).toContain('employee: { select: { user: { select: { id: true } } } }');
+    // v2.62.0: the employee select grew the name fields for the answered
+    // fan-out — the recipient input (linked user id) is still fetched.
+    expect(source).toContain('firstName: true');
+    expect(source).toContain('user: { select: { id: true } }');
     expect(source).toContain('startDate: true');
     expect(source).toContain('endDate: true');
   });
@@ -162,7 +165,8 @@ describe('v2.61.0 static wiring', () => {
 
   it('the NotificationItem union carries the new type', () => {
     const api = readFileSync(join(ROOT, 'lib/api.ts'), 'utf8');
-    expect(api).toContain("'leave_corrected' | 'leave_review_seen' | 'payroll_approved'");
+    // v2.62.0: the answered type joined the union right after review_seen.
+    expect(api).toContain("'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved'");
   });
 
   it('the notification-center renders the cyan receipt surface', () => {

@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.62.0',
+    title: 'The correction answers to the room — the approvals group hears when their re-check is done',
+    bullets: [
+      'The amber "Corrected - re-review" bell row raised a question; now it gets an answer: when a desk visit clears the re-check marker, every approver who was told about the correction gets an emerald "Correction answered" row.',
+      'The row names the reviewer and the employee — "{reviewer} reviewed {name}\'s corrected request — safe to decide on the corrected details" — and routes straight to the Leave desk.',
+      'The desk dialog joins in: an answered correction upgrades the receipt from "Last reviewed by" to an emerald "Correction answered — Seen by {reviewer}" with the badge-check and the reviewer avatar.',
+      'It rings only once per correction, alongside the employee\'s own "your correction was seen" row — one desk visit, every listener told exactly once.',
+      'Receipt rows stay bell-only: good news that keeps is not inbox-worthy.',
+    ],
+  },
+  {
     version: '2.61.0',
     title: 'The bell answers the correction — when the desk reads your fix, you hear about it',
     bullets: [
