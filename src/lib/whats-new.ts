@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.69.0',
+    title: 'The desk files its report — a printable per-branch ledger roll-up',
+    bullets: [
+      'The Desk activity panel grows a "Report" door: a printable per-branch desk report covering the last 7, 14 or 30 days — today included — on the desk\'s own Nairobi calendar (EAT).',
+      'One page answers the filing questions: totals (visits, corrections answered, reviewers, requests), a per-branch roll-up table, the day-by-day rhythm as a bar strip, and the reviewers who did the desk work.',
+      'The most-visited requests in the window are called out — a thrice-reviewed request is a different story from a once-glanced one.',
+      'Narrow the whole report to one branch with the chips — an explicit report scope, named in the header, unlike the org-wide morning note.',
+      'The "Print" button isolates the report on paper through the app\'s print pipeline — nav, sidebar and toolbar never reach the printer, and a printed copy can never disagree with the screen because both come from the same server-side read.',
+    ],
+  },
+  {
     version: '2.68.0',
     title: 'The morning note rings the bell — yesterday at the desk travels to every org inbox',
     bullets: [
