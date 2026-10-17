@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { WHATS_NEW, compareWhatsNewVersions, whatsNewReadState, whatsNewUnreadCount } from '@/lib/whats-new';
 
 /**
  * v2.66.0 contracts — the console catches up on the news.
@@ -36,7 +37,8 @@ describe('ChangelogModal - the console tells the whole release story', () => {
   const CHROME = readRepo('src/components/org/chrome.tsx');
 
   it('imports the shared WHATS_NEW feed (single source of truth)', () => {
-    expect(CHROME).toContain("import { WHATS_NEW, type WhatsNewEntry } from '@/lib/whats-new';");
+    // v2.75.0 — the reading-state helpers ride the same import.
+    expect(CHROME).toContain("import { WHATS_NEW, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';");
   });
 
   it('imports APP_VERSION alongside the build label', () => {
@@ -209,28 +211,30 @@ describe('CommandPalette - the jump-to-release group (v2.73.0)', () => {
 
   it('takes the jump callback and derives one item per release from WHATS_NEW', () => {
     expect(CHROME).toContain('onJumpToRelease: (version: string) => void;');
-    expect(CHROME).toMatch(/const releaseActions = useMemo\(\s*\(\) => WHATS_NEW\.map\(\(e\) => \(\{ version: e\.version, label: `v\$\{e\.version\} — \$\{e\.title\}` \}\)\)/);
+    // v2.75.0 — the map now derives the reading state on the same pass.
+    expect(CHROME).toMatch(/const releaseActions = useMemo\(\s*\(\) => WHATS_NEW\.map\(\(e\) => \(\{[\s\S]*?state: seenState\.read \? whatsNewReadState\(e\.version, seenState\.value\) : \('seen' as const\),/);
   });
 
   it('renders a dedicated group, last, so the default view stays compact', () => {
-    expect(CHROME).toContain('<CommandGroup heading="Jump to release">');
+    // v2.75.0 — the heading is a fragment now (it carries the unread counter).
     const workspaces = CHROME.indexOf('<CommandGroup heading="Store workspaces">');
-    const releases = CHROME.indexOf('<CommandGroup heading="Jump to release">');
+    const releases = CHROME.indexOf('Jump to release');
     expect(releases).toBeGreaterThan(workspaces);
   });
 
   it('release items are testid-ed, searchable by value, and truncate long titles', () => {
     expect(CHROME).toMatch(/data-testid=\{`palette-release-\$\{r\.version\}`\}/);
     expect(CHROME).toMatch(/value=\{`\$\{r\.label\} release notes`\}/);
-    expect(CHROME).toContain('<span className="min-w-0 flex-1 truncate">{r.label}</span>');
+    expect(CHROME).toContain('min-w-0 flex-1 truncate');
   });
 
   it('selecting a release closes the palette and jumps', () => {
     expect(CHROME).toMatch(/onSelect=\{\(\) => \{ onOpenChange\(false\); onJumpToRelease\(r\.version\); \}\}/);
   });
 
-  it('wears the changelog icon and dark-safe slate styling', () => {
-    expect(CHROME).toMatch(/<ScrollText className="mr-2 h-3\.5 w-3\.5 shrink-0 text-slate-400" \/>/);
+  it('wears the changelog icon and keeps the search placeholder', () => {
+    // v2.75.0 — the icon goes emerald for the latest, slate for the rest.
+    expect(CHROME).toContain("r.state === 'latest' ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400'");
     expect(CHROME).toContain('placeholder="Search actions, stores, releases..."');
   });
 });
@@ -309,5 +313,162 @@ describe('release metadata - v2.73.0', () => {
     expect(CHROME).toContain('data-testid="changelog-got-it"');
     expect(CHROME).toContain('data-testid="footer-changelog-pill"');
     expect(CHROME).toContain("const SEEN_VERSION_KEY = 'mbt_seen_version';");
+  });
+});
+
+// ── 7. the palette knows what you've read (v2.75.0) ──────────────────────────
+
+describe('compareWhatsNewVersions - semver, not string compare (v2.75.0)', () => {
+  it('orders component-wise: major, then minor, then patch', () => {
+    expect(compareWhatsNewVersions('2.75.0', '2.74.0')).toBeGreaterThan(0);
+    expect(compareWhatsNewVersions('2.74.0', '2.75.0')).toBeLessThan(0);
+    expect(compareWhatsNewVersions('2.73.0', '2.72.0')).toBeGreaterThan(0);
+    expect(compareWhatsNewVersions('3.0.0', '2.99.99')).toBeGreaterThan(0);
+  });
+
+  it('the string-compare trap is dead: 2.9 ranks BELOW 2.10', () => {
+    expect(compareWhatsNewVersions('2.10.0', '2.9.0')).toBeGreaterThan(0);
+    expect(compareWhatsNewVersions('2.9.0', '2.10.0')).toBeLessThan(0);
+  });
+
+  it('equal versions compare equal, and missing components read as zero', () => {
+    expect(compareWhatsNewVersions('2.75.0', '2.75.0')).toBe(0);
+    expect(compareWhatsNewVersions('2.75', '2.75.0')).toBe(0);
+  });
+});
+
+describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
+  it('the newest entry in the feed is the latest, always', () => {
+    expect(whatsNewReadState(WHATS_NEW[0].version, WHATS_NEW[0].version)).toBe('latest');
+    expect(whatsNewReadState(WHATS_NEW[0].version, null)).toBe('latest');
+  });
+
+  it('a release strictly newer than the seen flag is new', () => {
+    expect(whatsNewReadState('2.74.0', '2.73.0')).toBe('new');
+    expect(whatsNewReadState('2.74.1', '2.74.0')).toBe('new');
+  });
+
+  it('a release at or below the flag has been seen', () => {
+    expect(whatsNewReadState('2.72.0', '2.73.0')).toBe('seen');
+    expect(whatsNewReadState('2.73.0', '2.73.0')).toBe('seen');
+  });
+
+  it('stays calm with no flag: no unread claims without a reference point', () => {
+    expect(whatsNewReadState('2.30.0', null)).toBe('seen');
+    expect(whatsNewReadState(WHATS_NEW[0].version, null)).toBe('latest');
+  });
+});
+
+describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
+  it('counts the releases that arrived after the flag', () => {
+    // The feed leads 2.75.0 (latest), then 2.74.0, 2.73.0 — a 2.73.0 flag
+    // means 2.74.0 arrived unread (2.75.0 is the latest, marked separately).
+    expect(whatsNewUnreadCount('2.73.0')).toBe(1);
+    expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(4);
+  });
+
+  it('zero when everything is read, zero when nothing is provably unread', () => {
+    expect(whatsNewUnreadCount(WHATS_NEW[0].version)).toBe(0);
+    expect(whatsNewUnreadCount(null)).toBe(0);
+  });
+});
+
+describe('CommandPalette - the release inbox (v2.75.0)', () => {
+  const CHROME = readRepo('src/components/org/chrome.tsx');
+
+  it('reads the SHARED seen flag when the palette opens, never on the server', () => {
+    expect(CHROME).toContain('const [seenState, setSeenState] = useState<{ read: boolean; value: string | null }>({ read: false, value: null });');
+    const effect = CHROME.split('const [seenState, setSeenState]')[1].split('const releaseActions =')[0];
+    expect(effect).toContain('if (!open) return;');
+    expect(effect).toContain('localStorage.getItem(SEEN_VERSION_KEY)');
+    expect(effect).toContain('window.setTimeout');
+    expect(effect).toContain('return () => window.clearTimeout(id);');
+  });
+
+  it('re-reads on every open (a "Got it" in the modal lands on the next cmd+K)', () => {
+    const effect = CHROME.split('const [seenState, setSeenState]')[1].split('const releaseActions =')[0];
+    expect(effect).toContain('[open]);');
+  });
+
+  it('claims no state before the flag has actually been read', () => {
+    expect(CHROME).toContain("state: seenState.read ? whatsNewReadState(e.version, seenState.value) : ('seen' as const),");
+    expect(CHROME).toContain('(seenState.read ? whatsNewUnreadCount(seenState.value) : 0)');
+  });
+
+  it('every item carries its state marker, testid-ed per version', () => {
+    expect(CHROME).toMatch(/data-testid=\{`palette-release-state-\$\{r\.version\}`\}/);
+  });
+
+  it('the latest wears the modal\u2019s emerald badge (same family, Sparkles and all)', () => {
+    const latest = CHROME.split("r.state === 'latest' ? (")[1].split(") : r.state === 'new' ?")[0];
+    expect(latest).toContain('Sparkles');
+    expect(latest).toContain('latest');
+    expect(latest).toContain('dark:border-emerald-500/40 dark:bg-slate-900 dark:text-emerald-300');
+    expect(latest).toContain('data-testid={`palette-release-state-${r.version}`}');
+  });
+
+  it('new arrivals wear the outline chip of the footer-pill family', () => {
+    const fresh = CHROME.split(") : r.state === 'new' ? (")[1].split(") : (")[0];
+    expect(fresh).toContain('new');
+    expect(fresh).toContain('border-emerald-200');
+    expect(fresh).toContain('dark:border-emerald-500/30 dark:text-emerald-400');
+    expect(fresh).toContain('title={`v${r.version} arrived after you last read the notes`}');
+  });
+
+  it('read releases keep their quiet "notes" hint', () => {
+    const seen = CHROME.split(") : r.state === 'new' ? (")[1].split('</CommandItem>')[0];
+    expect(seen).toContain('<span className="ml-auto shrink-0 text-[10px] text-slate-400">notes</span>');
+  });
+
+  it('the group heading counts the unread', () => {
+    expect(CHROME).toContain('data-testid="palette-release-unread"');
+    expect(CHROME).toContain('{unreadCount} unread');
+    expect(CHROME).toContain("arrived after you last read the notes`}");
+  });
+
+  it('the latest item reads as first-class (emerald icon + bold title)', () => {
+    expect(CHROME).toContain("r.state === 'latest' ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400'");
+    expect(CHROME).toContain("r.state === 'latest' ? 'font-semibold text-slate-800 dark:text-slate-100' : ''");
+  });
+});
+
+describe("What's-New 2.75.0", () => {
+  it('leads the feed with the release-inbox story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.75.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.75.0'")).toBeLessThan(WN.indexOf("version: '2.74.0'"));
+    expect(WN).toContain('The palette knows what you');
+    expect(WN).toMatch(/unread/i);
+    expect(WN).toMatch(/SAME seen flag/);
+  });
+});
+
+describe('release metadata - v2.75.0', () => {
+  it('bumps package.json to at least 2.75.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.75.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.75.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.75.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-75-0']).toBe('node scripts/verify-v2-75-0.mjs');
+  });
+
+  it('keeps every prior surface intact (jump group, modal jump, footer pill, cross-links)', () => {
+    const CHROME = readRepo('src/components/org/chrome.tsx');
+    expect(CHROME).toMatch(/data-testid=\{`palette-release-\$\{r\.version\}`\}/);
+    expect(CHROME).toContain('data-testid="changelog-jump-pill"');
+    expect(CHROME).toContain('data-testid="footer-changelog-pill"');
+    expect(CHROME).toContain("localStorage.setItem(SEEN_VERSION_KEY, APP_VERSION);");
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-request-visit-reviewer"');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-visit-request"');
   });
 });
