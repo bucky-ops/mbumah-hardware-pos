@@ -387,32 +387,60 @@ function quarterPeriod(now: Date): { from: Date; to: Date } {
   };
 }
 
-/** Build the digest payload for one schedule (or null when the report is empty). */
-export async function buildDigestData(
-  schedule: { organizationId: string; storeId: string | null; reportKey: string; frequency: string },
-  now: Date = new Date(),
-): Promise<HrReportDigestData | null> {
-  const session = sweepSession(schedule);
-  const period = schedule.frequency === 'MONTHLY' ? monthPeriod(now) : quarterPeriod(now);
-  const periodLabel = `${period.from.toISOString().slice(0, 10)} → ${period.to.toISOString().slice(0, 10)}`;
+/**
+ * Shared header-block facts of every digest (email body AND CSV header rows).
+ * v2.52.0: extracted so the ad-hoc CSV export route and the scheduled email
+ * resolve organization / scope labels through ONE code path — the labels on
+ * a downloaded CSV can never drift from the labels in the email.
+ */
+export interface DigestMeta {
+  organizationName: string;
+  scopeLabel: string;
+  periodLabel: string;
+  frequencyLabel: string;
+}
+
+/** Resolve the digest's organization + scope labels for a caller's scope. */
+export async function digestOrgAndScope(
+  organizationId: string,
+  storeId: string | null,
+): Promise<{ organizationName: string; scopeLabel: string }> {
   const org = await db.organization.findUnique({
-    where: { id: schedule.organizationId },
+    where: { id: organizationId },
     select: { name: true },
   });
-  const scopeLabel = schedule.storeId
-    ? (await db.store.findUnique({ where: { id: schedule.storeId }, select: { name: true } }))?.name ?? 'Branch'
+  const scopeLabel = storeId
+    ? (await db.store.findUnique({ where: { id: storeId }, select: { name: true } }))?.name ?? 'Branch'
     : 'All branches';
+  return { organizationName: org?.name ?? 'MBUMAH Hardware', scopeLabel };
+}
 
+/**
+ * Build ONE report's digest payload from an explicit session + period + meta
+ * block. v2.52.0: extracted from buildDigestData so the ad-hoc CSV export
+ * route (GET /api/hr/reports/export) and the scheduled email share a single
+ * builder — a downloaded CSV always carries the same aggregates, labels and
+ * table shape the digest email would. `opts.storeId` narrows the report to a
+ * branch (org-scope caller drill-down, fail-closed inside the report fns).
+ */
+export async function buildDigestPayload(
+  session: AuthSession,
+  reportKey: string,
+  period: { from: Date; to: Date },
+  meta: DigestMeta,
+  now: Date = new Date(),
+  opts?: { storeId?: string | null; year?: number },
+): Promise<HrReportDigestData | null> {
   const base = {
-    organizationName: org?.name ?? 'MBUMAH Hardware',
-    periodLabel,
-    scopeLabel,
-    frequencyLabel: schedule.frequency,
+    organizationName: meta.organizationName,
+    periodLabel: meta.periodLabel,
+    scopeLabel: meta.scopeLabel,
+    frequencyLabel: meta.frequencyLabel,
   };
 
-  switch (schedule.reportKey) {
+  switch (reportKey) {
     case 'headcount': {
-      const r = await headcountReport(session, period);
+      const r = await headcountReport(session, period, opts);
       if (!r) return null;
       return {
         ...base,
@@ -433,7 +461,7 @@ export async function buildDigestData(
       };
     }
     case 'employment-cost': {
-      const r = await employmentCostReport(session, period);
+      const r = await employmentCostReport(session, period, opts);
       if (!r) return null;
       const fmt = (v: number) => `KES ${v.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       return {
@@ -453,7 +481,7 @@ export async function buildDigestData(
       };
     }
     case 'absence': {
-      const r = await absenceReport(session, period);
+      const r = await absenceReport(session, period, opts);
       if (!r) return null;
       return {
         ...base,
@@ -473,7 +501,7 @@ export async function buildDigestData(
       };
     }
     case 'turnover': {
-      const r = await turnoverReport(session, period);
+      const r = await turnoverReport(session, period, opts);
       if (!r) return null;
       return {
         ...base,
@@ -492,7 +520,7 @@ export async function buildDigestData(
       };
     }
     case 'time-to-hire': {
-      const r = await timeToHireReport(session, period);
+      const r = await timeToHireReport(session, period, opts);
       if (!r) return null;
       return {
         ...base,
@@ -505,7 +533,7 @@ export async function buildDigestData(
       };
     }
     case 'statutory-liability': {
-      const r = await statutoryLiabilityReport(session, period);
+      const r = await statutoryLiabilityReport(session, period, opts);
       if (!r) return null;
       const fmt = (v: number) => `KES ${v.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       return {
@@ -529,13 +557,16 @@ export async function buildDigestData(
       // v2.37.0: the only YEAR-KEYED schedule — balances are calendar-year
       // scoped, NOT period-keyed, so the digest re-computes for the current
       // UTC leave year on every fire and says so in the period label.
-      const r = await leaveUtilisationReport(session, now.getUTCFullYear(), { storeId: schedule.storeId });
+      // v2.52.0: the ad-hoc export passes the page's selected leave year so
+      // the CSV always matches what the screen shows.
+      const year = opts?.year ?? now.getUTCFullYear();
+      const r = await leaveUtilisationReport(session, year, { storeId: opts?.storeId ?? session.storeId ?? null });
       if (!r) return null;
       const pct = (v: number) => `${Math.round(v * 10) / 10}%`;
       return {
         ...base,
         reportLabel: REPORT_LABELS['leave-utilisation'],
-        periodLabel: `Leave year ${r.year}`,
+        periodLabel: `Leave year ${year}`,
         headline: [
           { label: 'Tracked rows', value: String(r.totals.tracked) },
           { label: 'Liability days', value: String(r.totals.available) },
@@ -554,6 +585,25 @@ export async function buildDigestData(
     default:
       return null;
   }
+}
+
+/** Build the digest payload for one schedule (or null when the report is empty). */
+export async function buildDigestData(
+  schedule: { organizationId: string; storeId: string | null; reportKey: string; frequency: string },
+  now: Date = new Date(),
+): Promise<HrReportDigestData | null> {
+  const session = sweepSession(schedule);
+  const period = schedule.frequency === 'MONTHLY' ? monthPeriod(now) : quarterPeriod(now);
+  const periodLabel = `${period.from.toISOString().slice(0, 10)} → ${period.to.toISOString().slice(0, 10)}`;
+  const { organizationName, scopeLabel } = await digestOrgAndScope(schedule.organizationId, schedule.storeId);
+  return buildDigestPayload(
+    session,
+    schedule.reportKey,
+    period,
+    { organizationName, scopeLabel, periodLabel, frequencyLabel: schedule.frequency },
+    now,
+    { storeId: schedule.storeId },
+  );
 }
 
 // ── Due-date logic + sweep ──────────────────────────────────────────────────
