@@ -1908,6 +1908,12 @@ model LeaveRequest {
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
   store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  // v2.63.0: the desk's own ledger — every desk visit (dialog open) is
+  // recorded individually below. The columns above only carry the LATEST
+  // visit; the table keeps WHO looked WHEN, how many times, and whether
+  // THAT visit cleared a pending re-check marker.
+  reviewVisits LeaveReviewVisit[]
+
   @@index([employeeId])
   @@index([leaveTypeId])
   @@index([storeId])
@@ -1916,6 +1922,33 @@ model LeaveRequest {
   @@index([storeId, status])
   @@index([employeeId, status])
   @@map("leave_requests")
+}
+
+/// v2.63.0: the desk's own ledger — one row per desk visit (every open of
+/// the leave detail dialog, which already POSTs the v2.59.0 review stamp).
+/// The LeaveRequest stamp columns (deskReviewedAt/By*) only carry the
+/// LATEST visit and are overwritten on every re-open; this table keeps the
+/// full history: WHO looked, WHEN, how many times, and whether THAT visit
+/// cleared a pending re-check marker (the v2.59.0 amber chip turning off).
+/// The desk dialog renders it as a visit timeline so an approver can tell
+/// "three people looked at this" from "nobody has". Cascade delete with the
+/// request — the ledger of a deleted request has no meaning.
+model LeaveReviewVisit {
+  id             String   @id @default(cuid())
+  leaveRequestId String
+  visitedById    String
+  // Denormalised display name (Users.name -> email -> id fallback, the
+  // same chain the v2.60.0 stamp uses) so the timeline never needs a join.
+  visitedByName  String
+  // v2.59.0-computed at write time: did THIS visit clear a pending
+  // correction (hadPendingCorrection)? Powers the emerald timeline dot.
+  clearedRecheck Boolean
+  createdAt      DateTime @default(now())
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+
+  @@index([leaveRequestId, createdAt])
+  @@map("leave_review_visits")
 }
 
 /// Daily attendance / time-tracking record. One row per employee per day.

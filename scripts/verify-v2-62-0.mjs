@@ -40,9 +40,9 @@ function read(rel) {
 
 console.log('== Version slots ==');
 const PKG = JSON.parse(read('package.json') ?? '{}');
-check('package.json version is 2.62.0', PKG.version === '2.62.0', PKG.version ?? 'missing');
-check('mbumah.releaseVersion is 2.62.0', PKG.mbumah?.releaseVersion === '2.62.0');
-check('mbumah.baseVersion is 2.62.0', PKG.mbumah?.baseVersion === '2.62.0');
+check('package.json version is 2.62.0+', PKG.version >= '2.62.0', PKG.version ?? 'missing');
+check('mbumah.releaseVersion is 2.62.0+', PKG.mbumah?.releaseVersion >= '2.62.0');
+check('mbumah.baseVersion is 2.62.0+', PKG.mbumah?.baseVersion >= '2.62.0');
 const WN = read('src/lib/whats-new.ts') ?? '';
 check('whats-new carries the 2.62.0 entry first', WN.includes("version: '2.62.0'") && WN.indexOf("version: '2.62.0'") < WN.indexOf("version: '2.61.0'"));
 

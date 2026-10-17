@@ -162,7 +162,11 @@ describe('v2.60.0 - the receipt is personal and shared', () => {
     // and onSuccess reads data.id / data.needsRecheck directly. The
     // v2.59.0 release read data.data.* off the wrong shape, so the inline
     // cache write threw silently (masked by focus refetches).
-    expect(source).toContain('apiFetch<{ id: string; deskReviewedAt: string | null; deskReviewedByName: string | null; needsRecheck: boolean }>');
+    // v2.63.0: the generic grew the visit-ledger fields (visitHistory +
+    // visitCount) and wrapped to multiple lines — the shape contract is
+    // asserted piecewise so the anchor survives further field growth.
+    expect(source).toMatch(/apiFetch<\{[\s\S]*?id: string;[\s\S]*?deskReviewedAt: string \| null;[\s\S]*?deskReviewedByName: string \| null;[\s\S]*?needsRecheck: boolean;[\s\S]*?\}>\(/);
+    expect(source).toContain('visitHistory?: Array<{ visitedByName: string; visitedAt: string; clearedRecheck: boolean }>');
     expect(source).toContain('l.id === data.id');
     expect(source).toContain('needsRecheck: data.needsRecheck');
     expect(source).not.toContain('data.data.needsRecheck');

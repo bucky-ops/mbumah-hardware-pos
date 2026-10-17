@@ -37,7 +37,7 @@ import {
   CalendarPlus, UserCheck, Info,
   UserCog, Link2, Unlink, ShieldCheck,
   Copy, RefreshCw, Wand2,
-  Paperclip, BadgeCheck,
+  Paperclip, BadgeCheck, History,
 } from 'lucide-react';
 
 import { leaveTypeStyle, balanceTone, balanceUtilization, initialsOf, previewWorkingDays } from '@/lib/leave-tab';
@@ -1608,6 +1608,12 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [detail, setDetail] = useState<LeaveRequest | null>(null);
+  // v2.63.0: the desk's visit ledger, per request — the review-stamp
+  // response carries the visit history (newest-first, capped at 8) + the
+  // total count; the dialog renders it as the visit timeline.
+  const [visitLog, setVisitLog] = useState<
+    Record<string, { entries: Array<{ visitedByName: string; visitedAt: string; clearedRecheck: boolean }>; total: number }>
+  >({});
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
@@ -1756,11 +1762,29 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   // react-query's focus refetches catching up afterwards).
   const reviewStampMutation = useMutation({
     mutationFn: (leaveRequestId: string) =>
-      apiFetch<{ id: string; deskReviewedAt: string | null; deskReviewedByName: string | null; needsRecheck: boolean }>(
+      apiFetch<{
+        id: string;
+        deskReviewedAt: string | null;
+        deskReviewedByName: string | null;
+        needsRecheck: boolean;
+        // v2.63.0: the visit ledger rides the stamp response.
+        visitHistory?: Array<{ visitedByName: string; visitedAt: string; clearedRecheck: boolean }>;
+        visitCount?: number;
+      }>(
         `/api/leaves/${leaveRequestId}/review`,
         { method: 'POST' },
       ),
     onSuccess: (data) => {
+      // v2.63.0: file the visit history for THIS request (fresh from the
+      // server, including the visit that just landed). Best-effort — an
+      // older response without the ledger fields simply leaves the
+      // timeline empty instead of throwing.
+      if (Array.isArray(data.visitHistory)) {
+        setVisitLog((prev) => ({
+          ...prev,
+          [data.id]: { entries: data.visitHistory ?? [], total: data.visitCount ?? data.visitHistory?.length ?? 0 },
+        }));
+      }
       qc.setQueryData<{ success: boolean; data: LeaveRequest[]; balances?: LeaveBalance[] }>(
         ['payroll-leaves', storeId],
         (old) =>
@@ -2552,6 +2576,72 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                     ) : (
                       <p className="text-sm text-muted-foreground">Not yet reviewed by the desk — no corrections on file.</p>
                     )}
+                    {/* v2.63.0: the visit timeline — the desk's own ledger,
+                        fresh from the stamp response (the visit that just
+                        landed included). Newest first; emerald dots mark the
+                        visits that CLEARED a re-check marker, neutral dots
+                        are routine looks. The count chip keeps the total
+                        honest even when the list is capped. */}
+                    {(() => {
+                      const log = visitLog[detail.id];
+                      if (!log || log.entries.length === 0) return null;
+                      const shown = log.entries.slice(0, 5);
+                      const hidden = log.total - shown.length;
+                      return (
+                        <div
+                          className="mt-2.5 pt-2.5 border-t border-border/60"
+                          data-testid="leave-visit-history"
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                            <History className="h-3 w-3" aria-hidden />
+                            Visit history
+                            <span className="ml-auto inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-muted-foreground ring-1 ring-border/60">
+                              {log.total} {log.total === 1 ? 'visit' : 'visits'}
+                            </span>
+                          </p>
+                          <ol className="space-y-1.5">
+                            {shown.map((v, i) => (
+                              <li
+                                key={`${v.visitedAt}-${i}`}
+                                className="flex items-center gap-2 text-xs"
+                                data-testid="leave-visit-entry"
+                              >
+                                <span
+                                  className={`inline-flex h-1.5 w-1.5 shrink-0 rounded-full ${
+                                    v.clearedRecheck
+                                      ? 'bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-800'
+                                      : 'bg-muted-foreground/40'
+                                  }`}
+                                  aria-hidden
+                                />
+                                {v.visitedByName ? (
+                                  <span
+                                    className="inline-flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[9px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-800"
+                                    aria-hidden
+                                  >
+                                    {v.visitedByName.trim().charAt(0).toUpperCase()}
+                                  </span>
+                                ) : null}
+                                <span className="text-foreground font-medium">
+                                  {v.visitedByName || 'The desk'}
+                                </span>
+                                <span className="text-muted-foreground">· {formatDateTime(v.visitedAt)}</span>
+                                {v.clearedRecheck ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                    <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> Cleared a re-check
+                                  </span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ol>
+                          {hidden > 0 ? (
+                            <p className="text-[11px] text-muted-foreground mt-1.5">
+                              + {hidden} earlier {hidden === 1 ? 'visit' : 'visits'} on file
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
