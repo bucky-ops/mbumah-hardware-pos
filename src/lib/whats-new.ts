@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.87.0',
+    title: 'The review gets written \u2014 and its subject reads it',
+    bullets: [
+      'Reviews can finally be written: a DRAFT or SUBMITTED review opens with a "Write review" / "Edit review" form \u2014 tap a 1\u20135 star rating, type the strengths and improvements, save. A fresh draft is no longer a dead end.',
+      'The save is honest about its limits: the rating is required before "Save draft" lights up, the narratives cap at 4000 characters with a live counter, and submitting still waits until the rating exists.',
+      'No more blind acknowledgements: in My goals & reviews, every review row gains a "Read review" panel \u2014 the stars, the strengths and the improvements load on demand before you acknowledge.',
+      'The read is scoped to you: only the reviewed employee reads a review through self-service \u2014 managers read through the HR console, and the lists still never show a rating.',
+      'Same families, light and dark: amber stars, emerald strengths, amber improvements \u2014 the write form and the read panel speak the review dialog\u2019s language.',
+    ],
+  },
+  {
     version: '2.86.0',
     title: 'The handover names its waiter \u2014 a waiting run is somebody\u2019s move',
     bullets: [

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { AuthSession } from '@/lib/auth';
 import {
   createCycle,
   createReview,
@@ -233,6 +234,42 @@ describe('performance reviews', () => {
     await expect(updateReview('rev-1', { action: 'CALIBRATE' }, session)).rejects.toMatchObject({
       code: 'CYCLE_NOT_ACTIVE',
     });
+  });
+  it('surfaces canEdit for DRAFT and SUBMITTED to the reviewer or HR (v2.87.0)', async () => {
+    db.performanceReview.findFirst.mockResolvedValue({ ...baseReview, status: 'DRAFT', overallRating: null });
+    const draft = await getReviewDetail('rev-1', session);
+    expect(draft.canEdit).toBe(true);
+    // the dead-end pair, now broken: a fresh draft is writable (canEdit)
+    // even though it is not yet submittable (canSubmit needs the rating)
+    expect(draft.canSubmit).toBe(false);
+
+    db.performanceReview.findFirst.mockResolvedValue({ ...baseReview, status: 'SUBMITTED', overallRating: 4 });
+    const submitted = await getReviewDetail('rev-1', session);
+    expect(submitted.canEdit).toBe(true);
+    expect(submitted.canSubmit).toBe(false);
+  });
+
+  it('closes canEdit once the review leaves the writable states', async () => {
+    db.performanceReview.findFirst.mockResolvedValue({ ...baseReview, status: 'ACKNOWLEDGED', overallRating: 4 });
+    expect((await getReviewDetail('rev-1', session)).canEdit).toBe(false);
+    db.performanceReview.findFirst.mockResolvedValue({ ...baseReview, status: 'CALIBRATED', overallRating: 4 });
+    expect((await getReviewDetail('rev-1', session)).canEdit).toBe(false);
+  });
+
+  it('gates canEdit by reviewer-or-HR, not by mere branch scope', async () => {
+    const reviewer: AuthSession = {
+      userId: 'user-1',
+      email: 'reviewer@mbumah.co.ke',
+      role: 'BRANCH_MANAGER',
+      storeId: 'store-1',
+      organizationId: 'org-1',
+    };
+    db.performanceReview.findFirst.mockResolvedValue({ ...baseReview, status: 'DRAFT' });
+    // the assigned reviewer may edit
+    expect((await getReviewDetail('rev-1', reviewer)).canEdit).toBe(true);
+    // a same-store bystander may not (reviewerUserId differs)
+    const bystander: AuthSession = { ...reviewer, userId: 'user-other' };
+    expect((await getReviewDetail('rev-1', bystander)).canEdit).toBe(false);
   });
 });
 
