@@ -44,6 +44,14 @@ export const PAYROLL_POSTED_METADATA_MARKER = 'payroll_posted';
  */
 export const PAYSLIP_ISSUED_METADATA_MARKER = 'payslip_issued';
 
+/**
+ * v2.50.0: feed-filter marker for the DISBURSEMENT digest rows
+ * (metadata.kind). Money actually left the door — M-Pesa B2C (live or
+ * simulated) or a manual bank-run confirmation — and the payroll group
+ * gets the per-batch payment record.
+ */
+export const PAYROLL_DISBURSED_METADATA_MARKER = 'payroll_disbursed';
+
 /** One per-employee aggregate row in the approval digest. */
 export interface PayrollRunDigestEmployeeRow {
   /** Display name, e.g. "Grace Wanjiku". */
@@ -449,6 +457,239 @@ export function payslipIssuedCopy(meta: PayslipIssuedMeta): PayslipIssuedCopy {
   </div>`;
 
   return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
+// ── v2.50.0: disbursement digest (money leaves the door) ────────────────────
+
+/** How the payment batch actually moved: live Daraja B2C, the dev/simulation
+ *  B2C, or a manual bank-run confirmation stamped by hand. */
+export type PayrollDisbursementMode = 'mpesa' | 'mpesa-mock' | 'manual';
+
+/** Run-level facts the disbursement digest copy is built from. */
+export interface PayrollRunDisbursedMeta {
+  /** Pay period label, e.g. "October 2026". */
+  periodName: string;
+  /** Store/branch name the run belongs to. */
+  storeName: string;
+  /** REGULAR / SUPPLEMENTARY / OFF_CYCLE / BONUS. */
+  runType: string;
+  /** mpesa (live Daraja) / mpesa-mock (dev simulation) / manual (bank run). */
+  mode: PayrollDisbursementMode;
+  /** Payslips eligible for this batch (PENDING, net > 0). */
+  eligible: number;
+  /** B2C payment requests sent to M-Pesa this batch (0 on manual). */
+  initiated: number;
+  /** Payslips that were already in flight from an earlier batch. */
+  alreadyInitiated: number;
+  /** Payslips settled PAID during this batch (mock receipts / manual marks). */
+  paidNow: number;
+  /** B2C initiation failures this batch. */
+  failed: number;
+  /** Payslips skipped (typically: no M-Pesa phone on file). */
+  skipped: number;
+  /** v2.33.0 gate counters, carried through for the honest banner. */
+  backoffSkipped?: number;
+  maxAttemptSkipped?: number;
+  /** Run-level net total (the money this batch settles). */
+  totalNet: number;
+  /** Disbursing actor's display label ("Grace Wanjiku" / email / "Disbursing user"). */
+  disbursedByLabel: string;
+  /** ISO timestamp of the disbursement batch. */
+  disbursedAtIso: string;
+  /** Manual payment reference (MANUAL-… / bank ref) when provided. */
+  paymentRef?: string | null;
+}
+
+/** Notification copy bundle for the disbursement digest (same shape contract). */
+export interface PayrollRunDisbursedCopy {
+  title: string;
+  message: string;
+  notifType: 'INFO';
+  priority: 'NORMAL';
+  emailSubject: string;
+  emailText: string;
+  emailHtml: string;
+}
+
+/** One per-payslip payment row in the disbursement CSV. */
+export interface PayrollDisbursementRow {
+  employeeName: string;
+  employeeCode: string | null;
+  net: number;
+  /** PAID / SENT / FAILED / SKIPPED. */
+  status: string;
+  /** M-Pesa receipt (mock-settled) or manual payment reference (nullable). */
+  receipt?: string | null;
+}
+
+/** Mode-specific prose so a live batch never reads like a simulation. */
+function disbursementModeCopy(mode: PayrollDisbursementMode): { label: string; receiptLine: string } {
+  if (mode === 'mpesa') {
+    return {
+      label: 'M-Pesa B2C',
+      receiptLine: 'Receipts land as M-Pesa settles each payment (B2C result webhook).',
+    };
+  }
+  if (mode === 'mpesa-mock') {
+    return {
+      label: 'simulated M-Pesa B2C',
+      receiptLine: 'Simulation mode: every eligible payment settled immediately with a mock receipt.',
+    };
+  }
+  return {
+    label: 'manual confirmation',
+    receiptLine: 'Marked paid by hand (bank run / cash) — this is a bookkeeping confirmation, not an M-Pesa send.',
+  };
+}
+
+/**
+ * Build the disbursement-digest copy: one bundle reused for the in-app bell
+ * rows and the email (HTML + text) — the same "money left the door" facts
+ * everywhere, so the bell, the email body and the CSV can never disagree.
+ * Amber surface family (#92400e header) so a disbursement never looks like
+ * the approval (emerald), the posting (sky) or a personal payslip notice
+ * (teal) in a crowded inbox.
+ */
+export function payrollRunDisbursedCopy(meta: PayrollRunDisbursedMeta): PayrollRunDisbursedCopy {
+  const period = meta.periodName || 'Payroll run';
+  const net = formatKesMoney(meta.totalNet);
+  const when = formatApprovedStamp(meta.disbursedAtIso);
+  const mode = disbursementModeCopy(meta.mode);
+
+  const sentNow =
+    meta.mode === 'manual'
+      ? `${meta.paidNow} payment${meta.paidNow === 1 ? '' : 's'} marked paid`
+      : `${meta.initiated} payment${meta.initiated === 1 ? '' : 's'} sent`;
+  const already = meta.alreadyInitiated ? ` · ${meta.alreadyInitiated} already in flight` : '';
+  const problems =
+    meta.failed || meta.skipped
+      ? ` · ${[
+          meta.failed ? `${meta.failed} failed` : null,
+          meta.skipped ? `${meta.skipped} skipped` : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}`
+      : '';
+  const nextStep =
+    meta.failed > 0
+      ? 'Retry the failed payments from the run dialog, then lock.'
+      : 'Lock the run to freeze the period.';
+
+  const title = `Payroll disbursed — ${period}`;
+  const message =
+    `${meta.storeName} · ${period} · ${sentNow} via ${mode.label}${already}${problems} · ` +
+    `Net ${net}. ${mode.receiptLine}`;
+
+  const emailSubject =
+    `Payroll disbursed — ${period} · ${meta.storeName} ` +
+    `(${sentNow}${meta.failed ? `, ${meta.failed} failed` : ''}, ${net} net)`;
+
+  const counter = (label: string, value: string | number, extra = ''): string =>
+    `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">${esc(label)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;font-size:13px;${extra}">${esc(value)}</td>
+        </tr>`;
+
+  const rowsHtml =
+    counter('Payments sent', meta.mode === 'manual' ? `${meta.paidNow} marked paid` : meta.initiated) +
+    (meta.alreadyInitiated ? counter('Already in flight', meta.alreadyInitiated) : '') +
+    counter('Settled this batch', meta.paidNow) +
+    (meta.failed ? counter('Failed', meta.failed, 'color:#b91c1c;') : '') +
+    (meta.skipped ? counter('Skipped', meta.skipped) : '') +
+    (meta.backoffSkipped ? counter('Backoff-blocked retries', meta.backoffSkipped) : '') +
+    (meta.maxAttemptSkipped ? counter('At attempt ceiling', meta.maxAttemptSkipped, 'color:#b91c1c;') : '') +
+    counter('Net settled', net, 'font-weight:800;font-size:14px;color:#047857;');
+
+  const emailText = [
+    `${'MBUMAH HARDWARE'} — Payroll disbursement digest`,
+    `${meta.storeName} · ${period} · ${meta.runType}`,
+    '-'.repeat(48),
+    `Channel: ${mode.label}`,
+    `Payments sent: ${meta.mode === 'manual' ? `${meta.paidNow} marked paid` : meta.initiated}`,
+    ...(meta.alreadyInitiated ? [`Already in flight: ${meta.alreadyInitiated}`] : []),
+    `Settled this batch: ${meta.paidNow}`,
+    ...(meta.failed ? [`Failed: ${meta.failed}`] : []),
+    ...(meta.skipped ? [`Skipped: ${meta.skipped}`] : []),
+    ...(meta.backoffSkipped ? [`Backoff-blocked retries: ${meta.backoffSkipped}`] : []),
+    ...(meta.maxAttemptSkipped ? [`At attempt ceiling: ${meta.maxAttemptSkipped}`] : []),
+    `Net settled: ${net}`,
+    `Disbursed by: ${meta.disbursedByLabel}`,
+    `Disbursed at: ${when}`,
+    ...(meta.paymentRef ? [`Payment ref: ${meta.paymentRef}`] : []),
+    '',
+    'The ready-to-file per-payslip payment CSV is attached (employee, staff',
+    'number, net, status, receipt) — reconcile it against the M-Pesa',
+    'statement or the bank run.',
+    '',
+    `Next step: ${nextStep}`,
+    '',
+    'This digest carries per-payslip payment aggregates and is sent only to',
+    'the payroll group — it never contains national IDs, bank details or',
+    'payslip line items.',
+  ].join('\n');
+
+  const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <div style="background:#92400e;color:#ffffff;padding:14px 18px;">
+      <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;opacity:0.85;">MBUMAH HARDWARE</div>
+      <div style="font-size:17px;font-weight:700;margin-top:2px;">Payroll disbursed — ${esc(period)}</div>
+    </div>
+    <div style="padding:16px 18px;color:#1f2937;">
+      <p style="margin:0 0 10px 0;font-size:13px;"><strong>${esc(meta.storeName)}</strong> &middot; ${esc(period)} &middot; ${esc(meta.runType)} run</p>
+      <table style="width:100%;margin:12px 0;border-collapse:collapse;">${rowsHtml}</table>
+      <p style="margin:10px 0;font-size:13px;">Disbursed by <strong>${esc(meta.disbursedByLabel)}</strong> at ${esc(when)} via <strong>${esc(mode.label)}</strong>.${meta.paymentRef ? ` Payment ref: <strong>${esc(meta.paymentRef)}</strong>.` : ''}</p>
+      <p style="margin:10px 0;font-size:13px;">${esc(mode.receiptLine)} The ready-to-file per-payslip payment CSV (employee, staff number, net, status, receipt) is attached — reconcile it against the M-Pesa statement or the bank run.</p>
+      <p style="margin:14px 0 0 0;font-size:12px;color:#6b7280;">
+        Next step: ${esc(nextStep)}<br/>
+        Per-payslip payment aggregates only — sent to the payroll group; never contains national IDs,<br/>
+        bank details or payslip line items.
+      </p>
+    </div>
+  </div>`;
+
+  return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
+/**
+ * Build the ready-to-file per-payslip payment CSV for a disbursement batch:
+ * header block (report/organization/period/run type/channel/actor/stamp) →
+ * per-payslip payment table (employee, staff number, net, status, receipt).
+ * Returns null when there is nothing to file so an empty batch never ships
+ * an empty spreadsheet.
+ */
+export function payrollDisbursementToCsv(
+  rows: PayrollDisbursementRow[],
+  meta: PayrollRunDisbursedMeta,
+): DigestCsvAttachment | null {
+  if (rows.length === 0) return null;
+  const period = meta.periodName || 'payroll-run';
+  const mode = disbursementModeCopy(meta.mode);
+  const lines: string[] = [];
+
+  lines.push(csvRow(['Report', 'Payroll disbursement summary']));
+  lines.push(csvRow(['Organization', meta.storeName]));
+  lines.push(csvRow(['Period', period]));
+  lines.push(csvRow(['Run type', meta.runType]));
+  lines.push(csvRow(['Channel', mode.label]));
+  lines.push(csvRow(['Disbursed by', meta.disbursedByLabel]));
+  lines.push(csvRow(['Disbursed-UTC', meta.disbursedAtIso]));
+  if (meta.paymentRef) lines.push(csvRow(['Payment ref', meta.paymentRef]));
+  lines.push('');
+
+  lines.push(csvRow(['Employee', 'Staff number', 'Net (KES)', 'Status', 'Receipt']));
+  for (const r of rows) {
+    lines.push(
+      csvRow([r.employeeName, r.employeeCode ?? '', csvMoney(r.net), r.status, r.receipt ?? '']),
+    );
+  }
+
+  // RFC-4180: CRLF between records, trailing CRLF at end of file (same
+  // framing as the approval/posted CSVs); byte size on the raw UTF-8 string.
+  const csv = lines.join('\r\n') + '\r\n';
+  return {
+    filename: `mbumah-payroll-${slug(period)}-disbursement.csv`,
+    content: Buffer.from(csv, 'utf8').toString('base64'),
+    byteSize: Buffer.byteLength(csv, 'utf8'),
+  };
 }
 
 // ── CSV attachment ──────────────────────────────────────────────────────────

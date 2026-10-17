@@ -31,13 +31,19 @@ import {
   PAYROLL_APPROVED_METADATA_MARKER,
   PAYROLL_POSTED_METADATA_MARKER,
   PAYSLIP_ISSUED_METADATA_MARKER,
+  PAYROLL_DISBURSED_METADATA_MARKER,
   payrollRunApprovalCopy,
   payrollRunPostedCopy,
   payslipIssuedCopy,
+  payrollRunDisbursedCopy,
   payrollRunDigestToCsv,
+  payrollDisbursementToCsv,
   type PayrollRunDigestEmployeeRow,
   type PayrollRunDigestMeta,
   type PayrollRunPostedMeta,
+  type PayrollRunDisbursedMeta,
+  type PayrollDisbursementRow,
+  type PayrollDisbursementMode,
 } from './run-digest';
 import {
   buildPayrollJournal,
@@ -1244,6 +1250,172 @@ export async function notifyEmployeesPayslipsIssued(params: {
   };
 }
 
+// ── 5.b v2.50.0: disbursement digest (money leaves the door) ─────────────
+
+/** Fail-soft result surfaced by POST .../disburse + POST .../disburse-mpesa. */
+export interface PayrollDisbursementDigestResult {
+  notifiedUsers: number;
+  emailRecipients: number;
+  emailStatus: 'SENT' | 'FAILED' | 'SKIPPED';
+  emailError?: string;
+  csvFilename?: string;
+  csvByteSize?: number;
+}
+
+/**
+ * v2.50.0: fan out the DISBURSEMENT digest for a just-settled payment batch —
+ * the lifecycle's last step finally has a voice. Money actually left the
+ * door (M-Pesa B2C live or simulated, or a manual bank-run confirmation),
+ * and everyone who co-owns the payroll decision now gets the per-batch
+ * payment record: counts by outcome, the net total, and a ready-to-file
+ * per-payslip payment CSV for the M-Pesa/bank reconciliation.
+ *
+ * Audience mirrors the posting digest: the store's decision-capable payroll
+ * group (SUPER_ADMIN/STORE_OWNER/BRANCH_MANAGER/ACCOUNTANT — active,
+ * store-scoped or super) MINUS the disbursing actor who just acted (their
+ * own dialog shows them the banner). Delivery: ONE email envelope with the
+ * per-payslip payment CSV attached, in-app bell rows per user with the
+ * payroll_disbursed metadata marker. Every failure mode is caught by the
+ * callers — the disbursement itself is already durable.
+ */
+export async function notifyPayrollRunDisbursed(params: {
+  runId: string;
+  storeId: string;
+  actorId: string;
+  mode: PayrollDisbursementMode;
+  eligible: number;
+  initiated: number;
+  alreadyInitiated: number;
+  paidNow: number;
+  failed: number;
+  skipped: number;
+  backoffSkipped?: number;
+  maxAttemptSkipped?: number;
+  paymentRef?: string | null;
+  disbursedAtIso: string;
+  rows: PayrollDisbursementRow[];
+}): Promise<PayrollDisbursementDigestResult> {
+  const [run, store, period] = await Promise.all([
+    db.payrollRun.findUnique({
+      where: { id: params.runId },
+      select: { runType: true, totalNet: true },
+    }),
+    db.store.findUnique({ where: { id: params.storeId }, select: { name: true } }),
+    // The period name rides the run → period relation.
+    db.payrollRun
+      .findUnique({
+        where: { id: params.runId },
+        select: { payrollPeriod: { select: { name: true } } },
+      })
+      .then((r) => r?.payrollPeriod?.name ?? null),
+  ]);
+
+  // Actor label: same fallback ladder as the approval/posting digests.
+  const actorLabel =
+    (await db.user
+      .findUnique({ where: { id: params.actorId }, select: { name: true, email: true } })
+      .then((u) => u?.name?.trim() || u?.email || null)
+      .catch(() => null)) || 'Disbursing user';
+
+  const meta: PayrollRunDisbursedMeta = {
+    periodName: period ?? 'Payroll run',
+    storeName: store?.name ?? 'MBUMAH HARDWARE',
+    runType: run?.runType ?? 'RUN',
+    mode: params.mode,
+    eligible: params.eligible,
+    initiated: params.initiated,
+    alreadyInitiated: params.alreadyInitiated,
+    paidNow: params.paidNow,
+    failed: params.failed,
+    skipped: params.skipped,
+    ...(params.backoffSkipped !== undefined ? { backoffSkipped: params.backoffSkipped } : {}),
+    ...(params.maxAttemptSkipped !== undefined
+      ? { maxAttemptSkipped: params.maxAttemptSkipped }
+      : {}),
+    totalNet: Number(run?.totalNet ?? 0),
+    disbursedByLabel: actorLabel,
+    disbursedAtIso: params.disbursedAtIso,
+    ...(params.paymentRef ? { paymentRef: params.paymentRef } : {}),
+  };
+
+  const copy = payrollRunDisbursedCopy(meta);
+  const csv = payrollDisbursementToCsv(params.rows, meta);
+
+  // Recipients: decision-capable group minus the actor. The actor keeps
+  // their own honest banner; the group gets the durable record.
+  const group = await db.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] },
+      OR: [{ storeId: params.storeId }, { role: 'SUPER_ADMIN' }],
+    },
+    select: { id: true, email: true },
+  });
+  const recipients = group.filter((u) => u.id !== params.actorId);
+  if (recipients.length === 0) {
+    return { notifiedUsers: 0, emailRecipients: 0, emailStatus: 'SKIPPED' };
+  }
+
+  const emailAddresses = recipients
+    .map((u) => u.email)
+    .filter((e): e is string => typeof e === 'string' && e.includes('@'));
+
+  let emailStatus: PayrollDisbursementDigestResult['emailStatus'] = 'SKIPPED';
+  let emailError: string | undefined;
+  if (emailAddresses.length > 0) {
+    const email = await sendEmail({
+      to: emailAddresses,
+      subject: copy.emailSubject,
+      html: copy.emailHtml,
+      text: copy.emailText,
+      ...(csv ? { attachments: [csv] } : {}),
+      type: 'PAYROLL_DISBURSED',
+      metadata: {
+        runId: params.runId,
+        periodName: meta.periodName,
+        storeName: meta.storeName,
+        mode: meta.mode,
+        initiated: meta.initiated,
+        paidNow: meta.paidNow,
+        failed: meta.failed,
+        skipped: meta.skipped,
+        totalNet: meta.totalNet,
+        disbursedBy: actorLabel,
+        ...(csv ? { csvFilename: csv.filename, csvBytes: csv.byteSize } : {}),
+      },
+    });
+    emailStatus = email.success ? 'SENT' : 'FAILED';
+    if (!email.success) emailError = email.error ?? 'Email send failed';
+  }
+
+  // In-app bell rows (kind marker drives the feed surface + filters).
+  await db.notification.createMany({
+    data: recipients.map((u) => ({
+      storeId: params.storeId,
+      userId: u.id,
+      title: copy.title,
+      message: copy.message,
+      type: copy.notifType,
+      category: 'HR',
+      priority: copy.priority,
+      metadata: JSON.stringify({
+        kind: PAYROLL_DISBURSED_METADATA_MARKER,
+        runId: params.runId,
+        periodName: meta.periodName,
+        emailStatus,
+      }),
+    })),
+  });
+
+  return {
+    notifiedUsers: recipients.length,
+    emailRecipients: emailAddresses.length,
+    emailStatus,
+    ...(emailError ? { emailError } : {}),
+    ...(csv ? { csvFilename: csv.filename, csvByteSize: csv.byteSize } : {}),
+  };
+}
+
 // ── 4. Post (idempotent journal + payslip issuance) ─────────────────────────
 
 export async function postPayrollRun(ctx: RunActorContext, runId: string) {
@@ -1503,6 +1675,16 @@ export async function disbursePayrollRun(
       'Only posted or locked runs can be disbursed.',
     );
   }
+  // v2.50.0: snapshot the batch BEFORE the updateMany so the digest CSV can
+  // carry the per-payslip payment rows (employee, staff number, net).
+  const batch = await db.payrollDetail.findMany({
+    where: { payrollRunId: run.id, paymentStatus: 'PENDING', netPay: { gt: 0 } },
+    select: {
+      netPay: true,
+      employee: { select: { firstName: true, lastName: true, employeeCode: true } },
+    },
+    orderBy: { employeeId: 'asc' },
+  });
   const now = new Date();
   const result = await withImmutabilityBypass(
     async () =>
@@ -1524,7 +1706,38 @@ export async function disbursePayrollRun(
       metadata: { disbursed: result.count, paymentRef: paymentRef ?? null },
     },
   );
-  return { disbursed: result.count };
+
+  // v2.50.0: the disbursement digest — a manual bank-run confirmation is
+  // exactly the moment the payroll group wants the record. BEST-EFFORT by
+  // contract: the marks above are already durable; the digest result rides
+  // fail-soft and can never undo or block them.
+  const rows: PayrollDisbursementRow[] = batch.map((d) => ({
+    employeeName: `${d.employee?.firstName ?? ''} ${d.employee?.lastName ?? ''}`.trim() || 'Unnamed employee',
+    employeeCode: d.employee?.employeeCode ?? null,
+    net: Number(d.netPay),
+    status: 'PAID',
+    receipt: paymentRef ?? null,
+  }));
+  const digest = await notifyPayrollRunDisbursed({
+    runId: run.id,
+    storeId: ctx.storeId,
+    actorId: ctx.actorId,
+    mode: 'manual',
+    eligible: batch.length,
+    initiated: 0,
+    alreadyInitiated: 0,
+    paidNow: result.count,
+    failed: 0,
+    skipped: 0,
+    paymentRef: paymentRef ?? null,
+    disbursedAtIso: now.toISOString(),
+    rows,
+  }).catch((err) => {
+    console.warn('[payroll] manual disbursement digest failed (best-effort):', err);
+    return null;
+  });
+
+  return { disbursed: result.count, digest };
 }
 
 // ── 6. Corrections (reverse and replace) ─────────────────────────────────────

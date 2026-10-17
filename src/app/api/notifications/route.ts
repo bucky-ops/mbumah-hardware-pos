@@ -24,6 +24,7 @@ import {
   PAYROLL_APPROVED_METADATA_MARKER,
   PAYROLL_POSTED_METADATA_MARKER,
   PAYSLIP_ISSUED_METADATA_MARKER,
+  PAYROLL_DISBURSED_METADATA_MARKER,
 } from '@/lib/hr/payroll/run-digest';
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,10 @@ export interface NotificationData {
   // v2.49.0: 'payslip_issued' - EMPLOYEE-facing personal rows (one per
   // portal-linked employee, own payslip number + net only); teal surface,
   // deep link → the portal Payslips page.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued';
+  // v2.50.0: 'payroll_disbursed' - disbursement digest rows (M-Pesa B2C
+  // batch or manual confirmation, per-payslip payment CSV); amber surface,
+  // targetTab → payroll Pay Runs desk, honest delivery chip.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -364,6 +368,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                   // v2.49.0: personal payslip-issued rows own their surface
                   // (section 9).
                   { metadata: { contains: PAYSLIP_ISSUED_METADATA_MARKER } },
+                  // v2.50.0: disbursement digest rows own their surface
+                  // (section 9).
+                  { metadata: { contains: PAYROLL_DISBURSED_METADATA_MARKER } },
                 ],
               },
             },
@@ -435,6 +442,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.49.0: employee-facing "your payslip is issued" rows —
                 // one per portal-linked employee, own numbers only.
                 { metadata: { contains: PAYSLIP_ISSUED_METADATA_MARKER } },
+                // v2.50.0: disbursement digest rows (money left the door —
+                // M-Pesa B2C batch or manual confirmation).
+                { metadata: { contains: PAYROLL_DISBURSED_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -590,6 +600,23 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               category: 'HR',
               actionUrl: n.actionUrl ?? undefined,
               actionLabel: n.actionLabel ?? undefined,
+            });
+          } else if (kind === 'payroll_disbursed') {
+            notifications.push({
+              id: `payroll-${n.id}`,
+              type: 'payroll_disbursed',
+              title: n.title,
+              description: n.message,
+              // v2.50.0: the money left the door — an amber info row (the
+              // payment channel and per-batch outcome) that deep-links the
+              // Pay Runs desk; a FAILED email delivery rides 'warning'
+              // exactly like the approval and posting rows.
+              severity: extras.emailStatus === 'FAILED' ? 'warning' : 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: 'payroll',
+              category: 'HR',
+              emailStatus: extras.emailStatus === 'SENT' || extras.emailStatus === 'FAILED' ? extras.emailStatus : undefined,
             });
           } else {
             const declined = n.type === 'WARNING' || extras.status === 'REJECTED';

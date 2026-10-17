@@ -13,12 +13,15 @@ export const POST = hrGuard('hr.payroll.disburse', DISBURSE_ROLES)(
     const { id } = (await context?.params) ?? { id: '' };
     const body = await readJson(request);
     try {
-      const result = await disbursePayrollRun(
+      // v2.50.0: the digest rides the manual confirmation the same way it
+      // rides the B2C batch — the payroll group hears the money moved, and
+      // the honest "who was told" banner shows in the run dialog.
+      const { disbursed, digest } = await disbursePayrollRun(
         payrollActorContext(session),
         id,
         typeof body.paymentRef === 'string' ? body.paymentRef : undefined,
       );
-      return Response.json({ success: true, data: result });
+      return Response.json({ success: true, data: { disbursed }, digest });
     } catch (error) {
       const mapped = payrollErrorResponse(error);
       if (mapped) return mapped;

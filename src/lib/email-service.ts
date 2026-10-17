@@ -191,6 +191,9 @@ export const NotificationType = {
   // v2.49.0: employee-facing "your payslip is issued" notice — one
   // personalized email per portal-linked employee, own numbers only.
   PAYSLIP_ISSUED: 'PAYSLIP_ISSUED',
+  // v2.50.0: payroll-run disbursement digest (M-Pesa B2C batch or manual
+  // bank-run confirmation; per-payslip payment CSV attached).
+  PAYROLL_DISBURSED: 'PAYROLL_DISBURSED',
   TEST: 'TEST',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

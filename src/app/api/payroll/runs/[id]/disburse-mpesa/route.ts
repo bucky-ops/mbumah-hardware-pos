@@ -22,7 +22,10 @@ import {
   type B2CStaleResult,
   type B2CDisburseSummary,
 } from '@/lib/hr/payroll/disbursement-service';
-import { payrollActorContext } from '@/lib/hr/payroll/run-service';
+import {
+  payrollActorContext,
+  notifyPayrollRunDisbursed,
+} from '@/lib/hr/payroll/run-service';
 import { payrollErrorResponse, readJson } from '@/lib/hr/payroll/route-helpers';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +53,46 @@ export const POST = hrGuard('hr.payroll.disburse', DISBURSE_ROLES)(
       const summary: B2CDisburseSummary = await (mode === 'retry-failed'
         ? () => retryFailedPayrollB2C(payrollActorContext(session), id, detailIds)
         : () => disburseRunViaMpesa(payrollActorContext(session), id))();
-      return Response.json({ success: true, data: summary });
+      // v2.50.0: the disbursement digest rides the 'all' batch only — a
+      // retry or refresh is a partial recovery, and re-notifying on every
+      // retry would spam the payroll group. BEST-EFFORT by contract: the
+      // batch above is already durable; a digest failure must never fail
+      // the request.
+      let digest = null;
+      if (mode === 'all') {
+        const actor = payrollActorContext(session);
+        digest = await notifyPayrollRunDisbursed({
+          runId: id,
+          storeId: actor.storeId,
+          actorId: actor.actorId,
+          mode: summary.mode === 'mock' ? 'mpesa-mock' : 'mpesa',
+          eligible: summary.eligible,
+          initiated: summary.initiated,
+          alreadyInitiated: summary.alreadyInitiated,
+          paidNow: summary.receipts.length,
+          failed: summary.failed.length,
+          skipped: summary.skipped.length,
+          ...(summary.backoffSkipped !== undefined
+            ? { backoffSkipped: summary.backoffSkipped }
+            : {}),
+          ...(summary.maxAttemptSkipped !== undefined
+            ? { maxAttemptSkipped: summary.maxAttemptSkipped }
+            : {}),
+          paymentRef: null,
+          disbursedAtIso: new Date().toISOString(),
+          rows: (summary.results ?? []).map((r) => ({
+            employeeName: r.employeeName,
+            employeeCode: r.employeeCode,
+            net: r.net,
+            status: r.status,
+            receipt: r.receipt ?? null,
+          })),
+        }).catch((err) => {
+          console.warn('[payroll] b2c disbursement digest failed (best-effort):', err);
+          return null;
+        });
+      }
+      return Response.json({ success: true, data: summary, digest });
     } catch (error) {
       const mapped = payrollErrorResponse(error);
       if (mapped) return mapped;

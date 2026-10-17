@@ -366,6 +366,10 @@ export function NotificationCenter({
       // emerald approval or sky posting).
       case 'payslip_issued':
         return <Wallet className="h-4 w-4 text-teal-600" />;
+      // v2.50.0: disbursement - amber dollar-circle, money actually left
+      // the door (M-Pesa B2C batch or manual bank-run confirmation).
+      case 'payroll_disbursed':
+        return <CircleDollarSign className="h-4 w-4 text-amber-600" />;
     }
   };
 
@@ -569,7 +573,7 @@ export function NotificationCenter({
                     onClick={() => handleNotificationClick(notification)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
                     tabIndex={0}
-                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'leave_cancel' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_on_behalf' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_edited' ? 'border-l-[3px] border-l-indigo-400 dark:border-l-indigo-500' : ''} ${notification.type === 'leave_corrected' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'payroll_approved' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_posted' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'payslip_issued' ? 'border-l-[3px] border-l-teal-400 dark:border-l-teal-500' : ''}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'leave_cancel' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_on_behalf' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_edited' ? 'border-l-[3px] border-l-indigo-400 dark:border-l-indigo-500' : ''} ${notification.type === 'leave_corrected' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'payroll_approved' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_posted' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'payslip_issued' ? 'border-l-[3px] border-l-teal-400 dark:border-l-teal-500' : ''} ${notification.type === 'payroll_disbursed' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type, notification.leaveStatus)}</div>
@@ -687,6 +691,28 @@ export function NotificationCenter({
                             <span className="inline-flex items-center gap-0.5 rounded border border-teal-200 bg-teal-50 px-1 py-0 text-[10px] font-medium text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
                               Payslip ready
                             </span>
+                          </div>
+                        ) : null}
+                        {/* v2.50.0: disbursement rows carry an amber "Disbursed"
+                            chip + the honest delivery chip - the money-moved
+                            record deserves the same glance-ability as the
+                            approval/posting rows. */}
+                        {notification.type === 'payroll_disbursed' ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="inline-flex items-center gap-0.5 rounded border border-amber-200 bg-amber-50 px-1 py-0 text-[10px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                              Disbursed
+                            </span>
+                            {notification.emailStatus ? (
+                              <span
+                                className={`inline-flex items-center gap-0.5 rounded border px-1 py-0 text-[10px] font-medium ${
+                                  notification.emailStatus === 'SENT'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                    : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+                                }`}
+                              >
+                                {notification.emailStatus === 'SENT' ? 'Email sent' : 'Email failed'}
+                              </span>
+                            ) : null}
                           </div>
                         ) : null}
                         {/* v2.27.0: digest rows surface the delivery outcome
