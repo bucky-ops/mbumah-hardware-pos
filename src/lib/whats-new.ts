@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.84.0',
+    title: 'The run remembers its own steps \u2014 who did what, and when (EAT)',
+    bullets: [
+      'The run dialog grows a "Run history" strip: initiated, prepared, approved, posted, locked, paid \u2014 each step with the NAME of the person who did it and the EAT wall clock it happened at, in lifecycle order.',
+      'It reads only facts the row already carried (no new visibility, no second guess): a step the run never took simply never appears \u2014 a fresh draft shows one event, a locked run shows the whole walk.',
+      'The bounce-back is not hidden: a rejected run shows WHO rejected it and the reason they gave \u2014 with an honest "no timestamp recorded", because the ledger stamps who and why, never when.',
+      'The posted step names its journal entry, and every stamp is EAT \u2014 the shop\u2019s filing clock \u2014 so the timeline reads like the payslips and the digest CSVs do.',
+      'Actor names resolve through the same ladder the digest emails use (name \u2192 email), fetched in one query; a name that cannot be resolved says "Unknown user" instead of vanishing.',
+    ],
+  },
+  {
     version: '2.83.0',
     title: 'The run hands every slip over \u2014 one zip, every payslip, a manifest inside',
     bullets: [

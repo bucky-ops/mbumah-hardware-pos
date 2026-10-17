@@ -2,11 +2,17 @@
 // v2.22.0: additive `disbursement` block (PII-free B2C state per payslip) so
 // the run dialog can light up Retry failed / Check status affordances without
 // a second request.
+// v2.84.0: additive `history` block — the run's lifecycle as an ordered list
+// of who-did-what (actor names resolved in ONE query, same fallback ladder as
+// the digest labels: name → email → 'Unknown user'), when it happened (ISO;
+// the dialog stamps EAT), and the rejection reason. No new visibility: the
+// timeline is the same facts the header row already carried, made readable.
 
 import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import { summariseRunB2CState } from '@/lib/hr/payroll/disbursement-service';
+import { buildRunHistory } from '@/lib/hr/payroll/run-history';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +49,50 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(
     } catch {
       disbursement = null;
     }
-    return Response.json({ success: true, data: run, can, disbursement });
+    // v2.84.0: resolve every lifecycle actor's label in ONE query, then let
+    // the pure builder shape the ordered timeline. Best-effort: a name
+    // lookup failure must never degrade the run view.
+    let history: ReturnType<typeof buildRunHistory> = [];
+    try {
+      const actorIds = [
+        run.initiatedBy,
+        run.preparedByUserId,
+        run.approvedByUserId,
+        run.rejectedByUserId,
+        run.postedByUserId,
+        run.lockedByUserId,
+      ].filter((v): v is string => typeof v === 'string' && v.length > 0);
+      const actorUsers = actorIds.length
+        ? await db.user.findMany({
+            where: { id: { in: actorIds } },
+            select: { id: true, name: true, email: true },
+          })
+        : [];
+      const actors = Object.fromEntries(
+        actorUsers.map((u) => [u.id, u.name?.trim() || u.email || 'Unknown user']),
+      );
+      history = buildRunHistory(
+        {
+          createdAt: run.createdAt,
+          initiatedBy: run.initiatedBy,
+          preparedAt: run.preparedAt,
+          preparedByUserId: run.preparedByUserId,
+          approvedAt: run.approvedAt,
+          approvedByUserId: run.approvedByUserId,
+          rejectedByUserId: run.rejectedByUserId,
+          rejectionReason: run.rejectionReason,
+          postedAt: run.postedAt,
+          postedByUserId: run.postedByUserId,
+          lockedAt: run.lockedAt,
+          lockedByUserId: run.lockedByUserId,
+          paidAt: run.paidAt,
+          journalEntryNumber: run.journalEntry?.entryNumber ?? null,
+        },
+        actors,
+      );
+    } catch {
+      history = [];
+    }
+    return Response.json({ success: true, data: run, can, disbursement, history });
   },
 );

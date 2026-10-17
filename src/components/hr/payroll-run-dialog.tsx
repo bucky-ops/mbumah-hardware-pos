@@ -11,10 +11,12 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileArchive, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileArchive, FileDown, History, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { downloadPayrollBundle } from '@/components/hr/payslip-bundle-download';
+import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
+import type { RunHistoryEvent } from '@/lib/hr/payroll/run-history';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/(shell)/hr/payroll/page';
 
 /** Colored payment status chips (v2.21.0 styling pass). */
@@ -34,6 +36,17 @@ const LIFECYCLE_STEPS = [
   { key: 'disburse', label: 'Disburse' },
   { key: 'lock', label: 'Lock' },
 ] as const;
+
+/** v2.84.0: per-event dot colors — one family per lifecycle fact. */
+const HISTORY_DOT_STYLES: Record<string, string> = {
+  initiated: 'bg-slate-400 dark:bg-slate-600',
+  prepared: 'bg-sky-500 dark:bg-sky-400',
+  approved: 'bg-amber-500 dark:bg-amber-400',
+  rejected: 'bg-rose-500 dark:bg-rose-400',
+  posted: 'bg-emerald-500 dark:bg-emerald-400',
+  locked: 'bg-violet-500 dark:bg-violet-400',
+  paid: 'bg-teal-500 dark:bg-teal-400',
+};
 
 function lifecycleStage(status: string): number {
   switch (status) {
@@ -122,6 +135,8 @@ interface RunDetailResponse {
   };
   /** v2.22.0 additive PII-free B2C disbursement state (null-safe for old runs). */
   disbursement?: B2CDisbursementState | null;
+  /** v2.84.0: the run's lifecycle as who-did-what (server-resolved names). */
+  history?: RunHistoryEvent[];
 }
 
 interface PayslipRow {
@@ -417,6 +432,7 @@ export function PayrollRunDialog({
   const can = detail?.can;
   const status = run?.status ?? '';
   const parsedIssues: ApiIssue[] | null = issues ?? (run?.errorMessage ? tryParseIssues(run.errorMessage) : null);
+  const history = detail?.history ?? [];
 
   const stage = lifecycleStage(status);
 
@@ -783,6 +799,57 @@ export function PayrollRunDialog({
                 </div>
               )}
             </div>
+
+            {/* v2.84.0: run history — the run remembers its own steps: who did
+                what, and when (EAT). Facts the row already carried, made
+                readable; the rejection bounce-back rides with its reason and
+                an honest "no timestamp recorded". */}
+            {history.length > 0 && (
+              <div className="rounded-lg border p-4" data-testid="payroll-run-history">
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <History className="h-3.5 w-3.5" /> Run history
+                </p>
+                <ol>
+                  {history.map((event, i) => (
+                    <li
+                      key={event.key}
+                      data-testid={`payroll-run-history-${event.key}`}
+                      className="relative flex gap-3 pb-3 last:pb-0"
+                    >
+                      {i < history.length - 1 && (
+                        <span aria-hidden className="absolute left-[5px] top-4 h-full w-px bg-border" />
+                      )}
+                      <span
+                        aria-hidden
+                        className={`relative mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${HISTORY_DOT_STYLES[event.key] ?? 'bg-muted-foreground/40'}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm leading-tight">
+                          <span className="font-medium">{event.label}</span>
+                          {event.actorLabel !== '—' && (
+                            <span className="text-muted-foreground"> · {event.actorLabel}</span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                          {event.atIso ? formatEatStamp(new Date(event.atIso)) : 'no timestamp recorded'}
+                        </p>
+                        {event.note && (
+                          <p
+                            className={`mt-1 rounded-md border px-2 py-1 text-xs ${
+                              event.key === 'rejected'
+                                ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+                                : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                            }`}
+                          >
+                            {event.note}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
 
             {/* Gate issues */}
             {parsedIssues && parsedIssues.length > 0 && (
