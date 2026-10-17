@@ -37,10 +37,11 @@ const LIFECYCLE_STEPS = [
   { key: 'lock', label: 'Lock' },
 ] as const;
 
-/** v2.84.0: per-event dot colors — one family per lifecycle fact. */
+/** v2.84.0: per-event dot colors — one family per lifecycle fact. v2.85.0 adds the indigo handover. */
 const HISTORY_DOT_STYLES: Record<string, string> = {
   initiated: 'bg-slate-400 dark:bg-slate-600',
   prepared: 'bg-sky-500 dark:bg-sky-400',
+  submitted: 'bg-indigo-500 dark:bg-indigo-400',
   approved: 'bg-amber-500 dark:bg-amber-400',
   rejected: 'bg-rose-500 dark:bg-rose-400',
   posted: 'bg-emerald-500 dark:bg-emerald-400',
@@ -562,7 +563,7 @@ export function PayrollRunDialog({
                     onClick={() => void act('approve')}
                     disabled={busy || can.isPreparer}
                     className="gap-1.5"
-                    title={can.isPreparer ? 'Maker-checker: the preparer cannot approve this run' : 'Approve this run'}
+                    title={can.isPreparer ? 'Maker-checker: the maker (preparer or submitter) cannot approve this run' : 'Approve this run'}
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" /> Approve
                   </Button>
@@ -712,8 +713,8 @@ export function PayrollRunDialog({
               )}
               {status === 'PENDING_APPROVAL' && can?.approve && can.isPreparer && (
                 <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
-                  Maker-checker: you prepared this run, so approval must come from a different user
-                  (e.g. the store owner or a super admin).
+                  Maker-checker: you prepared or submitted this run, so approval must come from a
+                  different user (e.g. the store owner or a super admin).
                 </p>
               )}
               {run.journalEntryId && (
@@ -803,11 +804,19 @@ export function PayrollRunDialog({
             {/* v2.84.0: run history — the run remembers its own steps: who did
                 what, and when (EAT). Facts the row already carried, made
                 readable; the rejection bounce-back rides with its reason and
-                an honest "no timestamp recorded". */}
+                an honest "no timestamp recorded". v2.85.0: the walk gains its
+                missing step — the indigo handover sits between Prepared and
+                Approved, and the header counts the steps the run has lived. */}
             {history.length > 0 && (
               <div className="rounded-lg border p-4" data-testid="payroll-run-history">
                 <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <History className="h-3.5 w-3.5" /> Run history
+                  <span
+                    className="ml-auto rounded-full border bg-muted/50 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal tabular-nums text-muted-foreground"
+                    data-testid="payroll-run-history-count"
+                  >
+                    {history.length} {history.length === 1 ? 'step' : 'steps'}
+                  </span>
                 </p>
                 <ol>
                   {history.map((event, i) => (

@@ -7,6 +7,9 @@
 // the digest labels: name → email → 'Unknown user'), when it happened (ISO;
 // the dialog stamps EAT), and the rejection reason. No new visibility: the
 // timeline is the same facts the header row already carried, made readable.
+// v2.85.0: the walk gains its missing step — submittedAt/submittedById join
+// the actor map and the builder input, and `can.isPreparer` covers the
+// handover boundary (prepared OR submitted ⇒ maker-checker).
 
 import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
@@ -38,7 +41,10 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(
       post: hasHrPermission(session.role, 'hr.payroll.post'),
       disburse: hasHrPermission(session.role, 'hr.payroll.disburse'),
       correct: hasHrPermission(session.role, 'hr.payroll.correct'),
-      isPreparer: run.preparedByUserId === session.userId,
+      // v2.85.0: the maker-checker boundary is the HANDOVER — a session that
+      // prepared OR submitted the run is bound by it, so the dialog's approve
+      // affordance disables for both (the server enforces it regardless).
+      isPreparer: run.preparedByUserId === session.userId || run.submittedById === session.userId,
       isCorrectionRequester: false,
     };
     // v2.22.0: B2C disbursement state. Best-effort: a state failure must never
@@ -57,6 +63,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(
       const actorIds = [
         run.initiatedBy,
         run.preparedByUserId,
+        run.submittedById,
         run.approvedByUserId,
         run.rejectedByUserId,
         run.postedByUserId,
@@ -75,8 +82,11 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(
         {
           createdAt: run.createdAt,
           initiatedBy: run.initiatedBy,
+          status: run.status,
           preparedAt: run.preparedAt,
           preparedByUserId: run.preparedByUserId,
+          submittedAt: run.submittedAt,
+          submittedById: run.submittedById,
           approvedAt: run.approvedAt,
           approvedByUserId: run.approvedByUserId,
           rejectedByUserId: run.rejectedByUserId,
