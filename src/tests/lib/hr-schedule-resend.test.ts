@@ -70,10 +70,12 @@ import {
   getScheduleResendInfo,
   latestBatchFailedRecipients,
   resendFailedDigest,
+  runDueHrReportSchedules,
 } from '@/lib/hr/report-schedule-service';
 import type { HrScheduleError } from '@/lib/hr/report-schedule-service';
 import { hrAudit } from '@/lib/hr/audit';
 import { sendEmail } from '@/lib/email-service';
+import { headcountReport } from '@/lib/hr/reports';
 
 const ORG = 'org_mbumah';
 const SCHEDULE_ID = 'sched-1';
@@ -429,5 +431,192 @@ describe('resendFailedDigest', () => {
     expect(hrAudit).toHaveBeenCalledWith(
       expect.objectContaining({ actorId: 'user_bm', actorRole: 'BRANCH_MANAGER' }),
     );
+  });
+
+  it('v2.56.0 automatic mode: envelopes are NOT manual, automaticRetry stamped, no actor notification, audit says automaticRetry', async () => {
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow());
+    db.notificationLog.findMany.mockResolvedValue([
+      perRecipientRow(OWNER, 'FAILED', T_MS),
+      perRecipientRow(HR, 'FAILED', T_MS),
+    ]);
+
+    const result = await resendFailedDigest(
+      ORG,
+      { id: 'system-hr-digests', role: 'SYSTEM', storeId: null },
+      SCHEDULE_ID,
+      new Date(Date.UTC(2026, 9, 17, 9, 0)),
+      { automatic: true },
+    );
+    expect(result.outcome).toBe('SENT');
+
+    // Envelopes carry the automatic-retry stamps, never the manual flag.
+    for (const call of (sendEmail as ReturnType<typeof vi.fn>).mock.calls) {
+      const meta = (call[0] as { metadata: Record<string, unknown> }).metadata;
+      expect(meta.resend).toBe(true);
+      expect(meta.automaticRetry).toBe(true);
+      expect(meta.manual).toBe(false);
+    }
+
+    // The sweep writes the creator's ONE copy — the automatic retry itself
+    // must NOT write a notification for the synthetic SYSTEM actor.
+    expect(db.notification.create).not.toHaveBeenCalled();
+
+    // The audit says automaticRetry, not manualSend.
+    expect(hrAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 'system-hr-digests',
+        metadata: expect.objectContaining({ automaticRetry: true, manualSend: false, resend: true }),
+      }),
+    );
+  });
+});
+
+// ── v2.56.0: the sweep self-heals ───────────────────────────────────────────
+
+describe('sweep self-heal: one automatic retry before giving up', () => {
+  // 2026-10-19 is a Monday and the schedule fires WEEKLY on Monday 02:00 UTC
+  // with lastRunAt null — this instant is genuinely DUE.
+  const SWEEP_NOW = new Date(Date.UTC(2026, 9, 19, 2, 0));
+  const FAIL = { success: false, error: 'mailbox unavailable' };
+  const OK = { success: true, messageId: 'm-ok' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.notificationLog.findMany.mockResolvedValue([]);
+    db.hrReportSchedule.update.mockResolvedValue(scheduleRow());
+    db.notification.create.mockResolvedValue({ id: 'notif-1' });
+    db.organization.findUnique.mockResolvedValue({ name: 'MBUMAH HARDWARE' });
+    db.hrReportSchedule.findMany.mockResolvedValue([scheduleRow({ lastRunAt: null, lastStatus: null, lastError: null })]);
+    db.hrReportSchedule.findFirst.mockResolvedValue(scheduleRow({ lastRunAt: null, lastStatus: null, lastError: null }));
+    (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValue(OK);
+  });
+
+  it('first attempt all FAILED → retry recovers → final SENT, recovery note, ONE NORMAL notification', async () => {
+    // First attempt: OWNER then HR both fail. Retry (sorted: HR then OWNER): both succeed.
+    (sendEmail as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(FAIL)
+      .mockResolvedValueOnce(FAIL)
+      .mockResolvedValueOnce(OK)
+      .mockResolvedValueOnce(OK);
+    // The retry derives its target set from the batch the sweep just wrote.
+    db.notificationLog.findMany.mockResolvedValue([
+      perRecipientRow(OWNER, 'FAILED', SWEEP_NOW.getTime()),
+      perRecipientRow(HR, 'FAILED', SWEEP_NOW.getTime()),
+    ]);
+
+    const result = await runDueHrReportSchedules(SWEEP_NOW);
+
+    expect(result.sent).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.results[0]).toMatchObject({
+      status: 'SENT',
+      recipients: 2,
+      delivered: 2,
+      retry: { attempted: true, recovered: true, recipients: 2 },
+    });
+
+    // Four envelopes total: 2 failed first attempts + 2 successful retries.
+    expect(sendEmail).toHaveBeenCalledTimes(4);
+    const retryMeta = (sendEmail as ReturnType<typeof vi.fn>).mock.calls[2][0] as { metadata: Record<string, unknown> };
+    expect(retryMeta.metadata).toMatchObject({ resend: true, automaticRetry: true, manual: false });
+
+    // The FINAL stamp says SENT with a clean error (the retry's own internal
+    // stamp of FAILED is overridden by the sweep's final word).
+    const updates = db.hrReportSchedule.update.mock.calls.map((c) => (c[0] as { data: Record<string, unknown> }).data);
+    expect(updates[updates.length - 1]).toEqual({ lastStatus: 'SENT', lastError: null });
+
+    // ONE creator copy — NORMAL priority, telling the recovery story.
+    expect(db.notification.create).toHaveBeenCalledTimes(1);
+    const note = db.notification.create.mock.calls[0][0] as { data: { priority: string; message: string } };
+    expect(note.data.priority).toBe('NORMAL');
+    expect(note.data.message).toContain('The first attempt was failed');
+    expect(note.data.message).toContain('the automatic retry delivered to everyone who missed it');
+  });
+
+  it('first attempt PARTIAL → retry delivers to the missed one → final SENT with the partial recovery story', async () => {
+    // First attempt (OWNER, HR): OWNER ok, HR fails. Retry (sorted: HR): ok.
+    (sendEmail as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(OK)
+      .mockResolvedValueOnce(FAIL)
+      .mockResolvedValueOnce(OK);
+    db.notificationLog.findMany.mockResolvedValue([
+      perRecipientRow(OWNER, 'SENT', SWEEP_NOW.getTime()),
+      perRecipientRow(HR, 'FAILED', SWEEP_NOW.getTime()),
+    ]);
+
+    const result = await runDueHrReportSchedules(SWEEP_NOW);
+
+    expect(result.sent).toBe(1);
+    expect(result.results[0]).toMatchObject({ status: 'SENT', retry: { attempted: true, recovered: true, recipients: 1 } });
+    const note = db.notification.create.mock.calls[0][0] as { data: { priority: string; message: string } };
+    expect(note.data.priority).toBe('NORMAL');
+    expect(note.data.message).toContain('The first attempt was partial');
+  });
+
+  it('the retry also fails → final FAILED, HIGH copy says the retry was already tried', async () => {
+    (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValue(FAIL);
+    db.notificationLog.findMany.mockResolvedValue([
+      perRecipientRow(OWNER, 'FAILED', SWEEP_NOW.getTime()),
+      perRecipientRow(HR, 'FAILED', SWEEP_NOW.getTime()),
+    ]);
+
+    const result = await runDueHrReportSchedules(SWEEP_NOW);
+
+    expect(result.failed).toBe(1);
+    expect(result.results[0]).toMatchObject({
+      status: 'FAILED',
+      retry: { attempted: true, recovered: false, recipients: 2 },
+    });
+    const updates = db.hrReportSchedule.update.mock.calls.map((c) => (c[0] as { data: Record<string, unknown> }).data);
+    expect(updates[updates.length - 1]).toMatchObject({ lastStatus: 'FAILED' });
+    expect(db.notification.create).toHaveBeenCalledTimes(1);
+    const note = db.notification.create.mock.calls[0][0] as { data: { priority: string; message: string } };
+    expect(note.data.priority).toBe('HIGH');
+    expect(note.data.message).toContain('An automatic retry was attempted and also failed');
+  });
+
+  it('a SKIPPED retry (data vanished mid-sweep) leaves the first outcome standing', async () => {
+    (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValue(FAIL);
+    db.notificationLog.findMany.mockResolvedValue([
+      perRecipientRow(OWNER, 'FAILED', SWEEP_NOW.getTime()),
+      perRecipientRow(HR, 'FAILED', SWEEP_NOW.getTime()),
+    ]);
+    // The digest computes on the first attempt, then the report source dies
+    // before the retry can recompute it.
+    (headcountReport as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        active: 5,
+        onLeave: 0,
+        suspended: 0,
+        hiresInPeriod: 0,
+        exitsInPeriod: 0,
+        avgTenureYears: 2.1,
+        byEmploymentType: [{ employmentType: 'PERMANENT', count: 5 }],
+      })
+      .mockRejectedValueOnce(new Error('report source gone'));
+
+    const result = await runDueHrReportSchedules(SWEEP_NOW);
+
+    expect(result.failed).toBe(1);
+    // No retry key: the retry never produced an outcome worth reporting.
+    expect(result.results[0]).toMatchObject({ status: 'FAILED' });
+    expect(result.results[0].retry).toBeUndefined();
+    const updates = db.hrReportSchedule.update.mock.calls.map((c) => (c[0] as { data: Record<string, unknown> }).data);
+    expect(updates[updates.length - 1]).toMatchObject({ lastStatus: 'FAILED' });
+    // The creator copy does NOT claim a retry happened.
+    const note = db.notification.create.mock.calls[0][0] as { data: { message: string } };
+    expect(note.data.message).not.toContain('automatic retry');
+  });
+
+  it('NOTHING_TO_RESEND from the retry (no batch rows yet) → the first outcome stands, no retry key', async () => {
+    (sendEmail as ReturnType<typeof vi.fn>).mockResolvedValue(FAIL);
+    // notificationLog.findMany stays [] (beforeEach) → the retry 409s.
+
+    const result = await runDueHrReportSchedules(SWEEP_NOW);
+
+    expect(result.failed).toBe(1);
+    expect(result.results[0]).toMatchObject({ status: 'FAILED' });
+    expect(result.results[0].retry).toBeUndefined();
+    expect(sendEmail).toHaveBeenCalledTimes(2); // first attempt only
   });
 });

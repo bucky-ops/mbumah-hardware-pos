@@ -638,7 +638,10 @@ export interface ScheduleSweepResult {
   failed: number;
   skipped: number;
   /** v2.54.0: `delivered` counts the per-recipient envelopes that actually went out; `status` gains PARTIAL (mixed delivery). */
-  results: Array<{ id: string; reportKey: string; status: 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED'; error?: string; recipients: number; delivered?: number }>;
+  // v2.56.0: `retry` rides the row when the sweep self-healed — one automatic
+  // re-send to exactly the addresses the first attempt missed, with `recovered`
+  // telling whether that retry got everyone (final SENT) or also fell short.
+  results: Array<{ id: string; reportKey: string; status: 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED'; error?: string; recipients: number; delivered?: number; retry?: { attempted: boolean; recovered: boolean; recipients: number } }>;
 }
 
 // v2.24.0: schedule report keys -> /hr/reports deep-link tab ids (the UI
@@ -682,6 +685,8 @@ async function writeDigestNotification(params: {
   attachmentLabel?: string | null;
   /** v2.55.0: the parenthesised actor-action label — 'manual send' or 'manual re-send'. */
   manualLabel?: string;
+  /** v2.56.0: extra honest sentence appended to the copy (the retry story). */
+  note?: string;
 }): Promise<string | null> {
   try {
     const tab = REPORT_KEY_TO_TAB[params.reportKey as HrScheduleReportKey];
@@ -704,7 +709,7 @@ async function writeDigestNotification(params: {
         storeId: params.storeId,
         userId: params.recipientUserId,
         title: `${label} digest — ${params.digest?.scopeLabel ?? 'All branches'}`.trim(),
-        message: `${params.digest?.periodLabel ?? ''} · ${headlineText} · ${delivery}${attachment}${params.manual ? ` (${params.manualLabel ?? 'manual send'})` : ''}`,
+        message: `${params.digest?.periodLabel ?? ''} · ${headlineText} · ${delivery}${attachment}${params.note ? ` ${params.note}` : ''}${params.manual ? ` (${params.manualLabel ?? 'manual send'})` : ''}`,
         type: 'SYSTEM',
         category: 'HR',
         priority: params.email.success ? 'NORMAL' : 'HIGH',
@@ -891,43 +896,142 @@ export async function runDueHrReportSchedules(
           manual: false,
           attachmentLabel,
         });
-      } else if (summary.outcome === 'PARTIAL') {
-        // v2.54.0: mixed delivery is its own honest state — neither the
-        // emerald SENT nor the rose FAILED would tell the truth.
-        await db.hrReportSchedule.update({
-          where: { id: schedule.id },
-          data: { lastRunAt: now, lastStatus: 'PARTIAL', lastError: (summary.aggregateError ?? 'Some recipients were not delivered').slice(0, 250) },
-        });
-        result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'PARTIAL', recipients: recipients.length, delivered: summary.delivered, error: summary.aggregateError ?? undefined });
-        await writeDigestNotification({
-          scheduleId: schedule.id,
-          reportKey: schedule.reportKey,
-          storeId: schedule.storeId,
-          recipientUserId: schedule.createdByUserId,
-          digest,
-          email: { success: false, error: summary.aggregateError ?? 'Some recipients were not delivered' },
-          manual: false,
-          attachmentLabel,
-        });
       } else {
+        // v2.54.0: mixed/all-failed delivery is stamped honestly. v2.56.0:
+        // the sweep SELF-HEALS — one automatic retry to exactly the addresses
+        // the first attempt missed, BEFORE the creator's failure copy is
+        // written. A transient provider blip gets a second chance without a
+        // human ever seeing a HIGH-priority alert; the final stamp + the ONE
+        // creator notification tell the story of the FINAL state, not the
+        // first stumble.
+        const firstOutcome = summary.outcome; // 'PARTIAL' | 'FAILED'
+        const firstError = (summary.aggregateError ?? 'Email send failed').slice(0, 250);
         await db.hrReportSchedule.update({
           where: { id: schedule.id },
-          data: { lastRunAt: now, lastStatus: 'FAILED', lastError: (summary.aggregateError ?? 'Email send failed').slice(0, 250) },
+          data: { lastRunAt: now, lastStatus: firstOutcome, lastError: firstError },
         });
-        result.failed += 1;
-        result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'FAILED', error: summary.aggregateError ?? undefined, recipients: recipients.length, delivered: 0 });
-        // v2.24.0: failures surface at HIGH priority so the creator's alert
-        // popups catch a silently broken digest cadence.
-        await writeDigestNotification({
-          scheduleId: schedule.id,
-          reportKey: schedule.reportKey,
-          storeId: schedule.storeId,
-          recipientUserId: schedule.createdByUserId,
-          digest,
-          email: { success: false, error: summary.aggregateError ?? 'Email send failed' },
-          manual: false,
-          attachmentLabel,
+
+        // The retry reuses the manual re-send machinery in its automatic
+        // mode: the target set is re-derived from the batch the sweep JUST
+        // wrote (inside the batch window), the digest is recomputed fresh,
+        // the cadence stays untouched, and every envelope is stamped
+        // metadata.resend + automaticRetry so history reads as a retry.
+        let retry: { attempted: boolean; outcome: ResendOutcome; recipients: number; error?: string } = {
+          attempted: false,
+          outcome: firstOutcome,
+          recipients: 0,
+        };
+        try {
+          const retryResult = await resendFailedDigest(
+            schedule.organizationId,
+            { id: 'system-hr-digests', role: 'SYSTEM', storeId: schedule.storeId },
+            schedule.id,
+            now,
+            { automatic: true },
+          );
+          if (retryResult.outcome !== 'SKIPPED') {
+            retry = {
+              attempted: true,
+              outcome: retryResult.outcome,
+              recipients: retryResult.reSentTo.length,
+              ...(retryResult.email.error ? { error: retryResult.email.error } : {}),
+            };
+          }
+        } catch {
+          // NOTHING_TO_RESEND (the latest batch somehow has no undelivered
+          // addresses) or a compute hiccup: the first attempt's outcome stands.
+        }
+
+        const finalOutcome: 'SENT' | 'PARTIAL' | 'FAILED' =
+          retry.outcome === 'SENT' || retry.outcome === 'PARTIAL' || retry.outcome === 'FAILED'
+            ? retry.outcome
+            : firstOutcome;
+        const finalError =
+          finalOutcome === 'SENT'
+            ? null
+            : (retry.attempted && retry.outcome === finalOutcome && retry.error ? retry.error : firstError).slice(0, 250);
+
+        // The FINAL stamp reflects the FINAL attempt (the retry stamped its
+        // own outcome internally; SKIPPED retries are overridden here).
+        await db.hrReportSchedule.update({
+          where: { id: schedule.id },
+          data: { lastStatus: finalOutcome, lastError: finalError },
         });
+
+        const retryMeta = retry.attempted
+          ? { retry: { attempted: true, recovered: finalOutcome === 'SENT', recipients: retry.recipients } }
+          : {};
+
+        if (finalOutcome === 'SENT') {
+          result.sent += 1;
+          result.results.push({
+            id: schedule.id,
+            reportKey: schedule.reportKey,
+            status: 'SENT',
+            recipients: recipients.length,
+            delivered: recipients.length,
+            ...retryMeta,
+          });
+          // v2.56.0: a recovery is still a success — quiet NORMAL copy, but
+          // honest about the stumble it recovered from.
+          await writeDigestNotification({
+            scheduleId: schedule.id,
+            reportKey: schedule.reportKey,
+            storeId: schedule.storeId,
+            recipientUserId: schedule.createdByUserId,
+            digest,
+            email: { success: true },
+            manual: false,
+            attachmentLabel,
+            note: `The first attempt was ${firstOutcome.toLowerCase()} — the automatic retry delivered to everyone who missed it.`,
+          });
+        } else if (finalOutcome === 'PARTIAL') {
+          result.results.push({
+            id: schedule.id,
+            reportKey: schedule.reportKey,
+            status: 'PARTIAL',
+            recipients: recipients.length,
+            delivered: summary.delivered,
+            error: finalError ?? undefined,
+            ...retryMeta,
+          });
+          await writeDigestNotification({
+            scheduleId: schedule.id,
+            reportKey: schedule.reportKey,
+            storeId: schedule.storeId,
+            recipientUserId: schedule.createdByUserId,
+            digest,
+            email: { success: false, error: finalError ?? 'Some recipients were not delivered' },
+            manual: false,
+            attachmentLabel,
+            ...(retry.attempted ? { note: 'An automatic retry was attempted and some recipients are still missing.' } : {}),
+          });
+        } else {
+          result.failed += 1;
+          result.results.push({
+            id: schedule.id,
+            reportKey: schedule.reportKey,
+            status: 'FAILED',
+            error: finalError ?? undefined,
+            recipients: recipients.length,
+            delivered: 0,
+            ...retryMeta,
+          });
+          // v2.24.0: failures surface at HIGH priority so the creator's alert
+          // popups catch a silently broken digest cadence — v2.56.0 copy says
+          // the retry was already tried, so nobody re-runs it by hand twice.
+          await writeDigestNotification({
+            scheduleId: schedule.id,
+            reportKey: schedule.reportKey,
+            storeId: schedule.storeId,
+            recipientUserId: schedule.createdByUserId,
+            digest,
+            email: { success: false, error: finalError ?? 'Email send failed' },
+            manual: false,
+            attachmentLabel,
+            ...(retry.attempted ? { note: 'An automatic retry was attempted and also failed — the delivery history names the addresses.' } : {}),
+          });
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Digest computation failed';
@@ -1334,6 +1438,11 @@ export async function resendFailedDigest(
   actor: { id: string; role: string; storeId: string | null },
   id: string,
   now: Date = new Date(),
+  /** v2.56.0: `automatic` = the SWEEP calling — envelopes are NOT manual
+   * (no 'manual' chip, metadata.automaticRetry stamped instead), the
+   * per-actor notification is skipped (the sweep writes the creator's ONE
+   * copy with the full recovery story), and the audit says automaticRetry. */
+  opts?: { automatic?: boolean },
 ): Promise<ResendFailedResult> {
   const row = await db.hrReportSchedule.findFirst({
     where: { id, organizationId, deletedAt: null },
@@ -1390,16 +1499,18 @@ export async function resendFailedDigest(
       data: { lastStatus: 'SKIPPED', lastError: reason.slice(0, 250) },
     });
     email = { success: false, error: reason };
-    notificationId = await writeDigestNotification({
-      scheduleId: row.id,
-      reportKey: row.reportKey,
-      storeId: row.storeId,
-      recipientUserId: actor.id,
-      digest: null,
-      email,
-      manual: true,
-      manualLabel: 'manual re-send',
-    });
+    notificationId = opts?.automatic
+      ? null // v2.56.0: the sweep writes the creator's ONE copy with the full story.
+      : await writeDigestNotification({
+          scheduleId: row.id,
+          reportKey: row.reportKey,
+          storeId: row.storeId,
+          recipientUserId: actor.id,
+          digest: null,
+          email,
+          manual: true,
+          manualLabel: 'manual re-send',
+        });
   } else {
     const attachment = digestToCsv(digest, now);
     const { summary } = await sendDigestEnvelopes({
@@ -1409,7 +1520,8 @@ export async function resendFailedDigest(
       metadata: {
         scheduleId: row.id,
         reportKey: row.reportKey,
-        manual: true,
+        manual: opts?.automatic ? false : true,
+        ...(opts?.automatic ? { automaticRetry: true } : {}),
         actorId: actor.id,
         resend: true,
         ...(verdict.batchAt ? { resendOfBatchAt: verdict.batchAt } : {}),
@@ -1433,17 +1545,19 @@ export async function resendFailedDigest(
         data: { lastStatus: outcome, lastError: summary.aggregateError ?? null },
       });
     }
-    notificationId = await writeDigestNotification({
-      scheduleId: row.id,
-      reportKey: row.reportKey,
-      storeId: row.storeId,
-      recipientUserId: actor.id,
-      digest,
-      email,
-      manual: true,
-      manualLabel: 'manual re-send',
-      attachmentLabel: csv ? `CSV (${formatCsvSize(csv.byteSize)})` : null,
-    });
+    notificationId = opts?.automatic
+      ? null // v2.56.0: the sweep writes the creator's ONE copy with the full story.
+      : await writeDigestNotification({
+          scheduleId: row.id,
+          reportKey: row.reportKey,
+          storeId: row.storeId,
+          recipientUserId: actor.id,
+          digest,
+          email,
+          manual: true,
+          manualLabel: 'manual re-send',
+          attachmentLabel: csv ? `CSV (${formatCsvSize(csv.byteSize)})` : null,
+        });
   }
 
   await hrAudit({
@@ -1454,7 +1568,8 @@ export async function resendFailedDigest(
     resourceId: row.id,
     storeId: row.storeId ?? undefined,
     metadata: {
-      manualSend: true,
+      manualSend: opts?.automatic ? false : true,
+      ...(opts?.automatic ? { automaticRetry: true } : {}),
       resend: true,
       reportKey: row.reportKey,
       outcome,
