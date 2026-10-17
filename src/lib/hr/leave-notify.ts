@@ -62,7 +62,10 @@ export type LeaveNotificationKind =
   | 'leave_cancel'
   | 'leave_on_behalf'
   | 'leave_edited'
-  | 'leave_corrected';
+  | 'leave_corrected'
+  // v2.47.0: payroll-run approval digest rows share this feed section
+  // (marker 'payroll_approved' lives in payroll/run-digest.ts).
+  | 'payroll_approved';
 
 export type LeaveDecisionStatus = 'APPROVED' | 'REJECTED';
 
@@ -211,6 +214,9 @@ export interface LeaveDecisionExtras {
   /** v2.40.0: HR editor display name on leave_edited rows (the employee
    *  notification for a request corrected in the edit window). */
   editedByName?: string;
+  /** v2.47.0: delivery stamp on payroll_approved rows — drives the
+   *  warning-vs-info severity in the feed mapping (FAILED → warning). */
+  emailStatus?: string;
 }
 
 /** Fail-soft metadata parser for the notification feed (same contract as
@@ -228,7 +234,8 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
       rec.kind === 'leave_cancel' ||
       rec.kind === 'leave_on_behalf' ||
       rec.kind === 'leave_edited' ||
-      rec.kind === 'leave_corrected'
+      rec.kind === 'leave_corrected' ||
+      rec.kind === 'payroll_approved'
     )
       out.kind = rec.kind;
     if (typeof rec.leaveRequestId === 'string') out.leaveRequestId = rec.leaveRequestId;
@@ -238,6 +245,7 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
     if (typeof rec.cancelledByManager === 'boolean') out.cancelledByManager = rec.cancelledByManager;
     if (typeof rec.enteredByName === 'string') out.enteredByName = rec.enteredByName;
     if (typeof rec.editedByName === 'string') out.editedByName = rec.editedByName;
+    if (typeof rec.emailStatus === 'string') out.emailStatus = rec.emailStatus;
     return out;
   } catch {
     return {};

@@ -24,8 +24,16 @@
 import { db, withImmutabilityBypass } from '@/lib/db';
 import { createJournalEntry } from '@/lib/accounting-helpers';
 import { nextSequence, formatSequence } from '@/lib/sequence';
+import { sendEmail } from '@/lib/email-service';
 import { hrAudit, HrEntityType } from '../audit';
 import { hasUnapprovedTimesheet } from '../attendance-service';
+import {
+  PAYROLL_APPROVED_METADATA_MARKER,
+  payrollRunApprovalCopy,
+  payrollRunDigestToCsv,
+  type PayrollRunDigestEmployeeRow,
+  type PayrollRunDigestMeta,
+} from './run-digest';
 import {
   buildPayrollJournal,
   computePayslip,
@@ -680,7 +688,188 @@ export async function approvePayrollRun(ctx: RunActorContext, runId: string) {
       metadata: { approved: true },
     },
   );
-  return updated;
+  // v2.47.0: the approval digest rides the v2.46.0 attachment machinery —
+  // bell rows to the maker + the store's payroll group, one email with the
+  // per-employee CSV attached. BEST-EFFORT by contract: a notification or
+  // email failure must never fail the approval decision itself (the run is
+  // already APPROVED above); the digest result is surfaced fail-soft.
+  const digest = await notifyPayrollRunApproved({
+    run: updated,
+    storeId: ctx.storeId,
+    actorId: ctx.actorId,
+  }).catch((err) => {
+    console.warn('[payroll] approval digest failed (best-effort):', err);
+    return null;
+  });
+  return { run: updated, digest };
+}
+
+/** Fail-soft result surfaced by POST /api/payroll/runs/[id]/approve. */
+export interface PayrollApprovalDigestResult {
+  /** Distinct users that received the in-app bell row. */
+  notifiedUsers: number;
+  /** Distinct email recipients (may be less when addresses are missing). */
+  emailRecipients: number;
+  emailStatus: 'SENT' | 'FAILED' | 'SKIPPED';
+  emailError?: string;
+  csvFilename?: string;
+  csvByteSize?: number;
+}
+
+/**
+ * v2.47.0: fan out the approval digest for a JUST-APPROVED run.
+ *
+ * Audience (mirrors the leave approver fan-out):
+ *   - the store's decision-capable payroll group (SUPER_ADMIN,
+ *     STORE_OWNER, BRANCH_MANAGER, ACCOUNTANT — active, store-scoped or
+ *     super), MINUS the approver who just acted;
+ *   - PLUS the run's maker (preparedByUserId) always — the maker-checker
+ *     contract means the maker was waiting on this decision.
+ *
+ * Delivery: one email per send (all addresses on one envelope) with the
+ * per-employee CSV attached, in-app bell rows per user with the
+ * payroll_approved metadata marker (the feed route owns the surface).
+ * Every failure mode is caught: the approval decision is already durable.
+ */
+export async function notifyPayrollRunApproved(params: {
+  run: { id: string; payrollPeriodId: string; runType: string; approvedAt: Date | null; approvedByUserId: string | null; preparedByUserId: string | null };
+  storeId: string;
+  actorId: string;
+}): Promise<PayrollApprovalDigestResult> {
+  const [run, store, period] = await Promise.all([
+    db.payrollRun.findUnique({
+      where: { id: params.run.id },
+      select: {
+        employeeCount: true,
+        totalGross: true,
+        totalDeductions: true,
+        totalNet: true,
+        approvedAt: true,
+        preparedByUserId: true,
+      },
+    }),
+    db.store.findUnique({ where: { id: params.storeId }, select: { name: true } }),
+    db.payrollPeriod.findUnique({ where: { id: params.run.payrollPeriodId }, select: { name: true } }),
+  ]);
+  if (!run) return { notifiedUsers: 0, emailRecipients: 0, emailStatus: 'SKIPPED' };
+
+  // Per-employee aggregates for the CSV (names + codes only, from the
+  // PayrollDetail rows the run was posted with).
+  const details = await db.payrollDetail.findMany({
+    where: { payrollRunId: params.run.id },
+    select: {
+      grossPay: true,
+      totalDeductions: true,
+      netPay: true,
+      employee: { select: { firstName: true, lastName: true, employeeCode: true } },
+    },
+    orderBy: { employeeId: 'asc' },
+  });
+  const rows: PayrollRunDigestEmployeeRow[] = details.map((d) => ({
+    employeeName: `${d.employee?.firstName ?? ''} ${d.employee?.lastName ?? ''}`.trim() || 'Unnamed employee',
+    employeeCode: d.employee?.employeeCode ?? null,
+    gross: Number(d.grossPay),
+    deductions: Number(d.totalDeductions),
+    net: Number(d.netPay),
+  }));
+
+  // Approver label: same fallback ladder as leave-notify (name → email).
+  const approverLabel =
+    (await db.user
+      .findUnique({ where: { id: params.actorId }, select: { name: true, email: true } })
+      .then((u) => u?.name?.trim() || u?.email || null)
+      .catch(() => null)) || 'Approver';
+
+  const meta: PayrollRunDigestMeta = {
+    periodName: period?.name ?? 'Payroll run',
+    storeName: store?.name ?? 'MBUMAH HARDWARE',
+    runType: params.run.runType,
+    employeeCount: run.employeeCount,
+    totalGross: Number(run.totalGross),
+    totalDeductions: Number(run.totalDeductions),
+    totalNet: Number(run.totalNet),
+    approvedByLabel: approverLabel,
+    approvedAtIso: (run.approvedAt ?? new Date()).toISOString(),
+  };
+
+  const copy = payrollRunApprovalCopy(meta);
+  const csv = payrollRunDigestToCsv(rows, meta);
+
+  // Recipients: decision-capable group minus the actor, plus the maker.
+  const group = await db.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'] },
+      OR: [{ storeId: params.storeId }, { role: 'SUPER_ADMIN' }],
+    },
+    select: { id: true, email: true },
+  });
+  const byId = new Map(group.map((u) => [u.id, u]));
+  if (params.run.preparedByUserId && !byId.has(params.run.preparedByUserId)) {
+    const maker = await db.user.findUnique({
+      where: { id: params.run.preparedByUserId },
+      select: { id: true, email: true, isActive: true },
+    });
+    if (maker?.isActive) byId.set(maker.id, maker);
+  }
+  byId.delete(params.actorId);
+  const recipients = [...byId.values()];
+  if (recipients.length === 0) return { notifiedUsers: 0, emailRecipients: 0, emailStatus: 'SKIPPED' };
+
+  const emailAddresses = recipients
+    .map((u) => u.email)
+    .filter((e): e is string => typeof e === 'string' && e.includes('@'));
+
+  let emailStatus: PayrollApprovalDigestResult['emailStatus'] = 'SKIPPED';
+  let emailError: string | undefined;
+  if (emailAddresses.length > 0) {
+    const email = await sendEmail({
+      to: emailAddresses,
+      subject: copy.emailSubject,
+      html: copy.emailHtml,
+      text: copy.emailText,
+      ...(csv ? { attachments: [csv] } : {}),
+      type: 'PAYROLL_APPROVED',
+      metadata: {
+        runId: params.run.id,
+        periodName: meta.periodName,
+        storeName: meta.storeName,
+        employeeCount: meta.employeeCount,
+        totalNet: meta.totalNet,
+        approvedBy: approverLabel,
+        ...(csv ? { csvFilename: csv.filename, csvBytes: csv.byteSize } : {}),
+      },
+    });
+    emailStatus = email.success ? 'SENT' : 'FAILED';
+    if (!email.success) emailError = email.error ?? 'Email send failed';
+  }
+
+  // In-app bell rows (kind marker drives the feed surface + filters).
+  await db.notification.createMany({
+    data: recipients.map((u) => ({
+      storeId: params.storeId,
+      userId: u.id,
+      title: copy.title,
+      message: copy.message,
+      type: copy.notifType,
+      category: 'HR',
+      priority: copy.priority,
+      metadata: JSON.stringify({
+        kind: PAYROLL_APPROVED_METADATA_MARKER,
+        runId: params.run.id,
+        periodName: meta.periodName,
+        emailStatus,
+      }),
+    })),
+  });
+
+  return {
+    notifiedUsers: recipients.length,
+    emailRecipients: emailAddresses.length,
+    emailStatus,
+    ...(emailError ? { emailError } : {}),
+    ...(csv ? { csvFilename: csv.filename, csvByteSize: csv.byteSize } : {}),
+  };
 }
 
 // ── 4. Post (idempotent journal + payslip issuance) ─────────────────────────

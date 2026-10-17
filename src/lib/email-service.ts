@@ -183,6 +183,8 @@ export const NotificationType = {
   LEAVE_CANCEL: 'LEAVE_CANCEL',
   // v2.45.0: password-changed security notice (self-service rotation).
   PASSWORD_CHANGED: 'PASSWORD_CHANGED',
+  // v2.47.0: payroll-run approval digest (maker + payroll group, CSV attached).
+  PAYROLL_APPROVED: 'PAYROLL_APPROVED',
   TEST: 'TEST',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
