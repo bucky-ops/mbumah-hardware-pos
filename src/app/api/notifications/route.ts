@@ -18,6 +18,7 @@ import {
   LEAVE_ON_BEHALF_METADATA_MARKER,
   LEAVE_EDITED_METADATA_MARKER,
   LEAVE_REQUEST_METADATA_MARKER,
+  LEAVE_REVIEW_SEEN_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
 import {
@@ -63,7 +64,11 @@ export interface NotificationData {
   // v2.51.0: 'payroll_paid' - EMPLOYEE-facing personal "you've been paid"
   // rows (one per portal-linked employee whose payslip settled PAID, own
   // receipt in hand); emerald surface, deep link → the portal Payslips page.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
+  // v2.61.0: 'leave_review_seen' - EMPLOYEE-facing rows for the moment a
+  // desk visit CLEARS a pending correction (the re-check marker flips off);
+  // cyan surface, deep link → the portal leave page where the "Seen by
+  // {reviewer}" badge lives.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -456,6 +461,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.43.0: the approver-facing rows for the same corrections
                 // (the approvals group re-checks before deciding).
                 { metadata: { contains: LEAVE_CORRECTED_METADATA_MARKER } },
+                // v2.61.0: the employee-facing "your correction was seen"
+                // rows — the desk visit that cleared the marker, named.
+                { metadata: { contains: LEAVE_REVIEW_SEEN_METADATA_MARKER } },
                 // v2.47.0: payroll-run approval digest rows (maker + the
                 // store's payroll group) with the headline numbers.
                 { metadata: { contains: PAYROLL_APPROVED_METADATA_MARKER } },
@@ -569,6 +577,24 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               isRead: false,
               targetTab: 'payroll',
               category: 'HR',
+            });
+          } else if (kind === 'leave_review_seen') {
+            notifications.push({
+              id: `leave-${n.id}`,
+              type: 'leave_review_seen',
+              title: n.title,
+              description: n.message,
+              // v2.61.0: YOUR corrected request was read by the desk — a
+              // quiet cyan receipt row (a person answered, nothing to do)
+              // that deep-links the portal leave page, where the emerald
+              // "Seen by {reviewer}" badge carries the same story.
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: '',
+              category: 'HR',
+              actionUrl: n.actionUrl ?? undefined,
+              actionLabel: n.actionLabel ?? undefined,
             });
           } else if (kind === 'payroll_approved') {
             notifications.push({

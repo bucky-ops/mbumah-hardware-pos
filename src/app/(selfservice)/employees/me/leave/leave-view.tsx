@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarOff, CalendarPlus, CheckCheck, Eye, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, UserCheck } from 'lucide-react';
+import { CalendarOff, CalendarPlus, CheckCheck, Eye, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, ScanEye, UserCheck } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 import { previewWorkingDays } from '@/lib/leave-tab';
 import { LeaveAttachmentPicker, LeaveAttachmentChip } from '@/components/hr/leave-attachment-ui';
@@ -398,12 +398,25 @@ export function LeaveView({ initialData, selfUserId }: { initialData: LeaveDto; 
                         after the edit it names the reviewer (emerald) — a
                         correction answered by a person, not a timer. */}
                     {needsDeskRecheck(r.editedAt, r.deskReviewedAt) ? (
-                      <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                      <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                        {/* v2.61.0: a live pulse dot — the waiting state reads
+                            as "in progress", not as a stale label. */}
+                        <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        </span>
                         <Eye className="h-3 w-3" aria-hidden /> Waiting for a desk review
                       </p>
                     ) : r.deskReviewedAt ? (
                       <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">
-                        <Eye className="h-3 w-3" aria-hidden />
+                        {/* v2.61.0: a named review earns the scan-eye (a
+                            person looked); the anonymous pre-v2.60 stamp
+                            keeps the plain eye. */}
+                        {r.deskReviewedByName ? (
+                          <ScanEye className="h-3 w-3" aria-hidden />
+                        ) : (
+                          <Eye className="h-3 w-3" aria-hidden />
+                        )}
                         {r.deskReviewedByName ? `Seen by ${r.deskReviewedByName}` : 'Seen by the desk'} · {formatDate(r.deskReviewedAt)}
                       </p>
                     ) : null}

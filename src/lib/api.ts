@@ -2907,7 +2907,10 @@ export interface NotificationItem {
   // batch or manual confirmation; amber surface, Pay Runs desk).
   // v2.51.0: 'payroll_paid' - employee-facing personal "you've been paid"
   // rows (own receipt in hand; emerald surface, portal Payslips deep link).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
+  // v2.61.0: 'leave_review_seen' - employee-facing "your correction was
+  // seen" rows (the desk visit that cleared the re-check marker; cyan
+  // scan-eye, "Correction seen" chip, portal leave page deep link).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
