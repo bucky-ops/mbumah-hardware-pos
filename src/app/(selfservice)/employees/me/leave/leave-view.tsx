@@ -16,11 +16,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarOff, CalendarPlus, CheckCheck, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, UserCheck } from 'lucide-react';
+import { CalendarOff, CalendarPlus, CheckCheck, Eye, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, UserCheck } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 import { previewWorkingDays } from '@/lib/leave-tab';
 import { LeaveAttachmentPicker, LeaveAttachmentChip } from '@/components/hr/leave-attachment-ui';
 import { parseLeaveAttachmentMeta } from '@/lib/hr/leave-attachment';
+import { needsDeskRecheck } from '@/lib/hr/leave-recheck';
 
 export interface BalanceDto {
   leaveTypeId: string;
@@ -57,6 +58,12 @@ export interface RequestDto {
    *  corrected the request (null = pre-v2.45.0 edit or never edited). When
    *  it matches the signed-in user the card renders "Corrected by you". */
   editedByUserId?: string | null;
+  /** v2.60.0: the desk-review mirror — when the desk last opened this
+   *  request (null = never) and who it was, rendered on the card so a
+   *  corrected request never feels ignored. The waiting/seen decision is
+   *  computed through the SAME shared rule the desk chip uses. */
+  deskReviewedAt?: string | null;
+  deskReviewedByName?: string | null;
 }
 export interface LeaveDto {
   balances: BalanceDto[];
@@ -383,6 +390,23 @@ export function LeaveView({ initialData, selfUserId }: { initialData: LeaveDto; 
                       </p>
                     )}
                     {r.editNote ? <p className="mt-1 text-xs text-amber-700/90 dark:text-amber-300/90">Note: {r.editNote}</p> : null}
+                    {/* v2.60.0: the review mirror — the employee side of the
+                        desk's re-check marker, decided by the SAME shared
+                        rule (needsDeskRecheck) so the two sides can never
+                        disagree. While the correction is unseen the card
+                        says so honestly (amber); once a desk visit lands
+                        after the edit it names the reviewer (emerald) — a
+                        correction answered by a person, not a timer. */}
+                    {needsDeskRecheck(r.editedAt, r.deskReviewedAt) ? (
+                      <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                        <Eye className="h-3 w-3" aria-hidden /> Waiting for a desk review
+                      </p>
+                    ) : r.deskReviewedAt ? (
+                      <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">
+                        <Eye className="h-3 w-3" aria-hidden />
+                        {r.deskReviewedByName ? `Seen by ${r.deskReviewedByName}` : 'Seen by the desk'} · {formatDate(r.deskReviewedAt)}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
                 {r.reason ? <p className="mt-1 text-xs text-muted-foreground">“{r.reason}”</p> : null}

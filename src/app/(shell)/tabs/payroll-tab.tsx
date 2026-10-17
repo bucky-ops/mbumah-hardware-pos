@@ -188,6 +188,8 @@ interface LeaveRequest {
    *  (the amber "re-check" chip). Computed server-side by needsDeskRecheck. */
   deskReviewedAt?: string | null;
   needsRecheck?: boolean;
+  /** v2.60.0: who stamped the last desk visit (null = pre-v2.60.0 review). */
+  deskReviewedByName?: string | null;
   /** v2.42.0: supporting document — data URL (governed cap) or http(s) link. */
   attachmentUrl?: string | null;
 }
@@ -1745,11 +1747,16 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
   // on it) but honest on failure: a failed stamp means the chip stays and
   // another approver still sees "corrected, not reviewed since", so we log
   // a quiet toast instead of pretending the read happened. The mutation
-  // updates the cached row in place (needsRecheck is server-computed) and
-  // refetches to stay consistent.
+  // updates the cached row in place (needsRecheck is server-computed) so
+  // the dialog receipt flips WITHOUT waiting for a refocus refetch.
+  // v2.60.0 FIX: apiFetch returns the UNWRAPPED json.data — the generic
+  // must describe the INNER data object, not the envelope. The v2.59.0
+  // version read data.data.id off the wrong shape, so onSuccess threw
+  // silently and the inline cache write never landed (masked in QA by
+  // react-query's focus refetches catching up afterwards).
   const reviewStampMutation = useMutation({
     mutationFn: (leaveRequestId: string) =>
-      apiFetch<{ success: boolean; data: { id: string; deskReviewedAt: string | null; needsRecheck: boolean } }>(
+      apiFetch<{ id: string; deskReviewedAt: string | null; deskReviewedByName: string | null; needsRecheck: boolean }>(
         `/api/leaves/${leaveRequestId}/review`,
         { method: 'POST' },
       ),
@@ -1761,8 +1768,13 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
             ? {
                 ...old,
                 data: old.data.map((l) =>
-                  l.id === data.data.id
-                    ? { ...l, deskReviewedAt: data.data.deskReviewedAt, needsRecheck: data.data.needsRecheck }
+                  l.id === data.id
+                    ? {
+                        ...l,
+                        deskReviewedAt: data.deskReviewedAt,
+                        deskReviewedByName: data.deskReviewedByName,
+                        needsRecheck: data.needsRecheck,
+                      }
                     : l,
                 ),
               }
@@ -2459,7 +2471,14 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                         Corrected {detail.editedAt ? formatDateTime(detail.editedAt) : 'recently'} — no desk visit since. Opening this dialog marks it re-checked for every approver.
                       </p>
                     ) : live.deskReviewedAt ? (
-                      <p className="text-sm text-muted-foreground">Last reviewed {formatDateTime(live.deskReviewedAt)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Last reviewed
+                        {live.deskReviewedByName ? (
+                          <span className="font-medium text-foreground"> by {live.deskReviewedByName}</span>
+                        ) : null}
+                        {' · '}
+                        {formatDateTime(live.deskReviewedAt)}
+                      </p>
                     ) : (
                       <p className="text-sm text-muted-foreground">Not yet reviewed by the desk — no corrections on file.</p>
                     )}

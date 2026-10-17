@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.60.0',
+    title: 'The receipt is personal and shared — the desk records who reviewed, and the employee sees it',
+    bullets: [
+      'A desk review is a person reading, not a timer firing: the re-check receipt now says "Last reviewed by Grace" instead of an anonymous timestamp, on the dialog and in the audit log.',
+      'The employee\u2019s portal card mirrors the same receipt: once a desk visit lands after a correction, the card shows an emerald "Seen by {reviewer}" badge — a corrected request is answered by a person.',
+      'While that visit hasn\u2019t happened yet, the portal card says so honestly with an amber "Waiting for a desk review" badge — no more silent limbo after you fix your own dates.',
+      'Both sides are decided by the SAME shared rule as the desk\u2019s re-check chip, so the portal badge and the desk marker can never disagree about whether a correction has been seen.',
+      'The reviewer\u2019s name travels with the stamp (Users.name, falling back to email), so the record survives even if a display name changes later.',
+    ],
+  },
+  {
     version: '2.59.0',
     title: 'The desk never decides on a stale correction — corrected leave requests carry their own re-check marker',
     bullets: [

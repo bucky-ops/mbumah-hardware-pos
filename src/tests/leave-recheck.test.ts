@@ -114,9 +114,57 @@ describe('GET /api/leaves - DTO carries the server-computed marker', () => {
     expect(source).toContain("from '@/lib/hr/leave-recheck'");
   });
 
+  it('exposes the reviewer name (v2.60.0: the receipt is personal)', () => {
+    const source = readFileSync(join(ROOT, 'app/api/leaves/route.ts'), 'utf8');
+    expect(source).toContain('deskReviewedByName: r.deskReviewedByName ?? null');
+  });
+
   it('the heuristic module stays pure (no server-only imports)', () => {
     const source = readFileSync(join(ROOT, 'lib/hr/leave-recheck.ts'), 'utf8');
     expect(source).not.toMatch(/from '@\/lib\/db'/);
     expect(source).not.toMatch(/from 'next\/server'/);
+  });
+});
+
+describe('v2.60.0 - the receipt is personal and shared', () => {
+  it('the stamp route records WHO reviewed (id + name with fallback)', () => {
+    const source = readFileSync(join(ROOT, 'app/api/leaves/[id]/review/route.ts'), 'utf8');
+    expect(source).toContain('deskReviewedById: session.userId');
+    expect(source).toContain('deskReviewedByName: reviewerName');
+    expect(source).toContain('reviewer?.name ?? session.email ?? session.userId');
+    expect(source).toContain('reviewerId: session.userId');
+    expect(source).toContain('reviewerName');
+  });
+
+  it('the portal DTO mirrors the review to the employee', () => {
+    const source = readFileSync(join(ROOT, 'lib/hr/self-service.ts'), 'utf8');
+    expect(source).toContain('deskReviewedAt: r.deskReviewedAt?.toISOString() ?? null');
+    expect(source).toContain('deskReviewedByName: r.deskReviewedByName ?? null');
+  });
+
+  it('the portal card decides waiting/seen through the SAME shared rule', () => {
+    const source = readFileSync(join(ROOT, 'app/(selfservice)/employees/me/leave/leave-view.tsx'), 'utf8');
+    expect(source).toContain("import { needsDeskRecheck } from '@/lib/hr/leave-recheck';");
+    expect(source).toContain('needsDeskRecheck(r.editedAt, r.deskReviewedAt)');
+    expect(source).toContain('Waiting for a desk review');
+    expect(source).toContain('Seen by ${r.deskReviewedByName}');
+    expect(source).toContain("'Seen by the desk'");
+  });
+
+  it('the desk receipt names the reviewer', () => {
+    const source = readFileSync(join(ROOT, 'app/(shell)/tabs/payroll-tab.tsx'), 'utf8');
+    expect(source).toContain('by {live.deskReviewedByName}');
+  });
+
+  it('the stamp cache write reads the UNWRAPPED apiFetch shape (v2.60.0 fix)', () => {
+    const source = readFileSync(join(ROOT, 'app/(shell)/tabs/payroll-tab.tsx'), 'utf8');
+    // apiFetch returns json.data — the generic describes the INNER object
+    // and onSuccess reads data.id / data.needsRecheck directly. The
+    // v2.59.0 release read data.data.* off the wrong shape, so the inline
+    // cache write threw silently (masked by focus refetches).
+    expect(source).toContain('apiFetch<{ id: string; deskReviewedAt: string | null; deskReviewedByName: string | null; needsRecheck: boolean }>');
+    expect(source).toContain('l.id === data.id');
+    expect(source).toContain('needsRecheck: data.needsRecheck');
+    expect(source).not.toContain('data.data.needsRecheck');
   });
 });
