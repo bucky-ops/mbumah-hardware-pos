@@ -86,7 +86,7 @@ console.log('== The hint: screen only, never on paper ==');
 const hint = VIEW.split('data-testid="desk-report-kbd-hint"')[1]?.split('</span>')[0] ?? '';
 check('the keyboard hint exists at the footnote', hint.length > 0 && hint.includes('walk the doors') && hint.includes('closes a drawer'));
 check('the hint is screen-only', hint.includes('hidden') && hint.includes('sm:flex') && hint.includes('print:hidden'));
-check('the hint dresses its keys as keys (3 kbd chips)', (hint.match(/<kbd /g) || []).length === 3 && hint.includes('font-mono'));
+check('the hint dresses its keys as keys (6 kbd chips after v2.78.0)', (hint.match(/<kbd /g) || []).length === 6 && hint.includes('font-mono'));
 
 console.log('== Prior anchors: nothing else moved ==');
 check('the reading-state inbox survives (per-version state testids)', CHROME.includes('data-testid={`palette-release-state-${r.version}`}'));
