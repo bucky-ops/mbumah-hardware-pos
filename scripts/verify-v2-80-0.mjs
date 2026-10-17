@@ -54,7 +54,8 @@ check('deskReportDrawerParam is exported', MOD.includes('export function deskRep
 check('the parser rides URLSearchParams on a search string', MOD.includes('new URLSearchParams(search.startsWith') && MOD.includes("params.get('request')") && MOD.includes("params.get('reviewer')"));
 check('one drawer per link: the request wins when both params ride', MOD.includes('const request = params.get(\'request\')?.trim();') && MOD.indexOf("if (request) return { kind: 'request', id: request };") < MOD.indexOf("if (reviewer) return { kind: 'reviewer', id: reviewer };"));
 check('whitespace-only params are no link at all', MOD.includes("params.get('reviewer')?.trim()") && MOD.includes('if (request) return') && MOD.includes('if (reviewer) return'));
-check('deskReportDrawerHref is exported and encodes the subject', MOD.includes('export function deskReportDrawerHref(') && MOD.includes('`/org/desk-report?${kind}=${encodeURIComponent(id)}`'));
+// v2.81.0: the href composes through deskReportReportHref (scope-aware), encoding inside the composer.
+check('deskReportDrawerHref is exported and encodes the subject', MOD.includes('export function deskReportDrawerHref(') && MOD.includes('`${drawer.kind}=${encodeURIComponent(drawer.id)}`'));
 check('DeskReportDeepLinkResult names the verdict and the sentence', MOD.includes('export interface DeskReportDeepLinkResult {') && MOD.includes('open: boolean;') && MOD.includes('announcement: string;'));
 check('deskReportResolveDeepLink is exported', MOD.includes('export function deskReportResolveDeepLink('));
 check('the reviewer verdict names the file and its size', MOD.includes("`The link opened ${link.id}'s file — ${row.visits} ${row.visits === 1 ? 'visit' : 'visits'} in this window.`"));
@@ -66,19 +67,26 @@ check('the resolver reads the ledger through the slice helper', MOD.includes('de
 
 console.log('== The view: the arrival answers, the URL mirrors ==');
 const VIEW = read('src/components/org/desk-report-view.tsx') ?? '';
-check('the view imports the parser, the href builder and the resolver', VIEW.includes('deskReportDrawerHref,') && VIEW.includes('deskReportDrawerParam,') && VIEW.includes('deskReportResolveDeepLink,'));
+// v2.81.0: the view parses through deskReportArrival and composes through deskReportReportHref.
+check('the view imports the parser, the href builder and the resolver', VIEW.includes('deskReportArrival,') && VIEW.includes('deskReportReportHref,') && VIEW.includes('deskReportResolveDeepLink,'));
 check('the arrival is gated one-shot, parsed at resolve time (client-nav safe)', VIEW.includes('const deepLinkOpen = useRef(true);') && (VIEW.split('const resolve = setTimeout(')[1]?.split('}, 0);')[0] ?? '').includes('deepLinkOpen.current = false;'));
 const resolveBody = VIEW.split('const resolve = setTimeout(')[1]?.split('}, 0);')[0] ?? '';
-check('the link is read from the address bar at the first read', resolveBody.includes('const link = deskReportDrawerParam(window.location.search);') && resolveBody.includes('if (!link) return;'));
-check('the arrival resolves against the first read', resolveBody.includes('deskReportResolveDeepLink(link, data)'));
-check('the verdict opens the family the link named', resolveBody.includes("if (link.kind === 'reviewer') setOpenReviewer(link.id);") && resolveBody.includes('else setOpenRequest(link.id);'));
-check('a refusal strips the address (the bar stops claiming it)', resolveBody.includes("history.replaceState(null, '', '/org/desk-report')"));
+check('the link is read from the address bar at the first read', VIEW.includes('const arrival = deskReportArrival(window.location.search);') && VIEW.includes('deepLinkOpen.current = false; // a plain visit: nothing to answer'));
+// v2.81.0: the drawer is named by arrival.drawer and resolves against the re-keyed read.
+check('the arrival resolves against the first read', resolveBody.includes('deskReportResolveDeepLink(arrival.drawer, data)'));
+check('the verdict opens the family the link named', resolveBody.includes("if (arrival.drawer.kind === 'reviewer') setOpenReviewer(arrival.drawer.id);") && resolveBody.includes('else setOpenRequest(arrival.drawer.id);'));
+// v2.81.0: the refusal rides syncUrl — the scope it landed on stays, only the drawer param is dropped.
+check('a refusal strips the address (the bar stops claiming it)', resolveBody.includes('syncUrl();'));
 check('the verdict speaks through the walk announcer', resolveBody.includes('setWalkAnnouncement(result.announcement)'));
-const mirrorBody = VIEW.split('every drawer has an address')[1]?.split('}, [openReviewer, openRequest]);')[0] ?? '';
-check('the mirror rides the pure href builder for both families', mirrorBody.includes("deskReportDrawerHref('request', openRequest)") && mirrorBody.includes("deskReportDrawerHref('reviewer', openReviewer)"));
-check('a closed drawer is the base address', mirrorBody.includes(": '/org/desk-report';"));
+// v2.81.0 grew the mirror: the whole state (window/branch/drawer) now
+// composes through syncUrl (deskReportReportHref) and the mirror effect
+// rides it — the contracts keep their meaning, the slices follow the shape.
+const syncBody = VIEW.split('const syncUrl = useCallback(')[1]?.split('}, [days, branch, openReviewer, openRequest]);')[0] ?? '';
+const mirrorBody = VIEW.split('the WHOLE state does')[1]?.split('}, [syncUrl]);')[0] ?? '';
+check('the mirror rides the pure href builder for both families', /deskReportReportHref\(\s+days,\s+branch,/.test(syncBody) && syncBody.includes("{ kind: 'request', id: openRequest }") && syncBody.includes("{ kind: 'reviewer', id: openReviewer }"));
+check('a closed drawer is the base address', syncBody.includes(': null,'));
 check('the mirror holds while the arrival gate is open', mirrorBody.includes('if (deepLinkOpen.current) return;'));
-check('the mirror replaces state, never navigates', mirrorBody.includes('history.replaceState(null, \'\', href)') && !mirrorBody.includes('history.pushState') && !mirrorBody.includes('window.location.assign'));
+check('the mirror replaces state, never navigates', syncBody.includes("history.replaceState(null, '', href)") && !syncBody.includes('history.pushState') && !syncBody.includes('window.location.assign'));
 const foot = VIEW.split('data-testid="desk-report-footnote"')[1]?.split('</p>')[0] ?? '';
 check('the footnote says an open drawer rides the address bar', foot.includes('An open drawer rides the address bar — copy the URL and the same file opens for whoever follows.'));
 check('the deep links add no doors — the walk stays 6', (VIEW.match(/data-desk-door\n/g) || []).length === 6);
@@ -86,7 +94,10 @@ check('the deep links add no doors — the walk stays 6', (VIEW.match(/data-desk
 console.log('== The desk panel hands the report a name ==');
 const PANELS = read('src/components/org/panels.tsx') ?? '';
 check('the drill-down bar carries the report deep link', PANELS.includes('data-testid="desk-drilldown-report-link"'));
-check('the link hands the narrowed reviewer over encoded', PANELS.includes('href={`/org/desk-report?reviewer=${encodeURIComponent(reviewer)}`}') && PANELS.includes("title={`Open ${reviewer}'s file in the desk report`}"));
+// v2.81.0 moved the href onto the pure builder (deskReportDrawerHref) so
+// the panel's branch filter rides along — the encoding now lives inside the
+// composer (encodeURIComponent(id) in desk-report.ts).
+check('the link hands the narrowed reviewer over encoded (via the pure builder since v2.81.0)', PANELS.includes("href={deskReportDrawerHref('reviewer', reviewer, { branch: branch ?? null })}") && PANELS.includes("title={`Open ${reviewer}'s file in the desk report`}") && MOD.includes('encodeURIComponent(drawer.id)'));
 check('the door is dressed like one (emerald family, dark variants, focus ring)', PANELS.split('data-testid="desk-drilldown-report-link"')[1]?.split('</Link>')[0]?.includes('border-emerald-200 bg-white') && PANELS.includes('dark:border-emerald-500/30 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:border-emerald-400 dark:hover:bg-emerald-500/15') && PANELS.includes('focus-visible:ring-emerald-400'));
 check('the clear button survives beside the door', PANELS.includes('data-testid="desk-drilldown-clear"') && PANELS.includes('onClick={clearReviewer}'));
 

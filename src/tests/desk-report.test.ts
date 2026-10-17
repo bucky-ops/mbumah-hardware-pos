@@ -52,6 +52,8 @@ import {
   deskReportRequestSubject,
   deskReportDrawerParam,
   deskReportDrawerHref,
+  deskReportReportHref,
+  deskReportArrival,
   deskReportResolveDeepLink,
   deskReportReviewerLedger,
   deskReportChipStep,
@@ -1886,13 +1888,13 @@ describe('deskReportResolveDeepLink - the arrival answers honestly (v2.80.0)', (
   });
 });
 
-describe('the deep links in the view (v2.80.0)', () => {
+describe('the deep links in the view (v2.80.0, scope-riding v2.81.0)', () => {
   const readRepo2 = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
   const VIEW = readRepo2('src/components/org/desk-report-view.tsx');
 
-  it('the view imports the parser, the href builder and the resolver', () => {
-    expect(VIEW).toContain('deskReportDrawerHref,');
-    expect(VIEW).toContain('deskReportDrawerParam,');
+  it('the view imports the arrival parser, the composer and the resolver', () => {
+    expect(VIEW).toContain('deskReportArrival,');
+    expect(VIEW).toContain('deskReportReportHref,');
     expect(VIEW).toContain('deskReportResolveDeepLink,');
   });
 
@@ -1902,31 +1904,70 @@ describe('the deep links in the view (v2.80.0)', () => {
     // bar AFTER the new page renders, so a mount-time parse could see the
     // old address and miss the link.
     expect(VIEW).toContain('const deepLinkOpen = useRef(true);');
-    const body = VIEW.split('const resolve = setTimeout(')[1].split('}, 0);')[0];
-    expect(body).toContain('deepLinkOpen.current = false;');
-    expect(body).toContain('const link = deskReportDrawerParam(window.location.search);');
-    expect(body).toContain('if (!link) return; // no link in the address: a plain visit, nothing to answer');
+    expect(VIEW).toContain("const arrival = deskReportArrival(window.location.search);");
+    expect(VIEW).toContain('deepLinkOpen.current = false; // a plain visit: nothing to answer');
   });
 
-  it('the arrival resolves against the same read: open names the family, refusal strips the address', () => {
+  it('beat one re-keys ONLY what the link carried, announced on the scope channel', () => {
+    const rekey = VIEW.split('const rekey = setTimeout(')[1].split('}, 0);')[0];
+    expect(rekey).toContain('rekeyedRef.current = true;');
+    expect(rekey).toContain("setScopeAnnouncement(deskReportScopeAnnouncement('window', WINDOW_LABELS[arrival.days] ?? `${arrival.days} days`));");
+    expect(rekey).toContain("setScopeAnnouncement(deskReportScopeAnnouncement('branch', label));");
+    expect(rekey).toContain('setDays(arrival.days);');
+    expect(rekey).toContain('setBranch(arrival.branch);');
+    expect(rekey).toContain('clearDrawers();');
+    // Only what the link carried: absent keys are null, not defaults.
+    const guard = VIEW.split('if ((arrival.days && arrival.days !== days)')[1].split('return () => clearTimeout(rekey);')[0];
+    expect(guard).toContain('if (arrival.days && arrival.days !== days) {');
+    expect(guard).toContain('if (arrival.branch && arrival.branch !== branch) {');
+  });
+
+  it('beat two resolves the drawer against the RE-KEYED read and wears the arrival', () => {
+    // The settle guard sits in the EFFECT body, before the deferred
+    // callback (the slice-trap class: assert it against the whole file).
+    expect(VIEW).toContain('if (data.window.days !== days || (data.scope.branch ?? null) !== branch) return;');
     const body = VIEW.split('const resolve = setTimeout(')[1].split('}, 0);')[0];
-    expect(body).toContain('deskReportResolveDeepLink(link, data)');
-    expect(body).toContain("if (link.kind === 'reviewer') setOpenReviewer(link.id);");
-    expect(body).toContain('else setOpenRequest(link.id);');
-    expect(body).toContain("history.replaceState(null, '', '/org/desk-report')");
+    expect(body).toContain('deskReportResolveDeepLink(arrival.drawer, data)');
+    expect(body).toContain("if (arrival.drawer.kind === 'reviewer') setOpenReviewer(arrival.drawer.id);");
+    expect(body).toContain('setViaLink(true); // the drawer wears how it arrived');
+    // A refusal keeps the scope it landed on and stops claiming the drawer.
+    expect(body).toContain('syncUrl();');
     expect(body).toContain('setWalkAnnouncement(result.announcement)');
   });
 
-  it('every drawer has an address: the URL mirrors the open drawer, either family, base when closed', () => {
-    const mirror = VIEW.split("v2.80.0 — every drawer has an address")[1].split('}, [openReviewer, openRequest]);')[0];
-    expect(mirror).toContain("deskReportDrawerHref('request', openRequest)");
-    expect(mirror).toContain("deskReportDrawerHref('reviewer', openReviewer)");
-    expect(mirror).toContain(": '/org/desk-report';");
-    expect(mirror).toContain('history.replaceState(null, \'\', href)');
-    expect(mirror).toContain('if (deepLinkOpen.current) return;');
+  it('the whole state has an address: syncUrl composes window, branch and drawer', () => {
+    const sync = VIEW.split('const syncUrl = useCallback(')[1].split('}, [days, branch, openReviewer, openRequest]);')[0];
+    expect(sync).toMatch(/deskReportReportHref\(\s+days,\s+branch,/);
+    expect(sync).toContain("openRequest\n        ? { kind: 'request', id: openRequest }");
+    expect(sync).toContain("openReviewer\n          ? { kind: 'reviewer', id: openReviewer }");
+    expect(sync).toContain("window.location.pathname + window.location.search !== href");
+    expect(sync).toContain('history.replaceState(null, \'\', href)');
     // The mirror never navigates — replaceState only.
-    expect(mirror).not.toContain('history.pushState');
-    expect(mirror).not.toContain('window.location.assign');
+    expect(sync).not.toContain('history.pushState');
+    expect(sync).not.toContain('window.location.assign');
+  });
+
+  it('the mirror holds while the arrival gate is open', () => {
+    const mirror = VIEW.split('the WHOLE state does')[1].split('}, [syncUrl]);')[0];
+    expect(mirror).toContain('if (deepLinkOpen.current) return;');
+    expect(mirror).toContain('syncUrl();');
+  });
+
+  it('the link badge resets everywhere the via chips reset, and only the arrival sets it', () => {
+    expect((VIEW.match(/setViaLink\(false\)/g) || []).length).toBe(7);
+    expect((VIEW.match(/setViaLink\(true\)/g) || []).length).toBe(1);
+  });
+
+  it('both drawers wear the from-the-link chip — a badge, not a door', () => {
+    const rev = VIEW.split('data-testid="desk-report-reviewer-linkchip"')[1].split('</span>')[0];
+    const req = VIEW.split('data-testid="desk-report-request-linkchip"')[1].split('</span>')[0];
+    for (const chip of [rev, req]) {
+      expect(chip).toContain('border-emerald-200 bg-emerald-50');
+      expect(chip).toContain('dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300');
+      expect(chip).toContain('Link2');
+      expect(chip).not.toContain('data-desk-door');
+    }
+    expect(VIEW).toContain('from the link');
   });
 
   it('the footnote says the drawer rides the address bar', () => {
@@ -1939,8 +1980,81 @@ describe('the deep links in the view (v2.80.0)', () => {
   });
 });
 
-describe('release metadata - v2.80.0', () => {
-  it('bumps package.json to at least 2.80.0 (all three slots) and registers the verify script', () => {
+describe('deskReportReportHref - the whole state has an address (v2.81.0)', () => {
+  it('defaults leave no ink: 7 days and no branch compose to the bare path', () => {
+    expect(deskReportReportHref(7, null, null)).toBe('/org/desk-report');
+    expect(deskReportReportHref(null, null, null)).toBe('/org/desk-report');
+  });
+
+  it('a real window rides; a non-default window rides; an invalid one is not a scope', () => {
+    expect(deskReportReportHref(14, null, null)).toBe('/org/desk-report?days=14');
+    expect(deskReportReportHref(30, null, null)).toBe('/org/desk-report?days=30');
+    expect(deskReportReportHref(99, null, null)).toBe('/org/desk-report');
+  });
+
+  it('the branch rides encoded', () => {
+    expect(deskReportReportHref(null, 'store-juja', null)).toBe('/org/desk-report?branch=store-juja');
+    expect(deskReportReportHref(null, 'store with space', null)).toBe('/org/desk-report?branch=store%20with%20space');
+  });
+
+  it('window, branch and drawer compose in ONE deterministic order', () => {
+    expect(deskReportReportHref(14, 'store-juja', { kind: 'reviewer', id: 'Jane Doe' }))
+      .toBe('/org/desk-report?days=14&branch=store-juja&reviewer=Jane%20Doe');
+    expect(deskReportReportHref(null, null, { kind: 'request', id: 'req 42' }))
+      .toBe('/org/desk-report?request=req%2042');
+  });
+
+  it('round-trips through the arrival parser', () => {
+    const href = deskReportReportHref(14, 'store-juja', { kind: 'reviewer', id: 'Grace Wanjiku' });
+    expect(deskReportArrival(href.split('?')[1])).toEqual({ days: 14, branch: 'store-juja', drawer: { kind: 'reviewer', id: 'Grace Wanjiku' } });
+  });
+});
+
+describe('deskReportDrawerHref - the drawer address with scope (v2.81.0)', () => {
+  it('a bare drawer address is unchanged from v2.80.0', () => {
+    expect(deskReportDrawerHref('reviewer', 'Jane Doe')).toBe('/org/desk-report?reviewer=Jane%20Doe');
+  });
+
+  it('the scope rides behind the drawer param (the panel door hands its branch over)', () => {
+    expect(deskReportDrawerHref('reviewer', 'Jane Doe', { branch: 'store-juja' }))
+      .toBe('/org/desk-report?branch=store-juja&reviewer=Jane%20Doe');
+    expect(deskReportDrawerHref('reviewer', 'Jane Doe', { branch: null }))
+      .toBe('/org/desk-report?reviewer=Jane%20Doe');
+    expect(deskReportDrawerHref('reviewer', 'Jane Doe', { days: 14, branch: 'store-nak' }))
+      .toBe('/org/desk-report?days=14&branch=store-nak&reviewer=Jane%20Doe');
+  });
+});
+
+describe('deskReportArrival - everything a link can ask for (v2.81.0)', () => {
+  it('parses scope + drawer in one read', () => {
+    expect(deskReportArrival('?days=14&branch=store-juja&reviewer=Jane%20Doe'))
+      .toEqual({ days: 14, branch: 'store-juja', drawer: { kind: 'reviewer', id: 'Jane Doe' } });
+  });
+
+  it('absent keys are null, not defaults — the caller re-keys ONLY what the link carried', () => {
+    expect(deskReportArrival('?reviewer=Jane')).toEqual({ days: null, branch: null, drawer: { kind: 'reviewer', id: 'Jane' } });
+    expect(deskReportArrival('?days=30')).toEqual({ days: 30, branch: null, drawer: null });
+    expect(deskReportArrival('?branch=store-juja')).toEqual({ days: null, branch: 'store-juja', drawer: null });
+  });
+
+  it('only the REAL windows count; anything else is not a scope', () => {
+    expect(deskReportArrival('?days=99').days).toBeNull();
+    expect(deskReportArrival('?days=abc').days).toBeNull();
+    expect(deskReportArrival('?days=7').days).toBe(7);
+  });
+
+  it('the request wins when both drawer params ride (one drawer on arrival)', () => {
+    expect(deskReportArrival('?days=14&reviewer=Jane&request=req-1').drawer).toEqual({ kind: 'request', id: 'req-1' });
+  });
+
+  it('a plain visit is all null', () => {
+    expect(deskReportArrival('')).toEqual({ days: null, branch: null, drawer: null });
+    expect(deskReportArrival('?foo=1')).toEqual({ days: null, branch: null, drawer: null });
+  });
+});
+
+describe('release metadata - v2.81.0', () => {
+  it('bumps package.json to at least 2.81.0 (all three slots) and registers the verify script', () => {
     const PKG = JSON.parse(readRepo('package.json')) as {
       version: string;
       mbumah: { releaseVersion: string; baseVersion: string };
@@ -1951,17 +2065,17 @@ describe('release metadata - v2.80.0', () => {
       const [x, y, z] = base.split('.').map(Number);
       return a > x || (a === x && (b > y || (b === y && c >= z)));
     };
-    expect(atLeast(PKG.version, '2.80.0')).toBe(true);
-    expect(atLeast(PKG.mbumah.releaseVersion, '2.80.0')).toBe(true);
-    expect(atLeast(PKG.mbumah.baseVersion, '2.80.0')).toBe(true);
-    expect(PKG.scripts['verify:v2-80-0']).toBe('node scripts/verify-v2-80-0.mjs');
+    expect(atLeast(PKG.version, '2.81.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.81.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.81.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-81-0']).toBe('node scripts/verify-v2-81-0.mjs');
   });
 
-  it('whats-new 2.80.0 leads the feed with the addressable story', () => {
+  it('whats-new 2.81.0 leads the feed with the whole-scope story', () => {
     const WN = readRepo('src/lib/whats-new.ts');
-    expect(WN.indexOf("version: '2.80.0'")).toBeGreaterThan(-1);
-    expect(WN.indexOf("version: '2.80.0'")).toBeLessThan(WN.indexOf("version: '2.79.0'"));
-    expect(WN).toContain('The report is addressable');
+    expect(WN.indexOf("version: '2.81.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.81.0'")).toBeLessThan(WN.indexOf("version: '2.80.0'"));
+    expect(WN).toContain('The link carries the whole scope');
   });
 
   it('keeps every prior surface intact (walk, announcers, drawers, scope chips, report CSV, filing drawers)', () => {
@@ -1974,6 +2088,8 @@ describe('release metadata - v2.80.0', () => {
     const MOD = readRepo('src/lib/hr/desk-report.ts');
     expect(MOD).toContain('export function deskReportDrawerParam(');
     expect(MOD).toContain('export function deskReportDrawerHref(');
+    expect(MOD).toContain('export function deskReportReportHref(');
+    expect(MOD).toContain('export function deskReportArrival(');
     expect(MOD).toContain('export function deskReportResolveDeepLink(');
     expect(MOD).toContain('export function deskReportSliceToCsv(');
     expect(MOD).toContain('export function deskReportSliceCsvFilename(');

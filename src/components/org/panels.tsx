@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Activity, AlertOctagon, BadgeCheck, BellRing, Coffee, FileText, History, LogIn, MessagesSquare, RadioTower, Send, Sunrise, X } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
+import { deskReportDrawerHref } from '@/lib/hr/desk-report';
 import { num, timeAgo, type ActivityItem, type ConsoleAlert, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData } from './primitives';
 
 const SEV: Record<string, string> = {
@@ -539,10 +540,13 @@ export function DeskActivity({ data, filter, onFilterChange }: {
           ) : null}
           {/* v2.80.0 — the desk flows into the report: the narrowed reviewer
               rides the link as a deep link (?reviewer=…), and the report
-              opens that reviewer's drawer on arrival. The chip wears the
-              panel's emerald family — a door, dressed like one. */}
+              opens that reviewer's drawer on arrival. v2.81.0 — the door
+              hands its BRANCH FILTER over too (?branch=… rides behind the
+              name), so the report arrives in the scope the desk narrowed
+              to. The chip wears the panel's emerald family — a door,
+              dressed like one. */}
           <Link
-            href={`/org/desk-report?reviewer=${encodeURIComponent(reviewer)}`}
+            href={deskReportDrawerHref('reviewer', reviewer, { branch: branch ?? null })}
             data-testid="desk-drilldown-report-link"
             title={`Open ${reviewer}'s file in the desk report`}
             className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/30 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:border-emerald-400 dark:hover:bg-emerald-500/15"

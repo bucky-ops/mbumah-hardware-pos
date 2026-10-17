@@ -51,7 +51,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, ArrowUpRight, BadgeCheck, Building2, CalendarRange, ChevronDown, CornerUpLeft,
-  FileSpreadsheet, FileText, Printer, RefreshCw, Sunrise, Users,
+  FileSpreadsheet, FileText, Link2, Printer, RefreshCw, Sunrise, Users,
 } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
 import { printReceiptElement } from '@/lib/receipt-pdf';
@@ -61,9 +61,9 @@ import {
   deskReportAvatarHue,
   deskReportChipStep,
   deskReportDayLabel,
-  deskReportDrawerHref,
-  deskReportDrawerParam,
+  deskReportArrival,
   deskReportHasRequestDoor,
+  deskReportReportHref,
   deskReportRequestLedger,
   deskReportRequestSubject,
   deskReportResolveDeepLink,
@@ -115,6 +115,12 @@ export function DeskReportView() {
   // only ever describes the jump that just happened.
   const [viaRequest, setViaRequest] = useState<string | null>(null);
   const [viaReviewer, setViaReviewer] = useState<string | null>(null);
+  // v2.81.0: the link's badge — the CURRENT drawer was opened by the deep
+  // link the user followed, so the drawer wears a small "from the link"
+  // chip the way a jumped drawer wears its "via" chip. Any plain toggle,
+  // jump or scope change clears it: it only ever describes the arrival
+  // that just happened.
+  const [viaLink, setViaLink] = useState(false);
   // v2.77.0: the walk's announcer — an aria-live region that names each
   // door as j/k lands on it (and the Escape close), mounted unconditionally
   // so the live region exists before the first message arrives.
@@ -132,6 +138,10 @@ export function DeskReportView() {
   // still see the OLD address and miss the link entirely. By the time the
   // report's first read lands, the address bar is the truth.
   const deepLinkOpen = useRef(true);
+  // v2.81.0 — whether the arrival already re-keyed the scope on its way to
+  // the drawer verdict (the scope sentence rode the scope channel; the
+  // drawer verdict rides the walk channel).
+  const rekeyedRef = useRef(false);
 
   const load = useCallback(async (d: number, b: string | null) => {
     const seq = ++loadSeq.current;
@@ -169,49 +179,6 @@ export function DeskReportView() {
     const initial = setTimeout(() => void load(days, branch), 0);
     return () => clearTimeout(initial);
   }, [load, days, branch]);
-
-  // v2.80.0 — the report answers its mail: when the first read lands, the
-  // arrival link resolves against it (same read, same doors) and either
-  // opens the drawer it names — or says, out loud, why not. The resolution
-  // is deferred one tick like the initial load (same lint hygiene), and it
-  // is one-shot: after this, opening and closing is the page's own business.
-  useEffect(() => {
-    if (!data || !deepLinkOpen.current) return;
-    const resolve = setTimeout(() => {
-      deepLinkOpen.current = false;
-      const link = deskReportDrawerParam(window.location.search);
-      if (!link) return; // no link in the address: a plain visit, nothing to answer
-      const result = deskReportResolveDeepLink(link, data);
-      if (result.open) {
-        if (link.kind === 'reviewer') setOpenReviewer(link.id);
-        else setOpenRequest(link.id);
-      } else {
-        // The address cannot be shown — the bar stops claiming it.
-        history.replaceState(null, '', '/org/desk-report');
-      }
-      setWalkAnnouncement(result.announcement);
-    }, 0);
-    return () => clearTimeout(resolve);
-  }, [data]);
-
-  // v2.80.0 — every drawer has an address: the URL mirrors whatever drawer
-  // is open (either family; one at a time, so one param suffices), and
-  // closing it — by toggle, Escape, a cross-jump or a scope re-key — takes
-  // the param back off. replaceState, never navigation: the page the desk
-  // is reading does not reload because its address learned the drawer's
-  // name. Held while the arrival gate is unresolved, so the link the user
-  // followed is not stripped before it has answered.
-  useEffect(() => {
-    if (deepLinkOpen.current) return;
-    const href = openRequest
-      ? deskReportDrawerHref('request', openRequest)
-      : openReviewer
-        ? deskReportDrawerHref('reviewer', openReviewer)
-        : '/org/desk-report';
-    if (window.location.pathname + window.location.search !== href) {
-      history.replaceState(null, '', href);
-    }
-  }, [openReviewer, openRequest]);
 
   // v2.78.0 — the picks speak: a real re-key (the guard's no-op stays
   // silent) names its new scope through the live region BEFORE the fetch
@@ -263,11 +230,13 @@ export function DeskReportView() {
     setOpenRequest(null);
     setViaRequest(null);
     setViaReviewer(null);
+    setViaLink(false);
   }, []);
   const toggleReviewer = (name: string) => {
     setOpenRequest(null);
     setViaRequest(null);
     setViaReviewer(null);
+    setViaLink(false);
     setOpenReviewer((cur) => (cur === name ? null : name));
   };
   // v2.72.0 — the report reads the file: the same one-drawer rule for the
@@ -276,6 +245,7 @@ export function DeskReportView() {
     setOpenReviewer(null);
     setViaRequest(null);
     setViaReviewer(null);
+    setViaLink(false);
     setOpenRequest((cur) => (cur === id ? null : id));
   };
   // v2.74.0 — the cross-links: a visit row inside one family's drawer names
@@ -286,12 +256,14 @@ export function DeskReportView() {
     setOpenRequest(null);
     setViaRequest(null);
     setViaReviewer(fromRequestId);
+    setViaLink(false);
     setOpenReviewer(name);
   };
   const jumpToRequest = (id: string, fromReviewer: string) => {
     setOpenReviewer(null);
     setViaReviewer(null);
     setViaRequest(fromReviewer);
+    setViaLink(false);
     setOpenRequest(id);
   };
   const jumpBackToReviewer = () => {
@@ -300,6 +272,7 @@ export function DeskReportView() {
     setOpenRequest(null);
     setViaRequest(null);
     setViaReviewer(null);
+    setViaLink(false);
     setOpenReviewer(name);
   };
   const jumpBackToRequest = () => {
@@ -308,8 +281,100 @@ export function DeskReportView() {
     setOpenReviewer(null);
     setViaRequest(null);
     setViaReviewer(null);
+    setViaLink(false);
     setOpenRequest(id);
   };
+
+  // v2.81.0 — one composer for every address the page writes: the URL
+  // mirror and a refusal's strip both ride deskReportReportHref through
+  // here, so the address bar can only ever show the canonical form of the
+  // state (window, branch, drawer; defaults leave no ink).
+  const syncUrl = useCallback(() => {
+    const href = deskReportReportHref(
+      days,
+      branch,
+      openRequest
+        ? { kind: 'request', id: openRequest }
+        : openReviewer
+          ? { kind: 'reviewer', id: openReviewer }
+          : null,
+    );
+    if (window.location.pathname + window.location.search !== href) {
+      history.replaceState(null, '', href);
+    }
+  }, [days, branch, openReviewer, openRequest]);
+
+  // v2.80.0 — the report answers its mail; v2.81.0 — the mail can carry the
+  // whole scope. The arrival resolves in TWO beats against the first reads:
+  // beat one re-keys the report to the link's ?days=/?branch= (ONLY what the
+  // link actually carried — absent keys are null, not defaults), beat two
+  // opens the drawer it names against the RE-KEYED read — a reviewer with
+  // no visits in the default window still opens when the link widened the
+  // window. The parse happens at resolution time, not at mount: a
+  // client-side navigation (the desk panel's Link into the report) updates
+  // the address bar AFTER the new page renders, so a mount-time read can
+  // still see the OLD address. Deferred one tick like the initial load
+  // (same lint hygiene); one-shot by contract — after the beats, opening
+  // and closing is the page's own business.
+  useEffect(() => {
+    if (!data || !deepLinkOpen.current) return;
+    const arrival = deskReportArrival(window.location.search);
+    if (!arrival.days && !arrival.branch && !arrival.drawer) {
+      deepLinkOpen.current = false; // a plain visit: nothing to answer
+      return;
+    }
+    // Beat one — the scope lands first. A re-key announces on the scope
+    // channel and clears the drawers: a new window re-keys the whole
+    // report, drawers included.
+    if ((arrival.days && arrival.days !== days) || (arrival.branch && arrival.branch !== branch)) {
+      const rekey = setTimeout(() => {
+        rekeyedRef.current = true;
+        if (arrival.days && arrival.days !== days) {
+          setScopeAnnouncement(deskReportScopeAnnouncement('window', WINDOW_LABELS[arrival.days] ?? `${arrival.days} days`));
+          setDays(arrival.days);
+        }
+        if (arrival.branch && arrival.branch !== branch) {
+          const label = data.branches.find((b) => b.storeId === arrival.branch)?.storeName ?? arrival.branch;
+          setScopeAnnouncement(deskReportScopeAnnouncement('branch', label));
+          setBranch(arrival.branch);
+        }
+        clearDrawers();
+      }, 0);
+      return () => clearTimeout(rekey);
+    }
+    // Beat two — the read matches the link's scope (or the link carried
+    // none): the drawer resolves against THIS read, so it cannot disagree
+    // with the page above it.
+    if (data.window.days !== days || (data.scope.branch ?? null) !== branch) return;
+    const resolve = setTimeout(() => {
+      deepLinkOpen.current = false;
+      rekeyedRef.current = false;
+      if (!arrival.drawer) return; // scope-only arrival: the re-key said it all
+      const result = deskReportResolveDeepLink(arrival.drawer, data);
+      if (result.open) {
+        if (arrival.drawer.kind === 'reviewer') setOpenReviewer(arrival.drawer.id);
+        else setOpenRequest(arrival.drawer.id);
+        setViaLink(true); // the drawer wears how it arrived
+      } else {
+        // The drawer cannot be shown — the bar keeps the scope it landed
+        // on and stops claiming the drawer.
+        syncUrl();
+      }
+      setWalkAnnouncement(result.announcement);
+    }, 0);
+    return () => clearTimeout(resolve);
+  }, [data, days, branch, clearDrawers, syncUrl]);
+
+  // v2.80.0 — every drawer has an address; v2.81.0 — the WHOLE state does:
+  // window, branch and drawer mirror into the URL as one composed href, so
+  // the address bar always names exactly what is on screen. Held while the
+  // arrival gate is open — the link the user followed must not be stripped
+  // before it has answered. replaceState, never navigation: the page does
+  // not reload because its address learned its own name.
+  useEffect(() => {
+    if (deepLinkOpen.current) return;
+    syncUrl();
+  }, [syncUrl]);
 
   // v2.76.0 — the keyboard walks the report: j focuses the next door, k the
   // previous, both wrapping at the ends; escape closes whatever is open.
@@ -757,6 +822,19 @@ export function DeskReportView() {
                                   via {viaBackSubject.employeeName}&apos;s {viaBackSubject.leaveTypeName}
                                 </button>
                               ) : null}
+                              {/* v2.81.0 — the drawer wears how it arrived: a
+                                  deep-link arrival shows its origin, the way
+                                  a jumped drawer shows its via chip. A badge,
+                                  not a door — nothing to click, nothing to
+                                  walk. */}
+                              {viaLink ? (
+                                <span
+                                  data-testid="desk-report-reviewer-linkchip"
+                                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[9px] tracking-wide text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                                >
+                                  <Link2 className="h-2.5 w-2.5" aria-hidden /> from the link
+                                </span>
+                              ) : null}
                               {/* v2.79.0 — the drawer files itself: this
                                   button files exactly the slice above, from
                                   the same ledger, in the same order (a Blob,
@@ -894,6 +972,14 @@ export function DeskReportView() {
                                   <CornerUpLeft className="h-2.5 w-2.5" aria-hidden />
                                   via {viaRequest}
                                 </button>
+                              ) : null}
+                              {viaLink ? (
+                                <span
+                                  data-testid="desk-report-request-linkchip"
+                                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[9px] tracking-wide text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                                >
+                                  <Link2 className="h-2.5 w-2.5" aria-hidden /> from the link
+                                </span>
                               ) : null}
                               {/* v2.79.0 — the request drawer files itself:
                                   the same slice-CSV button, the request's

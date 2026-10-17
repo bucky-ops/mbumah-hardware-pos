@@ -52,6 +52,17 @@
 // file says exactly that), and the one-drawer rule holds on arrival — a
 // link asks for ONE drawer, never two.
 //
+// v2.81.0: the link carries the whole scope. A drawer address alone opens
+// the DEFAULT window — a link to a 14-day, Juja-Main-narrowed report lost
+// everything but the drawer. Now ?days= and ?branch= ride beside the
+// drawer param: the arrival re-keys the report FIRST (the honest two-beat —
+// the default window renders, then the link's scope lands, then the drawer
+// resolves against the re-keyed read), the URL mirrors the FULL state
+// (window, branch, drawer) from then on, and the desk panel's drill-down
+// door hands its branch filter over with the reviewer's name. A drawer
+// opened by a link wears a small "from the link" chip, the way a jumped
+// drawer wears its "via" chip — the page always says how it got here.
+//
 // WHY: the morning-note family (v2.67.0 strip, v2.68.0 bell) tells the org
 // what happened YESTERDAY; a filing desk needs more than yesterday. The
 // report answers the window questions in one printable page — totals, a
@@ -556,16 +567,74 @@ export function deskReportDrawerParam(
 }
 
 /**
- * The address of a drawer (v2.80.0) — the href both directions of the deep
+ * The scope a report address can carry (v2.81.0) — the window length and
+ * the branch narrow, beside the drawer param. `days` rides only when it is
+ * a REAL window (7/14/30) and not the default (7 needs no ink); `branch`
+ * rides when non-empty.
+ */
+export interface DeskReportScopeParams {
+  days?: number | null;
+  branch?: string | null;
+}
+
+/**
+ * The address of a report state (v2.81.0) — window, branch and drawer in
+ * ONE deterministic string, the single composer both directions of every
  * link ride: the desk panel's per-reviewer door builds one to hand a name
- * into the report, and the report reflects every open drawer back into the
- * address bar, so the URL always names the drawer on screen.
+ * (and its branch filter) into the report, and the report reflects its
+ * whole state back into the address bar, so the URL always names exactly
+ * what is on screen. Defaults leave no ink: 7 days and no branch compose
+ * to the bare path.
+ */
+export function deskReportReportHref(
+  days: number | null,
+  branch: string | null,
+  drawer: { kind: DeskReportSliceKind; id: string } | null,
+): string {
+  const parts: string[] = [];
+  if (days && days !== DESK_REPORT_DEFAULT_DAYS && (DESK_REPORT_WINDOW_DAYS as readonly number[]).includes(days)) {
+    parts.push(`days=${days}`);
+  }
+  if (branch) parts.push(`branch=${encodeURIComponent(branch)}`);
+  if (drawer) parts.push(`${drawer.kind}=${encodeURIComponent(drawer.id)}`);
+  return parts.length > 0 ? `/org/desk-report?${parts.join('&')}` : '/org/desk-report';
+}
+
+/**
+ * The address of a drawer (v2.80.0, scope added v2.81.0) — the drawer param
+ * first, with optional scope riding behind it (?reviewer=X&branch=store-juja).
  */
 export function deskReportDrawerHref(
   kind: DeskReportSliceKind,
   id: string,
+  scope?: DeskReportScopeParams,
 ): string {
-  return `/org/desk-report?${kind}=${encodeURIComponent(id)}`;
+  return deskReportReportHref(
+    scope?.days ?? null,
+    scope?.branch ?? null,
+    { kind, id },
+  );
+}
+
+/**
+ * Everything an arrival link can ask for (v2.81.0) — parsed from a
+ * location.search-style string in one read: the window re-key (only the
+ * REAL windows count; anything else is not a scope and is ignored), the
+ * branch narrow (any non-empty id — the report renders an honest empty
+ * when the branch has no visits), and the drawer (via the v2.80.0 parser,
+ * request precedence intact). Keys that are absent are null, not defaults
+ * — the caller re-keys ONLY what the link actually carried.
+ */
+export function deskReportArrival(search: string): {
+  days: number | null;
+  branch: string | null;
+  drawer: { kind: DeskReportSliceKind; id: string } | null;
+} {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const rawDays = Number.parseInt(params.get('days') ?? '', 10);
+  const days = (DESK_REPORT_WINDOW_DAYS as readonly number[]).includes(rawDays) ? rawDays : null;
+  const branch = params.get('branch')?.trim() || null;
+  return { days, branch, drawer: deskReportDrawerParam(search) };
 }
 
 /**
