@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.72.0',
+    title: 'The report reads the file — click a request to read its visits',
+    bullets: [
+      'The most-visited requests on the desk report are doors now too: click one and the report lists every visit that request drew in the same window — the day and EAT time the desk came, which branch it came to, who did the visit, and whether the visit answered a correction.',
+      'Same one-read rule as the reviewer drill-down: the drawer filters the ledger the report was already built from, so what it lists can never disagree with the visit count on the door.',
+      'One drawer at a time across the whole report — opening a request closes the reviewer drawer and vice versa, so the page stays calm while the screen investigates.',
+      'Changing the window or branch chips closes any open drawer — a new scope re-keys the whole report, drill-downs included.',
+      'Screen-only like its sibling: the drawer never reaches paper, so printed and filed copies keep the deterministic roll-up shape.',
+    ],
+  },
+  {
     version: '2.71.0',
     title: 'The report opens its ledger — click a reviewer to read their visits',
     bullets: [

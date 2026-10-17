@@ -47,6 +47,7 @@ import {
   deskReportWindowLabel,
   deskReportShortStoreName,
   deskReportAvatarHue,
+  deskReportRequestLedger,
   deskReportReviewerLedger,
   deskReportVisitTime,
   deriveDeskReport,
@@ -847,5 +848,157 @@ describe('release metadata - v2.71.0', () => {
     expect(PANELS).toContain('data-testid="desk-report-link"');
     const MOD = readRepo('src/lib/hr/desk-report.ts');
     expect(MOD).toContain("row(['Report', 'Desk report']);");
+  });
+});
+
+// ── 8. the request drill-down (v2.72.0) ─────────────────────────────────────
+
+describe('deskReportRequestLedger - the report reads the file (v2.72.0)', () => {
+  const now = new Date('2026-10-17T14:00:00Z');
+  const win7 = { ...deskReportWindow(now, 7), days: 7 };
+
+  it('filters one request out of the ledger, preserving the newest-first order', () => {
+    const report = deriveDeskReport(
+      [
+        row({ id: 'v1', leaveRequestId: 'req-a', createdAt: new Date(Date.UTC(2026, 9, 12, 6, 0, 0)) }),
+        row({ id: 'v2', leaveRequestId: 'req-b', createdAt: new Date(Date.UTC(2026, 9, 13, 6, 0, 0)) }),
+        row({ id: 'v3', leaveRequestId: 'req-a', createdAt: new Date(Date.UTC(2026, 9, 16, 6, 0, 0)) }),
+      ],
+      win7,
+    );
+    const fileA = deskReportRequestLedger(report.ledger, 'req-a');
+    expect(fileA.map((e) => e.id)).toEqual(['v3', 'v1']);
+    expect(fileA.every((e) => e.requestId === 'req-a')).toBe(true);
+    expect(deskReportRequestLedger(report.ledger, 'req-unknown')).toEqual([]);
+  });
+
+  it('keeps every visit fact the drawer needs (reviewer, branch, day, cleared)', () => {
+    const report = deriveDeskReport(
+      [
+        row({
+          id: 'v1', leaveRequestId: 'req-a', visitedByName: 'Grace Achieng', clearedRecheck: true,
+          createdAt: new Date(Date.UTC(2026, 9, 15, 9, 30, 0)),
+        }),
+      ],
+      win7,
+    );
+    const [entry] = deskReportRequestLedger(report.ledger, 'req-a');
+    expect(entry.reviewer).toBe('Grace Achieng');
+    expect(entry.cleared).toBe(true);
+    expect(entry.dayKey).toBe('2026-10-15'); // 12:30 EAT, Thu 15 Oct
+    expect(entry.storeName).toBe('MBUMAH HARDWARE - Juja Main');
+  });
+
+  it('agrees with the request roll-up by construction (same ledger)', () => {
+    const report = deriveDeskReport(
+      [
+        row({ id: 'v1', leaveRequestId: 'req-a', createdAt: new Date(Date.UTC(2026, 9, 12, 6, 0, 0)) }),
+        row({ id: 'v2', leaveRequestId: 'req-a', createdAt: new Date(Date.UTC(2026, 9, 13, 6, 0, 0)) }),
+        row({ id: 'v3', leaveRequestId: 'req-b', createdAt: new Date(Date.UTC(2026, 9, 14, 6, 0, 0)) }),
+      ],
+      win7,
+    );
+    const hot = report.topRequests[0];
+    expect(hot.visits).toBe(2);
+    expect(deskReportRequestLedger(report.ledger, hot.requestId)).toHaveLength(2);
+  });
+});
+
+describe('DeskReportView - the request drill-down (v2.72.0)', () => {
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('imports the request ledger helper', () => {
+    expect(VIEW).toContain('deskReportRequestLedger,');
+  });
+
+  it('holds ONE drawer across both families (a request door closes the reviewer drawer and vice versa)', () => {
+    const toggleReviewer = VIEW.split('const toggleReviewer =')[1].split('const toggleRequest =')[0];
+    const toggleRequest = VIEW.split('const toggleRequest =')[1].split('  // v2.70.0')[0];
+    expect(toggleReviewer).toContain('setOpenRequest(null);');
+    expect(toggleRequest).toContain('setOpenReviewer(null);');
+    expect(toggleRequest).toContain('setOpenRequest((cur) => (cur === id ? null : id));');
+  });
+
+  it('closes BOTH drawers on a scope change (window + branch)', () => {
+    const pickDays = VIEW.split('const pickDays =')[1].split('const pickBranch =')[0];
+    const pickBranch = VIEW.split('const pickBranch =')[1].split('  // v2.71.0')[0];
+    expect(pickDays).toContain('setOpenReviewer(null)');
+    expect(pickDays).toContain('setOpenRequest(null)');
+    expect(pickBranch).toContain('setOpenReviewer(null)');
+    expect(pickBranch).toContain('setOpenRequest(null)');
+  });
+
+  it('exposes the request door semantics (aria-expanded + testids)', () => {
+    expect(VIEW).toContain('data-testid="desk-report-request-toggle"');
+    expect(VIEW).toContain('data-testid="desk-report-request-panel"');
+    expect(VIEW).toContain('data-testid="desk-report-request-visits"');
+    expect(VIEW).toContain('data-testid="desk-report-request-visit"');
+    const door = VIEW.split('const open = openRequest === r.requestId;')[1].split('data-testid="desk-report-request-toggle"')[0];
+    expect(door).toContain('aria-expanded={open}');
+  });
+
+  it('renders request visit rows with day + EAT time, branch, reviewer, cleared chip', () => {
+    expect(VIEW).toContain('visited by {v.reviewer}');
+    const visits = VIEW.split('data-testid="desk-report-request-visits"')[1].split('</ul>')[0];
+    expect(visits).toContain('{deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT');
+    expect(visits).toContain('{deskReportShortStoreName(v.storeName)}');
+    expect(visits).toContain('recheck cleared');
+  });
+
+  it('stays honest: count line names the request, empty state instead of pretending', () => {
+    expect(VIEW).toContain("&apos;s {r.leaveTypeName} · {num(visits.length)} visit{visits.length === 1 ? '' : 's'} in this window");
+    expect(VIEW).toContain('data-testid="desk-report-request-empty"');
+    expect(VIEW).toContain('No visits recorded for this request in this window.');
+  });
+
+  it('keeps the drawer off the paper and hints the interaction on screen', () => {
+    const panel = VIEW.split('data-testid="desk-report-request-panel"')[1].split('data-testid="desk-report-request-visits"')[0];
+    expect(panel).toContain('print:hidden');
+    expect(VIEW).toContain('click a request to read its visits');
+  });
+
+  it('wears the same emerald family in dark mode as the reviewer drawer', () => {
+    const panel = VIEW.split('data-testid="desk-report-request-panel"')[1].split('data-testid="desk-report-request-visits"')[0];
+    expect(panel).toContain('dark:border-emerald-500/20 dark:bg-emerald-500/5');
+    const visits = VIEW.split('data-testid="desk-report-request-visits"')[1].split('</ul>')[0];
+    expect(visits).toContain('dark:bg-slate-900/60');
+  });
+});
+
+describe('release metadata - v2.72.0', () => {
+  it('leads What\'s-New with the request-drill-down story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.72.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.72.0'")).toBeLessThan(WN.indexOf("version: '2.71.0'"));
+    expect(WN).toContain('The report reads the file');
+    expect(WN).toMatch(/One drawer at a time across the whole report/);
+    expect(WN).toMatch(/never reaches paper/i);
+  });
+
+  it('bumps package.json to at least 2.72.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.72.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.72.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.72.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-72-0']).toBe('node scripts/verify-v2-72-0.mjs');
+  });
+
+  it('keeps the prior report surfaces intact (reviewer drawer, CSV voice, panel door)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-toggle"');
+    expect(VIEW).toContain('data-testid="desk-report-csv"');
+    expect(VIEW).toContain("printReceiptElement('desk-report-content')");
+    const MOD = readRepo('src/lib/hr/desk-report.ts');
+    expect(MOD).toContain('export function deskReportRequestLedger(');
+    expect(MOD).toContain('export function deskReportReviewerLedger(');
   });
 });
