@@ -2460,10 +2460,19 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                     }`}
                   >
                     <p
-                      className={`text-xs font-medium mb-0.5 flex items-center gap-1 ${
+                      className={`text-xs font-medium mb-0.5 flex items-center gap-1.5 ${
                         live.needsRecheck ? 'text-amber-800 dark:text-amber-300' : 'text-muted-foreground'
                       }`}
                     >
+                      {/* v2.61.0: the amber state gets the same live pulse dot
+                          as the portal's waiting badge — both surfaces read
+                          as "in progress", not as a stale label. */}
+                      {live.needsRecheck ? (
+                        <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        </span>
+                      ) : null}
                       <Eye className="h-3 w-3" aria-hidden /> Desk review
                     </p>
                     {live.needsRecheck ? (
@@ -2471,14 +2480,28 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                         Corrected {detail.editedAt ? formatDateTime(detail.editedAt) : 'recently'} — no desk visit since. Opening this dialog marks it re-checked for every approver.
                       </p>
                     ) : live.deskReviewedAt ? (
-                      <p className="text-sm text-muted-foreground">
-                        Last reviewed
+                      <div className="flex items-center gap-2">
+                        {/* v2.61.0: the reviewer wears an initial avatar —
+                            the receipt is a person, and now it looks like
+                            one (emerald initial-circle; anonymous stamps
+                            keep the plain line). */}
                         {live.deskReviewedByName ? (
-                          <span className="font-medium text-foreground"> by {live.deskReviewedByName}</span>
+                          <span
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-800"
+                            aria-hidden
+                          >
+                            {live.deskReviewedByName.trim().charAt(0).toUpperCase()}
+                          </span>
                         ) : null}
-                        {' · '}
-                        {formatDateTime(live.deskReviewedAt)}
-                      </p>
+                        <p className="text-sm text-muted-foreground">
+                          Last reviewed
+                          {live.deskReviewedByName ? (
+                            <span className="font-medium text-foreground"> by {live.deskReviewedByName}</span>
+                          ) : null}
+                          {' · '}
+                          {formatDateTime(live.deskReviewedAt)}
+                        </p>
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">Not yet reviewed by the desk — no corrections on file.</p>
                     )}

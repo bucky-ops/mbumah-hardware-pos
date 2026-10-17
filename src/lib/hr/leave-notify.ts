@@ -56,6 +56,16 @@ export const LEAVE_ON_BEHALF_METADATA_MARKER = 'leave_on_behalf';
  *  page so the employee can see the corrected values on their own card. */
 export const LEAVE_EDITED_METADATA_MARKER = 'leave_edited';
 
+/** v2.61.0: marker for REVIEW-SEEN rows — the employee-facing bell row
+ *  written when a desk visit actually CLEARS a pending correction (the
+ *  v2.59.0 re-check marker flips off). The v2.60.0 portal mirror is passive
+ *  (the badge waits for the employee to look); this row makes the moment
+ *  ACTIVE — the bell tells them their correction was read, by whom.
+ *  Written by POST /api/leaves/[id]/review, best-effort like every other
+ *  leave delivery. Bell-only by design: a read-receipt is not inbox-worthy
+ *  (the portal badge + this row carry it; no email). */
+export const LEAVE_REVIEW_SEEN_METADATA_MARKER = 'leave_review_seen';
+
 export type LeaveNotificationKind =
   | 'leave_decision'
   | 'leave_request'
@@ -63,6 +73,9 @@ export type LeaveNotificationKind =
   | 'leave_on_behalf'
   | 'leave_edited'
   | 'leave_corrected'
+  // v2.61.0: employee-facing "your correction was seen" rows share the same
+  // section (marker 'leave_review_seen', written by the review stamp route).
+  | 'leave_review_seen'
   // v2.47.0: payroll-run approval digest rows share this feed section
   // (marker 'payroll_approved' lives in payroll/run-digest.ts).
   | 'payroll_approved'
@@ -226,6 +239,9 @@ export interface LeaveDecisionExtras {
   /** v2.40.0: HR editor display name on leave_edited rows (the employee
    *  notification for a request corrected in the edit window). */
   editedByName?: string;
+  /** v2.61.0: reviewer display name on leave_review_seen rows — the desk
+   *  visit that cleared the correction, named on the employee's bell row. */
+  reviewerName?: string;
   /** v2.47.0: delivery stamp on payroll_approved rows — drives the
    *  warning-vs-info severity in the feed mapping (FAILED → warning). */
   emailStatus?: string;
@@ -247,6 +263,7 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
       rec.kind === 'leave_on_behalf' ||
       rec.kind === 'leave_edited' ||
       rec.kind === 'leave_corrected' ||
+      rec.kind === 'leave_review_seen' ||
       rec.kind === 'payroll_approved' ||
       rec.kind === 'payroll_posted' ||
       rec.kind === 'payslip_issued' ||
@@ -261,6 +278,7 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
     if (typeof rec.cancelledByManager === 'boolean') out.cancelledByManager = rec.cancelledByManager;
     if (typeof rec.enteredByName === 'string') out.enteredByName = rec.enteredByName;
     if (typeof rec.editedByName === 'string') out.editedByName = rec.editedByName;
+    if (typeof rec.reviewerName === 'string') out.reviewerName = rec.reviewerName;
     if (typeof rec.emailStatus === 'string') out.emailStatus = rec.emailStatus;
     return out;
   } catch {
@@ -790,4 +808,44 @@ export function leaveEditedCopy(input: LeaveEditedCopyInput): LeaveEditedCopy {
   ].join('\n');
 
   return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
+// ============================================================================
+// v2.61.0 - REVIEW-SEEN COPY (the bell answers the correction)
+// ============================================================================
+
+export interface LeaveReviewSeenCopyInput {
+  leaveTypeName: string;
+  /** ISO date strings as stored on the LeaveRequest row. */
+  startDate: string;
+  endDate: string;
+  /** Display name of the reviewer whose desk visit cleared the correction
+   *  (the same name the v2.60.0 receipt and portal badge carry). */
+  reviewerName: string;
+}
+
+export interface LeaveReviewSeenCopy {
+  title: string;
+  message: string;
+  /** Notification.type - SUCCESS: a correction being read is a completion,
+   *  not an alarm and not a to-do. */
+  notifType: 'SUCCESS';
+  priority: 'NORMAL';
+}
+
+/** Build the bell copy for the moment a desk review clears a pending
+ *  correction (POST /api/leaves/[id]/review). Bell-ONLY by design: a
+ *  read-receipt is not inbox-worthy — the portal badge (v2.60.0) and this
+ *  row carry the moment; an email would be noise for good news that keeps.
+ *  The row deep-links the portal leave page where the "Seen by {reviewer}"
+ *  badge lives, so the bell row and the badge tell one story. */
+export function leaveReviewSeenCopy(input: LeaveReviewSeenCopyInput): LeaveReviewSeenCopy {
+  const { leaveTypeName, startDate, endDate, reviewerName } = input;
+
+  const range = `${formatLeaveDay(startDate)} - ${formatLeaveDay(endDate)}`;
+
+  const title = 'Your corrected leave request was seen';
+  const message = `${reviewerName} reviewed your corrected ${leaveTypeName} request (${range}). The re-check marker is cleared — no action is needed.`;
+
+  return { title, message, notifType: 'SUCCESS', priority: 'NORMAL' };
 }

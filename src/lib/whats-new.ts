@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.61.0',
+    title: 'The bell answers the correction — when the desk reads your fix, you hear about it',
+    bullets: [
+      'A corrected leave request no longer waits silently for you to check the portal: the moment a desk visit clears the re-check marker, your bell rings with "Your corrected leave request was seen".',
+      'The row names the reviewer and the corrected dates — the same person the desk receipt and the portal badge carry, so all three surfaces tell one story.',
+      'It rings only once per correction: the first desk visit after an edit carries the news; re-opening the dialog never re-rings the bell.',
+      'The receipt surface is cyan in the bell ("Correction seen" chip), the honest counterpart of the amber "Corrected - re-review" row the approvals group gets.',
+      'The portal waiting badge now pulses while your correction is unseen, and a named review earns the scan-eye icon — waiting and seen look different at a glance.',
+    ],
+  },
+  {
     version: '2.60.0',
     title: 'The receipt is personal and shared — the desk records who reviewed, and the employee sees it',
     bullets: [

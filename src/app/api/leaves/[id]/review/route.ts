@@ -23,6 +23,10 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess } from '@/lib/auth';
 import { needsDeskRecheck } from '@/lib/hr/leave-recheck';
+import {
+  LEAVE_REVIEW_SEEN_METADATA_MARKER,
+  leaveReviewSeenCopy,
+} from '@/lib/hr/leave-notify';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +45,20 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
 
   const existing = await db.leaveRequest.findUnique({
     where: { id },
-    select: { id: true, storeId: true, status: true, editedAt: true, deskReviewedAt: true },
+    select: {
+      id: true,
+      storeId: true,
+      status: true,
+      editedAt: true,
+      deskReviewedAt: true,
+      // v2.61.0: the bell answers the correction — the row needs the leave
+      // type + range (copy) and the employee's linked user (recipient) so
+      // the desk visit can TELL the employee their correction was read.
+      startDate: true,
+      endDate: true,
+      leaveType: { select: { name: true } },
+      employee: { select: { user: { select: { id: true } } } },
+    },
   });
 
   if (!existing || existing.storeId !== session.storeId) {
@@ -52,6 +69,14 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
   }
 
   const reviewedAt = new Date();
+
+  // Computed from the PRE-update row: true exactly when this stamp actually
+  // clears a pending correction (the v2.59.0 re-check marker flips off).
+  // Doubles as the v2.61.0 bell gate — only a visit that carries news (the
+  // correction was unseen) writes the employee row; re-opening an already
+  // reviewed dialog is silent by construction, no matter how many
+  // approvers repeat the visit.
+  const hadPendingCorrection = needsDeskRecheck(existing.editedAt, existing.deskReviewedAt);
 
   // v2.60.0: resolve the reviewer's display name (the session carries only
   // the id + email; the receipt is addressed to a human). Fallback chain:
@@ -83,11 +108,53 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
     metadata: {
       leaveRequestId: id,
       requestStatus: existing.status,
-      hadPendingCorrection: needsDeskRecheck(existing.editedAt, existing.deskReviewedAt),
+      hadPendingCorrection,
       reviewerId: session.userId,
       reviewerName,
     },
   });
+
+  // v2.61.0: the bell answers the correction — when the stamp actually
+  // CLEARS a pending correction, the employee's bell gets an active row
+  // ("Your corrected leave request was seen", named reviewer) instead of
+  // the v2.60.0 mirror waiting passively for them to open the portal.
+  // Best-effort by the same contract as every leave delivery: the stamp is
+  // already on record, so a notification failure must never fail the visit.
+  // The hadPendingCorrection gate is the dedup: the FIRST visit after an
+  // edit carries the news, every later re-open of the dialog is silent.
+  if (hadPendingCorrection) {
+    try {
+      const recipientUserId = existing.employee?.user?.id ?? null;
+      if (recipientUserId) {
+        const copy = leaveReviewSeenCopy({
+          leaveTypeName: existing.leaveType.name,
+          startDate: existing.startDate.toISOString(),
+          endDate: existing.endDate.toISOString(),
+          reviewerName,
+        });
+        await db.notification.create({
+          data: {
+            storeId: existing.storeId,
+            userId: recipientUserId,
+            title: copy.title,
+            message: copy.message,
+            type: copy.notifType,
+            category: 'HR',
+            priority: copy.priority,
+            actionUrl: '/employees/me/leave',
+            actionLabel: 'View my leave',
+            metadata: JSON.stringify({
+              kind: LEAVE_REVIEW_SEEN_METADATA_MARKER,
+              leaveRequestId: id,
+              reviewerName,
+            }),
+          },
+        });
+      }
+    } catch {
+      // Review-seen delivery is best-effort by design.
+    }
+  }
 
   return Response.json({
     success: true,
