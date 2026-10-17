@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.83.0',
+    title: 'The run hands every slip over \u2014 one zip, every payslip, a manifest inside',
+    bullets: [
+      'The run dialog\u2019s filing row grows a second door: "Payslip bundle (N)" zips EVERY payslip in the run \u2014 the same masked slips the PDF column serves \u2014 into one download, ready to hand out or archive.',
+      'No more N clicks for N people: from the first prepared slip to a locked run, the bundle appears the moment payslips exist, and the digest CSV door keeps its own approval gate beside it.',
+      'A manifest rides inside: _MANIFEST.csv names the run, the generation time (EAT), and one row per slip \u2014 payslip no., employee, file, net \u2014 in the same RFC-4180 filing voice with the same formula-injection guard as every other file the shop files.',
+      'Privacy travels with the slips: each PDF is built through the identical view-shaping pipeline as the per-row column \u2014 statutory identifiers stay [REDACTED] unless your role may unmask them \u2014 and the export is audit-logged like every other filing download.',
+      'The archive is written by the house\u2019s own zero-dependency zip writer (same spirit as the PDF writer): deterministic bytes, flat ASCII names, no new libraries on the receipt-printer\u2019s conveyor belt.',
+    ],
+  },
+  {
     version: '2.82.0',
     title: 'The report files everything \u2014 one button files the whole ledger, every visit the report read',
     bullets: [
