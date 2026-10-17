@@ -2901,7 +2901,9 @@ export interface NotificationItem {
   // missed them, so the notification center rendered them without an icon.
   // v2.48.0: 'payroll_posted' - posting digest rows (journal + payslips
   // issued; sky surface, same desk).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted';
+  // v2.49.0: 'payslip_issued' - employee-facing personal rows (one per
+  // portal-linked employee; teal surface, portal Payslips deep link).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';

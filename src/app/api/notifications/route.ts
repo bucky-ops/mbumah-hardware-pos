@@ -20,7 +20,11 @@ import {
   LEAVE_REQUEST_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
-import { PAYROLL_APPROVED_METADATA_MARKER, PAYROLL_POSTED_METADATA_MARKER } from '@/lib/hr/payroll/run-digest';
+import {
+  PAYROLL_APPROVED_METADATA_MARKER,
+  PAYROLL_POSTED_METADATA_MARKER,
+  PAYSLIP_ISSUED_METADATA_MARKER,
+} from '@/lib/hr/payroll/run-digest';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +52,10 @@ export interface NotificationData {
   // Pay Runs desk, honest delivery chip from metadata.emailStatus.
   // v2.48.0: 'payroll_posted' - posting digest rows (journal + payslips
   // issued); sky surface, same desk, same honest delivery chip.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted';
+  // v2.49.0: 'payslip_issued' - EMPLOYEE-facing personal rows (one per
+  // portal-linked employee, own payslip number + net only); teal surface,
+  // deep link → the portal Payslips page.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -354,6 +361,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                   { metadata: { contains: PAYROLL_APPROVED_METADATA_MARKER } },
                   // v2.48.0: payroll posting rows own their surface (section 9).
                   { metadata: { contains: PAYROLL_POSTED_METADATA_MARKER } },
+                  // v2.49.0: personal payslip-issued rows own their surface
+                  // (section 9).
+                  { metadata: { contains: PAYSLIP_ISSUED_METADATA_MARKER } },
                 ],
               },
             },
@@ -422,6 +432,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.48.0: payroll-run posting digest rows (journal +
                 // payslips issued) with the same headline numbers.
                 { metadata: { contains: PAYROLL_POSTED_METADATA_MARKER } },
+                // v2.49.0: employee-facing "your payslip is issued" rows —
+                // one per portal-linked employee, own numbers only.
+                { metadata: { contains: PAYSLIP_ISSUED_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -557,6 +570,26 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               targetTab: 'payroll',
               category: 'HR',
               emailStatus: extras.emailStatus === 'SENT' || extras.emailStatus === 'FAILED' ? extras.emailStatus : undefined,
+            });
+          } else if (kind === 'payslip_issued') {
+            notifications.push({
+              id: `payslip-${n.id}`,
+              type: 'payslip_issued',
+              title: n.title,
+              description: n.message,
+              // v2.49.0: YOUR payslip is issued — a quiet teal info row
+              // (personal pay news, never an alarm) that deep-links the
+              // portal's Payslips page via the row's actionUrl. The row is
+              // personal: it carries only this user's own payslip facts,
+              // so there is no email-delivery chip — the notice has no
+              // group audience to hide anything from.
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: '',
+              category: 'HR',
+              actionUrl: n.actionUrl ?? undefined,
+              actionLabel: n.actionLabel ?? undefined,
             });
           } else {
             const declined = n.type === 'WARNING' || extras.status === 'REJECTED';

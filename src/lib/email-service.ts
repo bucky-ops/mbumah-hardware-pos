@@ -188,6 +188,9 @@ export const NotificationType = {
   // v2.48.0: payroll-run posting digest (journal + payslips issued; same
   // audience minus the poster, CSV attached).
   PAYROLL_POSTED: 'PAYROLL_POSTED',
+  // v2.49.0: employee-facing "your payslip is issued" notice — one
+  // personalized email per portal-linked employee, own numbers only.
+  PAYSLIP_ISSUED: 'PAYSLIP_ISSUED',
   TEST: 'TEST',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

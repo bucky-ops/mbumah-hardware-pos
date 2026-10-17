@@ -35,6 +35,15 @@ export const PAYROLL_APPROVED_METADATA_MARKER = 'payroll_approved';
 /** v2.48.0: feed-filter marker for the POSTED digest rows (metadata.kind). */
 export const PAYROLL_POSTED_METADATA_MARKER = 'payroll_posted';
 
+/**
+ * v2.49.0: feed-filter marker for the EMPLOYEE-facing "your payslip is
+ * issued" rows (metadata.kind). These are PERSONAL rows — one per employee
+ * with a linked portal account, carrying only that employee's own payslip
+ * facts (payslip number + net) — never the group CSV, never anyone else's
+ * numbers.
+ */
+export const PAYSLIP_ISSUED_METADATA_MARKER = 'payslip_issued';
+
 /** One per-employee aggregate row in the approval digest. */
 export interface PayrollRunDigestEmployeeRow {
   /** Display name, e.g. "Grace Wanjiku". */
@@ -320,6 +329,121 @@ export function payrollRunPostedCopy(meta: PayrollRunPostedMeta): PayrollRunPost
       <p style="margin:14px 0 0 0;font-size:12px;color:#6b7280;">
         Next step: disburse salaries (bank run or M-Pesa B2C), then lock the run to freeze the period.<br/>
         Per-employee aggregates only — sent to the payroll group and the run&rsquo;s maker; never contains national IDs, bank details or payslip line items.
+      </p>
+    </div>
+  </div>`;
+
+  return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
+// ── v2.49.0: employee-facing "your payslip is issued" notice ────────────────
+
+/** v2.49.0: the PERSONAL facts one employee's notice is built from. */
+export interface PayslipIssuedMeta {
+  /** Pay period label, e.g. "October 2026". */
+  periodName: string;
+  /** Store/branch name the run belongs to. */
+  storeName: string;
+  /** The employee's own display name (used in the email greeting only). */
+  employeeName: string;
+  /** Issued payslip number, e.g. "PS-20261017-0006" (null tolerated —
+   *  a run can post with payslips but a detail row always gets one; kept
+   *  nullable for the same defensive posture as the posted digest). */
+  payslipNumber: string | null;
+  /** The employee's own net pay for the period. */
+  netPay: number;
+  /** PENDING / PAID / FAILED / HELD at posting time. */
+  paymentStatus: string;
+  /** ISO timestamp of the posting decision. */
+  postedAtIso: string;
+}
+
+/** v2.49.0: notification copy bundle for the personal payslip notice. */
+export interface PayslipIssuedCopy {
+  title: string;
+  message: string;
+  notifType: 'INFO';
+  priority: 'NORMAL';
+  emailSubject: string;
+  emailText: string;
+  emailHtml: string;
+}
+
+/**
+ * Build ONE employee's personalized "your payslip is issued" copy.
+ *
+ * PRIVACY CONTRACT: this notice is personal — it carries ONLY the
+ * recipient's own payslip facts (payslip number, net, payment status).
+ * It never contains other employees' data, never the group CSV, never
+ * national IDs or bank details. Teal surface family (#0f766e header) so
+ * a personal pay notice never looks like the group's emerald approval or
+ * sky posting digest in a shared inbox.
+ */
+export function payslipIssuedCopy(meta: PayslipIssuedMeta): PayslipIssuedCopy {
+  const period = meta.periodName || 'Payroll run';
+  const net = formatKesMoney(meta.netPay);
+  const when = formatApprovedStamp(meta.postedAtIso);
+  const slip = meta.payslipNumber || null;
+  const paid = meta.paymentStatus === 'PAID';
+
+  const title = `Payslip issued — ${period}`;
+  const message = slip
+    ? `Your ${period} payslip ${slip} is ready · Net ${net}${paid ? ' · marked PAID' : ''} — open My Workspace → Payslips to view or download it.`
+    : `Your ${period} payslip is ready · Net ${net} — open My Workspace → Payslips to view or download it.`;
+
+  const firstName = meta.employeeName.split(/\s+/)[0] || 'there';
+  const emailSubject = slip
+    ? `Your payslip is ready — ${period} (${slip}, ${net} net)`
+    : `Your payslip is ready — ${period} (${net} net)`;
+
+  const emailText = [
+    `${'MBUMAH HARDWARE'} — Your payslip is ready`,
+    `${meta.storeName} · ${period}`,
+    '-'.repeat(48),
+    `Hello ${firstName},`,
+    '',
+    slip ? `Payslip number: ${slip}` : 'Payslip number: (being finalised)',
+    `Net pay: ${net}`,
+    `Payment status: ${meta.paymentStatus}`,
+    `Issued at: ${when}`,
+    '',
+    'Open My Workspace → Payslips to view the full breakdown',
+    '(earnings, statutory deductions and the printable copy).',
+    '',
+    'This notice is personal — it carries only your own payslip',
+    'summary and is sent only to you.',
+  ].join('\n');
+
+  const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <div style="background:#0f766e;color:#ffffff;padding:14px 18px;">
+      <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;opacity:0.85;">MBUMAH HARDWARE</div>
+      <div style="font-size:17px;font-weight:700;margin-top:2px;">Your payslip is ready — ${esc(period)}</div>
+    </div>
+    <div style="padding:16px 18px;color:#1f2937;">
+      <p style="margin:0 0 10px 0;font-size:13px;">Hello <strong>${esc(firstName)}</strong>,</p>
+      <p style="margin:10px 0;font-size:13px;">Your payslip for <strong>${esc(period)}</strong> at ${esc(meta.storeName)} has been issued${slip ? ` as <strong>${esc(slip)}</strong>` : ''}.</p>
+      <table style="width:100%;margin:12px 0;border-collapse:collapse;">
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Payslip number</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;font-size:13px;">${slip ? esc(slip) : '<span style="color:#6b7280;font-weight:400;">being finalised</span>'}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Net pay</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:800;font-size:14px;color:#0f766e;">${esc(net)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Payment status</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;font-size:13px;">${paid ? '<span style="color:#047857;">PAID</span>' : esc(meta.paymentStatus)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;color:#6b7280;font-size:13px;">Issued at</td>
+          <td style="padding:8px 12px;text-align:right;font-size:13px;">${esc(when)}</td>
+        </tr>
+      </table>
+      <p style="margin:10px 0;font-size:13px;">Open <strong>My Workspace → Payslips</strong> to view the full breakdown — earnings, statutory deductions and the printable copy.</p>
+      <p style="margin:14px 0 0 0;font-size:12px;color:#6b7280;">
+        This notice is personal — it carries only your own payslip summary<br/>
+        and is sent only to you. It never contains other employees&rsquo; data.
       </p>
     </div>
   </div>`;

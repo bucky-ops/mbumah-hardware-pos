@@ -16,11 +16,19 @@ export const POST = hrGuard('hr.payroll.post', POST_ROLES)(
       // (recipients, email status, CSV filename/size) so the run dialog can
       // show an honest "who was told" notice. The idempotent replay path
       // returns no digest — a retried post never re-notifies anyone.
-      const { run, journalEntryId, replay, digest } = await postPayrollRun(
+      // v2.49.0: the same body also carries `employeeNotices` — the
+      // per-employee "your payslip is issued" fan-out counts (portal-linked
+      // audience, emails sent/failed) for the banner's second line.
+      const { run, journalEntryId, replay, digest, employeeNotices } = await postPayrollRun(
         payrollActorContext(session),
         id,
       );
-      return Response.json({ success: true, data: { run, journalEntryId, replay }, digest });
+      return Response.json({
+        success: true,
+        data: { run, journalEntryId, replay },
+        digest,
+        employeeNotices,
+      });
     } catch (error) {
       const mapped = payrollErrorResponse(error);
       if (mapped) return mapped;
