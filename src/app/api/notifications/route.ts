@@ -20,7 +20,7 @@ import {
   LEAVE_REQUEST_METADATA_MARKER,
   parseLeaveDecisionExtras,
 } from '@/lib/hr/leave-notify';
-import { PAYROLL_APPROVED_METADATA_MARKER } from '@/lib/hr/payroll/run-digest';
+import { PAYROLL_APPROVED_METADATA_MARKER, PAYROLL_POSTED_METADATA_MARKER } from '@/lib/hr/payroll/run-digest';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +46,9 @@ export interface NotificationData {
   // v2.47.0: 'payroll_approved' - payroll-run approval digest rows (maker
   // + the store's payroll group); emerald surface, targetTab → payroll
   // Pay Runs desk, honest delivery chip from metadata.emailStatus.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved';
+  // v2.48.0: 'payroll_posted' - posting digest rows (journal + payslips
+  // issued); sky surface, same desk, same honest delivery chip.
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -350,6 +352,8 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                   { metadata: { contains: LEAVE_CORRECTED_METADATA_MARKER } },
                   // v2.47.0: payroll approval rows own their surface (section 9).
                   { metadata: { contains: PAYROLL_APPROVED_METADATA_MARKER } },
+                  // v2.48.0: payroll posting rows own their surface (section 9).
+                  { metadata: { contains: PAYROLL_POSTED_METADATA_MARKER } },
                 ],
               },
             },
@@ -415,6 +419,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // v2.47.0: payroll-run approval digest rows (maker + the
                 // store's payroll group) with the headline numbers.
                 { metadata: { contains: PAYROLL_APPROVED_METADATA_MARKER } },
+                // v2.48.0: payroll-run posting digest rows (journal +
+                // payslips issued) with the same headline numbers.
+                { metadata: { contains: PAYROLL_POSTED_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -529,6 +536,27 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               isRead: false,
               targetTab: 'payroll',
               category: 'HR',
+              // v2.48.0: flatten the delivery stamp so the row renders the
+              // honest "Email sent / Email failed" chip (was approve-only
+              // before — the banner had it, the bell row didn't).
+              emailStatus: extras.emailStatus === 'SENT' || extras.emailStatus === 'FAILED' ? extras.emailStatus : undefined,
+            });
+          } else if (kind === 'payroll_posted') {
+            notifications.push({
+              id: `payroll-${n.id}`,
+              type: 'payroll_posted',
+              title: n.title,
+              description: n.message,
+              // v2.48.0: the ledger closed — journal in the books, payslip
+              // numbers issued. A sky info row (posting never looks like an
+              // approval) that deep-links the same Pay Runs desk; a FAILED
+              // email delivery rides 'warning' exactly like the approval row.
+              severity: extras.emailStatus === 'FAILED' ? 'warning' : 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: 'payroll',
+              category: 'HR',
+              emailStatus: extras.emailStatus === 'SENT' || extras.emailStatus === 'FAILED' ? extras.emailStatus : undefined,
             });
           } else {
             const declined = n.type === 'WARNING' || extras.status === 'REJECTED';

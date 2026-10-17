@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.48.0',
+    title: 'Posting a payroll run now closes the loop — the ledger story lands in the same bell and inbox',
+    bullets: [
+      'The moment a run is posted — journal entry in the books, payslip numbers issued — the maker and the payroll group get the closing numbers (employees, payslips issued, gross, deductions, net) in their bell and inbox, exactly like the approval digest before it.',
+      'The posting email carries its own ready-to-file CSV with a "Payroll posting summary" header and the issued payslip-number range, so the file in your inbox says POSTED, not just approved.',
+      'The run dialog now shows a "Posting digest" banner right after you post: who was told, whether the email left, and the exact CSV that travelled with it — mirroring the approval banner.',
+      'Bell rows now speak clearly for both payroll events: an emerald Approved chip for approvals, a sky Posted chip for postings, and an honest "Email sent / Email failed" chip on both — plus approval rows finally render their icon.',
+      'Posting stays instant no matter what: the digest is best-effort, a mail hiccup is logged and flagged amber in the bell, and re-posting an already-posted run never re-notifies anyone.',
+    ],
+  },
+  {
     version: '2.47.0',
     title: 'A payroll approval now tells everyone who needs to know — with the numbers attached',
     bullets: [

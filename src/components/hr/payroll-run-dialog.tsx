@@ -151,8 +151,11 @@ interface B2CSummary {
   message?: string;
 }
 
-/** v2.47.0: fail-soft approval-digest result (POST .../approve body.digest). */
+/** v2.47.0: fail-soft approval-digest result (POST .../approve body.digest).
+ *  v2.48.0: the same shape rides POST .../post — kind tells the banner
+ *  which event it is announcing ("Approval digest" vs "Posting digest"). */
 interface DigestNotice {
+  kind?: 'approval' | 'posted';
   notifiedUsers?: number;
   emailRecipients?: number;
   emailStatus: 'SENT' | 'FAILED' | 'SKIPPED';
@@ -284,12 +287,15 @@ export function PayrollRunDialog({
       }
       // v2.47.0: capture the approval digest result (only the approve action
       // returns one; the banner stays visible until the dialog reopens).
-      if (action === 'approve') {
+      // v2.48.0: the post action carries the posting digest the same way
+      // (top-level body.digest) — but ONLY on a fresh post; the idempotent
+      // replay path returns no digest, so a retried post shows no banner.
+      if (action === 'approve' || action === 'post') {
         const d = (respBody as { digest?: DigestNotice | null }).digest;
         setDigestNotice(
           d && typeof d === 'object' && 'emailStatus' in d
-            ? d
-            : { emailStatus: 'SKIPPED', notifiedUsers: 0, emailRecipients: 0 },
+            ? { ...d, kind: action === 'post' ? 'posted' : 'approval' }
+            : null,
         );
       }
       await load(runId);
@@ -567,7 +573,9 @@ export function PayrollRunDialog({
                   }`}
                   role="status"
                 >
-                  <span className="font-medium">Approval digest · </span>
+                  <span className="font-medium">
+                    {digestNotice.kind === 'posted' ? 'Posting digest · ' : 'Approval digest · '}
+                  </span>
                   {digestNotice.notifiedUsers ? `${digestNotice.notifiedUsers} in-app notification(s)` : 'no in-app recipients'}
                   {' · '}
                   {digestNotice.emailStatus === 'SENT'
