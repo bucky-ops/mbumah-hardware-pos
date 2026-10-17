@@ -680,6 +680,8 @@ async function writeDigestNotification(params: {
   manual: boolean;
   /** v2.46.0: set when the email carried the ready-to-file CSV. */
   attachmentLabel?: string | null;
+  /** v2.55.0: the parenthesised actor-action label — 'manual send' or 'manual re-send'. */
+  manualLabel?: string;
 }): Promise<string | null> {
   try {
     const tab = REPORT_KEY_TO_TAB[params.reportKey as HrScheduleReportKey];
@@ -702,7 +704,7 @@ async function writeDigestNotification(params: {
         storeId: params.storeId,
         userId: params.recipientUserId,
         title: `${label} digest — ${params.digest?.scopeLabel ?? 'All branches'}`.trim(),
-        message: `${params.digest?.periodLabel ?? ''} · ${headlineText} · ${delivery}${attachment}${params.manual ? ' (manual send)' : ''}`,
+        message: `${params.digest?.periodLabel ?? ''} · ${headlineText} · ${delivery}${attachment}${params.manual ? ` (${params.manualLabel ?? 'manual send'})` : ''}`,
         type: 'SYSTEM',
         category: 'HR',
         priority: params.email.success ? 'NORMAL' : 'HIGH',
@@ -783,7 +785,16 @@ export async function sendDigestEnvelopes(params: {
   recipients: string[];
   digest: HrReportDigestData;
   csv: DigestCsvAttachment | null;
-  metadata: { scheduleId: string; reportKey: string; frequency?: string; manual?: boolean; actorId?: string };
+  metadata: {
+    scheduleId: string;
+    reportKey: string;
+    frequency?: string;
+    manual?: boolean;
+    actorId?: string;
+    // v2.55.0: stamped on re-send envelopes answering a failed/partial batch.
+    resend?: boolean;
+    resendOfBatchAt?: string;
+  };
 }): Promise<{ sends: RecipientSendResult[]; summary: RecipientSendSummary }> {
   const subject = `${params.digest.reportLabel} digest — ${params.digest.organizationName} (${params.digest.periodLabel})`;
   const attempts = params.recipients.map(async (to, index): Promise<RecipientSendResult> => {
@@ -1101,6 +1112,375 @@ export async function sendScheduleNow(
   };
 }
 
+// ── v2.55.0: re-send to the recipients the last delivery missed ────────────
+
+/**
+ * How far back (from the newest row's createdAt) rows still count as ONE
+ * delivery batch. Per-recipient envelopes are written inside a single
+ * Promise.all, so a real batch spans milliseconds; 15 s is a generous
+ * ceiling that still can never swallow the PREVIOUS batch of a schedule
+ * running more often than daily.
+ */
+export const RESEND_BATCH_WINDOW_MS = 15_000;
+
+/** Minimal row shape the batch derivation needs (mapped NotificationLog). */
+export interface ResendBatchRow {
+  status: string;
+  createdAt: Date | string;
+  /** v2.54.0 per-recipient envelope rows stamp the single address. */
+  recipientAddress?: string | null;
+  /** Legacy shared-envelope rows carry the whole address list. */
+  recipientList?: string[];
+}
+
+export interface LatestBatchVerdict {
+  /** ISO instant of the newest row in the batch (null when no rows). */
+  batchAt: string | null;
+  /** The batch's own honest aggregate status (SENT | PARTIAL | FAILED | PENDING). */
+  lastStatus: string | null;
+  delivered: number;
+  total: number;
+  /** Addresses the batch did NOT deliver (lowercased, deduped). */
+  failed: string[];
+}
+
+/**
+ * v2.55.0 PURE core (unit-tested): from the schedule's NotificationLog rows,
+ * isolate the LATEST delivery batch and name exactly who missed it.
+ *
+ * Rules:
+ *   • Batch = every row whose createdAt sits within RESEND_BATCH_WINDOW_MS
+ *     below (or at) the newest row's instant. Rows older than the window are
+ *     history, not the batch — an earlier failure must not widen today's
+ *     re-send.
+ *   • A per-recipient envelope row speaks for exactly its own address
+ *     (status !== 'SENT' → that address failed).
+ *   • A legacy shared-envelope row speaks for its whole list (status !==
+ *     'SENT' → every address on it failed).
+ *   • Delivered wins: an address that appears BOTH delivered and failed in
+ *     the same window is treated as delivered — a re-send must never spam
+ *     someone who already received the digest.
+ */
+export function latestBatchFailedRecipients(
+  rows: ResendBatchRow[],
+  windowMs: number = RESEND_BATCH_WINDOW_MS,
+): LatestBatchVerdict {
+  if (rows.length === 0) {
+    return { batchAt: null, lastStatus: null, delivered: 0, total: 0, failed: [] };
+  }
+  const times = rows.map((r) => new Date(r.createdAt).getTime());
+  const newest = Math.max(...times);
+  const batch = rows.filter((r) => {
+    const t = new Date(r.createdAt).getTime();
+    return t <= newest && t >= newest - windowMs;
+  });
+
+  const deliveredSet = new Set<string>();
+  const failedSet = new Set<string>();
+  for (const row of batch) {
+    const ok = row.status === 'SENT';
+    const addresses = row.recipientAddress ? [row.recipientAddress] : (row.recipientList ?? []);
+    for (const raw of addresses) {
+      const address = raw.trim().toLowerCase();
+      if (!address.includes('@')) continue;
+      if (ok) deliveredSet.add(address);
+      else failedSet.add(address);
+    }
+  }
+  for (const address of deliveredSet) failedSet.delete(address);
+
+  const delivered = deliveredSet.size;
+  const failedCount = failedSet.size;
+  const lastStatus =
+    delivered > 0 && failedCount > 0 ? 'PARTIAL' : failedCount > 0 ? 'FAILED' : delivered > 0 ? 'SENT' : 'PENDING';
+
+  return {
+    batchAt: new Date(newest).toISOString(),
+    lastStatus,
+    delivered,
+    total: delivered + failedCount,
+    failed: [...failedSet].sort(),
+  };
+}
+
+/** Read-only answer to "who would a re-send reach right now?". */
+export interface ScheduleResendInfo {
+  available: boolean;
+  /** The latest batch's own aggregate status. */
+  lastStatus: string | null;
+  /** ISO instant of the latest batch (null when the schedule never sent). */
+  batchAt: string | null;
+  /** Historical facts about the batch — NOT narrowed to current recipients. */
+  delivered: number;
+  total: number;
+  /** Addresses a re-send would target: batch-failed ∩ CURRENT recipients. */
+  failedRecipients: string[];
+}
+
+/**
+ * v2.55.0: the GET half of the re-send affordance. Same fail-closed scope as
+ * every other schedule read (404 unknown, 403 BRANCH manager out of branch).
+ * Read-only: no stamps, no audit, no side effects.
+ *
+ * The failed list is intersected with the schedule's CURRENT recipients: an
+ * address the operator has since removed must not silently receive a fresh
+ * digest — removal is a decision, and the re-send honours it.
+ */
+export async function getScheduleResendInfo(
+  organizationId: string,
+  actor: { id: string; role: string; storeId: string | null },
+  id: string,
+): Promise<ScheduleResendInfo> {
+  const row = await db.hrReportSchedule.findFirst({
+    where: { id, organizationId, deletedAt: null },
+  });
+  if (!row) {
+    throw new HrScheduleError('SCHEDULE_NOT_FOUND', 'Schedule not found.', 404);
+  }
+  if (actor.role === 'BRANCH_MANAGER' && row.storeId !== actor.storeId) {
+    throw new HrScheduleError(
+      'STORE_SCOPE_FORBIDDEN',
+      'Branch managers can only check re-send targets for their own branch.',
+      403,
+    );
+  }
+
+  const logs = await db.notificationLog.findMany({
+    where: {
+      type: 'HR_REPORT_DIGEST',
+      metadata: { contains: `"scheduleId":"${row.id}"` },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+  const verdict = latestBatchFailedRecipients(
+    logs.map((log) => resendRowFromLog(log)),
+  );
+  const current = new Set(safeParseRecipients(row.recipients));
+  const failedRecipients = verdict.failed.filter((a) => current.has(a));
+  return {
+    available: failedRecipients.length > 0,
+    lastStatus: verdict.lastStatus,
+    batchAt: verdict.batchAt,
+    delivered: verdict.delivered,
+    total: verdict.total,
+    failedRecipients,
+  };
+}
+
+/** Map a NotificationLog row into the pure batch-derivation shape. */
+function resendRowFromLog(log: {
+  status: string;
+  createdAt: Date;
+  recipient: string;
+  metadata: string | null;
+}): ResendBatchRow {
+  let meta: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(log.metadata ?? '{}') as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) meta = parsed as Record<string, unknown>;
+  } catch {
+    meta = {};
+  }
+  const recipientList = log.recipient
+    .split(',')
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0 && r.includes('@'));
+  return {
+    status: log.status,
+    createdAt: log.createdAt,
+    recipientAddress:
+      typeof meta.recipientAddress === 'string' && meta.recipientAddress.includes('@')
+        ? meta.recipientAddress
+        : null,
+    recipientList,
+  };
+}
+
+export type ResendOutcome = 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED' | 'NOTHING_TO_RESEND';
+
+export interface ResendFailedResult {
+  outcome: ResendOutcome;
+  /** Exactly the addresses this re-send was addressed to (may be empty on SKIPPED). */
+  reSentTo: string[];
+  schedule: ScheduleView;
+  digestSummary: { reportLabel: string; periodLabel: string; scopeLabel: string; headlines: string[] } | null;
+  email: { success: boolean; error?: string };
+  notificationId: string | null;
+  csv: { filename: string; byteSize: number } | null;
+}
+
+/**
+ * v2.55.0: give the failed another chance — re-send the digest to EXACTLY
+ * the recipients the latest delivery batch missed.
+ *
+ * - The target set is DERIVED SERVER-SIDE from the NotificationLog (never
+ *   trusted from the client) and narrowed to the schedule's current
+ *   recipients; a removal is honoured, not undone.
+ * - The digest is recomputed FRESH through the same governed path as every
+ *   other send (buildDigestData → same aggregates, same fail-closed scope) —
+ *   the re-sent copy is the current truth, not a replayed stale email.
+ * - Everyone who already received the latest batch is NEVER re-emailed.
+ * - Cadence untouched (lastRunAt is not written — a re-send is a manual
+ *   delivery, not a schedule fire); lastStatus/lastError reflect the
+ *   re-send's own outcome, mirroring sendScheduleNow.
+ * - Nothing to re-send is an honest 409 (NOTHING_TO_RESEND), not a silent
+ *   success.
+ * - Every envelope is stamped metadata.resend=true (+ the batch instant it
+ *   answers) so the delivery history can label it as a re-send.
+ */
+export async function resendFailedDigest(
+  organizationId: string,
+  actor: { id: string; role: string; storeId: string | null },
+  id: string,
+  now: Date = new Date(),
+): Promise<ResendFailedResult> {
+  const row = await db.hrReportSchedule.findFirst({
+    where: { id, organizationId, deletedAt: null },
+  });
+  if (!row) {
+    throw new HrScheduleError('SCHEDULE_NOT_FOUND', 'Schedule not found.', 404);
+  }
+  if (actor.role === 'BRANCH_MANAGER' && row.storeId !== actor.storeId) {
+    throw new HrScheduleError(
+      'STORE_SCOPE_FORBIDDEN',
+      'Branch managers can only re-send digests for their own branch.',
+      403,
+    );
+  }
+
+  const logs = await db.notificationLog.findMany({
+    where: {
+      type: 'HR_REPORT_DIGEST',
+      metadata: { contains: `"scheduleId":"${row.id}"` },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+  const verdict = latestBatchFailedRecipients(logs.map((log) => resendRowFromLog(log)));
+  const current = safeParseRecipients(row.recipients);
+  const currentSet = new Set(current);
+  const failed = verdict.failed.filter((a) => currentSet.has(a));
+  if (failed.length === 0) {
+    throw new HrScheduleError(
+      'NOTHING_TO_RESEND',
+      'No undelivered recipients in the latest delivery — nothing to re-send.',
+      409,
+    );
+  }
+
+  let digest: HrReportDigestData | null = null;
+  let computeError: string | null = null;
+  try {
+    digest = await buildDigestData(row, now);
+  } catch (error) {
+    computeError = error instanceof Error ? error.message : 'Digest computation failed';
+  }
+
+  let outcome: ResendOutcome;
+  let email: { success: boolean; error?: string } = { success: false };
+  let notificationId: string | null = null;
+  let csv: ResendFailedResult['csv'] = null;
+
+  if (!digest) {
+    outcome = 'SKIPPED';
+    const reason = computeError ?? 'Report returned no data for scope.';
+    await db.hrReportSchedule.update({
+      where: { id: row.id },
+      data: { lastStatus: 'SKIPPED', lastError: reason.slice(0, 250) },
+    });
+    email = { success: false, error: reason };
+    notificationId = await writeDigestNotification({
+      scheduleId: row.id,
+      reportKey: row.reportKey,
+      storeId: row.storeId,
+      recipientUserId: actor.id,
+      digest: null,
+      email,
+      manual: true,
+      manualLabel: 'manual re-send',
+    });
+  } else {
+    const attachment = digestToCsv(digest, now);
+    const { summary } = await sendDigestEnvelopes({
+      recipients: failed,
+      digest,
+      csv: attachment,
+      metadata: {
+        scheduleId: row.id,
+        reportKey: row.reportKey,
+        manual: true,
+        actorId: actor.id,
+        resend: true,
+        ...(verdict.batchAt ? { resendOfBatchAt: verdict.batchAt } : {}),
+      },
+    });
+    email = {
+      success: summary.outcome === 'SENT',
+      ...(summary.aggregateError ? { error: summary.aggregateError } : {}),
+    };
+    if (attachment) csv = { filename: attachment.filename, byteSize: attachment.byteSize };
+    if (summary.outcome === 'FAILED') {
+      outcome = 'FAILED';
+      await db.hrReportSchedule.update({
+        where: { id: row.id },
+        data: { lastStatus: 'FAILED', lastError: (summary.aggregateError ?? 'Email send failed').slice(0, 250) },
+      });
+    } else {
+      outcome = summary.outcome;
+      await db.hrReportSchedule.update({
+        where: { id: row.id },
+        data: { lastStatus: outcome, lastError: summary.aggregateError ?? null },
+      });
+    }
+    notificationId = await writeDigestNotification({
+      scheduleId: row.id,
+      reportKey: row.reportKey,
+      storeId: row.storeId,
+      recipientUserId: actor.id,
+      digest,
+      email,
+      manual: true,
+      manualLabel: 'manual re-send',
+      attachmentLabel: csv ? `CSV (${formatCsvSize(csv.byteSize)})` : null,
+    });
+  }
+
+  await hrAudit({
+    actorId: actor.id,
+    actorRole: actor.role,
+    action: 'EXECUTE',
+    resourceType: HrEntityType.REPORT_SCHEDULE,
+    resourceId: row.id,
+    storeId: row.storeId ?? undefined,
+    metadata: {
+      manualSend: true,
+      resend: true,
+      reportKey: row.reportKey,
+      outcome,
+      recipientCount: failed.length,
+      notificationId,
+    },
+  }).catch(() => {});
+
+  return {
+    outcome,
+    reSentTo: outcome === 'SKIPPED' ? [] : failed,
+    schedule: toScheduleView({ ...row, lastStatus: outcome, lastError: email.error ?? null }),
+    digestSummary: digest
+      ? {
+          reportLabel: digest.reportLabel,
+          periodLabel: digest.periodLabel,
+          scopeLabel: digest.scopeLabel,
+          headlines: (digest.headline ?? []).map((h) => `${h.label}: ${h.value}`),
+        }
+      : null,
+    email,
+    notificationId,
+    csv,
+  };
+}
+
 // ── v2.25.0: delivery observability ─────────────────────────────────────────
 
 /**
@@ -1169,6 +1549,9 @@ export interface ScheduleDeliveryRow {
   // decoded byte size from the send metadata; null for pre-2.46.0 rows).
   csvFilename: string | null;
   csvBytes: number | null;
+  // v2.55.0: true when this envelope was the re-send to recipients the
+  // previous batch missed (metadata.resend stamped by resendFailedDigest).
+  resend: boolean;
 }
 
 /**
@@ -1242,6 +1625,9 @@ export async function listScheduleDeliveries(
       // delivery row surfaces it as a chip so recipients know what to expect.
       csvFilename: typeof meta.csvFilename === 'string' ? meta.csvFilename : null,
       csvBytes: typeof meta.csvBytes === 'number' ? meta.csvBytes : null,
+      // v2.55.0: re-send envelopes are labelled in the history so a retry
+      // reads as a retry, never as a fresh send.
+      resend: meta.resend === true,
     };
   });
 }
