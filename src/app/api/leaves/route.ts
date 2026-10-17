@@ -73,6 +73,27 @@ async function listLeavesHandler(
     take: limit,
   });
 
+  // v2.64.0: the ledger steps into the light — each row carries the TOTAL
+  // number of desk visits on record (the v2.63.0 LeaveReviewVisit ledger),
+  // so the desk can see "this request has been looked at 3 times" WITHOUT
+  // opening the dialog. ONE groupBy over the page's request ids — no N+1,
+  // no extra client round-trip. Best-effort under its own guard by the
+  // same contract as every leave delivery: the list must render even if
+  // the ledger read misfires (the chip simply stays at 0/hidden).
+  let visitCounts: Record<string, number> = {};
+  if (requests.length > 0) {
+    try {
+      const grouped = await db.leaveReviewVisit.groupBy({
+        by: ['leaveRequestId'],
+        where: { leaveRequestId: { in: requests.map((r) => r.id) } },
+        _count: { _all: true },
+      });
+      visitCounts = Object.fromEntries(grouped.map((g) => [g.leaveRequestId, g._count._all]));
+    } catch {
+      // Visit-count read is best-effort by design.
+    }
+  }
+
   const requestData = requests.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
@@ -123,6 +144,9 @@ async function listLeavesHandler(
     // v2.60.0: the receipt is personal — who stamped the last desk visit,
     // so the dialog rail can say "Last reviewed by Grace".
     deskReviewedByName: r.deskReviewedByName ?? null,
+    // v2.64.0: at-a-glance attention meter — how many desk visits are on
+    // record for this row (the ledger total, not just the latest stamp).
+    visitCount: visitCounts[r.id] ?? 0,
   }));
 
   // Optionally include leave balances for the filtered employees
