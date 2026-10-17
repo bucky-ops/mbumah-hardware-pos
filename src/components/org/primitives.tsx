@@ -138,6 +138,24 @@ export interface KpiSummaryData {
   activity: ActivityItem[];
 }
 
+// v2.64.0: the org console's "Desk activity" audit panel (GET
+// /api/org/review-activity) — the v2.63.0 LeaveReviewVisit ledger read
+// org-wide: who looked, where, when, whether the visit cleared a re-check.
+export interface DeskActivityData {
+  generatedAt: string;
+  stats: { total: number; weekVisits: number; weekClears: number; weekReviewers: number };
+  recent: Array<{
+    id: string;
+    visitedByName: string;
+    visitedAt: string;
+    clearedRecheck: boolean;
+    storeName: string | null;
+    employeeName: string;
+    leaveTypeName: string;
+    requestStatus: string;
+  }>;
+}
+
 // ── Formatters ───────────────────────────────────────────────────────────────
 export const kes = (v: number, dp = 0): string =>
   `KES ${v.toLocaleString('en-KE', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;

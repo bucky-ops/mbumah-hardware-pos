@@ -190,6 +190,9 @@ interface LeaveRequest {
   needsRecheck?: boolean;
   /** v2.60.0: who stamped the last desk visit (null = pre-v2.60.0 review). */
   deskReviewedByName?: string | null;
+  /** v2.64.0: at-a-glance attention meter — the TOTAL desk visits on record
+   *  for this row (the v2.63.0 ledger total, not just the latest stamp). */
+  visitCount?: number;
   /** v2.42.0: supporting document — data URL (governed cap) or http(s) link. */
   attachmentUrl?: string | null;
 }
@@ -1798,6 +1801,11 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                         deskReviewedAt: data.deskReviewedAt,
                         deskReviewedByName: data.deskReviewedByName,
                         needsRecheck: data.needsRecheck,
+                        // v2.64.0: the row's visit chip keeps pace with the
+                        // ledger — the stamp response carries the fresh total,
+                        // so the count moves the moment the dialog opens (an
+                        // older payload without the field leaves it alone).
+                        visitCount: typeof data.visitCount === 'number' ? data.visitCount : l.visitCount,
                       }
                     : l,
                 ),
@@ -2141,6 +2149,60 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                   <TooltipContent side="top" align="start" className="max-w-64">
                                     <p className="font-medium">Corrected {l.editedAt ? new Date(l.editedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'recently'} — not reviewed since</p>
                                     <p className="mt-0.5 text-xs opacity-90">No desk visit since the last edit. Open the request to mark it re-checked — the marker clears for every approver.</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : null}
+                            {/* v2.64.0: the ledger steps into the light —
+                                an at-a-glance attention meter on every
+                                reviewed row. The v2.63.0 ledger knows how
+                                many times a request was opened; the chip
+                                puts that on the ROW so the desk can tell a
+                                once-glanced request from a thrice-reviewed
+                                one without opening the dialog. Neutral
+                                slate (informational, never an alarm) — the
+                                amber re-check chip stays the only urgent
+                                marker. Legacy rows reviewed before the
+                                ledger exist render a count-less "visited"
+                                chip so the receipt stays honest. */}
+                            {l.deskReviewedAt && (l.visitCount ?? 0) > 0 ? (
+                              <TooltipProvider delayDuration={120}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span
+                                      tabIndex={0}
+                                      data-testid="desk-visit-chip"
+                                      className="mt-0.5 inline-flex max-w-fit items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-medium text-slate-600 cursor-default outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
+                                    >
+                                      <History className="h-2.5 w-2.5" aria-hidden /> {l.visitCount} {l.visitCount === 1 ? 'visit' : 'visits'}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" align="start" className="max-w-64">
+                                    <p className="font-medium">
+                                      {l.visitCount} desk {l.visitCount === 1 ? 'visit' : 'visits'} on record
+                                      {l.deskReviewedByName ? ` — last by ${l.deskReviewedByName}` : ''}
+                                    </p>
+                                    <p className="mt-0.5 text-xs opacity-90">The full trail (who looked, when, who cleared a re-check) lives in the request dialog.</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : l.deskReviewedAt ? (
+                              <TooltipProvider delayDuration={120}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span
+                                      tabIndex={0}
+                                      data-testid="desk-visit-chip-legacy"
+                                      className="mt-0.5 inline-flex max-w-fit items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] font-medium text-slate-600 cursor-default outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
+                                    >
+                                      <History className="h-2.5 w-2.5" aria-hidden /> visited
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" align="start" className="max-w-64">
+                                    <p className="font-medium">
+                                      Reviewed{l.deskReviewedByName ? ` by ${l.deskReviewedByName}` : ''} — before the visit ledger kept history
+                                    </p>
+                                    <p className="mt-0.5 text-xs opacity-90">Visits are counted from v2.63.0 onward; opening the request again files the first counted visit.</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>

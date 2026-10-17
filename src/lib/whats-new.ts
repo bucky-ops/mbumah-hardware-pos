@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.64.0',
+    title: 'The ledger steps into the light — visit counts on the desk rows, and the org console sees the trail',
+    bullets: [
+      'Every reviewed row on the HR desk now wears a slate visit chip ("2 visits") — you can tell a once-glanced request from a thrice-reviewed one without opening the dialog.',
+      'Hover the chip for the short version: how many desk visits are on record and who looked last. The full trail still lives in the request dialog.',
+      'Rows reviewed before the ledger kept history show a count-less "visited" chip — the receipt stays honest about what was and was not counted.',
+      'The org console grows a "Desk activity" audit panel: who opened whose request, on which branch, when — live, across every store.',
+      'The panel\'s stat tiles answer the management questions at a glance: visits this week, corrections answered, distinct reviewers active, total on record.',
+    ],
+  },
+  {
     version: '2.63.0',
     title: 'The desk keeps its own ledger — every visit is on the record, and the dialog shows the trail',
     bullets: [

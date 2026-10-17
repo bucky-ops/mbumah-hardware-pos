@@ -17,14 +17,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronDown, Landmark, LayoutDashboard, Menu, PackageSearch, PieChart, Radio, ScrollText, Users, Wallet } from 'lucide-react';
-import { ActivityTimeline, ChatDrawer, DecisionSupport, LiveFeed } from '@/components/org/panels';
+import { ChevronDown, History, Landmark, LayoutDashboard, Menu, PackageSearch, PieChart, Radio, ScrollText, Users, Wallet } from 'lucide-react';
+import { ActivityTimeline, ChatDrawer, DecisionSupport, DeskActivity, LiveFeed } from '@/components/org/panels';
 import { StoreMatrix } from '@/components/org/store-matrix';
 import { ExpertModules } from '@/components/org/experts';
 import { KpiRow } from '@/components/org/kpi-row';
 import { ChangelogModal, CommandPalette, ConsoleFooter, ConsoleHeader, LoginDialog, ShortcutsModal, type SessionUser } from '@/components/org/chrome';
 import { SectionErrorBoundary } from '@/components/error-boundary';
-import { KenyaMap, kes, num, timeAgo, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
+import { KenyaMap, kes, num, timeAgo, type DeskActivityData, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
 import { authorizedFetchJson } from '@/lib/api';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 
@@ -33,6 +33,7 @@ const SECTIONS = [
   { id: 'store-matrix', label: 'Matrix', icon: PieChart },
   { id: 'experts', label: 'Experts', icon: PackageSearch },
   { id: 'decision', label: 'Decision', icon: Wallet },
+  { id: 'desk-activity', label: 'Desk activity', icon: History },
   { id: 'timeline', label: 'Activity', icon: ScrollText },
   { id: 'live-feed', label: 'Live Feed', icon: Radio },
 ];
@@ -135,6 +136,9 @@ function HrPerStorePanel({ rows }: { rows: NonNullable<OrgSummaryData['hrPerStor
 export default function OrgConsolePage() {
   const [summary, setSummary] = useState<OrgSummaryData | null>(null);
   const [kpi, setKpi] = useState<KpiSummaryData | null>(null);
+  // v2.64.0: the desk-activity audit panel (GET /api/org/review-activity).
+  const [deskActivity, setDeskActivity] = useState<DeskActivityData | null>(null);
+  const [deskActivityError, setDeskActivityError] = useState<string | null>(null);
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
@@ -156,9 +160,10 @@ export default function OrgConsolePage() {
 
   // ── Data fetch + 30s poll ────────────────────────────────────────────────
   const load = useCallback(async () => {
-    const [summaryRes, kpiRes] = await Promise.all([
+    const [summaryRes, kpiRes, deskRes] = await Promise.all([
       authorizedFetchJson('/api/org/summary'),
       authorizedFetchJson('/api/org/kpi-summary'),
+      authorizedFetchJson('/api/org/review-activity'),
     ]);
 
     if (summaryRes.ok && summaryRes.json?.success) {
@@ -187,6 +192,20 @@ export default function OrgConsolePage() {
             : kpiRes.json?.error ?? 'KPI summary unavailable.',
       );
       if (kpiRes.status === 401) setNeedsAuth(true);
+    }
+
+    if (deskRes.ok && deskRes.json?.success) {
+      setDeskActivity(deskRes.json.data as DeskActivityData);
+      setDeskActivityError(null);
+    } else {
+      setDeskActivityError(
+        deskRes.status === 401
+          ? 'Sign in to load desk activity.'
+          : deskRes.status === 403
+            ? 'Desk activity is limited to org roles (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER).'
+            : deskRes.json?.error ?? 'Desk activity unavailable.',
+      );
+      if (deskRes.status === 401) setNeedsAuth(true);
     }
 
     setOnline(true);
@@ -409,6 +428,11 @@ export default function OrgConsolePage() {
           <div id="decision">
             <SectionErrorBoundary sectionName="Decision Support">
               {kpi ? <DecisionSupport data={kpi} onToast={onToast} /> : <UnavailableCard message={kpiError ?? 'Loading decision support...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
+            </SectionErrorBoundary>
+          </div>
+          <div id="desk-activity">
+            <SectionErrorBoundary sectionName="Desk activity">
+              {deskActivity ? <DeskActivity data={deskActivity} /> : <UnavailableCard message={deskActivityError ?? 'Loading desk activity...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
             </SectionErrorBoundary>
           </div>
           <div id="timeline">

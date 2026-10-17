@@ -12,9 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Activity, AlertOctagon, BellRing, LogIn, MessagesSquare, RadioTower, Send } from 'lucide-react';
+import { Activity, AlertOctagon, BadgeCheck, BellRing, History, LogIn, MessagesSquare, RadioTower, Send } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
-import { timeAgo, type ActivityItem, type ConsoleAlert, type KpiSummaryData } from './primitives';
+import { num, timeAgo, type ActivityItem, type ConsoleAlert, type DeskActivityData, type KpiSummaryData } from './primitives';
 
 const SEV: Record<string, string> = {
   critical: 'border-red-200 bg-red-50',
@@ -365,6 +365,88 @@ export function LiveFeed({ refreshKey, signedIn, onRequireSignIn }: {
         </div>
       )}
       <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-400"><BellRing className="h-3 w-3" /> Notifications mirror critical events in each workspace.</p>
+    </section>
+  );
+}
+
+// ── Desk activity - the leave review ledger, org-wide (v2.64.0) ──────────────
+// The v2.63.0 ledger recorded every desk visit per request; this panel turns
+// it into the organization's audit view: WHO looked at WHOSE request, on
+// WHICH branch, WHEN, and whether THAT visit cleared a re-check marker. The
+// stat tiles answer the management questions at a glance: how much desk
+// attention leave is getting this week, how many corrections were answered,
+// and how many distinct reviewers are actually reading.
+const DESK_STATUS_CHIP: Record<string, string> = {
+  PENDING: 'border-amber-200 bg-amber-50 text-amber-700',
+  APPROVED: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  REJECTED: 'border-rose-200 bg-rose-50 text-rose-700',
+  CANCELLED: 'border-slate-200 bg-slate-50 text-slate-500',
+};
+
+export function DeskActivity({ data }: { data: DeskActivityData }) {
+  const { stats, recent } = data;
+  return (
+    <section aria-label="Desk activity" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <History className="h-4 w-4 text-emerald-500" /> Desk activity — leave review ledger
+          <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
+        </h2>
+        <p className="text-[10px] text-slate-400">Every desk visit on record, newest first · syncs every 30s</p>
+      </div>
+
+      {/* Stat tiles — the week's desk-attention figures */}
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {([
+          ['Visits · 7 days', stats.weekVisits],
+          ['Cleared re-checks', stats.weekClears],
+          ['Reviewers active', stats.weekReviewers],
+          ['On record', stats.total],
+        ] as Array<[string, number]>).map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-slate-100 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
+            <p className="text-sm font-bold tabular-nums text-slate-800">{num(value)}</p>
+          </div>
+        ))}
+      </div>
+
+      {recent.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-xs text-slate-500">
+          No desk visits recorded yet — the ledger fills as approvers open leave requests.
+        </p>
+      ) : (
+        <ul className="divide-y divide-slate-100">
+          {recent.map((v) => (
+            <li key={v.id} className="flex items-center gap-3 py-2">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700" aria-hidden="true">
+                {v.visitedByName.trim().charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs text-slate-700">
+                  <span className="font-semibold">{v.visitedByName}</span>
+                  {' '}opened {v.employeeName}&apos;s {v.leaveTypeName} request
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  {v.storeName ? `${v.storeName} · ` : ''}{timeAgo(v.visitedAt)} ago
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                {v.clearedRecheck && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700">
+                    <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> cleared a re-check
+                  </span>
+                )}
+                <span className={`rounded-full border px-1.5 py-px text-[10px] font-medium ${DESK_STATUS_CHIP[v.requestStatus] ?? 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+                  {v.requestStatus.toLowerCase()}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-[10px] text-slate-400">
+        Ledger keeps every visit since v2.63.0 — {num(stats.total)} on record. Each branch&apos;s desk sees the same trail in the request dialog.
+      </p>
     </section>
   );
 }
