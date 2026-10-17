@@ -34,6 +34,14 @@
 // the click landed. The walk (j/k) covers the doors; the chips answer the
 // arrows. Both speak, neither shouts.
 //
+// v2.79.0: the drawers file themselves. A drawer has always been a
+// screen-only read — filing just one reviewer's or one request's visits
+// meant hand-copying rows off the monitor. Now each drawer carries its own
+// CSV, built from the SAME one-pass ledger the drawer reads (no second
+// fetch, no server round-trip), so the filed copy cannot disagree with
+// what the desk is looking at. One column voice for both families — the
+// ledger holds every fact either way.
+//
 // WHY: the morning-note family (v2.67.0 strip, v2.68.0 bell) tells the org
 // what happened YESTERDAY; a filing desk needs more than yesterday. The
 // report answers the window questions in one printable page — totals, a
@@ -635,4 +643,89 @@ export function deskReportCsvFilename(report: DeskReportPayload): string {
     ? report.scope.branch.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'branch'
     : 'all-branches';
   return `mbumah-desk-report-${report.window.days}d-${start}_${end}-${scope}.csv`;
+}
+
+// ─── v2.79.0 — the drawers file themselves ───────────────────────────────────
+
+/** Which family a drawer-slice CSV files. */
+export type DeskReportSliceKind = 'reviewer' | 'request';
+
+/**
+ * The slice CSV's filing meta — the report page's own scope/window voice,
+ * the same words the header and the print footer carry.
+ */
+export interface DeskReportSliceMeta {
+  scopeLabel: string;
+  windowLabel: string;
+  windowDays: number;
+  generatedAt?: Date;
+}
+
+/**
+ * File ONE drawer's slice: the visits the open drawer is showing, nothing
+ * more. The rows go in the LEDGER's own order (newest first) — the slice
+ * never re-sorts, so the filed copy reads in the same order the desk just
+ * read on screen. One column voice for both families: a reviewer slice
+ * varies the Employee column, a request slice varies the Reviewer column,
+ * and the format stays a single machine-readable shape either way. The
+ * cells ride the digest CSV's escaper, so the OWASP formula-injection
+ * guard covers the drawer's files too. RFC-4180: CRLF records, trailing
+ * CRLF at end of file.
+ */
+export function deskReportSliceToCsv(
+  kind: DeskReportSliceKind,
+  subject: string,
+  entries: readonly DeskReportVisitEntry[],
+  meta: DeskReportSliceMeta,
+): string {
+  const generatedAt = meta.generatedAt ?? new Date();
+  const lines: string[] = [];
+  const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
+
+  row(['Report', kind === 'reviewer' ? 'Desk report — reviewer visits' : 'Desk report — request visits']);
+  row(['Subject', subject]);
+  row(['Scope', meta.scopeLabel]);
+  row(['Window', `${meta.windowLabel} (${meta.windowDays} EAT days)`]);
+  row(['Generated (UTC)', generatedAt.toISOString()]);
+
+  lines.push('');
+  lines.push('Visits');
+  row(['Date', 'Day', 'Time (EAT)', 'Branch', 'Reviewer', 'Employee', 'Leave type', 'Status', 'Recheck cleared']);
+  for (const v of entries) {
+    row([
+      v.dayKey,
+      deskReportDayLabel(v.dayKey),
+      deskReportVisitTime(v.at),
+      v.storeName,
+      v.reviewer,
+      v.employeeName,
+      v.leaveTypeName,
+      v.status,
+      v.cleared ? 'yes' : 'no',
+    ]);
+  }
+
+  return lines.join('\r\n') + '\r\n';
+}
+
+/**
+ * The download filename for a drawer's slice CSV: subject + window bounds +
+ * scope, e.g. mbumah-desk-reviewer-grace-wanjiku-7d-2026-10-11_2026-10-17-
+ * all-branches.csv or mbumah-desk-request-david-otieno-s-sick-leave-… — the
+ * same "filed copies never overwrite each other" rule as the report CSV.
+ * An all-punctuation subject falls back to the kind, so the file is never
+ * anonymous.
+ */
+export function deskReportSliceCsvFilename(
+  kind: DeskReportSliceKind,
+  subject: string,
+  report: DeskReportPayload,
+): string {
+  const start = deskReportDayKey(new Date(report.window.start));
+  const end = deskReportDayKey(new Date(new Date(report.window.end).getTime() - DAY_MS));
+  const slug = subject.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || kind;
+  const scope = report.scope.branch
+    ? report.scope.branch.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'branch'
+    : 'all-branches';
+  return `mbumah-desk-${kind}-${slug}-${report.window.days}d-${start}_${end}-${scope}.csv`;
 }

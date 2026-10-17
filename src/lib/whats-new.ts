@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.79.0',
+    title: 'The drawers file themselves \u2014 file a reviewer\u2019s or a request\u2019s visits straight from the desk report',
+    bullets: [
+      'Every drawer in the desk report carries its own CSV button now: open a reviewer or a request and file exactly the slice you are reading \u2014 that reviewer\u2019s visits or that request\u2019s history, nothing more.',
+      'The filed copy is filing-grade: RFC-4180 with the same formula-injection guard as the report\u2019s own CSV, one column voice for both families \u2014 EAT date, day and time, branch, reviewer, employee, leave type, status and the recheck-cleared flag.',
+      'It cannot disagree with the drawer: the file is built from the same one-pass ledger the drawer reads \u2014 no second fetch, no round-trip, the download lands instantly.',
+      'Filenames never collide: mbumah-desk-reviewer-\u2026 / mbumah-desk-request-\u2026 stamp the subject, window bounds and scope into every filed copy.',
+      'The paper names its scope too: the report footer now says "Branch: Juja Main" or "All branches" in plain words \u2014 one voice on screen, on paper and in every CSV.',
+    ],
+  },
+  {
     version: '2.78.0',
     title: 'The scope speaks the keyboard \u2014 the window and branch chips answer the arrows, and every re-key is announced',
     bullets: [
