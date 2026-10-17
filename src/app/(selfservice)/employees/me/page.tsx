@@ -21,8 +21,52 @@ import { ErrorNote } from '@/components/hr/self-service-ui';
 import { HomeView, type HomeDashboardDto } from './home-view';
 import { SelfDashboardCacheWriter } from './cache-writer';
 import { loadSelfPortal } from './self-portal';
+import { db, runWithoutTenant } from '@/lib/db';
+import { PAYSLIP_ISSUED_METADATA_MARKER } from '@/lib/hr/payroll/run-digest';
 
 export const dynamic = 'force-dynamic';
+
+/** v2.49.0: the employee-facing "your payslip is issued" notice strip. */
+export interface PayslipNoticeDto {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  actionUrl: string | null;
+  actionLabel: string | null;
+}
+
+async function loadPayslipNotices(userId: string): Promise<PayslipNoticeDto[]> {
+  try {
+    // runWithoutTenant: the SAME cross-tenant read posture the feed API uses
+    // for these rows (notification is store-scoped, but the portal strip is
+    // scoped by userId — the session user only ever sees their own rows;
+    // the feed API reads them the same way).
+    const rows = await runWithoutTenant(() =>
+      db.notification.findMany({
+        where: {
+          userId,
+          category: 'HR',
+          metadata: { contains: PAYSLIP_ISSUED_METADATA_MARKER },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+      }),
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      message: r.message,
+      createdAt: r.createdAt.toISOString(),
+      actionUrl: r.actionUrl,
+      actionLabel: r.actionLabel,
+    }));
+  } catch {
+    // The notice strip is best-effort garnish — the dashboard must render
+    // even if this read ever hiccups.
+    return [];
+  }
+}
 
 export default async function EmployeeHome() {
   const guard = await loadSelfPortal('hr.payroll.read.own');
@@ -37,10 +81,14 @@ export default async function EmployeeHome() {
     return <ErrorNote message="Could not load your dashboard. Try again in a moment." />;
   }
 
+  // v2.49.0: the latest personal payslip notices ride the dashboard render
+  // (SSR — no extra client fetch, the strip paints with the page).
+  const payslipNotices = await loadPayslipNotices(guard.session.userId);
+
   return (
     <>
       <SelfDashboardCacheWriter data={data} />
-      <HomeView data={data} />
+      <HomeView data={data} payslipNotices={payslipNotices} />
     </>
   );
 }

@@ -30,8 +30,10 @@ import { hasUnapprovedTimesheet } from '../attendance-service';
 import {
   PAYROLL_APPROVED_METADATA_MARKER,
   PAYROLL_POSTED_METADATA_MARKER,
+  PAYSLIP_ISSUED_METADATA_MARKER,
   payrollRunApprovalCopy,
   payrollRunPostedCopy,
+  payslipIssuedCopy,
   payrollRunDigestToCsv,
   type PayrollRunDigestEmployeeRow,
   type PayrollRunDigestMeta,
@@ -1068,6 +1070,180 @@ export async function notifyPayrollRunPosted(params: {
   };
 }
 
+// ── 3.c v2.49.0: employee-facing "your payslip is issued" notices ───────────
+
+/** Fail-soft result surfaced inside POST .../post body.digest.employeeNotices. */
+export interface PayslipIssuedFanoutResult {
+  /** Run employees with a linked portal account (the bell-row audience). */
+  portalLinked: number;
+  /** In-app rows actually written (≤ portalLinked; equals it on success). */
+  notifiedUsers: number;
+  /** Per-employee emails attempted (portal-linked employees with an address). */
+  emailsAttempted: number;
+  emailsSent: number;
+  emailsFailed: number;
+}
+
+/**
+ * v2.49.0: fan out the "your payslip is issued" notices to the run's
+ * EMPLOYEES — the last silent hop of the payroll lifecycle. Posting just
+ * made their pay official; the maker and the payroll group already heard
+ * about it (v2.48.0), but the person whose payslip now exists had to
+ * discover it by stumbling into the portal.
+ *
+ * PRIVACY DESIGN (deliberately unlike the group digests): every employee
+ * gets a PERSONAL row carrying only THEIR OWN payslip facts — payslip
+ * number, net, payment status — and, when they have an address, a
+ * personalized email with the same facts. There is no group CSV here, no
+ * other employees' numbers, ever. Only portal-linked employees (Employee
+ * rows with a userId) receive anything: an unlinked employee has no bell
+ * to ring and no portal page to open, and paper payslips remain the
+ * offline channel for them.
+ *
+ * Delivery: createMany for the in-app rows (one round-trip), then
+ * per-employee emails in batches of 5 (personalized content cannot share
+ * one envelope) — every send is individually caught, so one bad address
+ * never stalls the batch. Best-effort by contract: a failure here must
+ * never fail the posting itself.
+ */
+export async function notifyEmployeesPayslipsIssued(params: {
+  runId: string;
+  payrollPeriodId: string;
+  storeId: string;
+  postedAt: Date | null;
+}): Promise<PayslipIssuedFanoutResult> {
+  const [store, period] = await Promise.all([
+    db.store.findUnique({ where: { id: params.storeId }, select: { name: true } }),
+    db.payrollPeriod.findUnique({ where: { id: params.payrollPeriodId }, select: { name: true } }),
+  ]);
+
+  // The run's payslips joined to the portal link + personal email.
+  const details = await db.payrollDetail.findMany({
+    where: { payrollRunId: params.runId },
+    select: {
+      netPay: true,
+      paymentStatus: true,
+      payslipNumber: true,
+      employee: {
+        select: {
+          firstName: true,
+          lastName: true,
+          userId: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: { employeeId: 'asc' },
+  });
+
+  const postedAtIso = (params.postedAt ?? new Date()).toISOString();
+  const periodName = period?.name ?? 'Payroll run';
+  const storeName = store?.name ?? 'MBUMAH HARDWARE';
+
+  // Only portal-linked employees can receive anything at all (the schema
+  // guarantees the employee relation on every detail row; userId is the
+  // optional portal link).
+  const audience = details.filter(
+    (d) => typeof d.employee?.userId === 'string' && d.employee.userId.length > 0,
+  );
+
+  if (audience.length === 0) {
+    return { portalLinked: 0, notifiedUsers: 0, emailsAttempted: 0, emailsSent: 0, emailsFailed: 0 };
+  }
+
+  // In-app bell rows (one per portal-linked employee, personalized copy).
+  // Deep link straight to the portal Payslips page so the row IS the route.
+  const notices = audience.map((d) => {
+    const meta = {
+      periodName,
+      storeName,
+      employeeName: `${d.employee.firstName ?? ''} ${d.employee.lastName ?? ''}`.trim(),
+      payslipNumber: d.payslipNumber,
+      netPay: Number(d.netPay),
+      paymentStatus: d.paymentStatus,
+      postedAtIso,
+    };
+    const copy = payslipIssuedCopy(meta);
+    return { userId: d.employee.userId as string, copy };
+  });
+
+  await db.notification.createMany({
+    data: notices.map(({ userId, copy }) => ({
+      storeId: params.storeId,
+      userId,
+      title: copy.title,
+      message: copy.message,
+      type: copy.notifType,
+      category: 'HR',
+      priority: copy.priority,
+      // v2.49.0: the row deep-links the portal Payslips page — the in-shell
+      // feed (and the portal home strip) route the employee straight there.
+      actionUrl: '/employees/me/payslips',
+      actionLabel: 'View payslip',
+      metadata: JSON.stringify({
+        kind: PAYSLIP_ISSUED_METADATA_MARKER,
+        runId: params.runId,
+        periodName,
+      }),
+    })),
+  });
+
+  // Per-employee emails in batches of 5 — personalized content cannot share
+  // one envelope. Every send is individually caught; RESEND failures (and
+  // the dev no-API-key skip) surface honestly in the counts and the log.
+  const emailable = audience
+    .map((d, i) => ({ d, notice: notices[i] }))
+    .filter(
+      (x): x is { d: (typeof audience)[number]; notice: (typeof notices)[number] } =>
+        typeof x.d.employee.email === 'string' && x.d.employee.email.includes('@'),
+    );
+
+  let emailsSent = 0;
+  let emailsFailed = 0;
+  const BATCH = 5;
+  for (let i = 0; i < emailable.length; i += BATCH) {
+    const batch = emailable.slice(i, i + BATCH);
+    const settled = await Promise.allSettled(
+      batch.map(({ d, notice }) =>
+        sendEmail({
+          to: d.employee.email as string,
+          subject: notice.copy.emailSubject,
+          html: notice.copy.emailHtml,
+          text: notice.copy.emailText,
+          // Attribute the log row to the employee's user account when the
+          // portal link exists (it always does inside this audience).
+          userId: d.employee.userId ?? undefined,
+          type: 'PAYSLIP_ISSUED',
+          metadata: {
+            runId: params.runId,
+            periodName,
+            payslipNumber: d.payslipNumber,
+          },
+        }).then((res) => {
+          if (res.success) emailsSent += 1;
+          else emailsFailed += 1;
+        }),
+      ),
+    );
+    // A rejected promise (bug in the send path itself) counts as FAILED —
+    // allSettled means it cannot stall the rest of the batch.
+    for (const s of settled) {
+      if (s.status === 'rejected') {
+        emailsFailed += 1;
+        console.warn('[payroll] payslip-issued email rejected (best-effort):', s.reason);
+      }
+    }
+  }
+
+  return {
+    portalLinked: audience.length,
+    notifiedUsers: audience.length,
+    emailsAttempted: emailable.length,
+    emailsSent,
+    emailsFailed,
+  };
+}
+
 // ── 4. Post (idempotent journal + payslip issuance) ─────────────────────────
 
 export async function postPayrollRun(ctx: RunActorContext, runId: string) {
@@ -1249,7 +1425,22 @@ export async function postPayrollRun(ctx: RunActorContext, runId: string) {
     return null;
   });
 
-  return { run: updated, journalEntryId: journal.id, replay: false, digest };
+  // v2.49.0: the EMPLOYEE-facing half of the story — every portal-linked
+  // employee in the run gets a personal "your payslip is issued" bell row
+  // (deep link to their Payslips page) and a personalized email with ONLY
+  // their own numbers. Also best-effort by the same contract: it can never
+  // block or undo the posting, and the replay path returns NO notices.
+  const employeeNotices = await notifyEmployeesPayslipsIssued({
+    runId: run.id,
+    payrollPeriodId: run.payrollPeriodId,
+    storeId: ctx.storeId,
+    postedAt: updated.postedAt,
+  }).catch((err) => {
+    console.warn('[payroll] payslip-issued fan-out failed (best-effort):', err);
+    return null;
+  });
+
+  return { run: updated, journalEntryId: journal.id, replay: false, digest, employeeNotices };
 }
 
 // ── 5. Lock / void / disburse ────────────────────────────────────────────────

@@ -23,7 +23,7 @@ import {
   UserPlus, Receipt, CheckCheck, BellRing, Filter, X,
   MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield, BarChart3, ArrowRight,
   CalendarSync, MailX, CalendarCheck2, CalendarX2, CalendarPlus, CalendarOff, UserCheck,
-  PenLine, FilePenLine, Banknote, BookOpenCheck,
+  PenLine, FilePenLine, Banknote, BookOpenCheck, Wallet,
 } from 'lucide-react';
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security' | 'email_failed';
@@ -361,6 +361,11 @@ export function NotificationCenter({
       // journal entry lands in the books and payslip numbers are issued.
       case 'payroll_posted':
         return <BookOpenCheck className="h-4 w-4 text-sky-600" />;
+      // v2.49.0: "your payslip is issued" - teal wallet, the personal
+      // "your money is ready" moment (never looks like the group's
+      // emerald approval or sky posting).
+      case 'payslip_issued':
+        return <Wallet className="h-4 w-4 text-teal-600" />;
     }
   };
 
@@ -564,7 +569,7 @@ export function NotificationCenter({
                     onClick={() => handleNotificationClick(notification)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
                     tabIndex={0}
-                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'leave_cancel' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_on_behalf' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_edited' ? 'border-l-[3px] border-l-indigo-400 dark:border-l-indigo-500' : ''} ${notification.type === 'leave_corrected' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'payroll_approved' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_posted' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'leave_cancel' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_on_behalf' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_edited' ? 'border-l-[3px] border-l-indigo-400 dark:border-l-indigo-500' : ''} ${notification.type === 'leave_corrected' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'payroll_approved' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_posted' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'payslip_issued' ? 'border-l-[3px] border-l-teal-400 dark:border-l-teal-500' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type, notification.leaveStatus)}</div>
@@ -671,6 +676,17 @@ export function NotificationCenter({
                                 {notification.emailStatus === 'SENT' ? 'Email sent' : 'Email failed'}
                               </span>
                             ) : null}
+                          </div>
+                        ) : null}
+                        {/* v2.49.0: personal payslip rows carry a teal "Payslip
+                            ready" chip — the employee's own good news is one
+                            glance away, and the row's "View payslip" action
+                            deep-links the portal page. */}
+                        {notification.type === 'payslip_issued' ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="inline-flex items-center gap-0.5 rounded border border-teal-200 bg-teal-50 px-1 py-0 text-[10px] font-medium text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
+                              Payslip ready
+                            </span>
                           </div>
                         ) : null}
                         {/* v2.27.0: digest rows surface the delivery outcome

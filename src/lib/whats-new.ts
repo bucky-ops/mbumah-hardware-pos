@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.49.0',
+    title: 'Your payslip now introduces itself — employees hear the moment their pay is official',
+    bullets: [
+      'The moment a payroll run is posted, every portal-linked employee in the run gets a personal "Payslip issued" notification carrying only their own facts — payslip number, net pay, payment status — with a one-tap link straight to their Payslips page.',
+      'The self-service home now leads with the good news: a teal notice strip shows your latest payslip notices above your stats, so "your October payslip is ready" is the first thing you see when you sign in.',
+      'Employees with an email address on file also receive a personalized "Your payslip is ready" email with the same own-numbers-only summary — no group spreadsheets, no colleagues\' figures, ever.',
+      'The run dialog\'s posting banner gained an honest "Employee notices" line: how many portal-linked employees were told, and how many of the personal emails left the building — right under the payroll group\'s digest.',
+      'Unlinked employees (no portal account) stay exactly as before — their payslip reaches them the offline way — and the whole fan-out is best-effort: it can never delay or undo the posting itself.',
+    ],
+  },
+  {
     version: '2.48.0',
     title: 'Posting a payroll run now closes the loop — the ledger story lands in the same bell and inbox',
     bullets: [

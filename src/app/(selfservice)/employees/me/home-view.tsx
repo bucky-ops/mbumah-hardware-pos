@@ -12,11 +12,21 @@
 // both a fix and a consistency guarantee between server and client renders.
 
 import Link from 'next/link';
-import { ArrowRight, CalendarClock, Palmtree, Wallet, Target, UserRound } from 'lucide-react';
+import { ArrowRight, CalendarClock, Palmtree, Wallet, Target, UserRound, BadgeCheck } from 'lucide-react';
 import { EmptyState, ProgressMeter, StatusBadge } from '@/components/hr/self-service-ui';
 // v2.24.0: formatters come from the DIRECTIVE-FREE module - a server
 // component may not call functions exported from a 'use client' module.
 import { formatKes, formatDate } from '@/components/hr/self-service-format';
+
+// v2.49.0: the employee-facing "your payslip is issued" notice strip.
+export interface PayslipNoticeItem {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: string;
+  actionUrl: string | null;
+  actionLabel: string | null;
+}
 
 export interface HomeDashboardDto {
   profile: {
@@ -48,7 +58,7 @@ function eatTime(iso: string): string {
   });
 }
 
-export function HomeView({ data }: { data: HomeDashboardDto }) {
+export function HomeView({ data, payslipNotices = [] }: { data: HomeDashboardDto; payslipNotices?: PayslipNoticeItem[] }) {
   const { profile } = data;
   const initials = `${profile.firstName?.[0] ?? ''}${profile.lastName?.[0] ?? ''}`.toUpperCase();
   const primaryLeave = data.leave.balances[0];
@@ -56,6 +66,57 @@ export function HomeView({ data }: { data: HomeDashboardDto }) {
 
   return (
     <div className="space-y-4" data-testid="selfservice-home">
+      {/* v2.49.0: "your payslip is issued" notice strip — the personal
+          good news renders FIRST, above the stat tiles, in the same teal
+          family the bell row and the email use. Up to 3 latest notices;
+          the newest carries the badge, the rest stay quiet rows. */}
+      {payslipNotices.length > 0 ? (
+        <section
+          aria-label="Payslip notices"
+          className="overflow-hidden rounded-2xl bg-gradient-to-br from-teal-400 via-teal-500 to-emerald-500 p-[1px] shadow-sm"
+          data-testid="payslip-notices"
+        >
+          <div className="rounded-2xl bg-card p-4 sm:p-5">
+            <div className="space-y-3">
+              {payslipNotices.map((notice, i) => (
+                <div key={notice.id} className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10 ${
+                      i === 0
+                        ? 'bg-gradient-to-br from-teal-500/15 to-emerald-500/15 text-teal-600 dark:text-teal-400'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                    aria-hidden
+                  >
+                    {i === 0 ? <BadgeCheck className="h-5 w-5" /> : <Wallet className="h-4 w-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-sm font-semibold tracking-tight">{notice.title}</p>
+                      {i === 0 ? (
+                        <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
+                          New
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{notice.message}</p>
+                  </div>
+                  {notice.actionUrl ? (
+                    <Link
+                      href={notice.actionUrl}
+                      className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-teal-600 px-2.5 py-1 text-[11px] font-medium text-white shadow-sm transition-colors hover:bg-teal-700"
+                    >
+                      {notice.actionLabel ?? 'View'}
+                      <ArrowRight className="h-3 w-3" aria-hidden />
+                    </Link>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {/* Profile hero */}
       <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 p-[1px] shadow-sm">
         <div className="rounded-2xl bg-card p-4 sm:p-5">

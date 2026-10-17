@@ -151,6 +151,15 @@ interface B2CSummary {
   message?: string;
 }
 
+/** v2.49.0: fail-soft per-employee "your payslip is issued" fan-out counts. */
+interface EmployeeNoticesNotice {
+  portalLinked?: number;
+  notifiedUsers?: number;
+  emailsAttempted?: number;
+  emailsSent?: number;
+  emailsFailed?: number;
+}
+
 /** v2.47.0: fail-soft approval-digest result (POST .../approve body.digest).
  *  v2.48.0: the same shape rides POST .../post — kind tells the banner
  *  which event it is announcing ("Approval digest" vs "Posting digest"). */
@@ -180,7 +189,12 @@ export function PayrollRunDialog({
   const [issues, setIssues] = useState<ApiIssue[] | null>(null);
   // v2.47.0: fail-soft approval-digest result surfaced by POST .../approve —
   // an honest "who was told, did the email leave the building" banner.
+  // v2.49.0: the per-employee "your payslip is issued" counts ride the same
+  // post response (body.employeeNotices) and render as the banner's teal
+  // second line — the group digest and the personal fan-out are two
+  // different audiences and the banner says both honestly.
   const [digestNotice, setDigestNotice] = useState<DigestNotice | null>(null);
+  const [employeeNotices, setEmployeeNotices] = useState<EmployeeNoticesNotice | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [trace, setTrace] = useState<{ id: string; data: TraceResponse } | null>(null);
@@ -222,6 +236,8 @@ export function PayrollRunDialog({
       setPayslips(null);
       setIssues(null);
       setTrace(null);
+      setDigestNotice(null);
+      setEmployeeNotices(null);
       void load(runId);
     }
   }, [runId, load]);
@@ -297,6 +313,13 @@ export function PayrollRunDialog({
             ? { ...d, kind: action === 'post' ? 'posted' : 'approval' }
             : null,
         );
+        // v2.49.0: the per-employee fan-out rides the post body only
+        // (approval has nothing to tell employees yet — payslips do not
+        // exist until the journal posts).
+        if (action === 'post') {
+          const en = (respBody as { employeeNotices?: EmployeeNoticesNotice | null }).employeeNotices;
+          setEmployeeNotices(en && typeof en === 'object' && typeof en.notifiedUsers === 'number' ? en : null);
+        }
       }
       await load(runId);
       onChanged();
@@ -589,6 +612,23 @@ export function PayrollRunDialog({
                   {digestNotice.emailStatus === 'FAILED' && digestNotice.emailError
                     ? ` — ${digestNotice.emailError.slice(0, 140)}`
                     : ''}
+                </div>
+              )}
+              {employeeNotices && (
+                <div
+                  className="mt-1.5 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-800 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300"
+                  role="status"
+                >
+                  <span className="font-medium">Employee notices · </span>
+                  {employeeNotices.portalLinked
+                    ? `${employeeNotices.notifiedUsers ?? employeeNotices.portalLinked} of ${employeeNotices.portalLinked} portal-linked employee(s) told their payslip is issued`
+                    : 'no portal-linked employees in this run (nothing to notify)'}
+                  {employeeNotices.emailsAttempted
+                    ? ` · emails ${employeeNotices.emailsSent ?? 0} sent${
+                        employeeNotices.emailsFailed ? ` / ${employeeNotices.emailsFailed} failed (logged for review)` : ''
+                      }`
+                    : ' · no employee email addresses on file'}
+                  {' — personal notices carry only the employee’s own payslip number and net.'}
                 </div>
               )}
             </div>
