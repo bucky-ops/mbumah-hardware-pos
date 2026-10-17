@@ -47,10 +47,13 @@ import {
   deskReportWindowLabel,
   deskReportShortStoreName,
   deskReportAvatarHue,
+  deskReportHasRequestDoor,
   deskReportRequestLedger,
+  deskReportRequestSubject,
   deskReportReviewerLedger,
   deskReportVisitTime,
   deriveDeskReport,
+  type DeskReportVisitEntry,
   type DeskReportVisitRow,
 } from '@/lib/hr/desk-report';
 
@@ -774,8 +777,9 @@ describe('DeskReportView - the reviewer drill-down (v2.71.0)', () => {
     expect(VIEW).toContain('setOpenReviewer((cur) => (cur === name ? null : name));');
     const pickDays = VIEW.split('const pickDays =')[1].split('const pickBranch =')[0];
     const pickBranch = VIEW.split('const pickBranch =')[1].split('const toggleReviewer =')[0];
-    expect(pickDays).toContain('setOpenReviewer(null)');
-    expect(pickBranch).toContain('setOpenReviewer(null)');
+    // v2.74.0 — scope changes go through the shared reset (drawers + memory).
+    expect(pickDays).toContain('clearDrawers();');
+    expect(pickBranch).toContain('clearDrawers();');
   });
 
   it('exposes the door semantics (aria-expanded + testids)', () => {
@@ -922,10 +926,12 @@ describe('DeskReportView - the request drill-down (v2.72.0)', () => {
   it('closes BOTH drawers on a scope change (window + branch)', () => {
     const pickDays = VIEW.split('const pickDays =')[1].split('const pickBranch =')[0];
     const pickBranch = VIEW.split('const pickBranch =')[1].split('  // v2.71.0')[0];
-    expect(pickDays).toContain('setOpenReviewer(null)');
-    expect(pickDays).toContain('setOpenRequest(null)');
-    expect(pickBranch).toContain('setOpenReviewer(null)');
-    expect(pickBranch).toContain('setOpenRequest(null)');
+    // v2.74.0 — the shared reset closes both drawers and clears the memory.
+    expect(pickDays).toContain('clearDrawers();');
+    expect(pickBranch).toContain('clearDrawers();');
+    const reset = VIEW.split('const clearDrawers = () => {')[1].split('const toggleReviewer =')[0];
+    expect(reset).toContain('setOpenReviewer(null);');
+    expect(reset).toContain('setOpenRequest(null);');
   });
 
   it('exposes the request door semantics (aria-expanded + testids)', () => {
@@ -937,12 +943,15 @@ describe('DeskReportView - the request drill-down (v2.72.0)', () => {
     expect(door).toContain('aria-expanded={open}');
   });
 
-  it('renders request visit rows with day + EAT time, branch, reviewer, cleared chip', () => {
-    expect(VIEW).toContain('visited by {v.reviewer}');
+  it('renders request visit rows with day + EAT time, branch, reviewer door, cleared chip', () => {
+    expect(VIEW).toContain('visited by{\' \'}');
     const visits = VIEW.split('data-testid="desk-report-request-visits"')[1].split('</ul>')[0];
     expect(visits).toContain('{deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT');
     expect(visits).toContain('{deskReportShortStoreName(v.storeName)}');
     expect(visits).toContain('recheck cleared');
+    // v2.74.0 — the reviewer the row names is a door now.
+    expect(visits).toContain('data-testid="desk-report-request-visit-reviewer"');
+    expect(visits).toContain('jumpToReviewer(v.reviewer, r.requestId)');
   });
 
   it('stays honest: count line names the request, empty state instead of pretending', () => {
@@ -1000,5 +1009,240 @@ describe('release metadata - v2.72.0', () => {
     const MOD = readRepo('src/lib/hr/desk-report.ts');
     expect(MOD).toContain('export function deskReportRequestLedger(');
     expect(MOD).toContain('export function deskReportReviewerLedger(');
+  });
+});
+
+// ── 9. the cross-links (v2.74.0) ─────────────────────────────────────────────
+
+describe('deskReportRequestSubject - the file behind a reviewer row (v2.74.0)', () => {
+  const LEDGER: DeskReportVisitEntry[] = [
+    {
+      id: 'visit-newest', at: '2026-10-17T09:15:00.000Z', dayKey: '2026-10-17',
+      storeId: 'store-juja', storeName: 'MBUMAH HARDWARE - Juja Main',
+      reviewer: 'Grace Wanjiku', employeeName: 'David Otieno', leaveTypeName: 'Sick Leave',
+      status: 'PENDING', cleared: false, requestId: 'req-1',
+    },
+    {
+      id: 'visit-older', at: '2026-10-16T09:15:00.000Z', dayKey: '2026-10-16',
+      storeId: 'store-juja', storeName: 'MBUMAH HARDWARE - Juja Main',
+      reviewer: 'Peter Kimani', employeeName: 'David Otieno', leaveTypeName: 'Sick Leave',
+      status: 'PENDING', cleared: true, requestId: 'req-1',
+    },
+    {
+      id: 'visit-other', at: '2026-10-15T10:00:00.000Z', dayKey: '2026-10-15',
+      storeId: 'store-nak', storeName: 'MBUMAH HARDWARE - Nakuru Branch',
+      reviewer: 'Grace Wanjiku', employeeName: 'Mary Achieng', leaveTypeName: 'Annual Leave',
+      status: 'APPROVED', cleared: false, requestId: 'req-2',
+    },
+  ];
+
+  it('recovers the human title of a request from its own ledger entries', () => {
+    expect(deskReportRequestSubject(LEDGER, 'req-1')).toEqual({
+      employeeName: 'David Otieno', leaveTypeName: 'Sick Leave',
+    });
+    expect(deskReportRequestSubject(LEDGER, 'req-2')).toEqual({
+      employeeName: 'Mary Achieng', leaveTypeName: 'Annual Leave',
+    });
+  });
+
+  it('entries of one request share the subject - the first match answers', () => {
+    const a = deskReportRequestSubject(LEDGER, 'req-1');
+    const again = deskReportRequestSubject([LEDGER[1], LEDGER[0]], 'req-1');
+    expect(a).toEqual(again);
+  });
+
+  it('stays honest: unknown request ids derive to null, never a guess', () => {
+    expect(deskReportRequestSubject(LEDGER, 'req-404')).toBeNull();
+    expect(deskReportRequestSubject([], 'req-1')).toBeNull();
+  });
+
+  it('reads without disturbing the ledger (the newest-first order is sacred)', () => {
+    const frozen = Object.freeze([...LEDGER]) as readonly DeskReportVisitEntry[];
+    deskReportRequestSubject(frozen, 'req-1');
+    expect(frozen[0].id).toBe('visit-newest');
+    expect(frozen[2].id).toBe('visit-other');
+  });
+});
+
+describe('deskReportHasRequestDoor - a door is promised only where one exists (v2.74.0)', () => {
+  const TOP = [
+    { requestId: 'req-1', visits: 7 },
+    { requestId: 'req-2', visits: 3 },
+  ] as const;
+
+  it('a request on the most-visited list has a drawer beneath it', () => {
+    expect(deskReportHasRequestDoor(TOP, 'req-1')).toBe(true);
+    expect(deskReportHasRequestDoor(TOP, 'req-2')).toBe(true);
+  });
+
+  it('a file outside the capped digest stays text - no broken promise', () => {
+    expect(deskReportHasRequestDoor(TOP, 'req-404')).toBe(false);
+    expect(deskReportHasRequestDoor([], 'req-1')).toBe(false);
+  });
+
+  it('answers by identity, not by position (order-independent)', () => {
+    expect(deskReportHasRequestDoor([{ requestId: 'req-9' }, { requestId: 'req-1' }], 'req-1')).toBe(true);
+  });
+});
+
+describe('DeskReportView - the drawers talk to each other (v2.74.0)', () => {
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('imports the cross-link helpers and the jump affordance icons', () => {
+    expect(VIEW).toContain('deskReportHasRequestDoor,');
+    expect(VIEW).toContain('deskReportRequestSubject,');
+    expect(VIEW).toContain('ArrowUpRight');
+    expect(VIEW).toContain('CornerUpLeft');
+  });
+
+  it('holds the two jump handlers alongside the toggles', () => {
+    expect(VIEW).toContain('const jumpToReviewer = (name: string, fromRequestId: string) => {');
+    expect(VIEW).toContain('const jumpToRequest = (id: string, fromReviewer: string) => {');
+  });
+
+  it('a jump obeys the one-drawer rule: the other family closes first', () => {
+    const jumpToReviewer = VIEW.split('const jumpToReviewer =')[1].split('const jumpToRequest =')[0];
+    const jumpToRequest = VIEW.split('const jumpToRequest =')[1].split('const jumpBackToReviewer =')[0];
+    expect(jumpToReviewer).toContain('setOpenRequest(null);');
+    expect(jumpToReviewer).toContain('setOpenReviewer(name);');
+    expect(jumpToRequest).toContain('setOpenReviewer(null);');
+    expect(jumpToRequest).toContain('setOpenRequest(id);');
+  });
+
+  it('a jump remembers where it came from (the via state is set, the opposite cleared)', () => {
+    const jumpToReviewer = VIEW.split('const jumpToReviewer =')[1].split('const jumpToRequest =')[0];
+    const jumpToRequest = VIEW.split('const jumpToRequest =')[1].split('const jumpBackToReviewer =')[0];
+    expect(jumpToReviewer).toContain('setViaReviewer(fromRequestId);');
+    expect(jumpToReviewer).toContain('setViaRequest(null);');
+    expect(jumpToRequest).toContain('setViaRequest(fromReviewer);');
+    expect(jumpToRequest).toContain('setViaReviewer(null);');
+  });
+
+  it('the way back: one click on the via chip returns, and the memory clears', () => {
+    expect(VIEW).toContain('const jumpBackToReviewer = () => {');
+    expect(VIEW).toContain('const jumpBackToRequest = () => {');
+    const backToRequest = VIEW.split('const jumpBackToRequest =')[1].split('// v2.70.0')[0];
+    expect(backToRequest).toContain('if (!viaReviewer) return;');
+    expect(backToRequest).toContain('setViaReviewer(null);');
+    expect(backToRequest).toContain('setOpenRequest(id);');
+  });
+
+  it('plain toggles clear the memory - a via chip never survives a manual open', () => {
+    const toggleReviewer = VIEW.split('const toggleReviewer =')[1].split('// v2.72.0 — the report reads the file')[0];
+    const toggleRequest = VIEW.split('const toggleRequest =')[1].split('// v2.74.0 — the cross-links')[0];
+    expect(toggleReviewer).toContain('setViaRequest(null);');
+    expect(toggleReviewer).toContain('setViaReviewer(null);');
+    expect(toggleRequest).toContain('setViaRequest(null);');
+    expect(toggleRequest).toContain('setViaReviewer(null);');
+  });
+
+  it('scope changes reset the whole cross-link state (drawers + memory)', () => {
+    const clearDrawers = VIEW.split('const clearDrawers = () => {')[1].split('const toggleReviewer =')[0];
+    expect(clearDrawers).toContain('setOpenReviewer(null);');
+    expect(clearDrawers).toContain('setOpenRequest(null);');
+    expect(clearDrawers).toContain('setViaRequest(null);');
+    expect(clearDrawers).toContain('setViaReviewer(null);');
+    const pickDays = VIEW.split('const pickDays =')[1].split('const pickBranch =')[0];
+    const pickBranch = VIEW.split('const pickBranch =')[1].split('// v2.71.0')[0];
+    expect(pickDays).toContain('clearDrawers();');
+    expect(pickBranch).toContain('clearDrawers();');
+  });
+
+  it('request visit rows open the reviewer they name (with the hue echo)', () => {
+    const door = VIEW.split('data-testid="desk-report-request-visit-reviewer"')[1].split('</button>')[0];
+    expect(door).toContain('{v.reviewer}');
+    expect(door).toContain('deskReportAvatarHue(v.reviewer)');
+    expect(door).toContain('ArrowUpRight');
+    expect(VIEW).toContain('onClick={() => jumpToReviewer(v.reviewer, r.requestId)}');
+    expect(VIEW).toContain("aria-label={`Open ${v.reviewer}'s visits`}");
+  });
+
+  it('reviewer visit rows open the file they name - but ONLY when the file has a drawer', () => {
+    expect(VIEW).toContain('{deskReportHasRequestDoor(data.topRequests, v.requestId) ? (');
+    const guard = VIEW.split('{deskReportHasRequestDoor(data.topRequests, v.requestId) ? (')[1].split(") : (")[0];
+    expect(guard).toContain('data-testid="desk-report-reviewer-visit-request"');
+    expect(guard).toContain('jumpToRequest(v.requestId, r.name)');
+    expect(guard).toContain('ArrowUpRight');
+    expect(VIEW).toContain("<>{v.employeeName}&apos;s {v.leaveTypeName}</>");
+  });
+
+  it('both drawers wear the via chip, and the chip is the way back', () => {
+    const reviewerVia = VIEW.split('data-testid="desk-report-reviewer-via"')[1].split('</button>')[0];
+    const requestVia = VIEW.split('data-testid="desk-report-request-via"')[1].split('</button>')[0];
+    expect(reviewerVia).toContain('CornerUpLeft');
+    expect(reviewerVia).toContain('via {viaBackSubject.employeeName}');
+    expect(VIEW).toContain('onClick={jumpBackToRequest}');
+    expect(requestVia).toContain('CornerUpLeft');
+    expect(requestVia).toContain('via {viaRequest}');
+    expect(VIEW).toContain('onClick={jumpBackToReviewer}');
+  });
+
+  it('the reviewer via chip reads its label from the SAME ledger (no second read)', () => {
+    expect(VIEW).toContain('const viaBackSubject = viaReviewer ? deskReportRequestSubject(data.ledger, viaReviewer) : null;');
+  });
+
+  it('the jump language is the drawer\u2019s emerald family, complete in dark mode', () => {
+    const door = VIEW.split('data-testid="desk-report-request-visit-reviewer"')[1].split('</button>')[0];
+    expect(door).toContain('text-emerald-700');
+    expect(door).toContain('dark:text-emerald-300');
+    expect(door).toContain('focus-visible:ring-emerald-400');
+    const chip = VIEW.split('data-testid="desk-report-request-via"')[1].split('</button>')[0];
+    expect(chip).toContain('dark:bg-slate-900/60');
+    expect(chip).toContain('dark:hover:bg-emerald-500/15');
+    expect(chip).toContain('hover:bg-emerald-100');
+  });
+
+  it('the drawers stay off the paper (the cross-links ride panels that never print)', () => {
+    const reviewerPanel = VIEW.split('data-testid="desk-report-reviewer-panel"')[1].split('desk-report-reviewer-visits')[0];
+    const requestPanel = VIEW.split('data-testid="desk-report-request-panel"')[1].split('desk-report-request-visits')[0];
+    expect(reviewerPanel).toContain('print:hidden');
+    expect(requestPanel).toContain('print:hidden');
+  });
+
+  it('the section hints tell the reader the rows are doors now', () => {
+    expect(VIEW).toContain('file names inside a drawer jump across');
+    expect(VIEW).toContain('reviewer names inside a drawer jump across');
+  });
+});
+
+describe('release metadata - v2.74.0', () => {
+  it('leads What\'s-New with the cross-links story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.74.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.74.0'")).toBeLessThan(WN.indexOf("version: '2.73.0'"));
+    expect(WN).toContain('The drawers talk to each other');
+    expect(WN).toMatch(/one click on it takes you straight back/);
+    expect(WN).toMatch(/a door is only promised where one exists/i);
+  });
+
+  it('bumps package.json to at least 2.74.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.74.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.74.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.74.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-74-0']).toBe('node scripts/verify-v2-74-0.mjs');
+  });
+
+  it('keeps every prior surface intact (both drawer families, CSV, print, palette jump)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-toggle"');
+    expect(VIEW).toContain('data-testid="desk-report-request-toggle"');
+    expect(VIEW).toContain('data-testid="desk-report-csv"');
+    expect(VIEW).toContain("printReceiptElement('desk-report-content')");
+    const MOD = readRepo('src/lib/hr/desk-report.ts');
+    expect(MOD).toContain('export function deskReportRequestLedger(');
+    expect(MOD).toContain('export function deskReportReviewerLedger(');
+    const CHROME = readRepo('src/components/org/chrome.tsx');
+    expect(CHROME).toContain('data-testid={`palette-release-${r.version}`}');
+    expect(CHROME).toContain('data-testid="changelog-jump-pill"');
   });
 });

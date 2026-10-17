@@ -17,6 +17,15 @@
 // drew the traffic (requests), and what happened inside each — all from one
 // read, so no drawer can contradict the roll-up above it.
 //
+// v2.74.0: the drawers talk to each other. Every row inside a drawer names
+// the other family — a request's visit rows say WHO came, a reviewer's
+// visit rows say WHICH file they were on — and those names are doors now:
+// click a reviewer's name to open their drawer, click a file's name to open
+// its drawer. The jump is honest about where it came from (a small "via"
+// chip offers the way back), and the one-drawer rule holds — the page never
+// shows two drawers at once, so the report never splits the reader's
+// attention. The drill-downs complete each other.
+//
 // WHY: the morning-note family (v2.67.0 strip, v2.68.0 bell) tells the org
 // what happened YESTERDAY; a filing desk needs more than yesterday. The
 // report answers the window questions in one printable page — totals, a
@@ -417,6 +426,40 @@ export function deskReportRequestLedger(
   requestId: string,
 ): DeskReportVisitEntry[] {
   return ledger.filter((entry) => entry.requestId === requestId);
+}
+
+// ── the cross-links (v2.74.0) ─────────────────────────────────────────
+
+/**
+ * The request's human title, read from its own ledger entries (v2.74.0):
+ * "who the file belongs to and what kind of file it is". The reviewer
+ * drill-down's rows name the request they were visiting; when that request
+ * is one of the report's doors, this recovers its label from the SAME
+ * ledger the drawer was filtered from — no second read, no prop drilling.
+ * Entries of one request share employee/type by construction; the FIRST
+ * match answers. Unknown requestId → null, and the caller stays text.
+ */
+export function deskReportRequestSubject(
+  ledger: readonly DeskReportVisitEntry[],
+  requestId: string,
+): { employeeName: string; leaveTypeName: string } | null {
+  const entry = ledger.find((e) => e.requestId === requestId);
+  return entry ? { employeeName: entry.employeeName, leaveTypeName: entry.leaveTypeName } : null;
+}
+
+/**
+ * Whether a request is one of the report's doors (v2.74.0). The request
+ * drill-down renders only the window's most-visited requests — a cap, by
+ * design (the section is a digest, not the whole ledger) — so a reviewer's
+ * visit row may name a file with no drawer beneath it. This guard keeps
+ * the cross-link honest: a door is promised only where one exists; the
+ * rows that name a doorless file simply stay text.
+ */
+export function deskReportHasRequestDoor(
+  topRequests: readonly { requestId: string }[],
+  requestId: string,
+): boolean {
+  return topRequests.some((r) => r.requestId === requestId);
 }
 
 /**

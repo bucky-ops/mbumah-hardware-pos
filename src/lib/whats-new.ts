@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.74.0',
+    title: 'The drawers talk to each other — every visit row names the other ledger, and the name is a door',
+    bullets: [
+      'Inside a request\'s drawer, "visited by Grace W." is a door now: click it and Grace\'s own visit ledger opens — no scrolling back up to the reviewers section.',
+      'The mirror holds: inside a reviewer\'s drawer, every row names the file it was visiting, and when that file has a drawer of its own, its name opens it.',
+      'A jump remembers where it came from — the opened drawer wears a small "via …" chip, and one click on it takes you straight back.',
+      'The one-drawer rule still governs the page: opening either family closes the other, so the report never splits your attention between two ledgers.',
+      'A door is only promised where one exists — the most-visited section is a capped digest, and rows naming files outside it stay honest text.',
+    ],
+  },
+  {
     version: '2.73.0',
     title: 'The palette knows the releases — cmd+K jumps straight to any release\'s notes',
     bullets: [

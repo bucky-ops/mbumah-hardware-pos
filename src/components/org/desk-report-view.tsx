@@ -9,6 +9,16 @@
 // computed SERVER-SIDE by GET /api/org/desk-report (the client only fetches
 // and renders, so a printed copy can never disagree with the screen).
 //
+// v2.74.0: the drill-downs talk to each other. A request visit row names
+// its reviewer — that name is a door now; a reviewer visit row names its
+// request — that title is a door too (when the file has a drawer: the
+// top-requests section is a capped digest, and a door is promised only
+// where one exists). Each jump remembers where it came from: a small
+// "via" chip in the opened drawer offers the jump back in one click, and
+// any plain toggle or scope change clears the memory. The one-drawer rule
+// still governs the whole page — opening either family closes the other,
+// so the report never shows two drawers at once.
+//
 // Print contract: the "Print" button isolates #desk-report-content through
 // the app's print-root pipeline (printReceiptElement clones the node into
 // #print-root; @media print shows ONLY that host) — the nav, sidebar and
@@ -24,8 +34,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, BadgeCheck, Building2, CalendarRange, ChevronDown, FileSpreadsheet, FileText, Printer,
-  RefreshCw, Sunrise, Users,
+  ArrowLeft, ArrowUpRight, BadgeCheck, Building2, CalendarRange, ChevronDown, CornerUpLeft,
+  FileSpreadsheet, FileText, Printer, RefreshCw, Sunrise, Users,
 } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
 import { printReceiptElement } from '@/lib/receipt-pdf';
@@ -34,7 +44,9 @@ import {
   DESK_REPORT_WINDOW_DAYS,
   deskReportAvatarHue,
   deskReportDayLabel,
+  deskReportHasRequestDoor,
   deskReportRequestLedger,
+  deskReportRequestSubject,
   deskReportReviewerLedger,
   deskReportShortStoreName,
   deskReportVisitTime,
@@ -70,6 +82,14 @@ export function DeskReportView() {
   // whole report, drawers included).
   const [openReviewer, setOpenReviewer] = useState<string | null>(null);
   const [openRequest, setOpenRequest] = useState<string | null>(null);
+  // v2.74.0: the cross-links' memory — HOW the open drawer was reached. A
+  // jump through a visit row records where it came from (a requestId when a
+  // reviewer drawer was opened from a request's rows, a reviewer name for
+  // the reverse), and the opened drawer wears a small "via" chip offering
+  // the jump back. Any plain toggle or scope change clears it: the chip
+  // only ever describes the jump that just happened.
+  const [viaRequest, setViaRequest] = useState<string | null>(null);
+  const [viaReviewer, setViaReviewer] = useState<string | null>(null);
   const loadSeq = useRef(0);
 
   const load = useCallback(async (d: number, b: string | null) => {
@@ -112,15 +132,13 @@ export function DeskReportView() {
   const pickDays = (d: number) => {
     if (d === days) return;
     setDays(d);
-    setOpenReviewer(null);
-    setOpenRequest(null);
+    clearDrawers();
     void load(d, branch);
   };
   const pickBranch = (id: string | null) => {
     if (id === branch) return;
     setBranch(id);
-    setOpenReviewer(null);
-    setOpenRequest(null);
+    clearDrawers();
     void load(days, id);
   };
 
@@ -128,15 +146,60 @@ export function DeskReportView() {
   // the open reviewer closed again. v2.72.0 — the second family joins: a
   // request door closes the reviewer drawer and a reviewer door closes the
   // request drawer — the report holds ONE open drawer, whichever family.
+  // v2.74.0 — the shared reset: every plain toggle and scope change also
+  // clears the cross-link memory, so a "via" chip can only ever describe
+  // the jump that just happened, never a stale one.
+  const clearDrawers = () => {
+    setOpenReviewer(null);
+    setOpenRequest(null);
+    setViaRequest(null);
+    setViaReviewer(null);
+  };
   const toggleReviewer = (name: string) => {
     setOpenRequest(null);
+    setViaRequest(null);
+    setViaReviewer(null);
     setOpenReviewer((cur) => (cur === name ? null : name));
   };
   // v2.72.0 — the report reads the file: the same one-drawer rule for the
   // request family.
   const toggleRequest = (id: string) => {
     setOpenReviewer(null);
+    setViaRequest(null);
+    setViaReviewer(null);
     setOpenRequest((cur) => (cur === id ? null : id));
+  };
+  // v2.74.0 — the cross-links: a visit row inside one family's drawer names
+  // the other family, and clicking it jumps there. The one-drawer rule does
+  // the closing; the jump records where it came from so the opened drawer
+  // can offer the way back in one click.
+  const jumpToReviewer = (name: string, fromRequestId: string) => {
+    setOpenRequest(null);
+    setViaRequest(null);
+    setViaReviewer(fromRequestId);
+    setOpenReviewer(name);
+  };
+  const jumpToRequest = (id: string, fromReviewer: string) => {
+    setOpenReviewer(null);
+    setViaReviewer(null);
+    setViaRequest(fromReviewer);
+    setOpenRequest(id);
+  };
+  const jumpBackToReviewer = () => {
+    if (!viaRequest) return;
+    const name = viaRequest;
+    setOpenRequest(null);
+    setViaRequest(null);
+    setViaReviewer(null);
+    setOpenReviewer(name);
+  };
+  const jumpBackToRequest = () => {
+    if (!viaReviewer) return;
+    const id = viaReviewer;
+    setOpenReviewer(null);
+    setViaRequest(null);
+    setViaReviewer(null);
+    setOpenRequest(id);
   };
 
   // v2.70.0 — the report files itself: ?format=csv returns the SAME derived
@@ -409,13 +472,17 @@ export function DeskReportView() {
                 <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   <Users className="h-3.5 w-3.5" aria-hidden /> Reviewers ({data.reviewers.length})
                   <span className="hidden font-normal normal-case tracking-normal text-slate-400 sm:inline print:hidden dark:text-slate-500">
-                    — click a reviewer to read their visits
+                    — click a reviewer to read their visits · file names inside a drawer jump across
                   </span>
                 </h2>
                 <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 dark:divide-slate-800 dark:border-slate-800">
                   {data.reviewers.map((r) => {
                     const open = openReviewer === r.name;
                     const visits = deskReportReviewerLedger(data.ledger, r.name);
+                    // v2.74.0 — the via chip's label: when this drawer was
+                    // reached through a request's visit rows, the same ledger
+                    // names the file to offer the jump back to.
+                    const viaBackSubject = viaReviewer ? deskReportRequestSubject(data.ledger, viaReviewer) : null;
                     return (
                       <li key={r.name} data-testid="desk-report-reviewer-row" className="px-3">
                         <button
@@ -447,8 +514,22 @@ export function DeskReportView() {
                             data-testid="desk-report-reviewer-panel"
                             className="mb-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2 print:hidden dark:border-emerald-500/20 dark:bg-emerald-500/5"
                           >
-                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
-                              {r.name} · {num(visits.length)} visit{visits.length === 1 ? '' : 's'} in this window
+                            <p className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
+                              <span>
+                                {r.name} · {num(visits.length)} visit{visits.length === 1 ? '' : 's'} in this window
+                              </span>
+                              {viaReviewer && viaBackSubject ? (
+                                <button
+                                  type="button"
+                                  onClick={jumpBackToRequest}
+                                  data-testid="desk-report-reviewer-via"
+                                  aria-label={`Back to ${viaBackSubject.employeeName}'s ${viaBackSubject.leaveTypeName} visits`}
+                                  className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1.5 py-px text-[9px] tracking-wide text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:bg-emerald-500/15"
+                                >
+                                  <CornerUpLeft className="h-2.5 w-2.5" aria-hidden />
+                                  via {viaBackSubject.employeeName}&apos;s {viaBackSubject.leaveTypeName}
+                                </button>
+                              ) : null}
                             </p>
                             {visits.length === 0 ? (
                               <p data-testid="desk-report-reviewer-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
@@ -469,7 +550,22 @@ export function DeskReportView() {
                                       {deskReportShortStoreName(v.storeName)}
                                     </span>
                                     <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
-                                      {v.employeeName}&apos;s {v.leaveTypeName}
+                                      {deskReportHasRequestDoor(data.topRequests, v.requestId) ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => jumpToRequest(v.requestId, r.name)}
+                                          data-testid="desk-report-reviewer-visit-request"
+                                          aria-label={`Open ${v.employeeName}'s ${v.leaveTypeName} visits`}
+                                          className="group -mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded px-0.5 py-px text-emerald-700 underline decoration-emerald-300 decoration-dotted underline-offset-2 transition-colors hover:text-emerald-800 hover:decoration-emerald-500 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:decoration-emerald-500/50 dark:hover:text-emerald-200"
+                                        >
+                                          <span className="min-w-0 truncate">
+                                            <span className="font-semibold">{v.employeeName}</span>&apos;s {v.leaveTypeName}
+                                          </span>
+                                          <ArrowUpRight className="h-3 w-3 shrink-0 text-emerald-500 transition-transform duration-150 group-hover:-translate-y-px group-hover:translate-x-px dark:text-emerald-400" aria-hidden />
+                                        </button>
+                                      ) : (
+                                        <>{v.employeeName}&apos;s {v.leaveTypeName}</>
+                                      )}
                                     </span>
                                     {v.cleared ? (
                                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
@@ -499,7 +595,7 @@ export function DeskReportView() {
                 <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   <FileText className="h-3.5 w-3.5" aria-hidden /> Most-visited requests
                   <span className="hidden font-normal normal-case tracking-normal text-slate-400 sm:inline print:hidden dark:text-slate-500">
-                    — click a request to read its visits
+                    — click a request to read its visits · reviewer names inside a drawer jump across
                   </span>
                 </h2>
                 <ul className="space-y-1.5">
@@ -535,8 +631,22 @@ export function DeskReportView() {
                             data-testid="desk-report-request-panel"
                             className="mb-1.5 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2 print:hidden dark:border-emerald-500/20 dark:bg-emerald-500/5"
                           >
-                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
-                              {r.employeeName}&apos;s {r.leaveTypeName} · {num(visits.length)} visit{visits.length === 1 ? '' : 's'} in this window
+                            <p className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
+                              <span>
+                                {r.employeeName}&apos;s {r.leaveTypeName} · {num(visits.length)} visit{visits.length === 1 ? '' : 's'} in this window
+                              </span>
+                              {viaRequest ? (
+                                <button
+                                  type="button"
+                                  onClick={jumpBackToReviewer}
+                                  data-testid="desk-report-request-via"
+                                  aria-label={`Back to ${viaRequest}'s visits`}
+                                  className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1.5 py-px text-[9px] tracking-wide text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:bg-emerald-500/15"
+                                >
+                                  <CornerUpLeft className="h-2.5 w-2.5" aria-hidden />
+                                  via {viaRequest}
+                                </button>
+                              ) : null}
                             </p>
                             {visits.length === 0 ? (
                               <p data-testid="desk-report-request-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
@@ -557,7 +667,18 @@ export function DeskReportView() {
                                       {deskReportShortStoreName(v.storeName)}
                                     </span>
                                     <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
-                                      visited by {v.reviewer}
+                                      visited by{' '}
+                                      <button
+                                        type="button"
+                                        onClick={() => jumpToReviewer(v.reviewer, r.requestId)}
+                                        data-testid="desk-report-request-visit-reviewer"
+                                        aria-label={`Open ${v.reviewer}'s visits`}
+                                        className="group -mx-0.5 inline-flex max-w-full items-center gap-1 rounded px-0.5 py-px font-semibold text-emerald-700 underline decoration-emerald-300 decoration-dotted underline-offset-2 transition-colors hover:text-emerald-800 hover:decoration-emerald-500 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:decoration-emerald-500/50 dark:hover:text-emerald-200"
+                                      >
+                                        <span className={`h-2 w-2 shrink-0 rounded-full ${deskReportAvatarHue(v.reviewer)}`} aria-hidden />
+                                        <span className="min-w-0 truncate">{v.reviewer}</span>
+                                        <ArrowUpRight className="h-3 w-3 shrink-0 text-emerald-500 transition-transform duration-150 group-hover:-translate-y-px group-hover:translate-x-px dark:text-emerald-400" aria-hidden />
+                                      </button>
                                     </span>
                                     {v.cleared ? (
                                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
