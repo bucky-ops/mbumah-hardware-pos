@@ -22,7 +22,7 @@
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import { sendEmail } from '@/lib/email-service';
-import { digestToCsv, formatCsvSize } from '@/lib/hr/digest-csv';
+import { digestToCsv, formatCsvSize, type DigestCsvAttachment } from '@/lib/hr/digest-csv';
 import {
   hrReportDigestTemplate,
   hrReportDigestText,
@@ -637,7 +637,8 @@ export interface ScheduleSweepResult {
   sent: number;
   failed: number;
   skipped: number;
-  results: Array<{ id: string; reportKey: string; status: 'SENT' | 'FAILED' | 'SKIPPED'; error?: string; recipients: number }>;
+  /** v2.54.0: `delivered` counts the per-recipient envelopes that actually went out; `status` gains PARTIAL (mixed delivery). */
+  results: Array<{ id: string; reportKey: string; status: 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED'; error?: string; recipients: number; delivered?: number }>;
 }
 
 // v2.24.0: schedule report keys -> /hr/reports deep-link tab ids (the UI
@@ -723,6 +724,96 @@ async function writeDigestNotification(params: {
   }
 }
 
+// ── v2.54.0: per-recipient digest envelopes ──────────────────────────────────
+
+/** Per-address send attempt outcome (one envelope = one address). */
+export interface RecipientSendResult {
+  to: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface RecipientSendSummary {
+  delivered: number;
+  total: number;
+  /** SENT = every address delivered · PARTIAL = mixed · FAILED = none. */
+  outcome: 'SENT' | 'PARTIAL' | 'FAILED';
+  /** Honest aggregate error for the schedule row / creator copy (null when all delivered). */
+  aggregateError: string | null;
+}
+
+/**
+ * Pure aggregate over per-recipient send attempts (unit-tested). The
+ * vocabulary is honest: a mixed delivery is PARTIAL — neither the emerald
+ * SENT nor the rose FAILED would tell the truth about "delivered to 2 of 3".
+ */
+export function summariseRecipientSends(sends: RecipientSendResult[]): RecipientSendSummary {
+  const total = sends.length;
+  const delivered = sends.filter((s) => s.success).length;
+  if (total > 0 && delivered === total) {
+    return { delivered, total, outcome: 'SENT', aggregateError: null };
+  }
+  const failed = sends.filter((s) => !s.success);
+  const firstError = failed[0]?.error ?? 'Email send failed';
+  if (delivered === 0) {
+    return { delivered: 0, total, outcome: 'FAILED', aggregateError: total > 1 ? `${total} recipient(s) not delivered: ${firstError}` : firstError };
+  }
+  return {
+    delivered,
+    total,
+    outcome: 'PARTIAL',
+    aggregateError: `Delivered to ${delivered} of ${total} recipient(s) — ${firstError}. Per-recipient rows are in the delivery history.`,
+  };
+}
+
+/**
+ * v2.54.0: send ONE envelope PER RECIPIENT — the digest privacy upgrade.
+ *
+ * Why: a single shared envelope puts every recipient's address on every
+ * other recipient's To: line, and the provider-level SENT/FAILED applies to
+ * the whole batch, so "which recipient actually broke" was a guess. One
+ * envelope per address fixes both: no address is ever exposed to the group,
+ * and every address earns its own NotificationLog row (own status + own
+ * error text) stamped with recipientAddress/recipientIndex/recipientCount.
+ *
+ * The digest content and CSV attachment are IDENTICAL on every envelope —
+ * built once upstream, never recomputed per recipient.
+ */
+export async function sendDigestEnvelopes(params: {
+  recipients: string[];
+  digest: HrReportDigestData;
+  csv: DigestCsvAttachment | null;
+  metadata: { scheduleId: string; reportKey: string; frequency?: string; manual?: boolean; actorId?: string };
+}): Promise<{ sends: RecipientSendResult[]; summary: RecipientSendSummary }> {
+  const subject = `${params.digest.reportLabel} digest — ${params.digest.organizationName} (${params.digest.periodLabel})`;
+  const attempts = params.recipients.map(async (to, index): Promise<RecipientSendResult> => {
+    try {
+      const email = await sendEmail({
+        to: [to],
+        subject,
+        html: hrReportDigestTemplate(params.digest),
+        text: hrReportDigestText(params.digest),
+        ...(params.csv ? { attachments: [params.csv] } : {}),
+        type: 'HR_REPORT_DIGEST',
+        metadata: {
+          ...params.metadata,
+          recipientAddress: to,
+          recipientIndex: index + 1,
+          recipientCount: params.recipients.length,
+          ...(params.csv ? { csvFilename: params.csv.filename, csvBytes: params.csv.byteSize } : {}),
+        },
+      });
+      return { to, success: email.success, ...(email.success ? {} : { error: email.error ?? 'Email send failed' }) };
+    } catch (error) {
+      // sendEmail never throws by contract, but a rejected promise here must
+      // count as that recipient's failure, never blow up the whole send.
+      return { to, success: false, error: error instanceof Error ? error.message : 'Email send failed' };
+    }
+  });
+  const sends = await Promise.all(attempts);
+  return { sends, summary: summariseRecipientSends(sends) };
+}
+
 /**
  * Run every due schedule. Call from the nightly cron (and the manual
  * `?force=1` path — force treats every active schedule as due WITHOUT
@@ -756,28 +847,28 @@ export async function runDueHrReportSchedules(
       // v2.46.0: every digest travels with a ready-to-file CSV built from
       // the SAME aggregate-only payload — no new data leaves the service.
       const csv = digestToCsv(digest, now);
-      const email = await sendEmail({
-        to: recipients,
-        subject: `${digest.reportLabel} digest — ${digest.organizationName} (${digest.periodLabel})`,
-        html: hrReportDigestTemplate(digest),
-        text: hrReportDigestText(digest),
-        ...(csv ? { attachments: [csv] } : {}),
-        type: 'HR_REPORT_DIGEST',
+      // v2.54.0: one envelope PER RECIPIENT — no address is exposed to the
+      // other recipients on a shared To: line, and every address earns its
+      // own NotificationLog row (its own SENT/FAILED + its own error), so
+      // "which recipient actually broke" is a lookup, not a guess.
+      const { summary } = await sendDigestEnvelopes({
+        recipients,
+        digest,
+        csv,
         metadata: {
           scheduleId: schedule.id,
           reportKey: schedule.reportKey,
           frequency: schedule.frequency,
-          ...(csv ? { csvFilename: csv.filename, csvBytes: csv.byteSize } : {}),
         },
       });
       const attachmentLabel = csv ? `CSV (${formatCsvSize(csv.byteSize)})` : null;
-      if (email.success) {
+      if (summary.outcome === 'SENT') {
         await db.hrReportSchedule.update({
           where: { id: schedule.id },
           data: { lastRunAt: now, lastStatus: 'SENT', lastError: null },
         });
         result.sent += 1;
-        result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'SENT', recipients: recipients.length });
+        result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'SENT', recipients: recipients.length, delivered: summary.delivered });
         // v2.24.0: in-app copy for the schedule's creator (quiet, info-level).
         await writeDigestNotification({
           scheduleId: schedule.id,
@@ -789,13 +880,31 @@ export async function runDueHrReportSchedules(
           manual: false,
           attachmentLabel,
         });
+      } else if (summary.outcome === 'PARTIAL') {
+        // v2.54.0: mixed delivery is its own honest state — neither the
+        // emerald SENT nor the rose FAILED would tell the truth.
+        await db.hrReportSchedule.update({
+          where: { id: schedule.id },
+          data: { lastRunAt: now, lastStatus: 'PARTIAL', lastError: (summary.aggregateError ?? 'Some recipients were not delivered').slice(0, 250) },
+        });
+        result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'PARTIAL', recipients: recipients.length, delivered: summary.delivered, error: summary.aggregateError ?? undefined });
+        await writeDigestNotification({
+          scheduleId: schedule.id,
+          reportKey: schedule.reportKey,
+          storeId: schedule.storeId,
+          recipientUserId: schedule.createdByUserId,
+          digest,
+          email: { success: false, error: summary.aggregateError ?? 'Some recipients were not delivered' },
+          manual: false,
+          attachmentLabel,
+        });
       } else {
         await db.hrReportSchedule.update({
           where: { id: schedule.id },
-          data: { lastRunAt: now, lastStatus: 'FAILED', lastError: (email.error ?? 'Email send failed').slice(0, 250) },
+          data: { lastRunAt: now, lastStatus: 'FAILED', lastError: (summary.aggregateError ?? 'Email send failed').slice(0, 250) },
         });
         result.failed += 1;
-        result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'FAILED', error: email.error, recipients: recipients.length });
+        result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'FAILED', error: summary.aggregateError ?? undefined, recipients: recipients.length, delivered: 0 });
         // v2.24.0: failures surface at HIGH priority so the creator's alert
         // popups catch a silently broken digest cadence.
         await writeDigestNotification({
@@ -804,7 +913,7 @@ export async function runDueHrReportSchedules(
           storeId: schedule.storeId,
           recipientUserId: schedule.createdByUserId,
           digest,
-          email: { success: false, error: email.error ?? 'Email send failed' },
+          email: { success: false, error: summary.aggregateError ?? 'Email send failed' },
           manual: false,
           attachmentLabel,
         });
@@ -834,7 +943,7 @@ export async function runDueHrReportSchedules(
 
 // ── v2.24.0: manual "send now" ──────────────────────────────────────────────
 
-export type SendNowOutcome = 'SENT' | 'FAILED' | 'SKIPPED';
+export type SendNowOutcome = 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
 
 export interface SendScheduleNowResult {
   outcome: SendNowOutcome;
@@ -915,33 +1024,36 @@ export async function sendScheduleNow(
     });
   } else {
     const attachment = digestToCsv(digest, now);
-    email = await sendEmail({
-      to: recipients,
-      subject: `${digest.reportLabel} digest — ${digest.organizationName} (${digest.periodLabel})`,
-      html: hrReportDigestTemplate(digest),
-      text: hrReportDigestText(digest),
-      ...(attachment ? { attachments: [attachment] } : {}),
-      type: 'HR_REPORT_DIGEST',
+    // v2.54.0: one envelope PER RECIPIENT (same contract as the sweep) —
+    // the actor's manual send is audited with the aggregate outcome, and
+    // every address earns its own NotificationLog delivery row.
+    const { summary } = await sendDigestEnvelopes({
+      recipients,
+      digest,
+      csv: attachment,
       metadata: {
         scheduleId: row.id,
         reportKey: row.reportKey,
         manual: true,
         actorId: actor.id,
-        ...(attachment ? { csvFilename: attachment.filename, csvBytes: attachment.byteSize } : {}),
       },
     });
+    email = {
+      success: summary.outcome === 'SENT',
+      ...(summary.aggregateError ? { error: summary.aggregateError } : {}),
+    };
     if (attachment) csv = { filename: attachment.filename, byteSize: attachment.byteSize };
-    if (email.success) {
-      outcome = 'SENT';
+    if (summary.outcome !== 'FAILED') {
+      outcome = summary.outcome === 'SENT' ? 'SENT' : 'PARTIAL';
       await db.hrReportSchedule.update({
         where: { id: row.id },
-        data: { lastStatus: 'SENT', lastError: null },
+        data: { lastStatus: outcome, lastError: summary.aggregateError ?? null },
       });
     } else {
       outcome = 'FAILED';
       await db.hrReportSchedule.update({
         where: { id: row.id },
-        data: { lastStatus: 'FAILED', lastError: (email.error ?? 'Email send failed').slice(0, 250) },
+        data: { lastStatus: 'FAILED', lastError: (summary.aggregateError ?? 'Email send failed').slice(0, 250) },
       });
     }
     notificationId = await writeDigestNotification({
@@ -974,7 +1086,7 @@ export async function sendScheduleNow(
 
   return {
     outcome,
-    schedule: toScheduleView({ ...row, lastStatus: outcome === 'FAILED' ? 'FAILED' : outcome === 'SENT' ? 'SENT' : 'SKIPPED', lastError: email.error ?? null }),
+    schedule: toScheduleView({ ...row, lastStatus: outcome, lastError: email.error ?? null }),
     digestSummary: digest
       ? {
           reportLabel: digest.reportLabel,
@@ -1048,6 +1160,10 @@ export interface ScheduleDeliveryRow {
   // from the comma-joined recipient column) so the UI can expand one row
   // into per-recipient chips.
   recipientList: string[];
+  // v2.54.0: per-recipient envelope sends stamp metadata.recipientAddress —
+  // when present, the row IS that recipient's own delivery record (its own
+  // SENT/FAILED + its own error). Null for legacy shared-envelope rows.
+  recipientAddress: string | null;
   manual: boolean; // manual "send now" vs scheduled sweep
   // v2.46.0: the ready-to-file CSV that travelled with the email (name +
   // decoded byte size from the send metadata; null for pre-2.46.0 rows).
@@ -1120,6 +1236,7 @@ export async function listScheduleDeliveries(
       createdAt: log.createdAt.toISOString(),
       recipients: typeof meta.recipientCount === 'number' ? meta.recipientCount : recipientList.length,
       recipientList,
+      recipientAddress: typeof meta.recipientAddress === 'string' && meta.recipientAddress.includes('@') ? meta.recipientAddress : null,
       manual: meta.manual === true,
       // v2.46.0: the ready-to-file CSV travels with the digest email — the
       // delivery row surfaces it as a chip so recipients know what to expect.

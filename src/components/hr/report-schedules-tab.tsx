@@ -83,6 +83,9 @@ interface DeliveryRow {
   recipients: number;
   // v2.27.0: per-recipient chips (parsed server-side from the joined column).
   recipientList: string[];
+  // v2.54.0: per-recipient envelope rows stamp the address — when present
+  // the row IS that recipient's own delivery record.
+  recipientAddress: string | null;
   manual: boolean;
   // v2.46.0: the ready-to-file CSV that travelled with this attempt.
   csvFilename: string | null;
@@ -123,6 +126,8 @@ const LAST_STATUS_STYLES: Record<string, string> = {
   SENT: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
   FAILED: 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
   SKIPPED: 'bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800',
+  // v2.54.0: mixed delivery is its own honest state — amber, like PENDING.
+  PARTIAL: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
 };
 
 // v2.25.0: delivery-row status chip styles (NotificationLog statuses).
@@ -130,6 +135,7 @@ const DELIVERY_STATUS_STYLES: Record<string, string> = {
   SENT: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900',
   FAILED: 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900',
   PENDING: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
+  PARTIAL: 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900',
 };
 
 // v2.25.0: health dot colour per delivery status (mini-bar on each card).
@@ -137,6 +143,7 @@ const DOT_STYLES: Record<string, string> = {
   SENT: 'bg-emerald-500',
   FAILED: 'bg-rose-500',
   PENDING: 'bg-amber-400',
+  PARTIAL: 'bg-amber-400',
 };
 
 function deliveryDotClass(status: string): string {
@@ -341,7 +348,7 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
     setSendNote(null);
     try {
       const res = await apiSend<{
-        outcome: 'SENT' | 'FAILED' | 'SKIPPED';
+        outcome: 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
         digestSummary: { reportLabel: string; periodLabel: string; scopeLabel: string; headlines: string[] } | null;
         email: { success: boolean; error?: string };
         notificationId: string | null;
@@ -353,6 +360,13 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
         setSendNote({
           tone: 'ok',
           text: `${label} digest sent to ${s.recipients.length} recipient(s) - email delivered.${csvNote} A copy is in your notification center.`,
+        });
+      } else if (res.outcome === 'PARTIAL') {
+        // v2.54.0: mixed delivery gets its own amber note — per-recipient
+        // rows in the delivery history say exactly which address broke.
+        setSendNote({
+          tone: 'warn',
+          text: `${label} digest delivered to some recipients (${res.email.error ?? 'partial delivery'}) - check the delivery history for the per-recipient rows.${csvNote}`,
         });
       } else if (res.outcome === 'SKIPPED') {
         setSendNote({
@@ -637,19 +651,24 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                     ) : (
                       <ul className="divide-y">
                         {historyRows.map((d) => {
-                          // v2.27.0: each attempt expands into per-recipient
-                          // chips — the same outcome applies to every address
-                          // on the attempt (the provider accepts/rejects the
-                          // whole envelope), so the chip carries the row's
-                          // status glyph.
+                          // v2.54.0: a per-recipient envelope row IS one
+                          // recipient's own delivery record — the address
+                          // renders inline (mono) and the expansion chevron
+                          // is pointless. Legacy shared-envelope rows keep
+                          // the v2.27.0 per-recipient chip expansion.
+                          const perRecipient = typeof d.recipientAddress === 'string' && d.recipientAddress.length > 0;
                           const expanded = historyExpandedId === d.id;
                           return (
-                            <li key={d.id} className="py-1.5 transition-colors hover:bg-muted/40">
+                            <li key={d.id} className={`py-1.5 transition-colors hover:bg-muted/40 ${perRecipient ? 'pl-2' : ''}`}>
                               <button
                                 type="button"
                                 onClick={() => setHistoryExpandedId(expanded ? null : d.id)}
                                 aria-expanded={expanded}
-                                aria-label={`${d.status} delivery on ${formatDate(d.createdAt)} to ${d.recipientList.length} recipient(s) — ${expanded ? 'hide' : 'show'} per-recipient details`}
+                                aria-label={
+                                  perRecipient
+                                    ? `${d.status} delivery on ${formatDate(d.createdAt)} to ${d.recipientAddress}`
+                                    : `${d.status} delivery on ${formatDate(d.createdAt)} to ${d.recipientList.length} recipient(s) — ${expanded ? 'hide' : 'show'} per-recipient details`
+                                }
                                 className="flex w-full items-start justify-between gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                               >
                                 <div className="min-w-0">
@@ -671,6 +690,14 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                                       </span>
                                     ) : null}
                                     <span className="text-muted-foreground">· {d.recipientList.length} recipient(s)</span>
+                                    {d.recipientAddress ? (
+                                      <span
+                                        className="max-w-[16rem] truncate rounded bg-muted px-1 font-mono text-[10px] text-foreground/80"
+                                        title={`${d.recipientAddress} — this row is ${d.recipientAddress}'s own delivery record`}
+                                      >
+                                        {d.recipientAddress}
+                                      </span>
+                                    ) : null}
                                   </p>
                                   {d.error ? (
                                     <p className="mt-0.5 line-clamp-2 text-rose-600 dark:text-rose-400" title={d.error}>

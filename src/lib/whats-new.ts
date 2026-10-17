@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.54.0',
+    title: 'Every recipient stands alone — digest emails go one-per-person, and the delivery history says who got what',
+    bullets: [
+      'Scheduled and manual digest emails now send one envelope per recipient: nobody\u2019s email address is exposed to everyone else on a shared To: line anymore.',
+      'Each recipient earns their own delivery row — SENT or FAILED per address, with the provider\u2019s own error text — so "which recipient actually broke" is a lookup, not a guess.',
+      'A mixed delivery is called what it is: the schedule shows an amber PARTIAL chip ("Delivered to 2 of 3") instead of pretending everything went out or nothing did.',
+      'The CSV attachment still rides every envelope — the same ready-to-file digest file, built once, attached to each person\u2019s own email.',
+      'Old delivery rows keep their per-recipient chips, so history written before this change stays readable right next to the new per-person rows.',
+    ],
+  },
+  {
     version: '2.53.0',
     title: 'The run\u2019s filing file, on demand — download a payroll run\u2019s digest CSV straight from the Pay Runs desk',
     bullets: [
