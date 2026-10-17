@@ -25,6 +25,7 @@ import { db, withImmutabilityBypass } from '@/lib/db';
 import { createJournalEntry } from '@/lib/accounting-helpers';
 import { nextSequence, formatSequence } from '@/lib/sequence';
 import { sendEmail } from '@/lib/email-service';
+import type { DigestCsvAttachment } from '@/lib/hr/digest-csv';
 import { hrAudit, HrEntityType } from '../audit';
 import { hasUnapprovedTimesheet } from '../attendance-service';
 import {
@@ -2216,4 +2217,132 @@ async function byCodeOrThrow(ctx: RunActorContext, code: string): Promise<string
     );
   }
   return account.id;
+}
+
+// ── v2.53.0: on-demand run digest CSV export ─────────────────────────────────
+//
+// The approval (v2.47.0) and posting (v2.48.0) digests attach a per-employee
+// CSV to their emails; v2.53.0 makes the SAME file downloadable on demand
+// from the Pay Runs desk. One builder (payrollRunDigestToCsv) for both
+// channels, so the downloaded file can never disagree with the inbox.
+
+/** Digest export exists from approval onward — these statuses carry the facts. */
+const RUN_DIGEST_EXPORTABLE_STATUSES = ['APPROVED', 'POSTED', 'LOCKED'] as const;
+
+export type RunDigestExportVariant = 'approval' | 'posted';
+
+export type RunDigestExportDecision =
+  | { ok: true; variant: RunDigestExportVariant }
+  | { ok: false; status: number; code: 'RUN_NOT_EXPORTABLE'; error: string };
+
+/**
+ * Pure status gate for the run digest export (unit-tested).
+ *
+ * APPROVED runs file the approval variant (Approved by / Approved-UTC);
+ * POSTED and LOCKED runs file the posted variant (Posted by / Posted-UTC /
+ * Payslips issued range). Everything earlier or off the lifecycle (drafts,
+ * pending approval, rejections, voids, failures) refuses honestly: a digest
+ * labelled "Approved by Approver" for a run nobody approved would be a lie.
+ */
+export function payrollRunExportDecision(runStatus: string): RunDigestExportDecision {
+  if (runStatus === 'APPROVED') return { ok: true, variant: 'approval' };
+  if (runStatus === 'POSTED' || runStatus === 'LOCKED') return { ok: true, variant: 'posted' };
+  if (RUN_DIGEST_EXPORTABLE_STATUSES.includes(runStatus as (typeof RUN_DIGEST_EXPORTABLE_STATUSES)[number])) {
+    // Unreachable today; kept so a future status addition cannot skip the gate.
+    return { ok: true, variant: 'approval' };
+  }
+  return {
+    ok: false,
+    status: 400,
+    code: 'RUN_NOT_EXPORTABLE',
+    error:
+      'The run digest exists from approval onward — prepare, submit and approve the run first, then download its filing file.',
+  };
+}
+
+/** Name/email fallback ladder shared with the digest fan-outs. */
+async function userDisplayLabel(userId: string | null, fallback: string): Promise<string> {
+  if (!userId) return fallback;
+  const u = await db.user
+    .findUnique({ where: { id: userId }, select: { name: true, email: true } })
+    .catch(() => null);
+  return u?.name?.trim() || u?.email || fallback;
+}
+
+/**
+ * Assemble the on-demand run digest export (service seam, unit-tested with a
+ * mocked db). Rows carry names + staff codes + money — the same aggregate the
+ * run dialog's payslip table already shows to the same read roles, so no new
+ * data crosses a visibility boundary. Returns null when there is nothing to
+ * file (no rows AND all-zero totals) so an empty run never ships an empty CSV.
+ */
+export async function buildRunDigestExport(params: {
+  run: {
+    id: string;
+    runType: string;
+    status: string;
+    approvedByUserId: string | null;
+    approvedAt: Date | null;
+    postedByUserId: string | null;
+    postedAt: Date | null;
+    totalGross: unknown; // Decimal | number | string — Number() coerced at the seam
+    totalDeductions: unknown;
+    totalNet: unknown;
+    employeeCount: number;
+  };
+  periodName: string;
+  storeName: string;
+  now?: Date;
+}): Promise<DigestCsvAttachment | null> {
+  const decision = payrollRunExportDecision(params.run.status);
+  if (!decision.ok) return null;
+
+  const [details, approverLabel, posterLabel] = await Promise.all([
+    db.payrollDetail.findMany({
+      where: { payrollRunId: params.run.id },
+      select: {
+        grossPay: true,
+        totalDeductions: true,
+        netPay: true,
+        payslipNumber: true,
+        employee: { select: { firstName: true, lastName: true, employeeCode: true } },
+      },
+      orderBy: [{ payslipNumber: 'asc' }, { employeeId: 'asc' }],
+    }),
+    userDisplayLabel(params.run.approvedByUserId, 'Approver'),
+    userDisplayLabel(params.run.postedByUserId, ''),
+  ]);
+
+  const rows: PayrollRunDigestEmployeeRow[] = details.map((d) => ({
+    employeeName: `${d.employee?.firstName ?? ''} ${d.employee?.lastName ?? ''}`.trim() || 'Unnamed employee',
+    employeeCode: d.employee?.employeeCode ?? null,
+    gross: Number(d.grossPay),
+    deductions: Number(d.totalDeductions),
+    net: Number(d.netPay),
+  }));
+
+  const slipNumbers = details.map((d) => d.payslipNumber).filter((n): n is string => typeof n === 'string' && n.length > 0);
+
+  const meta: PayrollRunDigestMeta & Partial<Pick<PayrollRunPostedMeta, 'postedByLabel' | 'postedAtIso' | 'payslipCount' | 'firstPayslipNumber' | 'lastPayslipNumber'>> = {
+    periodName: params.periodName,
+    storeName: params.storeName,
+    runType: params.run.runType,
+    employeeCount: params.run.employeeCount,
+    totalGross: Number(params.run.totalGross),
+    totalDeductions: Number(params.run.totalDeductions),
+    totalNet: Number(params.run.totalNet),
+    approvedByLabel: approverLabel,
+    approvedAtIso: (params.run.approvedAt ?? params.now ?? new Date()).toISOString(),
+    ...(decision.variant === 'posted'
+      ? {
+          postedByLabel: posterLabel || approverLabel,
+          postedAtIso: (params.run.postedAt ?? params.now ?? new Date()).toISOString(),
+          payslipCount: slipNumbers.length,
+          firstPayslipNumber: slipNumbers[0] ?? null,
+          lastPayslipNumber: slipNumbers.length > 0 ? slipNumbers[slipNumbers.length - 1] : null,
+        }
+      : {}),
+  };
+
+  return payrollRunDigestToCsv(rows, meta, params.now ?? new Date(), decision.variant);
 }

@@ -16,9 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Banknote, CheckCircle2, Clock, Landmark, Plus, RefreshCw, Wallet } from 'lucide-react';
+import { AlertTriangle, Banknote, CheckCircle2, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Wallet } from 'lucide-react';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
+import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 
 export interface PayrollPeriodDto {
   id: string;
@@ -89,6 +90,31 @@ export default function HrPayrollPage() {
   const [createRunOpen, setCreateRunOpen] = useState(false);
   const [createPeriodOpen, setCreatePeriodOpen] = useState(false);
   const [gateIssues, setGateIssues] = useState<ApiIssue[] | null>(null);
+  // v2.53.0: per-row digest CSV export — the filing file for one run, without
+  // opening the dialog. Tracks which row's download is in flight.
+  const [digestRowId, setDigestRowId] = useState<string | null>(null);
+  // Toast-free page: notes render inline next to the table (honest, printable).
+  const [digestNote, setDigestNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportRunDigest = useCallback(
+    async (runId: string) => {
+      if (digestRowId) return;
+      setDigestRowId(runId);
+      setDigestNote(null);
+      try {
+        const dl = await downloadRunDigestCsv(runId);
+        setDigestNote({
+          tone: 'ok',
+          text: `Digest CSV downloaded — ${dl.filename} (${dl.sizeLabel}). Same per-employee summary the approval and posting emails carry.`,
+        });
+      } catch (e) {
+        setDigestNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+      } finally {
+        setDigestRowId(null);
+      }
+    },
+    [digestRowId],
+  );
 
   // All state updates happen after awaits, never synchronously in the effect.
   const load = useCallback(async () => {
@@ -299,9 +325,29 @@ export default function HrPayrollPage() {
                           <TableCell className="text-right font-semibold tabular-nums">{kes(run.totalNet)}</TableCell>
                           <TableCell className="text-right tabular-nums">{run.employeeCount}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="outline" size="sm" onClick={() => setOpenRunId(run.id)}>
-                              Open
-                            </Button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {['APPROVED', 'POSTED', 'LOCKED'].includes(run.status) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 gap-1 px-2 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+                                  disabled={digestRowId !== null}
+                                  aria-label={`Download the digest CSV for the ${run.payrollPeriod.name} ${run.runType} run`}
+                                  title="The run's filing file — same per-employee summary the digest emails carry"
+                                  onClick={() => void exportRunDigest(run.id)}
+                                >
+                                  {digestRowId === run.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <FileDown className="h-3.5 w-3.5" />
+                                  )}
+                                  <span className="hidden text-xs lg:inline">{digestRowId === run.id ? 'Exporting…' : 'Digest CSV'}</span>
+                                </Button>
+                              )}
+                              <Button variant="outline" size="sm" onClick={() => setOpenRunId(run.id)}>
+                                Open
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -311,6 +357,20 @@ export default function HrPayrollPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* v2.53.0: inline note for the row-level digest CSV download. */}
+          {digestNote && (
+            <div
+              role="status"
+              className={`rounded-md border px-3 py-2 text-xs ${
+                digestNote.tone === 'ok'
+                  ? 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300'
+                  : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+              }`}
+            >
+              {digestNote.text}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="corrections">

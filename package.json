@@ -1,10 +1,10 @@
 {
   "name": "mbumah-hardware-pos",
-  "version": "2.52.0",
+  "version": "2.53.0",
   "private": true,
   "mbumah": {
-    "releaseVersion": "2.52.0",
-    "baseVersion": "2.52.0",
+    "releaseVersion": "2.53.0",
+    "baseVersion": "2.53.0",
     "hotfix": 0
   },
   "scripts": {
@@ -40,16 +40,15 @@
     "db:repair-workspace": "node scripts/repair-branch-workspace-store-schema.mjs",
     "db:repair-branch-managers": "node scripts/repair-branch-manager-schema.mjs",
     "domains:write-hosts": "node scripts/domains/write-hosts.mjs",
-    "verify:branch-workspace": "node scripts/verify-branch-workspace.mjs",
+    "verify:b2c": "node scripts/verify-b2c.mjs",
     "verify:branch-manager-users": "node scripts/verify-branch-manager-users.mjs",
-    "verify:release-selection": "node scripts/verify-release-selection.mjs",
-    "verify:prisma-config": "node scripts/verify-prisma-config.mjs",
-    "verify:windows-build": "node scripts/verify-windows-build-safety.mjs",
+    "verify:branch-workspace": "node scripts/verify-branch-workspace.mjs",
     "verify:org-console-expert": "node scripts/verify-org-console-expert-info.mjs",
     "verify:payroll-lifecycle": "node scripts/verify-payroll-lifecycle.mjs",
+    "verify:prisma-config": "node scripts/verify-prisma-config.mjs",
+    "verify:release-selection": "node scripts/verify-release-selection.mjs",
     "verify:stage-g": "node scripts/verify-stage-g.mjs",
     "verify:stage-h": "node scripts/verify-stage-h.mjs",
-    "verify:b2c": "node scripts/verify-b2c.mjs",
     "verify:v2-22-0": "node scripts/verify-v2-22-0.mjs",
     "verify:v2-23-0": "node scripts/verify-v2-23-0.mjs",
     "verify:v2-24-0": "node scripts/verify-v2-24-0.mjs",
@@ -74,7 +73,9 @@
     "verify:v2-49-0": "node scripts/verify-v2-49-0.mjs",
     "verify:v2-50-0": "node scripts/verify-v2-50-0.mjs",
     "verify:v2-51-0": "node scripts/verify-v2-51-0.mjs",
-    "verify:v2-52-0": "node scripts/verify-v2-52-0.mjs"
+    "verify:v2-52-0": "node scripts/verify-v2-52-0.mjs",
+    "verify:v2-53-0": "node scripts/verify-v2-53-0.mjs",
+    "verify:windows-build": "node scripts/verify-windows-build-safety.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
