@@ -66,6 +66,18 @@ export const LEAVE_EDITED_METADATA_MARKER = 'leave_edited';
  *  (the portal badge + this row carry it; no email). */
 export const LEAVE_REVIEW_SEEN_METADATA_MARKER = 'leave_review_seen';
 
+/** v2.62.0: marker for REVIEW-ANSWERED rows — the APPROVER-facing bell row
+ *  written when a desk visit actually CLEARS a pending correction. The
+ *  v2.43.0 amber "corrected — re-check it" rows told the approvals group a
+ *  request changed under them; nothing ever told them the loop closed. This
+ *  row answers THEIR notification: "the correction you were told about has
+ *  been seen by {reviewer} — safe to decide on the corrected details".
+ *  Written by POST /api/leaves/[id]/review, fanned out to the same
+ *  decision-capable group the correction went to (minus the reviewer and
+ *  the employee, who get their own v2.61.0 row). Bell-only by design — a
+ *  read-receipt is not inbox-worthy (no email surface). */
+export const LEAVE_REVIEW_ANSWERED_METADATA_MARKER = 'leave_review_answered';
+
 export type LeaveNotificationKind =
   | 'leave_decision'
   | 'leave_request'
@@ -76,6 +88,10 @@ export type LeaveNotificationKind =
   // v2.61.0: employee-facing "your correction was seen" rows share the same
   // section (marker 'leave_review_seen', written by the review stamp route).
   | 'leave_review_seen'
+  // v2.62.0: approver-facing "the correction you were notified of was
+  // answered" rows share the same section (marker 'leave_review_answered',
+  // written by the review stamp route alongside the employee row).
+  | 'leave_review_answered'
   // v2.47.0: payroll-run approval digest rows share this feed section
   // (marker 'payroll_approved' lives in payroll/run-digest.ts).
   | 'payroll_approved'
@@ -264,6 +280,7 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
       rec.kind === 'leave_edited' ||
       rec.kind === 'leave_corrected' ||
       rec.kind === 'leave_review_seen' ||
+      rec.kind === 'leave_review_answered' ||
       rec.kind === 'payroll_approved' ||
       rec.kind === 'payroll_posted' ||
       rec.kind === 'payslip_issued' ||
@@ -846,6 +863,53 @@ export function leaveReviewSeenCopy(input: LeaveReviewSeenCopyInput): LeaveRevie
 
   const title = 'Your corrected leave request was seen';
   const message = `${reviewerName} reviewed your corrected ${leaveTypeName} request (${range}). The re-check marker is cleared — no action is needed.`;
+
+  return { title, message, notifType: 'SUCCESS', priority: 'NORMAL' };
+}
+
+// ============================================================================
+// v2.62.0 - REVIEW-ANSWERED COPY (the correction answers to the room)
+// ============================================================================
+
+export interface LeaveReviewAnsweredCopyInput {
+  /** The EMPLOYEE's name (the person the request is FOR) — the approver
+   *  knows the request by its employee, so the row leads with them. */
+  firstName: string;
+  lastName: string;
+  leaveTypeName: string;
+  /** ISO date strings as stored on the LeaveRequest row. */
+  startDate: string;
+  endDate: string;
+  /** Display name of the reviewer whose desk visit cleared the correction
+   *  (the same name the v2.60.0 receipt, the v2.60.0 portal badge and the
+   *  v2.61.0 employee bell row carry — one event, one name everywhere). */
+  reviewerName: string;
+}
+
+export interface LeaveReviewAnsweredCopy {
+  title: string;
+  message: string;
+  /** Notification.type - SUCCESS: a correction being answered is a
+   *  completion (green light to decide), not an alarm and not a to-do. */
+  notifType: 'SUCCESS';
+  priority: 'NORMAL';
+}
+
+/** Build the bell copy for the moment a desk review clears a pending
+ *  correction, addressed to the APPROVERS who were told about it (the
+ *  v2.43.0 amber "corrected — re-check it" fan-out). Bell-ONLY by design,
+ *  same rationale as the employee-side review-seen row: a read-receipt is
+ *  not inbox-worthy — the amber row raised a question, this row answers
+ *  it, and the desk dialog's emerald "Correction seen by {reviewer}"
+ *  receipt (v2.62.0) carries the same story where the decision happens. */
+export function leaveReviewAnsweredCopy(input: LeaveReviewAnsweredCopyInput): LeaveReviewAnsweredCopy {
+  const { firstName, lastName, leaveTypeName, startDate, endDate, reviewerName } = input;
+
+  const name = `${firstName} ${lastName}`.trim();
+  const range = `${formatLeaveDay(startDate)} - ${formatLeaveDay(endDate)}`;
+
+  const title = `Correction answered - ${name}`;
+  const message = `${reviewerName} reviewed ${name}'s corrected ${leaveTypeName} request (${range}). The re-check marker is cleared — safe to decide on the corrected details.`;
 
   return { title, message, notifType: 'SUCCESS', priority: 'NORMAL' };
 }

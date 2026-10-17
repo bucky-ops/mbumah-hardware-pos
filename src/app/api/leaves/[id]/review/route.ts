@@ -23,9 +23,15 @@ import { systemLog, withErrorBoundary } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { requireStoreAccess } from '@/lib/auth';
 import { needsDeskRecheck } from '@/lib/hr/leave-recheck';
+// v2.62.0: the answered fan-out reuses the EXACT decision-capable set the
+// correction fan-out addressed, so the group told "a correction landed" and
+// the group later told "it was answered" can never drift apart.
+import { DECISION_CAPABLE_ROLES } from '@/lib/hr/leave-service';
 import {
   LEAVE_REVIEW_SEEN_METADATA_MARKER,
+  LEAVE_REVIEW_ANSWERED_METADATA_MARKER,
   leaveReviewSeenCopy,
+  leaveReviewAnsweredCopy,
 } from '@/lib/hr/leave-notify';
 
 export const dynamic = 'force-dynamic';
@@ -54,10 +60,19 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
       // v2.61.0: the bell answers the correction — the row needs the leave
       // type + range (copy) and the employee's linked user (recipient) so
       // the desk visit can TELL the employee their correction was read.
+      // v2.62.0: the same visit answers the APPROVERS too — the row needs
+      // the employee's name so the answered copy leads with the person the
+      // approver knows the request by.
       startDate: true,
       endDate: true,
       leaveType: { select: { name: true } },
-      employee: { select: { user: { select: { id: true } } } },
+      employee: {
+        select: {
+          firstName: true,
+          lastName: true,
+          user: { select: { id: true } },
+        },
+      },
     },
   });
 
@@ -153,6 +168,61 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
       }
     } catch {
       // Review-seen delivery is best-effort by design.
+    }
+
+    // v2.62.0: the correction answers to the room — the SAME clearing visit
+    // also rings the APPROVERS who were told about the correction (the
+    // v2.43.0 amber "corrected — re-check it" fan-out raised a question;
+    // this row answers it). Recipients are the exact decision-capable set
+    // the correction went to, minus the reviewer (they ARE the answer) and
+    // minus the employee's linked user (their own v2.61.0 row already
+    // carries the moment). Bell-only like the employee row — a
+    // read-receipt is not inbox-worthy. Best-effort under its own guard:
+    // the stamp is durable, a fan-out failure must never fail the visit,
+    // and the employee row above must not be lost to an approver error.
+    try {
+      const employeeLinkedUserId = existing.employee?.user?.id ?? null;
+      const exclude = [session.userId, ...(employeeLinkedUserId ? [employeeLinkedUserId] : [])];
+
+      const approvers = await db.user.findMany({
+        where: {
+          isActive: true,
+          role: { in: [...DECISION_CAPABLE_ROLES] },
+          id: { notIn: exclude },
+          OR: [{ storeId: existing.storeId }, { role: 'SUPER_ADMIN' }],
+        },
+        select: { id: true },
+      });
+
+      if (approvers.length > 0) {
+        const copy = leaveReviewAnsweredCopy({
+          firstName: existing.employee.firstName,
+          lastName: existing.employee.lastName,
+          leaveTypeName: existing.leaveType.name,
+          startDate: existing.startDate.toISOString(),
+          endDate: existing.endDate.toISOString(),
+          reviewerName,
+        });
+
+        await db.notification.createMany({
+          data: approvers.map((u) => ({
+            storeId: existing.storeId,
+            userId: u.id,
+            title: copy.title,
+            message: copy.message,
+            type: copy.notifType,
+            category: 'HR',
+            priority: copy.priority,
+            metadata: JSON.stringify({
+              kind: LEAVE_REVIEW_ANSWERED_METADATA_MARKER,
+              leaveRequestId: id,
+              reviewerName,
+            }),
+          })),
+        });
+      }
+    } catch {
+      // Review-answered delivery is best-effort by design.
     }
   }
 

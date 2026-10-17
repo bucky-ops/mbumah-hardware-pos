@@ -2910,7 +2910,10 @@ export interface NotificationItem {
   // v2.61.0: 'leave_review_seen' - employee-facing "your correction was
   // seen" rows (the desk visit that cleared the re-check marker; cyan
   // scan-eye, "Correction seen" chip, portal leave page deep link).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
+  // v2.62.0: 'leave_review_answered' - approver-facing "the correction you
+  // were told about was answered" rows (the same clearing visit; emerald
+  // badge-check, "Correction answered" chip, Payroll Leave desk routing).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
