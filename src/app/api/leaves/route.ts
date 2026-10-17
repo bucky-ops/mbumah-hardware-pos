@@ -52,7 +52,17 @@ async function listLeavesHandler(
     where,
     include: {
       employee: {
-        select: { id: true, firstName: true, lastName: true, jobTitle: true, photoUrl: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          jobTitle: true,
+          photoUrl: true,
+          // v2.45.0: the linked portal user id — lets the desk distinguish a
+          // self-corrected row (employee edited their own request) from an
+          // HR correction without comparing display names.
+          user: { select: { id: true } },
+        },
       },
       leaveType: {
         select: { id: true, name: true, code: true, isPaid: true, isStatutory: true },
@@ -97,6 +107,12 @@ async function listLeavesHandler(
     editedAt: r.editedAt?.toISOString() ?? null,
     editedByName: r.editedByName,
     editNote: r.editNote,
+    // v2.45.0: deterministic edit provenance — who corrected it (user id)
+    // and whose request it is (linked portal user id), so both the desk and
+    // the portal can render "Self-corrected" / "Corrected by you" chips
+    // without fragile name comparisons.
+    editedByUserId: r.editedByUserId ?? null,
+    employeeUserId: r.employee.user?.id ?? null,
   }));
 
   // Optionally include leave balances for the filtered employees
@@ -374,10 +390,13 @@ async function updateLeaveHandler(
   }
 
   // Only managers+ can approve/reject; the employee themselves can cancel.
-  // v2.40.0: EDIT (correcting a pending request in place) is an HR-desk
-  // governance action — the same decision-capable gate as the on-behalf
-  // filing path; employees correct their own requests via withdraw + refile.
-  if (action === 'APPROVE' || action === 'REJECT' || action === 'EDIT') {
+  // v2.40.0: EDIT (correcting a pending request in place) was an HR-desk
+  // governance action behind this gate.
+  // v2.45.0: EDIT left this gate — the request owner (the employee's linked
+  // portal user) may now correct their own PENDING request from the portal,
+  // which the decision-capable role gate would have refused. The owner vs
+  // decision-capable split is enforced below, once the request is fetched.
+  if (action === 'APPROVE' || action === 'REJECT') {
     const roleError = requireRole('SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT')(session);
     if (roleError) return roleError;
   }
@@ -420,6 +439,22 @@ async function updateLeaveHandler(
     if (!isDecisionCapable && !isRequestOwner) {
       return Response.json(
         { success: false, error: 'You can only cancel your own leave requests.' },
+        { status: 403 }
+      );
+    }
+  }
+
+  // v2.45.0: EDIT authorization mirrors the CANCEL split above — decision-
+  // capable roles may correct any request in their store (the v2.40.0 HR
+  // desk flow), and the request OWNER may now correct their own PENDING
+  // request from the portal (a typo should not cost a withdraw + refile).
+  // Everyone else is refused; tenant scoping below still applies to both.
+  if (action === 'EDIT') {
+    const isDecisionCapable = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'].includes(session.role);
+    const isRequestOwner = leaveRequest.employee.user?.id === session.userId;
+    if (!isDecisionCapable && !isRequestOwner) {
+      return Response.json(
+        { success: false, error: 'You can only correct your own leave requests.' },
         { status: 403 }
       );
     }

@@ -378,10 +378,15 @@ describe('leaveEditedCopy - copy contracts', () => {
 });
 
 describe('v2.40.0 static contracts', () => {
-  it('PUT /api/leaves validates EDIT behind the decision-capable gate', () => {
+  it('PUT /api/leaves validates EDIT behind the owner-or-decision-capable split (v2.45.0)', () => {
     const route = readFileSync(join(ROOT, 'app/api/leaves/route.ts'), 'utf8');
     expect(route).toContain("'APPROVE', 'REJECT', 'CANCEL', 'EDIT'");
-    expect(route).toContain("action === 'APPROVE' || action === 'REJECT' || action === 'EDIT'");
+    // v2.45.0: EDIT left the decision-capable requireRole gate — the request
+    // OWNER may now correct their own PENDING request from the portal.
+    expect(route).toContain("action === 'APPROVE' || action === 'REJECT')");
+    const editBlock = route.split("if (action === 'EDIT')")[1] ?? '';
+    expect(editBlock).toContain('leaveRequest.employee.user?.id === session.userId');
+    expect(editBlock).toContain('status: 403');
     expect(route).toContain("action: 'LEAVE_REQUEST_EDITED'");
     expect(route).toContain('NOT_EDITABLE');
   });

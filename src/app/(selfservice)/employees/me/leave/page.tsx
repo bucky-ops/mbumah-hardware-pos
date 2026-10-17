@@ -46,8 +46,10 @@ export default async function MyLeave() {
         description="Balances and requests. Your manager approves before days are used."
       />
       {/* Client view: "Request leave" button + dialog, then the SSR'd
-          balances and requests rendered from the payload above. */}
-      <LeaveView initialData={data} />
+          balances and requests rendered from the payload above. selfUserId
+          (v2.45.0) lets the card render the deterministic "Corrected by
+          you" chip for the employee's own corrections. */}
+      <LeaveView initialData={data} selfUserId={guard.session.userId} />
     </div>
   );
 }

@@ -676,3 +676,37 @@ export function hrReportDigestText(data: HrReportDigestData): string {
   lines.push('Aggregates only. Manage schedules: HR workspace > Reports > Schedules.');
   return lines.join('\n');
 }
+
+/**
+ * v2.45.0: password-changed security notice — fired best-effort by
+ * POST /api/profile/password after a successful self-service rotation
+ * (and by the v2.44.0 forced first-sign-in rotation, which is the same
+ * route). Tells the account owner WHAT changed, WHEN, and how many other
+ * devices were signed out, with an honest "wasn't you? act now" footer.
+ * No link, no action button — a notice, not a call to click.
+ */
+export function passwordChangedTemplate(data: {
+  userEmail: string;
+  changedAtIso: string;
+  sessionsRevoked: number;
+}): string {
+  const when = new Date(data.changedAtIso).toUTCString();
+  return emailShell(
+    'Your password was changed',
+    `
+    <h2>Your password was changed</h2>
+    <p>The password for <strong>${data.userEmail}</strong> was just changed from your account settings.</p>
+
+    <div class="alert alert-info">
+      <strong>When:</strong> ${when}<br/>
+      <strong>Devices signed out:</strong> ${data.sessionsRevoked} other session${data.sessionsRevoked === 1 ? '' : 's'} (this device stays signed in)
+    </div>
+
+    <div class="alert alert-warning">
+      <strong>Wasn't you?</strong> Someone with your current password may have signed in. Contact your administrator immediately so the account can be locked and a reset forced — do not wait.
+    </div>
+
+    <p style="font-size:12px;color:${BRAND.textMuted};">This is a security notice — no action is needed if you made this change. ${BRAND.name} will never ask for your password by email.</p>
+  `,
+  );
+}

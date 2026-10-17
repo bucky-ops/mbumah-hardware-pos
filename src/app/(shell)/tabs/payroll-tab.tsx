@@ -177,6 +177,12 @@ interface LeaveRequest {
   editedAt?: string | null;
   editedByName?: string | null;
   editNote?: string | null;
+  /** v2.45.0: deterministic edit provenance — editedByUserId is the User.id
+   *  of whoever corrected the request, employeeUserId the request owner's
+   *  linked portal user id; equality marks a SELF-correction (the employee
+   *  fixed their own request from the portal). */
+  editedByUserId?: string | null;
+  employeeUserId?: string | null;
   /** v2.42.0: supporting document — data URL (governed cap) or http(s) link. */
   attachmentUrl?: string | null;
 }
@@ -1955,14 +1961,19 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                   <TooltipTrigger asChild>
                                     <span
                                       tabIndex={0}
-                                      className="mt-0.5 inline-flex max-w-fit items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-px text-[10px] font-medium text-amber-700 cursor-default outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400"
+                                      className={`mt-0.5 inline-flex max-w-fit items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium cursor-default outline-none focus-visible:ring-2 ${
+                                        l.editedByUserId && l.editedByUserId === l.employeeUserId
+                                          ? 'border-indigo-200 bg-indigo-50 text-indigo-700 focus-visible:ring-indigo-400 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-400'
+                                          : 'border-amber-200 bg-amber-50 text-amber-700 focus-visible:ring-amber-400 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400'
+                                      }`}
                                     >
-                                      <Edit className="h-2.5 w-2.5" aria-hidden /> corrected
+                                      <Edit className="h-2.5 w-2.5" aria-hidden /> {l.editedByUserId && l.editedByUserId === l.employeeUserId ? 'self-corrected' : 'corrected'}
                                     </span>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" align="start" className="max-w-64">
                                     <p className="font-medium">
-                                      Corrected by {l.editedByName}
+                                      {l.editedByUserId && l.editedByUserId === l.employeeUserId ? 'Self-corrected by ' : 'Corrected by '}
+                                      {l.editedByName}
                                       {l.editedAt
                                         ? ` · ${new Date(l.editedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
                                         : ''}
@@ -2273,12 +2284,28 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                 <DetailField label="Emergency contact during leave" value={detail.emergencyContact} />
               )}
               {/* v2.40.0: correction provenance — who fixed it, when, and
-                  (optionally) why, straight from the edit-window stamp. */}
+                  (optionally) why, straight from the edit-window stamp.
+                  v2.45.0: a self-correction (the employee fixed their own
+                  request from the portal) reads "Self-corrected" on indigo
+                  instead of "Corrected by HR" on amber. */}
               {detail.editedByName && (
-                <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-2.5">
-                  <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1 flex items-center gap-1">
-                    <Edit className="h-3 w-3" aria-hidden /> Corrected by HR · {detail.editedByName}
-                    {detail.editedAt ? <span className="font-normal text-amber-600/80 dark:text-amber-400/80">· {formatDateTime(detail.editedAt)}</span> : null}
+                <div
+                  className={`rounded-lg border p-2.5 ${
+                    detail.editedByUserId && detail.editedByUserId === detail.employeeUserId
+                      ? 'border-indigo-200 bg-indigo-50 dark:border-indigo-900 dark:bg-indigo-950/30'
+                      : 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
+                  }`}
+                >
+                  <p
+                    className={`text-xs font-medium mb-1 flex items-center gap-1 ${
+                      detail.editedByUserId && detail.editedByUserId === detail.employeeUserId
+                        ? 'text-indigo-700 dark:text-indigo-300'
+                        : 'text-amber-700 dark:text-amber-300'
+                    }`}
+                  >
+                    <Edit className="h-3 w-3" aria-hidden />{' '}
+                    {detail.editedByUserId && detail.editedByUserId === detail.employeeUserId ? 'Self-corrected' : 'Corrected by HR'} · {detail.editedByName}
+                    {detail.editedAt ? <span className="font-normal opacity-80">· {formatDateTime(detail.editedAt)}</span> : null}
                   </p>
                   {detail.editNote ? <p className="text-sm whitespace-pre-wrap break-words">{detail.editNote}</p> : <p className="text-xs text-muted-foreground">Values were corrected in place — see the dates and days on this dialog.</p>}
                 </div>

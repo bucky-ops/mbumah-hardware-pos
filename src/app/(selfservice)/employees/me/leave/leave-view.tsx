@@ -16,8 +16,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarOff, CalendarPlus, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, UserCheck } from 'lucide-react';
+import { CalendarOff, CalendarPlus, CheckCheck, Loader2, MessageSquareWarning, Palmtree, Paperclip, PenLine, RefreshCw, UserCheck } from 'lucide-react';
 import { apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { previewWorkingDays } from '@/lib/leave-tab';
 import { LeaveAttachmentPicker, LeaveAttachmentChip } from '@/components/hr/leave-attachment-ui';
 import { parseLeaveAttachmentMeta } from '@/lib/hr/leave-attachment';
 
@@ -52,13 +53,17 @@ export interface RequestDto {
   editNote?: string | null;
   /** v2.42.0: supporting document — data URL (governed cap) or http(s) link. */
   attachmentUrl?: string | null;
+  /** v2.45.0: deterministic edit provenance — the User.id of whoever
+   *  corrected the request (null = pre-v2.45.0 edit or never edited). When
+   *  it matches the signed-in user the card renders "Corrected by you". */
+  editedByUserId?: string | null;
 }
 export interface LeaveDto {
   balances: BalanceDto[];
   requests: RequestDto[];
 }
 
-export function LeaveView({ initialData }: { initialData: LeaveDto }) {
+export function LeaveView({ initialData, selfUserId }: { initialData: LeaveDto; selfUserId: string }) {
   const router = useRouter();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -74,6 +79,12 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
   // re-opens the request dialog pre-filled from the rejected row (type,
   // dates, half-day, original reason) with the manager's note in view.
   const [resubmitOf, setResubmitOf] = useState<RequestDto | null>(null);
+  // v2.45.0: self-correction — the employee side of the governed edit
+  // window. A typo on a PENDING request no longer costs a withdraw + refile:
+  // "Correct" re-opens a pre-filled dialog and PUTs action EDIT to
+  // /api/leaves (owner authz added server-side this release). The approver
+  // fan-out (v2.43.0) tells the approvals group what changed.
+  const [editTarget, setEditTarget] = useState<RequestDto | null>(null);
 
   const withdraw = async () => {
     if (!withdrawTarget) return;
@@ -98,6 +109,14 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
   // v2.42.0: optional supporting document (e.g. a medical certificate photo)
   // attached from the portal — same governed rules the HR desk enforces.
   const [attachment, setAttachment] = useState<string | null>(null);
+  // v2.45.0: correction-dialog fields (own PENDING request).
+  const [editTypeId, setEditTypeId] = useState('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [editHalfDay, setEditHalfDay] = useState('false');
+  const [editReason, setEditReason] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [editAttachment, setEditAttachment] = useState<string | null>(null);
 
   /** Pre-fill the request dialog from a rejected request (v2.34.0). Falls
    *  back to an empty type when that balance row no longer exists — the
@@ -117,6 +136,90 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
     setOpen(false);
     setResubmitOf(null);
     setAttachment(null);
+  };
+
+  /** Pre-fill the correction dialog from the employee's own PENDING request
+   *  (v2.45.0). Falls back to an empty type when that balance row no longer
+   *  exists — the server's balance guard will refuse an unentitled type. */
+  const openCorrect = (r: RequestDto) => {
+    const match = initialData.balances.find((b) => b.code === r.code);
+    setEditTarget(r);
+    setEditTypeId(match?.leaveTypeId ?? '');
+    setEditStartDate(r.startDate.slice(0, 10));
+    setEditEndDate(r.endDate.slice(0, 10));
+    setEditHalfDay(r.halfDay ? 'true' : 'false');
+    setEditReason(r.reason ?? '');
+    setEditNote('');
+    setEditAttachment(r.attachmentUrl ?? null);
+  };
+
+  const closeCorrectDialog = () => {
+    setEditTarget(null);
+    setEditAttachment(null);
+  };
+
+  /** No-op guard — Save stays disabled until something actually changed
+   *  (same contract as the HR desk's correction dialog). A note-only
+   *  change DOES count: the note is part of the correction. */
+  const editDirty = (() => {
+    if (!editTarget) return false;
+    if (editNote.trim().length > 0) return true;
+    if (editTypeId !== (initialData.balances.find((b) => b.code === editTarget.code)?.leaveTypeId ?? '')) return true;
+    if (editStartDate !== editTarget.startDate.slice(0, 10)) return true;
+    if (editEndDate !== editTarget.endDate.slice(0, 10)) return true;
+    if (editHalfDay !== (editTarget.halfDay ? 'true' : 'false')) return true;
+    if (editReason !== (editTarget.reason ?? '')) return true;
+    if (editAttachment !== (editTarget.attachmentUrl ?? null)) return true;
+    return false;
+  })();
+
+  // Live balance rail for the corrected range — the exact arithmetic the
+  // server's edit guard applies (self-pending headroom on an unchanged
+  // type, target-type draw on a type change).
+  const editBalanceRow = editTarget ? initialData.balances.find((b) => b.leaveTypeId === editTypeId) : undefined;
+  const editSelfHeadroom =
+    editTarget && editBalanceRow && editBalanceRow.code === editTarget.code ? Number(editTarget.workingDays) : 0;
+  const editPreviewDays = editTarget ? previewWorkingDays(editStartDate, editEndDate, editHalfDay === 'true') : 0;
+  const editAvailable = editBalanceRow
+    ? Number(editBalanceRow.allocatedDays) +
+      Number(editBalanceRow.carryForwardDays) -
+      Number(editBalanceRow.usedDays) -
+      Number(editBalanceRow.pendingDays) +
+      editSelfHeadroom
+    : null;
+  const editInsufficient = editAvailable !== null && editPreviewDays > editAvailable;
+  const editFormReady =
+    !!editTarget &&
+    editDirty &&
+    editPreviewDays > 0 &&
+    !!editStartDate &&
+    !!editEndDate &&
+    editStartDate <= editEndDate &&
+    !editInsufficient;
+
+  const correct = async () => {
+    if (!editTarget) return;
+    setBusy(true);
+    setError('');
+    try {
+      await apiSend('/api/leaves', 'PUT', {
+        action: 'EDIT',
+        leaveRequestId: editTarget.id,
+        startDate: new Date(editStartDate).toISOString(),
+        endDate: new Date(editEndDate).toISOString(),
+        halfDay: editHalfDay === 'true',
+        ...(editTypeId ? { leaveTypeId: editTypeId } : {}),
+        ...(editReason.trim() ? { reason: editReason } : { reason: null }),
+        ...(editNote.trim() ? { editNote: editNote } : { editNote: null }),
+        ...(editAttachment !== (editTarget.attachmentUrl ?? null) ? { attachmentUrl: editAttachment } : {}),
+      });
+      closeCorrectDialog();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -215,15 +318,28 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                     {/* v2.33.0: withdraw while the request is still pending —
                         managers no longer need to be asked to "remove it". */}
                     {r.status === 'PENDING' ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 gap-1 border-violet-300 px-2 text-xs text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
-                        onClick={() => setWithdrawTarget(r)}
-                        disabled={busy}
-                      >
-                        <CalendarOff className="h-3 w-3" aria-hidden /> Withdraw
-                      </Button>
+                      <>
+                        {/* v2.45.0: self-correction — fix a typo in place
+                            instead of withdraw + refile. */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 border-indigo-300 px-2 text-xs text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+                          onClick={() => openCorrect(r)}
+                          disabled={busy}
+                        >
+                          <PenLine className="h-3 w-3" aria-hidden /> Correct
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 border-violet-300 px-2 text-xs text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                          onClick={() => setWithdrawTarget(r)}
+                          disabled={busy}
+                        >
+                          <CalendarOff className="h-3 w-3" aria-hidden /> Withdraw
+                        </Button>
+                      </>
                     ) : null}
                     {/* v2.34.0: resubmission after rejection — the pre-filled
                         retry that closes the decision loop. */}
@@ -255,9 +371,17 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
                     referencing the bell row. */}
                 {r.editedByName ? (
                   <div className="mt-1.5">
-                    <p className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
-                      <PenLine className="h-3 w-3" aria-hidden /> Corrected by HR · {r.editedByName}
-                    </p>
+                    {r.editedByUserId && r.editedByUserId === selfUserId ? (
+                      /* v2.45.0: the employee corrected it themselves —
+                          deterministic via editedByUserId, not name matching. */
+                      <p className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900">
+                        <CheckCheck className="h-3 w-3" aria-hidden /> Corrected by you
+                      </p>
+                    ) : (
+                      <p className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                        <PenLine className="h-3 w-3" aria-hidden /> Corrected by HR · {r.editedByName}
+                      </p>
+                    )}
                     {r.editNote ? <p className="mt-1 text-xs text-amber-700/90 dark:text-amber-300/90">Note: {r.editNote}</p> : null}
                   </div>
                 ) : null}
@@ -327,6 +451,123 @@ export function LeaveView({ initialData }: { initialData: LeaveDto }) {
               Withdraw request
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Correction dialog (v2.45.0 self-correction): pre-filled from the
+          employee's own PENDING request, indigo surface matching the
+          leave_edited notification rail, with the same live day-count +
+          balance rail and no-op guard the HR desk's dialog enforces. */}
+      <Dialog open={!!editTarget} onOpenChange={(v) => (v ? setEditTarget(editTarget) : closeCorrectDialog())}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PenLine className="h-4 w-4 text-indigo-600" aria-hidden /> Correct your request
+            </DialogTitle>
+            <DialogDescription>
+              Fix the details in place — the request stays pending and your approver is told exactly what changed.
+            </DialogDescription>
+          </DialogHeader>
+          {editTarget ? (
+            <>
+              {/* Before → after strip */}
+              <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
+                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-400">Correcting in place</p>
+                <p className="mt-0.5 text-sm text-foreground">
+                  {editTarget.type} · {formatDate(editTarget.startDate)} → {formatDate(editTarget.endDate)} · {Number(editTarget.workingDays)} day(s)
+                </p>
+                {(() => {
+                  const newTypeName = initialData.balances.find((b) => b.leaveTypeId === editTypeId)?.name;
+                  const changedDates = editStartDate !== editTarget.startDate.slice(0, 10) || editEndDate !== editTarget.endDate.slice(0, 10);
+                  if (!changedDates && newTypeName === editTarget.type && editHalfDay === (editTarget.halfDay ? 'true' : 'false')) {
+                    return <p className="mt-1 text-xs text-muted-foreground">Adjust the fields below — nothing has changed yet.</p>;
+                  }
+                  return (
+                    <p className="mt-1 text-xs text-indigo-800 dark:text-indigo-300">
+                      Now: {newTypeName ?? editTarget.type}
+                      {editHalfDay === 'true' ? ' (half day)' : ''} · {formatDate(`${editStartDate}T00:00:00.000Z`)} → {formatDate(`${editEndDate}T00:00:00.000Z`)}
+                      {editPreviewDays > 0 ? ` · ${editPreviewDays % 1 === 0 ? editPreviewDays : editPreviewDays.toFixed(1)} day(s)` : ''}
+                    </p>
+                  );
+                })()}
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Leave type</Label>
+                  <Select value={editTypeId} onValueChange={setEditTypeId}>
+                    <SelectTrigger aria-label="Leave type"><SelectValue placeholder="Choose type" /></SelectTrigger>
+                    <SelectContent>
+                      {initialData.balances.map((b) => (
+                        <SelectItem key={b.leaveTypeId} value={b.leaveTypeId}>
+                          {b.name} — {Number(b.availableDays)}d available
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="correct-start">Start</Label>
+                    <Input id="correct-start" type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="correct-end">End</Label>
+                    <Input id="correct-end" type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Duration</Label>
+                  <Select value={editHalfDay} onValueChange={setEditHalfDay}>
+                    <SelectTrigger aria-label="Duration"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="false">Full days</SelectItem>
+                      <SelectItem value="true">Half day</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Balance rail — mirrors the server's pre-flight guard. */}
+                {editBalanceRow && editAvailable !== null ? (
+                  <div
+                    className={`rounded-lg border px-3 py-2 text-xs ${
+                      editInsufficient
+                        ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300'
+                        : 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300'
+                    }`}
+                  >
+                    {editInsufficient
+                      ? `Corrected range needs ${editPreviewDays % 1 === 0 ? editPreviewDays : editPreviewDays.toFixed(1)} d but only ${editAvailable} d are available — the server will reject this correction.`
+                      : `${editAvailable} day(s) available on ${editBalanceRow.name} for the corrected range.`}
+                  </div>
+                ) : null}
+                <div className="space-y-1.5">
+                  <Label htmlFor="correct-reason">Reason (optional)</Label>
+                  <Textarea id="correct-reason" rows={2} value={editReason} onChange={(e) => setEditReason(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="correct-note">Note to your approver (optional)</Label>
+                  <Textarea
+                    id="correct-note"
+                    rows={2}
+                    placeholder="e.g. shifted a day — the site visit moved to Friday"
+                    value={editNote}
+                    onChange={(e) => setEditNote(e.target.value)}
+                  />
+                </div>
+                <LeaveAttachmentPicker value={editAttachment} onChange={setEditAttachment} testId="portal-correct-attachment" />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeCorrectDialog}>Cancel</Button>
+                <Button
+                  disabled={busy || !editFormReady}
+                  className="bg-indigo-600 text-white hover:bg-indigo-700"
+                  onClick={() => void correct()}
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <PenLine className="h-4 w-4" aria-hidden />}
+                  Save correction
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
 

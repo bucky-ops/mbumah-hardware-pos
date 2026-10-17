@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.45.0',
+    title: 'You can now fix your own pending leave request — no withdraw, no refile',
+    bullets: [
+      'A typo on a pending leave request no longer costs a withdrawal: every pending card in the portal now has a Correct action that fixes the dates, type, duration, reason or document in place — the request keeps its place in the approval queue.',
+      'Your approver is automatically told what changed: the correction posts an amber "re-check before deciding" row to everyone who was notified of the original request, carrying the before → after summary and your optional note.',
+      'The correction dialog shows a live day count and balance rail with the same guard the server applies, and Save stays disabled until something actually changed — no accidental no-op pings.',
+      'Corrections are labelled honestly: your own fixes show an indigo "Corrected by you" chip, HR fixes keep the amber "Corrected by HR" chip, and the HR desk now marks employee-fixed rows as self-corrected.',
+      'Every password change now sends a "your password was changed" security notice to the account owner — with the number of devices signed out — so a stolen-password rotation is never silent.',
+    ],
+  },
+  {
     version: '2.44.0',
     title: 'Temporary passwords now expire at first sign-in — every account picks its own password',
     bullets: [

@@ -221,7 +221,9 @@ describe('wiring: client gates (static contracts)', () => {
   it('create-&-link dialog sends the flag and the desk chip got its tooltip', () => {
     const payroll = read('app/(shell)/tabs/payroll-tab.tsx');
     expect(payroll).toContain('mustChangePassword: form.mustChangePassword !== false');
-    expect(payroll).toContain('Corrected by {l.editedByName}');
+    // v2.45.0: the tooltip label is provenance-aware (self-corrected vs
+    // corrected-by-HR); the note leg is unchanged.
+    expect(payroll).toContain("'Self-corrected by ' : 'Corrected by '");
     expect(payroll).toContain('{l.editNote ? (');
   });
 });

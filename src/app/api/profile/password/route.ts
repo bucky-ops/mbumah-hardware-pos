@@ -15,6 +15,10 @@
 //     this user is revoked (other browsers/devices are signed out). The
 //     CURRENT session is kept so the user isn't logged out mid-action.
 //   • Audit: a SystemLog entry records the change (never the passwords).
+//   • SECURITY NOTICE (v2.45.0): a best-effort "your password was changed"
+//     email reaches the account owner after every successful rotation —
+//     the one signal that reaches the victim when someone ELSE rotates the
+//     password with a stolen-but-working credential.
 
 import { type NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
@@ -22,6 +26,8 @@ import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
 import { LogSeverity, LogComponent } from '@/lib/types';
 import { withSessionAuth, getSessionFromRequest } from '@/lib/auth';
+import { sendEmail, NotificationType } from '@/lib/email-service';
+import { passwordChangedTemplate } from '@/lib/email-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,6 +144,27 @@ async function changePasswordHandler(...args: unknown[]): Promise<Response> {
       currentSessionKept: true,
     },
   });
+
+  // v2.45.0: security notice — the account owner hears about the rotation
+  // even when someone ELSE performed it with a stolen-but-working password
+  // (the attacker keeps the current session; the victim's other devices
+  // are signed out, and this email is the one signal that reaches them).
+  // Best-effort by design: a failed send (no RESEND_API_KEY in dev — the
+  // send logs to NotificationLog as FAILED) never fails the change itself.
+  const changedAtIso = new Date().toISOString();
+  await sendEmail({
+    to: user.email,
+    subject: 'Your MBUMAH HARDWARE password was changed',
+    html: passwordChangedTemplate({
+      userEmail: user.email,
+      changedAtIso,
+      sessionsRevoked,
+    }),
+    text: `Your MBUMAH HARDWARE password was changed on ${changedAtIso}. ${sessionsRevoked} other session(s) were signed out. If this wasn't you, contact your administrator immediately.`,
+    userId: user.id,
+    type: NotificationType.PASSWORD_CHANGED,
+    metadata: { sessionsRevoked, currentSessionKept: true, changedAtIso },
+  }).catch(() => undefined);
 
   return Response.json({
     success: true,
