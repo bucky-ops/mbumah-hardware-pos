@@ -61,6 +61,8 @@ import {
   deskReportVisitTime,
   deskReportSliceToCsv,
   deskReportSliceCsvFilename,
+  deskReportLedgerToCsv,
+  deskReportLedgerCsvFilename,
   deriveDeskReport,
   type DeskReportVisitEntry,
   type DeskReportVisitRow,
@@ -2091,6 +2093,210 @@ describe('release metadata - v2.81.0', () => {
     expect(MOD).toContain('export function deskReportReportHref(');
     expect(MOD).toContain('export function deskReportArrival(');
     expect(MOD).toContain('export function deskReportResolveDeepLink(');
+    expect(MOD).toContain('export function deskReportSliceToCsv(');
+    expect(MOD).toContain('export function deskReportSliceCsvFilename(');
+    expect(MOD).toContain('export function deskReportToCsv(');
+  });
+});
+
+// ── 11. the report files everything (v2.82.0) ────────────────────────────────
+
+describe('deskReportLedgerToCsv - the whole ledger, filed (v2.82.0)', () => {
+  const LEDGER: DeskReportVisitEntry[] = [
+    {
+      id: 'visit-newest', at: '2026-10-17T09:15:00.000Z', dayKey: '2026-10-17',
+      storeId: 'store-juja', storeName: 'MBUMAH HARDWARE - Juja Main',
+      reviewer: 'Grace Wanjiku', employeeName: 'David Otieno', leaveTypeName: 'Sick Leave',
+      status: 'PENDING', cleared: false, requestId: 'req-1',
+    },
+    {
+      id: 'visit-older', at: '2026-10-16T21:00:00.000Z', dayKey: '2026-10-17',
+      storeId: 'store-nak', storeName: 'MBUMAH HARDWARE - Nakuru Branch',
+      reviewer: 'Peter Kimani', employeeName: 'Mary Achieng', leaveTypeName: 'Annual Leave',
+      status: 'APPROVED', cleared: true, requestId: 'req-2',
+    },
+  ];
+  const META = { scopeLabel: 'Branch: MBUMAH HARDWARE - Juja Main', windowLabel: 'Fri, 10 Oct → Sat, 17 Oct', windowDays: 7, generatedAt: new Date(Date.UTC(2026, 9, 17, 12, 0, 0)) };
+
+  it('names the whole read: the all voice, the All visits subject, scope, window, stamp', () => {
+    const csv = deskReportLedgerToCsv(LEDGER, META);
+    const head = csv.split('\r\n').slice(0, 5);
+    expect(head[0]).toBe('Report,Desk report — all visits');
+    expect(head[1]).toBe('Subject,All visits');
+    expect(head[2]).toBe('Scope,Branch: MBUMAH HARDWARE - Juja Main');
+    expect(head[3]).toBe('Window,"Fri, 10 Oct → Sat, 17 Oct (7 EAT days)"');
+    expect(head[4]).toBe('Generated (UTC),2026-10-17T12:00:00.000Z');
+  });
+
+  it('every visit files, in the LEDGER\'s own order (newest first, never re-sorted)', () => {
+    const csv = deskReportLedgerToCsv(LEDGER, META);
+    const lines = csv.split('\r\n');
+    expect(lines[6]).toBe('Visits');
+    expect(lines[7]).toBe('Date,Day,Time (EAT),Branch,Reviewer,Employee,Leave type,Status,Recheck cleared');
+    // The whole ledger files in the order the desk just read — no re-sort.
+    expect(lines[8]).toBe('2026-10-17,Sat 17 Oct,12:15,MBUMAH HARDWARE - Juja Main,Grace Wanjiku,David Otieno,Sick Leave,PENDING,no');
+    expect(lines[9]).toBe('2026-10-17,Sat 17 Oct,00:00,MBUMAH HARDWARE - Nakuru Branch,Peter Kimani,Mary Achieng,Annual Leave,APPROVED,yes');
+    expect(lines[10]).toBe('');
+    expect(csv.endsWith('\r\n')).toBe(true);
+  });
+
+  it('an empty ledger files the honest header and no rows', () => {
+    const csv = deskReportLedgerToCsv([], META);
+    const lines = csv.split('\r\n');
+    expect(lines[0]).toBe('Report,Desk report — all visits');
+    expect(lines[7]).toBe('Date,Day,Time (EAT),Branch,Reviewer,Employee,Leave type,Status,Recheck cleared');
+    expect(lines[8]).toBe('');
+    expect(csv.endsWith('\r\n')).toBe(true);
+  });
+
+  it('rides the same escaper: hostile cells survive the whole-ledger filing', () => {
+    const hostile: DeskReportVisitEntry[] = [{
+      ...LEDGER[0], reviewer: '=SUM(A1)', employeeName: '@ cmd',
+    }];
+    const csv = deskReportLedgerToCsv(hostile, META);
+    expect(csv).toContain("'=SUM(A1)");
+    expect(csv).toContain("'@ cmd");
+  });
+
+  it('reads the frozen ledger without disturbing it', () => {
+    const frozen = Object.freeze([...LEDGER]) as readonly DeskReportVisitEntry[];
+    deskReportLedgerToCsv(frozen, META);
+    expect(frozen[0].id).toBe('visit-newest');
+    expect(frozen[1].id).toBe('visit-older');
+  });
+});
+
+describe('deskReportLedgerCsvFilename - one stamp names every filing (v2.82.0)', () => {
+  const PAYLOAD = {
+    window: { start: '2026-10-10T21:00:00.000Z', end: '2026-10-17T21:00:00.000Z', label: 'Fri, 10 Oct → Sat, 17 Oct', days: 7 },
+    scope: { branch: null, branchName: null },
+  } as unknown as Parameters<typeof deskReportLedgerCsvFilename>[0];
+
+  it('the kind names the file: no subject slug, the shared stamp rides', () => {
+    expect(deskReportLedgerCsvFilename(PAYLOAD))
+      .toBe('mbumah-desk-all-7d-2026-10-11_2026-10-17-all-branches.csv');
+  });
+
+  it('a narrowed scope names the branch slug, same as the other filings', () => {
+    const narrowed = { ...PAYLOAD, scope: { branch: 'store-juja', branchName: 'MBUMAH HARDWARE - Juja Main' } } as typeof PAYLOAD;
+    expect(deskReportLedgerCsvFilename(narrowed))
+      .toBe('mbumah-desk-all-7d-2026-10-11_2026-10-17-store-juja.csv');
+  });
+
+  it('the shared stamp keeps the report and drawer filenames byte-identical', () => {
+    // The v2.82.0 refactor gave all three filings ONE stamp helper — these
+    // are the exact outputs the v2.70/v2.79 rounds pinned, unchanged.
+    const reportPayload = PAYLOAD as unknown as Parameters<typeof deskReportCsvFilename>[0];
+    expect(deskReportCsvFilename(reportPayload))
+      .toBe('mbumah-desk-report-7d-2026-10-11_2026-10-17-all-branches.csv');
+    const slicePayload = PAYLOAD as unknown as Parameters<typeof deskReportSliceCsvFilename>[2];
+    expect(deskReportSliceCsvFilename('reviewer', 'Grace Wanjiku', slicePayload))
+      .toBe('mbumah-desk-reviewer-grace-wanjiku-7d-2026-10-11_2026-10-17-all-branches.csv');
+    expect(deskReportSliceCsvFilename('request', "David Otieno's Sick Leave", slicePayload))
+      .toBe('mbumah-desk-request-david-otieno-s-sick-leave-7d-2026-10-11_2026-10-17-all-branches.csv');
+  });
+});
+
+describe('the File-all button in the view (v2.82.0)', () => {
+  const readRepo = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('the view imports the whole-ledger builders and the FileStack icon', () => {
+    expect(VIEW).toContain('deskReportLedgerToCsv,');
+    expect(VIEW).toContain('deskReportLedgerCsvFilename,');
+    expect(VIEW).toContain('FileStack, FileText,');
+  });
+
+  it('the downloader is a client-side Blob of the whole ledger — no fetch, instant', () => {
+    const body = VIEW.split('const downloadLedgerCsv = useCallback(')[1].split('[data],')[0];
+    expect(body).toContain('if (!data) return;');
+    expect(body).toContain('deskReportLedgerToCsv(data.ledger, {');
+    expect(body).toContain("scopeLabel: data.scope.branchName ? `Branch: ${data.scope.branchName}` : 'All branches'");
+    expect(body).toContain('windowLabel: data.window.label,');
+    expect(body).toContain('windowDays: data.window.days,');
+    expect(body).toContain("new Blob([csv], { type: 'text/csv; charset=utf-8' })");
+    expect(body).toContain('URL.createObjectURL(blob)');
+    expect(body).toContain('deskReportLedgerCsvFilename(data)');
+    expect(body).not.toContain('fetch(');
+  });
+
+  it('the toolbar door is wired: testid, disabled until data, honest aria, count label', () => {
+    // The wiring sits BEFORE the testid in the source (the slice-trap
+    // class): assert the wiring against the whole file.
+    expect(VIEW).toContain('onClick={downloadLedgerCsv}');
+    expect(VIEW).toContain('disabled={!data}');
+    const btn = VIEW.split('data-testid="desk-report-file-all"')[1].split('</button>')[0];
+    expect(btn).toContain('title="File every visit in this window as CSV — the whole ledger, newest first (RFC-4180, formula-injection guarded)"');
+    expect(btn).toContain("data ? `File all ${data.ledger.length} visits as CSV` : 'File all visits as CSV'");
+    expect(btn).toContain("data ? `File all ${num(data.ledger.length)} visits` : 'File all visits'");
+  });
+
+  it('the whole-ledger filing is an action, not a walk door (the walk stays 6)', () => {
+    const btn = VIEW.split('data-testid="desk-report-file-all"')[1].split('</button>')[0];
+    expect(btn).not.toContain('data-desk-door');
+    expect((VIEW.match(/data-desk-door\n/g) || []).length).toBe(6);
+  });
+
+  it('the button wears the emerald family at toolbar scale, dark variants included', () => {
+    const btn = VIEW.split('data-testid="desk-report-file-all"')[1].split('</button>')[0];
+    expect(btn).toContain('border-emerald-300 bg-emerald-50/70');
+    expect(btn).toContain('hover:border-emerald-400 hover:bg-emerald-100');
+    expect(btn).toContain('focus-visible:ring-emerald-400');
+    expect(btn).toContain('disabled:opacity-60');
+    expect(btn).toContain('dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300');
+    expect(btn).toContain('dark:hover:bg-emerald-500/20');
+    expect(btn).toContain('FileStack');
+  });
+
+  it('the footnote says what the filing is', () => {
+    const foot = VIEW.split('data-testid="desk-report-footnote"')[1].split('</p>')[0];
+    expect(foot).toContain('files the whole ledger — every visit the report read, newest first');
+  });
+});
+
+describe('release metadata - v2.82.0', () => {
+  it('bumps package.json to at least 2.82.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.82.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.82.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.82.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-82-0']).toBe('node scripts/verify-v2-82-0.mjs');
+  });
+
+  it('whats-new 2.82.0 leads the feed with the files-everything story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.82.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.82.0'")).toBeLessThan(WN.indexOf("version: '2.81.0'"));
+    expect(WN).toContain('The report files everything');
+    expect(WN).toMatch(/File all N visits/);
+    expect(WN).toMatch(/mbumah-desk-all-/);
+  });
+
+  it('keeps every prior surface intact (walk, drawers, slice CSVs, deep links, whole-ledger filing)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
+    expect(VIEW).toContain('data-testid="desk-report-scope-announcer"');
+    expect(VIEW).toContain('data-testid="desk-report-csv"');
+    expect(VIEW).toContain('data-testid="desk-report-file-all"');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-csv"');
+    expect(VIEW).toContain('data-testid="desk-report-request-csv"');
+    expect(VIEW).toContain("printReceiptElement('desk-report-content')");
+    expect(VIEW).toContain('const clearDrawers = useCallback(');
+    const MOD = readRepo('src/lib/hr/desk-report.ts');
+    expect(MOD).toContain('export function deskReportLedgerToCsv(');
+    expect(MOD).toContain('export function deskReportLedgerCsvFilename(');
+    expect(MOD).toContain('export function deskReportDrawerParam(');
+    expect(MOD).toContain('export function deskReportReportHref(');
+    expect(MOD).toContain('export function deskReportArrival(');
     expect(MOD).toContain('export function deskReportSliceToCsv(');
     expect(MOD).toContain('export function deskReportSliceCsvFilename(');
     expect(MOD).toContain('export function deskReportToCsv(');

@@ -46,7 +46,7 @@ check('whats-new feed has grown to 79+ entries', (WN.match(/version: '[^']+'/g) 
 
 console.log('== Pure module: the slice files itself ==');
 const MOD = read('src/lib/hr/desk-report.ts') ?? '';
-check('DeskReportSliceKind covers both families', MOD.includes("export type DeskReportSliceKind = 'reviewer' | 'request';"));
+check('DeskReportSliceKind covers both drawer families and the whole ledger (v2.82.0 grew it)', MOD.includes("export type DeskReportSliceKind = 'reviewer' | 'request' | 'all';"));
 check('deskReportSliceToCsv is exported', MOD.includes('export function deskReportSliceToCsv('));
 check('the report voice names the family', MOD.includes("'Desk report — reviewer visits'") && MOD.includes("'Desk report — request visits'"));
 check('the filing meta stamps scope, window and generated-at', MOD.includes("row(['Scope', meta.scopeLabel]);") && MOD.includes('row([\'Window\', `${meta.windowLabel} (${meta.windowDays} EAT days)`]);') && MOD.includes("row(['Generated (UTC)', generatedAt.toISOString()]);"));
@@ -55,9 +55,9 @@ check('rows file in the LEDGER\'s own order (never re-sorted)', /for \(const v o
 check('the recheck flag files as yes/no', MOD.includes("v.cleared ? 'yes' : 'no',"));
 check('RFC-4180: CRLF records, trailing CRLF', MOD.includes("return lines.join('\\r\\n') + '\\r\\n';"));
 check('deskReportSliceCsvFilename is exported', MOD.includes('export function deskReportSliceCsvFilename('));
-check('the filename stamps kind + subject + window + scope', MOD.includes('return `mbumah-desk-${kind}-${slug}-${report.window.days}d-${start}_${end}-${scope}.csv`;'));
+check('the filename stamps kind + subject + window + scope (v2.82.0: the stamp is shared)', MOD.includes('return `mbumah-desk-${kind}-${slug}-${deskReportFileStamp(report)}.csv`;'));
 check('an all-punctuation subject falls back to the kind', MOD.includes(".toLowerCase() || kind;"));
-check('EAT wall bounds, same rule as the report filename', (MOD.match(/deskReportDayKey\(new Date\(new Date\(report\.window\.end\)\.getTime\(\) - DAY_MS\)\)/g) || []).length >= 2);
+check('EAT wall bounds, same rule as the report filename (v2.82.0: ONE stamp helper carries them)', MOD.includes('function deskReportFileStamp(report: DeskReportPayload): string {') && (MOD.match(/deskReportDayKey\(new Date\(new Date\(report\.window\.end\)\.getTime\(\) - DAY_MS\)\)/g) || []).length >= 1);
 
 console.log('== The view: the drawer carries its CSV ==');
 const VIEW = read('src/components/org/desk-report-view.tsx') ?? '';

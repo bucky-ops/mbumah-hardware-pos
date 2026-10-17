@@ -365,13 +365,15 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.81.0 (latest — counted separately), then 2.80.0,
-    // 2.79.0 — a 2.80.0 flag means 2.81.0 is the head ('latest', not 'new')
+    // The feed leads 2.82.0 (latest — counted separately), then 2.81.0,
+    // 2.80.0 — a 2.81.0 flag means 2.82.0 is the head ('latest', not 'new')
     // and nothing sits strictly between, so the honest count is 0; a
-    // 2.77.0 flag counts 2.78.0 + 2.79.0 + 2.80.0. Re-anchored for the
-    // v2.81.0-fed feed (flag exactly ONE release behind the head).
-    expect(whatsNewUnreadCount('2.80.0')).toBe(0);
-    expect(whatsNewUnreadCount('2.77.0')).toBe(3);
+    // 2.77.0 flag counts 2.78.0 + 2.79.0 + 2.80.0 + 2.81.0 (the head
+    // 2.82.0 reads 'latest', NOT 'new' — it never joins this count).
+    // Re-anchored for the v2.82.0-fed feed (flag exactly ONE release
+    // behind the head).
+    expect(whatsNewUnreadCount('2.81.0')).toBe(0);
+    expect(whatsNewUnreadCount('2.77.0')).toBe(4);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(9);
   });
 
@@ -651,6 +653,17 @@ describe('release metadata - v2.77.0', () => {
     const VIEW = readRepo('src/components/org/desk-report-view.tsx');
     expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
     expect(VIEW).toContain('data-testid="desk-report-kbd-hint"');
+  });
+});
+
+describe("What's-New 2.82.0", () => {
+  it('leads the feed with the files-everything story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.82.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.82.0'")).toBeLessThan(WN.indexOf("version: '2.81.0'"));
+    expect(WN).toContain('The report files everything');
+    expect(WN).toMatch(/File all N visits/);
+    expect(WN).toMatch(/mbumah-desk-all-/);
   });
 });
 

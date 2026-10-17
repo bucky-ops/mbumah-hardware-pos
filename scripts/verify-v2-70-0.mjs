@@ -61,7 +61,7 @@ check('Most-visited requests section', MOD.includes("row(['Employee', 'Leave typ
 check('RFC-4180: CRLF records, trailing CRLF', MOD.includes("lines.join('\\r\\n') + '\\r\\n'"));
 check('filename uses EAT wall dates (desk days, not UTC slices)', MOD.includes('const start = deskReportDayKey(new Date(report.window.start));') && MOD.includes('deskReportDayKey(new Date(new Date(report.window.end).getTime() - DAY_MS))'));
 check('filename scope: org-wide or branch slug', MOD.includes("'all-branches'") && MOD.includes('report.scope.branch.replace(/[^a-z0-9]+/gi, \'-\')'));
-check('filename never overwrites: window bounds in the name', MOD.includes('mbumah-desk-report-${report.window.days}d-${start}_${end}-${scope}.csv'));
+check('filename never overwrites: window bounds in the name (v2.82.0: the stamp is shared)', MOD.includes('mbumah-desk-report-${deskReportFileStamp(report)}.csv'));
 
 console.log('== The route: ?format=csv ==');
 const RT = read('src/app/api/org/desk-report/route.ts') ?? '';
