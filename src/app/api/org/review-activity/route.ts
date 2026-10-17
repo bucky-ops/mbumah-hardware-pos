@@ -1,5 +1,12 @@
 // GET /api/org/review-activity (v2.64.0 organization console, v2.65.0 depth,
-// v2.67.0 the morning note)
+// v2.67.0 the morning note, v2.68.0 the note rings the bell)
+//
+// v2.68.0 — the bell: the morning note grew a second voice. After deriving
+// the `yesterday` digest, the read statefully ensures (dedupe key = the
+// summarized EAT day) that a populated yesterday also lands a category-HR
+// bell row for every org-role user — same figures, same org-wide contract,
+// best-effort (a refused bell never breaks the panel). Quiet days ring
+// nothing; the strip's honest silence is the only notice a quiet desk gets.
 //
 // v2.67.0 — the digest: the payload grew a `yesterday` block, the desk's
 // morning note derived from the previous EAT calendar day of the ledger —
@@ -58,6 +65,17 @@ import { rawDb, runWithoutTenant } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
+// v2.68.0: the note's second voice — the writer that turns a populated
+// yesterday into (at most one, per day) bell rows for the org roles.
+import {
+  DESK_DIGEST_ACTION_URL,
+  DESK_DIGEST_ORG_ROLES,
+  type DeskDigestNoteFigures,
+  deskDigestDateKey,
+  deskDigestDedupeNeedle,
+  deskDigestMetadata,
+  deskDigestNoteCopy,
+} from '@/lib/hr/desk-digest-note';
 
 export const dynamic = 'force-dynamic';
 
@@ -217,6 +235,32 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
     const digestTopReviewer = [...reviewerDigest.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? null;
 
+    // v2.68.0 — the morning note rings the bell. Same figures, second
+    // voice: once per summarized day (statefully deduped on deskDigestDate),
+    // a populated yesterday also lands a bell row for every org-role user.
+    // Best-effort and swallow-safe — the panel's payload must never break
+    // because the bell refused to ring.
+    try {
+      await ensureDeskDigestNote({
+        windowStart: yesterdayStart,
+        figures: {
+          label: yesterdayLabel,
+          visits: digestVisits,
+          clears: digestClears,
+          reviewers: reviewerDigest.size,
+          requests: requestIds.size,
+          busiestBranch: digestBranches[0]
+            ? { storeName: digestBranches[0].storeName, visits: digestBranches[0].visits }
+            : null,
+          topReviewer: digestTopReviewer
+            ? { name: digestTopReviewer[0], visits: digestTopReviewer[1] }
+            : null,
+        },
+      });
+    } catch {
+      /* the bell note is best-effort by contract */
+    }
+
     return Response.json({
       success: true,
       data: {
@@ -264,6 +308,46 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
           : {}),
       },
     });
+  });
+}
+
+// v2.68.0 — the note writer. Idempotent per summarized day: the dedupe
+// needle searches the same metadata the rows are stamped with, so two
+// consoles loading the same morning ring the bell once, and a note for a
+// given day is written at most once even under concurrent loads. Reads and
+// writes go through rawDb inside the handler's runWithoutTenant scope —
+// the same org-wide contract the read itself follows (recipient rows are
+// storeId NULL: this is the organization's note, no branch's copy).
+async function ensureDeskDigestNote(params: {
+  windowStart: Date;
+  figures: DeskDigestNoteFigures;
+}): Promise<void> {
+  const copy = deskDigestNoteCopy(params.figures);
+  if (!copy) return; // quiet day — the desk's honest silence rings nothing
+  const dateKey = deskDigestDateKey(params.windowStart);
+  const existing = await rawDb.notification.findFirst({
+    where: { category: 'HR', metadata: { contains: deskDigestDedupeNeedle(dateKey) } },
+    select: { id: true },
+  });
+  if (existing) return;
+  const recipients = await rawDb.user.findMany({
+    where: { isActive: true, role: { in: [...DESK_DIGEST_ORG_ROLES] } },
+    select: { id: true },
+  });
+  if (recipients.length === 0) return;
+  await rawDb.notification.createMany({
+    data: recipients.map((u) => ({
+      storeId: null,
+      userId: u.id,
+      title: copy.title,
+      message: copy.message,
+      type: 'SYSTEM',
+      category: 'HR',
+      priority: 'NORMAL',
+      actionUrl: DESK_DIGEST_ACTION_URL,
+      actionLabel: 'Open desk activity',
+      metadata: JSON.stringify(deskDigestMetadata(dateKey, params.figures)),
+    })),
   });
 }
 

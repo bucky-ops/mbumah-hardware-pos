@@ -29,6 +29,9 @@ import {
   PAYROLL_DISBURSED_METADATA_MARKER,
   PAYROLL_PAID_METADATA_MARKER,
 } from '@/lib/hr/payroll/run-digest';
+// v2.68.0: the desk's morning-note bell rows (org roles, one per summarized
+// EAT day) — marker + the deep link the feed rows carry.
+import { DESK_DIGEST_METADATA_MARKER } from '@/lib/hr/desk-digest-note';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,7 +76,11 @@ export interface NotificationData {
   // clearing visit — "the correction you were told about was answered by
   // {reviewer}"; emerald surface, deep link → the Payroll tab's Leave desk
   // where the emerald dialog receipt carries the same story.
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
+  // v2.68.0: 'desk_digest' - ORG-facing rows for the desk's morning note
+  // ("Yesterday at the desk — {day}: N visits · M corrections answered");
+  // dawn-orange sunrise surface, one per summarized EAT day, deep link →
+  // the org dashboard's Desk activity panel (the strip it summarizes).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid' | 'desk_digest';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
@@ -399,6 +406,11 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                   { metadata: { contains: PAYROLL_DISBURSED_METADATA_MARKER } },
                   // v2.51.0: personal paid rows own their surface (section 9).
                   { metadata: { contains: PAYROLL_PAID_METADATA_MARKER } },
+                  // v2.68.0: the desk's morning-note rows own their surface
+                  // (section 9) — without this NOT entry the row renders
+                  // TWICE (fake hr_digest + real desk_digest), the exact
+                  // v2.38.0 double-render class this filter exists to stop.
+                  { metadata: { contains: DESK_DIGEST_METADATA_MARKER } },
                 ],
               },
             },
@@ -489,6 +501,9 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
                 // portal-linked employee whose payslip settled PAID, own
                 // receipt in hand, own numbers only.
                 { metadata: { contains: PAYROLL_PAID_METADATA_MARKER } },
+                // v2.68.0: the desk's morning-note bell rows (org roles, one
+                // per summarized EAT day) — the strip's story, delivered.
+                { metadata: { contains: DESK_DIGEST_METADATA_MARKER } },
               ],
             },
             orderBy: { createdAt: 'desc' },
@@ -717,6 +732,24 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
               category: 'HR',
               actionUrl: n.actionUrl ?? undefined,
               actionLabel: n.actionLabel ?? undefined,
+            });
+          } else if (kind === 'desk_digest') {
+            notifications.push({
+              id: `desk-${n.id}`,
+              type: 'desk_digest',
+              title: n.title,
+              description: n.message,
+              // v2.68.0: the morning note is news, not a warning — quiet
+              // info row; the orange dawn rail + sunrise icon carry the
+              // "yesterday, at the desk" voice. Deep link → the org
+              // dashboard panel whose strip this row summarizes.
+              severity: 'info',
+              timestamp: n.createdAt.toISOString(),
+              isRead: false,
+              targetTab: '',
+              category: 'HR',
+              actionUrl: n.actionUrl ?? '/org/dashboard',
+              actionLabel: n.actionLabel ?? 'Open desk activity',
             });
           } else {
             const declined = n.type === 'WARNING' || extras.status === 'REJECTED';

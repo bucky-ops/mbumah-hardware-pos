@@ -229,9 +229,16 @@ describe('Release metadata - v2.67.0', () => {
       mbumah: { releaseVersion: string; baseVersion: string };
       scripts: Record<string, string>;
     };
-    expect(PKG.version).toBe('2.67.0');
-    expect(PKG.mbumah.releaseVersion).toBe('2.67.0');
-    expect(PKG.mbumah.baseVersion).toBe('2.67.0');
+    // v2.68.0 precedent: prior-release version pins loosen every round —
+    // this suite must keep passing on this and later versions.
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.67.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.67.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.67.0')).toBe(true);
     expect(PKG.scripts['verify:v2-67-0']).toBe('node scripts/verify-v2-67-0.mjs');
   });
 
