@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.59.0',
+    title: 'The desk never decides on a stale correction — corrected leave requests carry their own re-check marker',
+    bullets: [
+      'A corrected leave request now wears an amber "re-check" chip until somebody actually looks at it: the chip means the last correction landed AFTER the desk\u2019s most recent visit, so the dates on screen may not be the dates you remember.',
+      'The Pending card says the number out loud — "2 need re-check" — and a new "Needs re-check" filter isolates the queue in one click, so unseen corrections can\u2019t hide inside a long list.',
+      'Opening a request stamps the desk review: the receipt appears on the dialog ("Last reviewed …"), the chip clears for every approver, and the stamp is audit-logged with whether a correction was waiting.',
+      'The marker is decided by ONE shared rule on the server, not by whichever screen you\u2019re on — a review only counts when it happens after the edit, so re-opening an old dialog never masks a fresh correction.',
+      'The stamp is a read-receipt, not a decision: nothing about the request changes when you look — approve, reject, cancel and correct keep their own guards.',
+    ],
+  },
+  {
     version: '2.58.0',
     title: 'One builder to file them all — every per-table CSV is now the governed digest file, and the org console can never shrink to one branch',
     bullets: [

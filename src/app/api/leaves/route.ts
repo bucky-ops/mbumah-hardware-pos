@@ -15,6 +15,7 @@ import {
   updateLeaveBalanceOnStatusChange,
 } from '@/lib/payroll-helpers';
 import { recomputeBalances, requestLeave, notifyLeaveRequestCancelled, editLeaveRequest } from '@/lib/hr/leave-service';
+import { needsDeskRecheck } from '@/lib/hr/leave-recheck';
 import { toNum } from '@/lib/decimal-safe';
 import {
   LEAVE_DECISION_METADATA_MARKER,
@@ -113,6 +114,12 @@ async function listLeavesHandler(
     // without fragile name comparisons.
     editedByUserId: r.editedByUserId ?? null,
     employeeUserId: r.employee.user?.id ?? null,
+    // v2.59.0: desk visit-tracking — when the desk last opened this request
+    // and whether a correction has landed since that visit (the amber
+    // "re-check" chip on the HR desk rows). Computed server-side through
+    // the one shared heuristic so the UI can never drift from the rule.
+    deskReviewedAt: r.deskReviewedAt?.toISOString() ?? null,
+    needsRecheck: needsDeskRecheck(r.editedAt, r.deskReviewedAt),
   }));
 
   // Optionally include leave balances for the filtered employees

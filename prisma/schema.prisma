@@ -1867,6 +1867,15 @@ model LeaveRequest {
   // the name columns) or never corrected.
   editedByUserId String?
 
+  // v2.59.0: desk visit-tracking for the re-check marker. Stamped the
+  // moment a desk-capable user opens the request's detail dialog (POST
+  // /api/leaves/[id]/review). Together with editedAt it powers the amber
+  // "re-check" chip: a corrected request that has NOT been opened since
+  // the last edit must never look like business as usual on the approvals
+  // desk. NULL = never reviewed by the desk (any editedAt therefore makes
+  // the row need a re-check).
+  deskReviewedAt DateTime?
+
   // Approval chain
   approvedBy String? // User ID of approver
   delegateApproverUserId String? // EMS v2.18.7: approver delegation
