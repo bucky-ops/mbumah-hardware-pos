@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
+import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/(shell)/hr/payroll/page';
 
 /** Colored payment status chips (v2.21.0 styling pass). */
@@ -212,6 +213,29 @@ export function PayrollRunDialog({
   // (Declared with the other hooks, BEFORE the `!runId` early return, so the
   // hook order is stable across renders.)
   const [rowRetryingId, setRowRetryingId] = useState<string | null>(null);
+  // v2.53.0: on-demand run digest CSV — the filing file for THIS run,
+  // downloadable from approval onward. Violet = on-demand download affordance
+  // (same family as the /hr/reports Digest CSV button), so "download the
+  // filing file" looks the same on every desk.
+  const [runCsvBusy, setRunCsvBusy] = useState(false);
+  const [runCsvNote, setRunCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportRunCsv = useCallback(async () => {
+    if (!runId || runCsvBusy) return;
+    setRunCsvBusy(true);
+    setRunCsvNote(null);
+    try {
+      const dl = await downloadRunDigestCsv(runId);
+      setRunCsvNote({
+        tone: 'ok',
+        text: `Digest CSV downloaded — ${dl.filename} (${dl.sizeLabel}). Same per-employee summary the approval and posting emails carry.`,
+      });
+    } catch (e) {
+      setRunCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setRunCsvBusy(false);
+    }
+  }, [runId, runCsvBusy]);
 
   const load = useCallback(async (id: string) => {
     setError(null);
@@ -244,6 +268,7 @@ export function PayrollRunDialog({
       setDigestNotice(null);
       setEmployeeNotices(null);
       setPaidNotices(null);
+      setRunCsvNote(null);
       void load(runId);
     }
   }, [runId, load]);
@@ -580,6 +605,40 @@ export function PayrollRunDialog({
                   </Button>
                 )}
               </div>
+              {/* v2.53.0: filing row — the run's digest CSV, on demand. Visible
+                  from approval onward (the route refuses earlier statuses
+                  honestly); violet family = download-the-filing-file affordance. */}
+              {['APPROVED', 'POSTED', 'LOCKED'].includes(status) && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void exportRunCsv()}
+                    disabled={runCsvBusy}
+                    aria-label="Download the digest CSV for this run"
+                    title="The run's filing file — the same per-employee summary the approval and posting emails carry"
+                    className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+                  >
+                    {runCsvBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                    {runCsvBusy ? 'Exporting…' : 'Digest CSV'}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Filing file for this run — header block, summary and per-employee rows, identical to the digest email attachment.
+                  </span>
+                </div>
+              )}
+              {runCsvNote && (
+                <div
+                  role="status"
+                  className={`mt-2 rounded-md border px-3 py-2 text-xs ${
+                    runCsvNote.tone === 'ok'
+                      ? 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300'
+                      : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+                  }`}
+                >
+                  {runCsvNote.text}
+                </div>
+              )}
               {status === 'PENDING_APPROVAL' && can?.approve && can.isPreparer && (
                 <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
                   Maker-checker: you prepared this run, so approval must come from a different user

@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.53.0',
+    title: 'The run\u2019s filing file, on demand — download a payroll run\u2019s digest CSV straight from the Pay Runs desk',
+    bullets: [
+      'Every payroll run that has been approved now carries a violet "Digest CSV" action: one click downloads the ready-to-file per-employee summary for that exact run — no opening emails, no waiting for a schedule.',
+      'It is the SAME file the approval and posting emails attach — header block, summary, per-employee rows, formula-injection guard and honest filename — built by one shared server builder, so the download can never disagree with the inbox.',
+      'Approved runs file the approval summary; posted and locked runs file the posting summary with the payslip-number range — the label always tells the truth about how far the run has actually travelled.',
+      'A run that has not been approved yet refuses honestly ("the run digest exists from approval onward") instead of handing you a file with "Approved by Approver" on it.',
+      'Every download is audit logged (who, which run, which variant, how many bytes) with field names only — the paperwork trail grows without exposing anyone\u2019s data.',
+    ],
+  },
+  {
     version: '2.52.0',
     title: 'Digest CSV, on demand — the filing file downloads from the report you are looking at',
     bullets: [
