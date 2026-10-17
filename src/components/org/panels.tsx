@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Activity, AlertOctagon, BadgeCheck, BellRing, History, LogIn, MessagesSquare, RadioTower, Send, X } from 'lucide-react';
+import { Activity, AlertOctagon, BadgeCheck, BellRing, Coffee, History, LogIn, MessagesSquare, RadioTower, Send, Sunrise, X } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
 import { num, timeAgo, type ActivityItem, type ConsoleAlert, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData } from './primitives';
 
@@ -407,7 +407,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
   filter: DeskActivityFilter;
   onFilterChange: (f: DeskActivityFilter) => void;
 }) {
-  const { stats, recent } = data;
+  const { stats, recent, yesterday } = data;
   const { reviewer, branch } = filter;
   const setBranch = (id: string | null) => onFilterChange({ ...filter, branch: id });
   const clearReviewer = () => onFilterChange({ ...filter, reviewer: null });
@@ -419,6 +419,82 @@ export function DeskActivity({ data, filter, onFilterChange }: {
           <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
         </h2>
         <p className="text-[10px] text-slate-400 dark:text-slate-500">Every desk visit on record, newest first · syncs every 30s</p>
+      </div>
+
+      {/* v2.67.0 — the desk's morning note. Yesterday's ledger summarized in
+          one strip: visits taken, corrections answered, reviewers who showed
+          up, requests touched, the busiest branch and the most active
+          reviewer. The note is org-wide by contract — the drill-down and
+          branch chips narrow the timeline below it, never this strip — and
+          the dawn gradient (amber morning → emerald answered) carries the
+          metaphor in both colour modes. A quiet day says so honestly. */}
+      <div
+        data-testid="desk-digest"
+        role="status"
+        aria-label="Yesterday at the desk"
+        className="mb-3 rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-white to-emerald-50/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] dark:border-amber-500/20 dark:from-amber-500/10 dark:via-slate-900 dark:to-emerald-500/10 dark:shadow-none"
+      >
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
+          <p data-testid="desk-digest-heading" className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100">
+            <Sunrise className="h-3.5 w-3.5 text-amber-500" /> Yesterday at the desk
+            <span data-testid="desk-digest-label" className="text-[10px] font-normal tabular-nums text-slate-400 dark:text-slate-500">· {yesterday.label}</span>
+          </p>
+          {yesterday.visits > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {yesterday.busiestBranch && (
+                <span
+                  data-testid="desk-digest-busiest"
+                  title={`Busiest branch yesterday: ${yesterday.busiestBranch.storeName} (${yesterday.busiestBranch.visits} visit${yesterday.busiestBranch.visits === 1 ? '' : 's'})`}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                >
+                  busiest · {shortStoreName(yesterday.busiestBranch.storeName)} {yesterday.busiestBranch.visits}
+                </span>
+              )}
+              {yesterday.topReviewer && (
+                <span
+                  data-testid="desk-digest-top-reviewer"
+                  title={`Most active reviewer yesterday: ${yesterday.topReviewer.name} (${yesterday.topReviewer.visits} visit${yesterday.topReviewer.visits === 1 ? '' : 's'})`}
+                  className={`inline-flex items-center gap-1 rounded-full border border-transparent px-2 py-0.5 text-[10px] font-medium ${avatarHue(yesterday.topReviewer.name)}`}
+                >
+                  top reviewer · {yesterday.topReviewer.name} {yesterday.topReviewer.visits}
+                </span>
+              )}
+            </div>
+          ) : null}
+        </div>
+        {yesterday.visits > 0 ? (
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
+            <div data-testid="desk-digest-visits">
+              <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.visits)}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">visit{yesterday.visits === 1 ? '' : 's'}</p>
+            </div>
+            <div data-testid="desk-digest-clears">
+              <p className="text-lg font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">{num(yesterday.clears)}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">correction{yesterday.clears === 1 ? '' : 's'} answered</p>
+            </div>
+            <div data-testid="desk-digest-reviewers">
+              <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.reviewers)}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">reviewer{yesterday.reviewers === 1 ? '' : 's'} on the desk</p>
+            </div>
+            <div data-testid="desk-digest-requests">
+              <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.requests)}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">request{yesterday.requests === 1 ? '' : 's'} touched</p>
+            </div>
+            {yesterday.branches.length > 1 ? (
+              <div data-testid="desk-digest-branches" className="ml-auto flex flex-wrap items-center gap-1">
+                {yesterday.branches.slice(0, 3).map((b) => (
+                  <span key={b.storeId} className="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] tabular-nums text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                    {shortStoreName(b.storeName)} {b.visits}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p data-testid="desk-digest-empty" className="flex items-center gap-1.5 rounded-lg border border-dashed border-amber-300/60 bg-amber-50/40 px-3 py-2 text-[11px] text-slate-500 dark:border-amber-500/20 dark:bg-amber-500/5 dark:text-slate-400">
+            <Coffee className="h-3.5 w-3.5 text-amber-500" /> The desk was quiet yesterday — no visits on record. The note fills as reviewers open leave requests.
+          </p>
+        )}
       </div>
 
       {/* Stat tiles — org-wide figures, never re-keyed by the filters */}

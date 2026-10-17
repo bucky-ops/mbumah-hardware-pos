@@ -147,8 +147,25 @@ export interface KpiSummaryData {
 // `reviewerStats` (present only when the read was drilled down) carries
 // the reviewer's org-wide totals for the drill-down header. `stats` stays
 // org-wide under every filter — the tiles never re-key silently.
+//
+// v2.67.0: the desk's morning note — `yesterday` summarizes the previous
+// EAT calendar day of the ledger (visits, corrections answered, distinct
+// reviewers/requests, busiest branch, most active reviewer, per-branch
+// breakdown). Org-wide by contract: drill-downs and branch filters narrow
+// the timeline below — the note never re-keys under the panel's filters.
 export interface DeskActivityData {
   generatedAt: string;
+  yesterday: {
+    date: string;
+    label: string;
+    visits: number;
+    clears: number;
+    reviewers: number;
+    requests: number;
+    busiestBranch: { storeName: string; visits: number } | null;
+    topReviewer: { name: string; visits: number } | null;
+    branches: Array<{ storeId: string; storeName: string; visits: number }>;
+  };
   stats: { total: number; weekVisits: number; weekClears: number; weekReviewers: number };
   recent: Array<{
     id: string;

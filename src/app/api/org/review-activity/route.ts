@@ -1,5 +1,12 @@
-// GET /api/org/review-activity (v2.64.0 organization console, v2.65.0 depth)
+// GET /api/org/review-activity (v2.64.0 organization console, v2.65.0 depth,
+// v2.67.0 the morning note)
 //
+// v2.67.0 — the digest: the payload grew a `yesterday` block, the desk's
+// morning note derived from the previous EAT calendar day of the ledger —
+// visits, corrections answered, distinct reviewers, distinct requests,
+// busiest branch, most active reviewer, per-branch breakdown. Org-wide by
+// contract: the note never re-keys under the panel's filters (same rule
+// as `stats` and `branches`).
 // The visit ledger steps into the light — the org console gets a "Desk
 // activity" audit panel over the v2.63.0 LeaveReviewVisit ledger. Every
 // desk visit is already on the record per request (the dialog's timeline);
@@ -67,6 +74,27 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
 
+    // v2.67.0 — the desk's morning note. YESTERDAY on the desk's own
+    // calendar, not a trailing 24h: Mbumah trades in Kenya (EAT, UTC+3),
+    // so the digest window is the previous EAT calendar day — a visit at
+    // 23:00 counts for the evening it happened and the note resets at
+    // local midnight, which is what "yesterday" means to the person
+    // reading it. The window is [yesterdayStart, todayStart) in epochs:
+    // today's EAT-midnight = (UTC midnight of today's EAT wall date) - 3h.
+    const EAT_OFFSET_MS = 3 * 3_600_000;
+    const eatNow = new Date(now.getTime() + EAT_OFFSET_MS);
+    const todayStart = new Date(
+      Date.UTC(eatNow.getUTCFullYear(), eatNow.getUTCMonth(), eatNow.getUTCDate()) - EAT_OFFSET_MS,
+    );
+    const yesterdayStart = new Date(todayStart.getTime() - DAY_MS);
+    // The day label is rendered from the EAT wall clock of the summarized
+    // day — computed server-side so a browser in any timezone reads the
+    // same "Fri, 16 Oct" the ledger window actually covers.
+    const eatYesterday = new Date(yesterdayStart.getTime() + EAT_OFFSET_MS);
+    const yesterdayLabel = eatYesterday.toLocaleDateString('en-GB', {
+      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
+    });
+
     // v2.65.0 drill-down params — absent/empty means "no filter". The
     // reviewer is matched on the denormalised visitedByName display name
     // (the exact string the timeline rows render), the branch on the
@@ -80,7 +108,7 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
     if (reviewer) visitWhere.visitedByName = reviewer;
     if (branch) visitWhere.leaveRequest = { storeId: branch };
 
-    const [recentRows, total, weekVisits, weekClears, weekReviewerRows, branchRows, reviewerVisits, reviewerClears, reviewerLast] = await Promise.all([
+    const [recentRows, total, weekVisits, weekClears, weekReviewerRows, branchRows, reviewerVisits, reviewerClears, reviewerLast, yesterdayRows] = await Promise.all([
       rawDb.leaveReviewVisit.findMany({
         where: visitWhere,
         orderBy: { createdAt: 'desc' },
@@ -133,6 +161,21 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
             select: { createdAt: true },
           })
         : Promise.resolve(null),
+      // v2.67.0: the morning note's raw rows — the full yesterday window
+      // (a day of visit-scale rows is small), from which every digest
+      // figure below is derived. Deliberately NOT narrowed by visitWhere:
+      // the note is the org's shared "what happened yesterday" and must
+      // never re-key under the panel's drill-down/branch filters (same
+      // contract as `stats` and `branches`).
+      rawDb.leaveReviewVisit.findMany({
+        where: { createdAt: { gte: yesterdayStart, lt: todayStart } },
+        select: {
+          visitedByName: true,
+          clearedRecheck: true,
+          leaveRequestId: true,
+          leaveRequest: { select: { storeId: true, store: { select: { name: true } } } },
+        },
+      }),
     ]);
 
     const branchCounts = new Map<string, { storeId: string; storeName: string; visits: number }>();
@@ -147,10 +190,52 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
       (a, b) => b.visits - a.visits || a.storeName.localeCompare(b.storeName),
     );
 
+    // v2.67.0 digest figures — derived from the window rows in one pass:
+    // visits, corrections answered (clearedRecheck), distinct reviewers,
+    // distinct requests, busiest branch, most active reviewer, and the
+    // per-branch breakdown the strip's mini chips render. An empty window
+    // derives to honest zeros/nulls — the UI says the desk was quiet.
+    const branchDigest = new Map<string, { storeId: string; storeName: string; visits: number }>();
+    const reviewerDigest = new Map<string, number>();
+    const requestIds = new Set<string>();
+    let digestVisits = 0;
+    let digestClears = 0;
+    for (const row of yesterdayRows) {
+      digestVisits += 1;
+      if (row.clearedRecheck) digestClears += 1;
+      requestIds.add(row.leaveRequestId);
+      reviewerDigest.set(row.visitedByName, (reviewerDigest.get(row.visitedByName) ?? 0) + 1);
+      const storeId = row.leaveRequest.storeId;
+      const storeName = row.leaveRequest.store?.name ?? storeId;
+      const entry = branchDigest.get(storeId) ?? { storeId, storeName, visits: 0 };
+      entry.visits += 1;
+      branchDigest.set(storeId, entry);
+    }
+    const digestBranches = [...branchDigest.values()].sort(
+      (a, b) => b.visits - a.visits || a.storeName.localeCompare(b.storeName),
+    );
+    const digestTopReviewer = [...reviewerDigest.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? null;
+
     return Response.json({
       success: true,
       data: {
         generatedAt: now.toISOString(),
+        yesterday: {
+          date: yesterdayStart.toISOString(),
+          label: yesterdayLabel,
+          visits: digestVisits,
+          clears: digestClears,
+          reviewers: reviewerDigest.size,
+          requests: requestIds.size,
+          busiestBranch: digestBranches[0]
+            ? { storeName: digestBranches[0].storeName, visits: digestBranches[0].visits }
+            : null,
+          topReviewer: digestTopReviewer
+            ? { name: digestTopReviewer[0], visits: digestTopReviewer[1] }
+            : null,
+          branches: digestBranches,
+        },
         stats: {
           total,
           weekVisits,

@@ -24,12 +24,12 @@ const check = (name, ok, detail) => {
 
 console.log('== Version slots ==');
 const PKG = JSON.parse(read('package.json') ?? '{}');
-check('package.json version is 2.66.0', PKG.version === '2.66.0', PKG.version ?? 'missing');
-check('mbumah.releaseVersion is 2.66.0', PKG.mbumah?.releaseVersion === '2.66.0');
-check('mbumah.baseVersion is 2.66.0', PKG.mbumah?.baseVersion === '2.66.0');
+check('package.json version is 2.66.0 or newer', PKG.version && PKG.version >= '2.66.0', PKG.version ?? 'missing');
+check('mbumah.releaseVersion is 2.66.0 or newer', PKG.mbumah?.releaseVersion && PKG.mbumah.releaseVersion >= '2.66.0');
+check('mbumah.baseVersion is 2.66.0 or newer', PKG.mbumah?.baseVersion && PKG.mbumah.baseVersion >= '2.66.0');
 check('verify:v2-66-0 script registered', PKG.scripts?.['verify:v2-66-0'] === 'node scripts/verify-v2-66-0.mjs');
 const WN = read('src/lib/whats-new.ts') ?? '';
-check('whats-new carries the 2.66.0 entry first', WN.includes("version: '2.66.0'") && WN.indexOf("version: '2.66.0'") < WN.indexOf("version: '2.65.0'"));
+check('whats-new carries the 2.66.0 entry (newer entries may lead)', WN.includes("version: '2.66.0'") && WN.indexOf("version: '2.66.0'") < WN.indexOf("version: '2.65.0'"));
 check('whats-new leads with the catch-up story', WN.includes('The console catches up on the news'));
 check('whats-new feed has grown past the modal collapse (66+ entries)', (WN.match(/version: '[^']+'/g) || []).length >= 66);
 
