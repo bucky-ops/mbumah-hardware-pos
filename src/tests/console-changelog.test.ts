@@ -365,10 +365,10 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.78.0 (latest), then 2.77.0, 2.76.0, 2.75.0 — a
-    // 2.76.0 flag means 2.77.0 arrived unread (2.78.0 is the latest,
-    // marked separately). Re-anchored for the v2.78.0-fed feed.
-    expect(whatsNewUnreadCount('2.76.0')).toBe(1);
+    // The feed leads 2.79.0 (latest — counted separately), then 2.78.0,
+    // 2.77.0 — a 2.77.0 flag means 2.78.0 arrived unread (the head claims
+    // 'latest', not 'new'). Re-anchored for the v2.79.0-fed feed.
+    expect(whatsNewUnreadCount('2.77.0')).toBe(1);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(6);
   });
 
@@ -648,5 +648,45 @@ describe('release metadata - v2.77.0', () => {
     const VIEW = readRepo('src/components/org/desk-report-view.tsx');
     expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
     expect(VIEW).toContain('data-testid="desk-report-kbd-hint"');
+  });
+});
+
+describe("What's-New 2.79.0", () => {
+  it('leads the feed with the drawers-file-themselves story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.79.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.79.0'")).toBeLessThan(WN.indexOf("version: '2.78.0'"));
+    expect(WN).toContain('The drawers file themselves');
+    expect(WN).toMatch(/RFC-4180/);
+    expect(WN).toMatch(/mbumah-desk-reviewer-/);
+  });
+});
+
+describe('release metadata - v2.79.0', () => {
+  it('bumps package.json to at least 2.79.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.79.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.79.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.79.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-79-0']).toBe('node scripts/verify-v2-79-0.mjs');
+  });
+
+  it('keeps every prior surface intact (palette, inbox, shortcuts sheet, walk, drawer CSVs)', () => {
+    const CHROME = readRepo('src/components/org/chrome.tsx');
+    expect(CHROME).toContain('data-testid="palette-mark-all-read"');
+    expect(CHROME).toContain('data-testid="shortcuts-desk-section"');
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-csv"');
+    expect(VIEW).toContain('data-testid="desk-report-request-csv"');
   });
 });

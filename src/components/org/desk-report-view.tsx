@@ -27,6 +27,14 @@
 // days — report re-keyed." The walk (j/k) covers the doors; the arrows
 // answer the chips; both speak through the same quiet channel.
 //
+// v2.79.0: the drawers file themselves. Each drawer (reviewer and request)
+// carries a small screen-only CSV button: it files exactly the slice the
+// drawer is showing, built client-side from the same one-pass ledger — no
+// second fetch, no round-trip, so the filed copy cannot disagree with the
+// screen. The footnote's scope mention now names the scope in the header's
+// own words ("Branch: …" / "All branches"), so the printed copy files with
+// its scope spoken plainly — one voice on screen, on paper, in every CSV.
+//
 // Print contract: the "Print" button isolates #desk-report-content through
 // the app's print-root pipeline (printReceiptElement clones the node into
 // #print-root; @media print shows ONLY that host) — the nav, sidebar and
@@ -59,8 +67,12 @@ import {
   deskReportReviewerLedger,
   deskReportScopeAnnouncement,
   deskReportShortStoreName,
+  deskReportSliceCsvFilename,
+  deskReportSliceToCsv,
   deskReportVisitTime,
   type DeskReportPayload,
+  type DeskReportSliceKind,
+  type DeskReportVisitEntry,
 } from '@/lib/hr/desk-report';
 
 const WINDOW_LABELS: Record<number, string> = { 7: '7 days', 14: '14 days', 30: '30 days' };
@@ -341,6 +353,33 @@ export function DeskReportView() {
       setCsvBusy(false);
     }
   }, []);
+
+  // v2.79.0 — the drawers file themselves: a client-side Blob built from
+  // the SAME ledger slice the drawer renders (no server round-trip — the
+  // data is already in hand, so the download is instant and cannot
+  // disagree). The meta rides the report page's own scope/window voice;
+  // the filename stamps subject + window + scope so filed copies never
+  // overwrite each other.
+  const downloadSliceCsv = useCallback(
+    (kind: DeskReportSliceKind, subject: string, entries: readonly DeskReportVisitEntry[]) => {
+      if (!data) return;
+      const csv = deskReportSliceToCsv(kind, subject, entries, {
+        scopeLabel: data.scope.branchName ? `Branch: ${data.scope.branchName}` : 'All branches',
+        windowLabel: data.window.label,
+        windowDays: data.window.days,
+      });
+      const blob = new Blob([csv], { type: 'text/csv; charset=utf-8' });
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = deskReportSliceCsvFilename(kind, subject, data);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    },
+    [data],
+  );
 
   const scopeLabel = data?.scope.branchName
     ? `Branch: ${data.scope.branchName}`
@@ -665,6 +704,22 @@ export function DeskReportView() {
                                   via {viaBackSubject.employeeName}&apos;s {viaBackSubject.leaveTypeName}
                                 </button>
                               ) : null}
+                              {/* v2.79.0 — the drawer files itself: this
+                                  button files exactly the slice above, from
+                                  the same ledger, in the same order (a Blob,
+                                  not a fetch — instant). It is a plain action
+                                  button, NOT a door: Tab reaches it, the j/k
+                                  walk does not. */}
+                              <button
+                                type="button"
+                                onClick={() => downloadSliceCsv('reviewer', r.name, visits)}
+                                data-testid="desk-report-reviewer-csv"
+                                title="File this reviewer's visits as CSV (RFC-4180, formula-injection guarded)"
+                                aria-label={`File ${r.name}'s visits as CSV`}
+                                className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-1.5 py-px text-[9px] font-semibold tracking-wide text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/30 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:bg-emerald-500/15"
+                              >
+                                <FileSpreadsheet className="h-2.5 w-2.5" aria-hidden /> CSV
+                              </button>
                             </p>
                             {visits.length === 0 ? (
                               <p data-testid="desk-report-reviewer-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
@@ -787,6 +842,19 @@ export function DeskReportView() {
                                   via {viaRequest}
                                 </button>
                               ) : null}
+                              {/* v2.79.0 — the request drawer files itself:
+                                  the same slice-CSV button, the request's
+                                  human title as the subject. */}
+                              <button
+                                type="button"
+                                onClick={() => downloadSliceCsv('request', `${r.employeeName}'s ${r.leaveTypeName}`, visits)}
+                                data-testid="desk-report-request-csv"
+                                title={`File ${r.employeeName}'s ${r.leaveTypeName} visits as CSV (RFC-4180, formula-injection guarded)`}
+                                aria-label={`File ${r.employeeName}'s ${r.leaveTypeName} visits as CSV`}
+                                className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-1.5 py-px text-[9px] font-semibold tracking-wide text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/30 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:bg-emerald-500/15"
+                              >
+                                <FileSpreadsheet className="h-2.5 w-2.5" aria-hidden /> CSV
+                              </button>
                             </p>
                             {visits.length === 0 ? (
                               <p data-testid="desk-report-request-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
@@ -839,7 +907,11 @@ export function DeskReportView() {
               </section>
 
               <p data-testid="desk-report-footnote" className="text-[10px] leading-relaxed text-slate-400 dark:text-slate-500">
-                Computed server-side from the leave review ledger over {data.window.label} ({data.scope.branchName ? 'branch scope' : 'org-wide scope'}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell.
+                {/* v2.79.0 — the paper names its scope: the parenthetical now
+                    rides the header's own scopeLabel voice ("Branch: …" /
+                    "All branches"), so a filed or printed copy says which
+                    scope it covers in plain words, not a shape name. */}
+                Computed server-side from the leave review ledger over {data.window.label} ({scopeLabel}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell.
                 <span data-testid="desk-report-kbd-hint" className="mt-1.5 hidden items-center gap-1 sm:flex print:hidden">
                   Keyboard:
                   <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">j</kbd>
