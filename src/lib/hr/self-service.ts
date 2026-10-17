@@ -528,6 +528,11 @@ export async function listMyLeave(employee: SelfEmployee): Promise<{
       editedAt: r.editedAt?.toISOString() ?? null,
       editedByName: r.editedByName ?? null,
       editNote: r.editNote ?? null,
+      // v2.45.0: deterministic edit provenance — when this id equals the
+      // signed-in user's id the card renders "Corrected by you" instead of
+      // "Corrected by HR" (name columns cannot be trusted for the match:
+      // the editor label falls back to an email).
+      editedByUserId: r.editedByUserId ?? null,
       // v2.42.0: supporting document (data URL within the governed cap, or
       // a legacy http(s) link) — renders the kind-coded attachment chip.
       attachmentUrl: r.attachmentUrl ?? null,

@@ -117,6 +117,8 @@ export const NotificationType = {
   LEAVE_DECISION: 'LEAVE_DECISION',
   LEAVE_REQUEST: 'LEAVE_REQUEST',
   LEAVE_CANCEL: 'LEAVE_CANCEL',
+  // v2.45.0: password-changed security notice (self-service rotation).
+  PASSWORD_CHANGED: 'PASSWORD_CHANGED',
   TEST: 'TEST',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

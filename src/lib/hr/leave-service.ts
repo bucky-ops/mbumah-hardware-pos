@@ -642,6 +642,10 @@ export async function editLeaveRequest(input: EditLeaveRequestInput) {
       ...(input.attachmentUrl !== undefined ? { attachmentUrl: input.attachmentUrl } : {}),
       editedAt: new Date(),
       editedByName: input.editedByName ?? null,
+      // v2.45.0: deterministic provenance — the acting user's id, so the
+      // portal can render "Corrected by you" vs "Corrected by HR" without
+      // comparing display names (which the email fallback breaks).
+      editedByUserId: input.actorId,
       editNote: input.editNote?.trim() ? input.editNote.trim() : null,
     },
     include: { leaveType: { select: { name: true, code: true } } },

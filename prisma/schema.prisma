@@ -1859,6 +1859,14 @@ model LeaveRequest {
   editedByName String?
   editNote   String?
 
+  // v2.45.0: deterministic provenance for the edit window — the User.id of
+  // whoever corrected the request. Name columns alone could not tell
+  // "Corrected by you" (the employee's own portal correction, v2.45.0) from
+  // "Corrected by HR" on the portal card, and the desk detail dialog could
+  // mislabel a self-corrected row. NULL = pre-v2.45.0 edit (falls back to
+  // the name columns) or never corrected.
+  editedByUserId String?
+
   // Approval chain
   approvedBy String? // User ID of approver
   delegateApproverUserId String? // EMS v2.18.7: approver delegation
