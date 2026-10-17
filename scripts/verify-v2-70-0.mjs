@@ -30,9 +30,17 @@ const check = (name, ok, detail) => {
 
 console.log('== Version slots ==');
 const PKG = JSON.parse(read('package.json') ?? '{}');
-check('package.json version is 2.70.0', PKG.version === '2.70.0', PKG.version ?? 'missing');
-check('mbumah.releaseVersion is 2.70.0', PKG.mbumah?.releaseVersion === '2.70.0');
-check('mbumah.baseVersion is 2.70.0', PKG.mbumah?.baseVersion === '2.70.0');
+// v2.71.0 precedent: prior-release version pins are looser every round —
+// this script must keep passing on this and later versions.
+const atLeast = (v, base) => {
+  if (typeof v !== 'string') return false;
+  const [a, b, c] = v.split('.').map(Number);
+  const [x, y, z] = base.split('.').map(Number);
+  return a > x || (a === x && (b > y || (b === y && c >= z)));
+};
+check('package.json version is >= 2.70.0', atLeast(PKG.version, '2.70.0'), PKG.version ?? 'missing');
+check('mbumah.releaseVersion is >= 2.70.0', atLeast(PKG.mbumah?.releaseVersion, '2.70.0'));
+check('mbumah.baseVersion is >= 2.70.0', atLeast(PKG.mbumah?.baseVersion, '2.70.0'));
 check('verify:v2-70-0 script registered', PKG.scripts?.['verify:v2-70-0'] === 'node scripts/verify-v2-70-0.mjs');
 const WN = read('src/lib/whats-new.ts') ?? '';
 check('whats-new carries the 2.70.0 entry first', WN.includes("version: '2.70.0'") && WN.indexOf("version: '2.70.0'") < WN.indexOf("version: '2.69.0'"));
