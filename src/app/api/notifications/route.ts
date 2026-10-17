@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { db, runWithTenant, runWithoutTenant } from '@/lib/db';
+import { db, rawDb, runWithTenant, runWithoutTenant } from '@/lib/db';
 import { withErrorBoundary } from '@/lib/logger';
 import { requireStoreAccess, type AuthSession } from '@/lib/auth';
 // FORMAT UNIFICATION (task 12-d): canonical en-KE KES formatter for money toasts
@@ -299,13 +299,19 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
     // from business tables) - so the bell badge and the Alerts panel silently
     // dropped security alerts. Pull the recipient's rows explicitly.
     //
-    // runWithoutTenant: security notifications are addressed BY USER ID, not
+    // rawDb (v2.57.0): security notifications are addressed BY USER ID, not
     // by branch - a SUPER_ADMIN's rows carry the OFFENDER's storeId (or null),
-    // and the tenant extension would hide them while browsing another branch.
+    // and tenant narrowing would hide them while browsing another branch.
+    // The hardened client's runWithoutTenant bypass reads AsyncLocalStorage
+    // at interceptor time and could observe the OUTER runWithTenant context
+    // inside a Next.js request (the v2.57.0 prod bug: org-wide feed sections
+    // silently vanished) - the un-intercepted rawDb client makes the
+    // user-addressed read unconditional. The WHERE clause still constrains
+    // every row to the session user, so no data crosses a visibility line.
     if (session?.userId) {
       try {
         const securityNotifications = await runWithoutTenant(() =>
-          db.notification.findMany({
+          rawDb.notification.findMany({
             where: {
               category: 'SECURITY',
               userId: session.userId,
@@ -351,8 +357,14 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
     // four leave markers; section 9 owns them.
     if (session?.userId) {
       try {
+        // rawDb (v2.57.0): the digest copies are addressed BY USER ID and
+        // org-wide schedules write storeId NULL - the leaked tenant
+        // narrowing excluded every one of them from the feed (the bell's
+        // "Email failed" tab rendered empty on prod while the rows sat in
+        // the DB). rawDb makes the user-addressed read unconditional; the
+        // WHERE clause still scopes every row to the session user.
         const hrDigestNotifications = await runWithoutTenant(() =>
-          db.notification.findMany({
+          rawDb.notification.findMany({
             where: {
               category: 'HR',
               userId: session.userId,
@@ -420,8 +432,13 @@ async function getHandler(request: NextRequest, session?: AuthSession): Promise<
     // reason as the security/digest rows.
     if (session?.userId) {
       try {
+        // rawDb (v2.57.0): same user-addressed contract as sections 7/8 -
+        // store-scoped rows survive tenant narrowing today, but an
+        // organisation-wide leave/payroll copy (storeId NULL) would vanish
+        // exactly like the digest rows did. The WHERE clause still scopes
+        // every row to the session user.
         const leaveNotifications = await runWithoutTenant(() =>
-          db.notification.findMany({
+          rawDb.notification.findMany({
             where: {
               category: 'HR',
               userId: session.userId,

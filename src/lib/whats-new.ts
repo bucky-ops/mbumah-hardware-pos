@@ -22,6 +22,18 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.57.0',
+    title: 'The bell closes the loop — a failed digest notification carries its own Retry delivery action',
+    bullets: [
+      'A failed digest copy in your bell no longer just reports the bad news: rows that name their schedule now carry an amber "Retry delivery" button right on the row.',
+      'One tap re-sends to exactly who missed it — the same server-governed re-send the schedule card uses: the missed set is derived on the server, everyone who already got the digest is never spammed, and the cadence never moves.',
+      'The outcome answers honestly, inline on the row: delivered (emerald), partial or failed (amber, pointing at the per-recipient rows), nothing to re-send (amber note, not an error), or refused when the schedule sits outside your desk.',
+      'Every retry writes a fresh manual copy into the bell, so the feed itself keeps the before-and-after — the failed attempt and the retry each keep their own row.',
+      'The "Email failed" filter tab now explains itself: a short amber note tells you the rows below carry the fix, so a broken send is one tap from discovery to repair.',
+      'Fixed a silent feed bug: organisation-wide digest copies (and security alerts) could vanish from the bell entirely — the feed now reads its user-addressed sections without store scoping, so every row addressed to you actually reaches you.',
+    ],
+  },
+  {
     version: '2.56.0',
     title: 'The sweep self-heals — a failed digest delivery gets one automatic retry before you ever hear about it',
     bullets: [

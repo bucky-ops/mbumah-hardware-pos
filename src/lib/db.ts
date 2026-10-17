@@ -772,5 +772,33 @@ function assertMutable(model: string, operation: string): void {
  */
 export const db = hardenedClient as unknown as PrismaClient;
 
+/**
+ * v2.57.0: the UN-hardened base client - no tenant injection, no
+ * immutability guards, no interceptors of any kind.
+ *
+ * WHY IT EXISTS: the hardened client's interceptors read the tenant context
+ * from AsyncLocalStorage at interceptor-execution time. Inside a Next.js
+ * production request, that read can observe the OUTER `runWithTenant`
+ * context even when the call site wrapped itself in `runWithoutTenant` -
+ * the bypass is then silently ignored and the query gets AND-narrowed to
+ * the browsing store. The notification center's user-addressed sections
+ * (SECURITY alerts / HR digest copies / leave + payroll copies) were hit
+ * exactly this way: org-wide rows carry storeId NULL, the leaked injection
+ * excluded every one of them, and whole feed sections vanished on prod
+ * while the same query ran correctly under a bare Node script.
+ *
+ * FOR WHOM: ONLY the feed reads that are addressed BY USER ID and whose
+ * WHERE clause already constrains every row to the session user
+ * (`userId = session.userId` + category + window + marker filters). Those
+ * sections were bypass-intended by contract; `rawDb` makes the bypass
+ * unconditional instead of ALS-timing-dependent. It MUST NOT be used for
+ * store-scoped business data - tenancy enforcement lives in the hardened
+ * client, and every `rawDb` call site is reviewed against that rule.
+ *
+ * Type note: same shape as `db` (the base client IS a PrismaClient), so
+ * call sites need no casting.
+ */
+export const rawDb = baseClient;
+
 // Re-export Prisma namespace + types for convenience in route handlers.
 export type { Prisma };
