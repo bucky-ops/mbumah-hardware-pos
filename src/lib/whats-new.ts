@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.86.0',
+    title: 'The handover names its waiter \u2014 a waiting run is somebody\u2019s move',
+    bullets: [
+      'A run sitting in PENDING_APPROVAL now says whose move it is: the run dialog wears a "who\u2019s next" strip right under the actions \u2014 an eligible checker reads "Waiting on you", the maker who handed it over reads the honest maker-checker boundary, everyone else reads that the run waits on an approver.',
+      'The strip carries the handover\u2019s facts: WHO submitted the run and the EAT moment they did it ("handed over by Jane Maker at 05:32 EAT") \u2014 read from the same history the timeline shows, never invented.',
+      'The runs table joins in: every waiting row wears "waiting since {EAT}" under its status badge, so a run parked in approval is visible at a glance \u2014 no opening required.',
+      'The three seats are styled apart: indigo for "waiting on you", amber for the maker-checker boundary, muted grey for spectators \u2014 light and dark.',
+      'Nothing appears without a fact: a stale response with no handover in the history hides the strip entirely \u2014 the wait is never faked.',
+    ],
+  },
+  {
     version: '2.85.0',
     title: 'The walk gains its missing step \u2014 the handover gets its own stamp',
     bullets: [

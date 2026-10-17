@@ -5,6 +5,8 @@
 // legacy tab contract (periodName, numeric money fields, detailCount) so the
 // existing POS Payroll tab keeps rendering; new consumers read the same
 // payload plus the lifecycle fields.
+// v2.86.0: submittedAt/submittedById join the additive payload — the runs
+// table shows the handover's age on every waiting run ("waiting since EAT").
 //
 // ?process=true (legacy tab "run payroll now"): the governed lifecycle never
 // auto-posts (spec rule 21 - the preparer cannot approve, and posting needs a
@@ -64,6 +66,10 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
     detailCount: r._count.details,
     journalEntryId: r.journalEntryId,
     preparedByUserId: r.preparedByUserId,
+    // v2.86.0: the handover's stamp rides the list too, so the runs table can
+    // say how long a PENDING_APPROVAL run has been waiting (additive).
+    submittedAt: r.submittedAt?.toISOString() ?? null,
+    submittedById: r.submittedById,
     approvedByUserId: r.approvedByUserId,
     periodName: r.payrollPeriod.name,
     periodStartDate: r.payrollPeriod.startDate.toISOString(),
