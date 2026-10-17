@@ -34,6 +34,7 @@ import {
   DESK_REPORT_WINDOW_DAYS,
   deskReportAvatarHue,
   deskReportDayLabel,
+  deskReportRequestLedger,
   deskReportReviewerLedger,
   deskReportShortStoreName,
   deskReportVisitTime,
@@ -62,9 +63,13 @@ export function DeskReportView() {
   // file downloads (the fetch carries the session cookie, same as the read).
   const [csvBusy, setCsvBusy] = useState(false);
   // v2.71.0: the reviewer drill-down — the name of the reviewer whose ledger
-  // is open, or null. One drawer at a time; a scope change closes it (a new
-  // window/branch re-keys the whole report, drawer included).
+  // is open, or null. v2.72.0: the request drill-down joins it — the id of
+  // the request whose visits are open. ONE drawer across the whole report:
+  // opening a reviewer closes the open request and vice versa, so the page
+  // stays calm; a scope change closes both (a new window/branch re-keys the
+  // whole report, drawers included).
   const [openReviewer, setOpenReviewer] = useState<string | null>(null);
+  const [openRequest, setOpenRequest] = useState<string | null>(null);
   const loadSeq = useRef(0);
 
   const load = useCallback(async (d: number, b: string | null) => {
@@ -108,19 +113,30 @@ export function DeskReportView() {
     if (d === days) return;
     setDays(d);
     setOpenReviewer(null);
+    setOpenRequest(null);
     void load(d, branch);
   };
   const pickBranch = (id: string | null) => {
     if (id === branch) return;
     setBranch(id);
     setOpenReviewer(null);
+    setOpenRequest(null);
     void load(days, id);
   };
 
   // v2.71.0 — the report opens its ledger: one drawer at a time, toggling
-  // the open reviewer closed again.
+  // the open reviewer closed again. v2.72.0 — the second family joins: a
+  // request door closes the reviewer drawer and a reviewer door closes the
+  // request drawer — the report holds ONE open drawer, whichever family.
   const toggleReviewer = (name: string) => {
+    setOpenRequest(null);
     setOpenReviewer((cur) => (cur === name ? null : name));
+  };
+  // v2.72.0 — the report reads the file: the same one-drawer rule for the
+  // request family.
+  const toggleRequest = (id: string) => {
+    setOpenReviewer(null);
+    setOpenRequest((cur) => (cur === id ? null : id));
   };
 
   // v2.70.0 — the report files itself: ?format=csv returns the SAME derived
@@ -475,26 +491,88 @@ export function DeskReportView() {
                 </ul>
               </section>
 
-              {/* Most-visited requests */}
+              {/* Most-visited requests — v2.72.0: every row is a door too.
+                  Click it and the request's own visits for this same window
+                  open beneath — the ledger answers WHICH days the desk came
+                  to this file, WHO came, and what they answered. */}
               <section aria-label="Most visited requests" data-testid="desk-report-top-requests">
                 <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                   <FileText className="h-3.5 w-3.5" aria-hidden /> Most-visited requests
+                  <span className="hidden font-normal normal-case tracking-normal text-slate-400 sm:inline print:hidden dark:text-slate-500">
+                    — click a request to read its visits
+                  </span>
                 </h2>
                 <ul className="space-y-1.5">
-                  {data.topRequests.map((r) => (
-                    <li key={r.requestId} data-testid="desk-report-request-row" className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-800">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
-                        {r.visits}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">
-                        <span className="font-semibold">{r.employeeName}</span>&apos;s {r.leaveTypeName}
-                        {r.storeName ? <span className="text-slate-400 dark:text-slate-500"> · {r.storeName}</span> : null}
-                      </span>
-                      <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium ${REPORT_STATUS_CHIP[r.status] ?? STATUS_CHIP_FALLBACK}`}>
-                        {r.status.toLowerCase()}
-                      </span>
-                    </li>
-                  ))}
+                  {data.topRequests.map((r) => {
+                    const open = openRequest === r.requestId;
+                    const visits = deskReportRequestLedger(data.ledger, r.requestId);
+                    return (
+                      <li key={r.requestId} data-testid="desk-report-request-row" className="px-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleRequest(r.requestId)}
+                          aria-expanded={open}
+                          data-testid="desk-report-request-toggle"
+                          className="-mx-1 flex w-full flex-wrap items-center gap-2 rounded-lg border border-transparent px-1 py-2 text-left transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-emerald-500/5"
+                        >
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
+                            {r.visits}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">
+                            <span className="font-semibold">{r.employeeName}</span>&apos;s {r.leaveTypeName}
+                            {r.storeName ? <span className="text-slate-400 dark:text-slate-500"> · {r.storeName}</span> : null}
+                          </span>
+                          <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium ${REPORT_STATUS_CHIP[r.status] ?? STATUS_CHIP_FALLBACK}`}>
+                            {r.status.toLowerCase()}
+                          </span>
+                          <ChevronDown
+                            aria-hidden
+                            className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 dark:text-slate-500 ${open ? 'rotate-180' : ''}`}
+                          />
+                        </button>
+                        {open ? (
+                          <div
+                            data-testid="desk-report-request-panel"
+                            className="mb-1.5 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2 print:hidden dark:border-emerald-500/20 dark:bg-emerald-500/5"
+                          >
+                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700/80 dark:text-emerald-300/80">
+                              {r.employeeName}&apos;s {r.leaveTypeName} · {num(visits.length)} visit{visits.length === 1 ? '' : 's'} in this window
+                            </p>
+                            {visits.length === 0 ? (
+                              <p data-testid="desk-report-request-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
+                                No visits recorded for this request in this window.
+                              </p>
+                            ) : (
+                              <ul className="space-y-1" data-testid="desk-report-request-visits">
+                                {visits.map((v) => (
+                                  <li
+                                    key={v.id}
+                                    data-testid="desk-report-request-visit"
+                                    className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md bg-white/80 px-2 py-1.5 text-xs dark:bg-slate-900/60"
+                                  >
+                                    <span className="shrink-0 font-medium tabular-nums text-slate-600 dark:text-slate-300">
+                                      {deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT
+                                    </span>
+                                    <span className="shrink-0 text-slate-400 dark:text-slate-500" title={v.storeName}>
+                                      {deskReportShortStoreName(v.storeName)}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
+                                      visited by {v.reviewer}
+                                    </span>
+                                    {v.cleared ? (
+                                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                        <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> recheck cleared
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
 

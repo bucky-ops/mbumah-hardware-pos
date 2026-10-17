@@ -10,6 +10,13 @@
 // fetch: the roll-up and the drill-down can never disagree because both come
 // from the same read.
 //
+// v2.72.0: the report reads the file — the second family of doors. A
+// most-visited request row opens ITS drawer: every visit that request drew
+// in the window, newest first, straight from the same ledger. The report
+// answers three questions now: who worked the desk (reviewers), which files
+// drew the traffic (requests), and what happened inside each — all from one
+// read, so no drawer can contradict the roll-up above it.
+//
 // WHY: the morning-note family (v2.67.0 strip, v2.68.0 bell) tells the org
 // what happened YESTERDAY; a filing desk needs more than yesterday. The
 // report answers the window questions in one printable page — totals, a
@@ -394,6 +401,22 @@ export function deskReportReviewerLedger(
   reviewer: string,
 ): DeskReportVisitEntry[] {
   return ledger.filter((entry) => entry.reviewer === reviewer);
+}
+
+/**
+ * The request drill-down (v2.72.0): one request's own visits from the
+ * ledger, in the ledger's order (newest first — the filter preserves it).
+ * The view calls this with the payload's ledger; an unknown requestId
+ * derives to an honest empty list, never an error. Every visit of the same
+ * request naturally shares its employee/type/status — those facts live on
+ * the door row; the drawer adds what the roll-up aggregates away: WHEN the
+ * desk came, WHO came, and whether the visit answered a correction.
+ */
+export function deskReportRequestLedger(
+  ledger: readonly DeskReportVisitEntry[],
+  requestId: string,
+): DeskReportVisitEntry[] {
+  return ledger.filter((entry) => entry.requestId === requestId);
 }
 
 /**
