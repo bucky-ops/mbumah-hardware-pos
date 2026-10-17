@@ -365,14 +365,14 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.87.0 (latest — counted separately), then 2.86.0,
-    // 2.85.0 — a 2.86.0 flag means 2.87.0 is the head ('latest', not 'new')
+    // The feed leads 2.88.0 (latest — counted separately), then 2.87.0,
+    // 2.86.0 — a 2.87.0 flag means 2.88.0 is the head ('latest', not 'new')
     // and nothing sits strictly between, so the honest count is 0; a
-    // 2.77.0 flag counts 2.78.0 … 2.86.0 (the head 2.87.0 reads 'latest',
+    // 2.77.0 flag counts 2.78.0 … 2.87.0 (the head 2.88.0 reads 'latest',
     // NOT 'new' — it never joins this count). Re-anchored for the
-    // v2.87.0-fed feed (flag exactly ONE release behind the head).
-    expect(whatsNewUnreadCount('2.86.0')).toBe(0);
-    expect(whatsNewUnreadCount('2.77.0')).toBe(9);
+    // v2.88.0-fed feed (flag exactly ONE release behind the head).
+    expect(whatsNewUnreadCount('2.87.0')).toBe(0);
+    expect(whatsNewUnreadCount('2.77.0')).toBe(10);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(10);
   });
 
@@ -685,6 +685,19 @@ describe("What's-New 2.86.0", () => {
     expect(WN).toMatch(/names its waiter/);
     expect(WN).toMatch(/Waiting on/);
     expect(WN).toMatch(/waiting since/);
+  });
+});
+
+describe("What's-New 2.88.0", () => {
+  it('leads the feed with the shape story — meter, door, filters', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.88.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.88.0'")).toBeLessThan(WN.indexOf("version: '2.87.0'"));
+    expect(WN).toMatch(/shows its shape/);
+    expect(WN).toMatch(/calibration meter/i);
+    expect(WN).toMatch(/View reviews/);
+    expect(WN).toMatch(/Showing X of Y/);
+    expect(WN).toMatch(/never appear in any list/i);
   });
 });
 

@@ -26,6 +26,13 @@ const CYCLE_TRANSITIONS: Record<string, readonly string[]> = {
   CLOSED: [],
 };
 
+export interface CycleStatusCounts {
+  DRAFT: number;
+  SUBMITTED: number;
+  ACKNOWLEDGED: number;
+  CALIBRATED: number;
+}
+
 export interface CycleDto {
   id: string;
   name: string;
@@ -34,6 +41,10 @@ export interface CycleDto {
   status: string;
   calibrationNotes: string | null;
   reviewCount: number;
+  // v2.88.0: the cycle shows its shape — per-status review counts so the
+  // console can render a calibration meter. Additive; counts never carry
+  // ratings or narratives (spec rule 7 stays intact).
+  statusCounts: CycleStatusCounts;
   createdAt: string;
 }
 
@@ -65,6 +76,27 @@ export async function listCycles(session: Session): Promise<CycleDto[]> {
     take: 60,
     include: { _count: { select: { reviews: true } } },
   });
+  // v2.88.0: per-cycle status counts for the calibration meter. One grouped
+  // query across the listed cycles; unknown statuses fold away (the service
+  // only ever writes the four lifecycle values). Counts match reviewCount's
+  // semantics — every non-deleted review of the cycle, not a role subset.
+  const countsByCycle = new Map<string, CycleStatusCounts>();
+  if (cycles.length > 0) {
+    const grouped = await db.performanceReview.groupBy({
+      by: ['cycleId', 'status'],
+      _count: { _all: true },
+      where: { deletedAt: null, cycleId: { in: cycles.map((c) => c.id) } },
+    });
+    for (const row of grouped) {
+      const counts =
+        countsByCycle.get(row.cycleId) ??
+        ({ DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 } as CycleStatusCounts);
+      if (row.status === 'DRAFT' || row.status === 'SUBMITTED' || row.status === 'ACKNOWLEDGED' || row.status === 'CALIBRATED') {
+        counts[row.status] = row._count._all;
+      }
+      countsByCycle.set(row.cycleId, counts);
+    }
+  }
   return cycles.map((c) => ({
     id: c.id,
     name: c.name,
@@ -73,6 +105,8 @@ export async function listCycles(session: Session): Promise<CycleDto[]> {
     status: c.status,
     calibrationNotes: c.calibrationNotes ?? null,
     reviewCount: c._count.reviews,
+    statusCounts:
+      countsByCycle.get(c.id) ?? { DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 },
     createdAt: c.createdAt.toISOString(),
   }));
 }
@@ -131,6 +165,8 @@ export async function createCycle(
     status: cycle.status,
     calibrationNotes: cycle.calibrationNotes ?? null,
     reviewCount: 0,
+    // A fresh cycle has no reviews yet — the meter starts empty.
+    statusCounts: { DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 },
     createdAt: cycle.createdAt.toISOString(),
   };
 }
