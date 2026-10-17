@@ -120,6 +120,9 @@ async function listLeavesHandler(
     // the one shared heuristic so the UI can never drift from the rule.
     deskReviewedAt: r.deskReviewedAt?.toISOString() ?? null,
     needsRecheck: needsDeskRecheck(r.editedAt, r.deskReviewedAt),
+    // v2.60.0: the receipt is personal — who stamped the last desk visit,
+    // so the dialog rail can say "Last reviewed by Grace".
+    deskReviewedByName: r.deskReviewedByName ?? null,
   }));
 
   // Optionally include leave balances for the filtered employees

@@ -1,5 +1,10 @@
 // POST /api/leaves/[id]/review - stamp the desk visit (v2.59.0).
 //
+// v2.60.0: the stamp is now PERSONAL — the reviewer's User.id + display
+// name ride alongside the timestamp, so the desk receipt says "Last
+// reviewed by Grace" and the employee's portal card shows the same
+// reviewer. A review is a person reading, not a timer firing.
+//
 // The HR desk's detail dialog is the ONE place an approver actually reads a
 // request before deciding. Opening it stamps deskReviewedAt, which powers
 // the amber "re-check" chip on rows whose last correction has not been seen
@@ -48,10 +53,24 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
 
   const reviewedAt = new Date();
 
+  // v2.60.0: resolve the reviewer's display name (the session carries only
+  // the id + email; the receipt is addressed to a human). Fallback chain:
+  // Users.name -> session email -> raw id, so the stamp NEVER fails just
+  // because a name lookup misfired.
+  const reviewer = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { name: true, email: true },
+  });
+  const reviewerName = reviewer?.name ?? session.email ?? session.userId;
+
   const updated = await db.leaveRequest.update({
     where: { id },
-    data: { deskReviewedAt: reviewedAt },
-    select: { id: true, deskReviewedAt: true, editedAt: true },
+    data: {
+      deskReviewedAt: reviewedAt,
+      deskReviewedById: session.userId,
+      deskReviewedByName: reviewerName,
+    },
+    select: { id: true, deskReviewedAt: true, deskReviewedByName: true, editedAt: true },
   });
 
   await systemLog({
@@ -65,6 +84,8 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
       leaveRequestId: id,
       requestStatus: existing.status,
       hadPendingCorrection: needsDeskRecheck(existing.editedAt, existing.deskReviewedAt),
+      reviewerId: session.userId,
+      reviewerName,
     },
   });
 
@@ -73,6 +94,7 @@ async function reviewLeaveHandler(...args: unknown[]): Promise<Response> {
     data: {
       id: updated.id,
       deskReviewedAt: updated.deskReviewedAt?.toISOString() ?? null,
+      deskReviewedByName: updated.deskReviewedByName ?? null,
       // Always false after a stamp BY CONSTRUCTION — the review just now is
       // not older than any edit that already landed. Stated explicitly so
       // the client can update its row without recomputing the rule.

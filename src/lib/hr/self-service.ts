@@ -533,6 +533,12 @@ export async function listMyLeave(employee: SelfEmployee): Promise<{
       // "Corrected by HR" (name columns cannot be trusted for the match:
       // the editor label falls back to an email).
       editedByUserId: r.editedByUserId ?? null,
+      // v2.60.0: the desk-review mirror — when the desk last opened this
+      // request (and who it was). The portal card renders the same receipt
+      // the desk sees: "seen by the desk" for a corrected request, or the
+      // honest "waiting for a desk review" while the marker is up.
+      deskReviewedAt: r.deskReviewedAt?.toISOString() ?? null,
+      deskReviewedByName: r.deskReviewedByName ?? null,
       // v2.42.0: supporting document (data URL within the governed cap, or
       // a legacy http(s) link) — renders the kind-coded attachment chip.
       attachmentUrl: r.attachmentUrl ?? null,

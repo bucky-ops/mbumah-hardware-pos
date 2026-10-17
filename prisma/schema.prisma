@@ -1876,6 +1876,15 @@ model LeaveRequest {
   // the row need a re-check).
   deskReviewedAt DateTime?
 
+  // v2.60.0: WHO stamped the review — the User.id + denormalised display
+  // name of the desk user whose visit cleared the marker. The receipt can
+  // now say "Last reviewed by Grace" instead of an anonymous timestamp,
+  // and the employee's portal card shows the same reviewer, so a corrected
+  // request reads as seen-by-a-person on BOTH sides of the desk. NULL =
+  // pre-v2.60.0 review (the visit happened, the reviewer was not recorded).
+  deskReviewedById   String?
+  deskReviewedByName String?
+
   // Approval chain
   approvedBy String? // User ID of approver
   delegateApproverUserId String? // EMS v2.18.7: approver delegation
