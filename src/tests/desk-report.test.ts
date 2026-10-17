@@ -50,6 +50,9 @@ import {
   deskReportHasRequestDoor,
   deskReportRequestLedger,
   deskReportRequestSubject,
+  deskReportDrawerParam,
+  deskReportDrawerHref,
+  deskReportResolveDeepLink,
   deskReportReviewerLedger,
   deskReportChipStep,
   deskReportScopeAnnouncement,
@@ -1783,6 +1786,195 @@ describe('release metadata - v2.79.0', () => {
     expect(VIEW).toContain("printReceiptElement('desk-report-content')");
     expect(VIEW).toContain('const clearDrawers = useCallback(');
     const MOD = readRepo('src/lib/hr/desk-report.ts');
+    expect(MOD).toContain('export function deskReportSliceToCsv(');
+    expect(MOD).toContain('export function deskReportSliceCsvFilename(');
+    expect(MOD).toContain('export function deskReportToCsv(');
+  });
+});
+
+describe('deskReportDrawerParam - the arrival link (v2.80.0)', () => {
+  it('names the drawer a link asks for, one param at a time', () => {
+    expect(deskReportDrawerParam('?reviewer=Jane%20Doe')).toEqual({ kind: 'reviewer', id: 'Jane Doe' });
+    expect(deskReportDrawerParam('?request=req-42')).toEqual({ kind: 'request', id: 'req-42' });
+  });
+
+  it('the request wins when a link carries both \u2014 one drawer on arrival, like on the page', () => {
+    expect(deskReportDrawerParam('?reviewer=Jane%20Doe&request=req-42')).toEqual({ kind: 'request', id: 'req-42' });
+  });
+
+  it('whitespace is trimmed, and a whitespace-only param is no link at all', () => {
+    expect(deskReportDrawerParam('?reviewer=%20Grace%20')).toEqual({ kind: 'reviewer', id: 'Grace' });
+    expect(deskReportDrawerParam('?reviewer=%20')).toBeNull();
+    expect(deskReportDrawerParam('?request=')).toBeNull();
+  });
+
+  it('no drawer param \u2192 null (a plain visit is not a deep link; scope params are not drawers)', () => {
+    expect(deskReportDrawerParam('')).toBeNull();
+    expect(deskReportDrawerParam('?days=14&branch=store-juja')).toBeNull();
+  });
+});
+
+describe('deskReportDrawerHref - every drawer has an address (v2.80.0)', () => {
+  it('builds the address of a drawer, encoding the subject', () => {
+    expect(deskReportDrawerHref('reviewer', 'Jane Doe')).toBe('/org/desk-report?reviewer=Jane%20Doe');
+    expect(deskReportDrawerHref('request', 'req 42')).toBe('/org/desk-report?request=req%2042');
+  });
+
+  it('round-trips through the parser (any name survives the ride)', () => {
+    const search = deskReportDrawerHref('reviewer', "David Otieno's Sick Leave").split('?')[1];
+    expect(deskReportDrawerParam(`?${search}`)).toEqual({ kind: 'reviewer', id: "David Otieno's Sick Leave" });
+  });
+});
+
+describe('deskReportResolveDeepLink - the arrival answers honestly (v2.80.0)', () => {
+  const LEDGER: DeskReportVisitEntry[] = [
+    {
+      id: 'visit-1', at: '2026-10-17T09:15:00.000Z', dayKey: '2026-10-17',
+      storeId: 'store-juja', storeName: 'MBUMAH HARDWARE - Juja Main',
+      reviewer: 'Grace Wanjiku', employeeName: 'David Otieno', leaveTypeName: 'Sick Leave',
+      status: 'PENDING', cleared: false, requestId: 'req-1',
+    },
+    {
+      id: 'visit-2', at: '2026-10-16T21:00:00.000Z', dayKey: '2026-10-17',
+      storeId: 'store-nak', storeName: 'MBUMAH HARDWARE - Nakuru Branch',
+      reviewer: 'Peter Kimani', employeeName: 'David Otieno', leaveTypeName: 'Sick Leave',
+      status: 'PENDING', cleared: false, requestId: 'req-1',
+    },
+    {
+      id: 'visit-3', at: '2026-10-15T08:00:00.000Z', dayKey: '2026-10-15',
+      storeId: 'store-juja', storeName: 'MBUMAH HARDWARE - Juja Main',
+      reviewer: 'Grace Wanjiku', employeeName: 'Mary Achieng', leaveTypeName: 'Annual Leave',
+      status: 'APPROVED', cleared: true, requestId: 'req-9',
+    },
+  ];
+  const DATA = {
+    ledger: LEDGER,
+    reviewers: [{ name: 'Grace Wanjiku', visits: 2 }, { name: 'Peter Kimani', visits: 1 }],
+    topRequests: [{ requestId: 'req-1' }],
+  };
+
+  it('a reviewer link opens the drawer and says how much the file holds', () => {
+    const r = deskReportResolveDeepLink({ kind: 'reviewer', id: 'Grace Wanjiku' }, DATA);
+    expect(r.open).toBe(true);
+    expect(r.announcement).toBe("The link opened Grace Wanjiku's file — 2 visits in this window.");
+  });
+
+  it('a reviewer outside the window is refused, by name', () => {
+    const r = deskReportResolveDeepLink({ kind: 'reviewer', id: 'Ali Mwangi' }, DATA);
+    expect(r.open).toBe(false);
+    expect(r.announcement).toBe("The link asked for Ali Mwangi's file — no visits from Ali Mwangi in this window's report.");
+  });
+
+  it('a request door opens and names the file the desk kept returning to', () => {
+    const r = deskReportResolveDeepLink({ kind: 'request', id: 'req-1' }, DATA);
+    expect(r.open).toBe(true);
+    expect(r.announcement).toBe("The link opened David Otieno's Sick Leave.");
+  });
+
+  it('a doorless file with visits is refused WITH the reason: the cap speaks', () => {
+    const r = deskReportResolveDeepLink({ kind: 'request', id: 'req-9' }, DATA);
+    expect(r.open).toBe(false);
+    expect(r.announcement).toBe(`The link's file drew 1 visit in this window but is not among the report's ${DESK_REPORT_TOP_REQUESTS_LIMIT} most-visited — no drawer for it here.`);
+  });
+
+  it('a file that drew no visits is refused honestly, and the ledger is never disturbed', () => {
+    const frozen = Object.freeze([...DATA.ledger]) as readonly DeskReportVisitEntry[];
+    const r = deskReportResolveDeepLink({ kind: 'request', id: 'req-404' }, { ...DATA, ledger: frozen });
+    expect(r.open).toBe(false);
+    expect(r.announcement).toBe('The link\u2019s file drew no visits in this window — the report has no drawer for it.');
+    expect(frozen[0].id).toBe('visit-1');
+  });
+});
+
+describe('the deep links in the view (v2.80.0)', () => {
+  const readRepo2 = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
+  const VIEW = readRepo2('src/components/org/desk-report-view.tsx');
+
+  it('the view imports the parser, the href builder and the resolver', () => {
+    expect(VIEW).toContain('deskReportDrawerHref,');
+    expect(VIEW).toContain('deskReportDrawerParam,');
+    expect(VIEW).toContain('deskReportResolveDeepLink,');
+  });
+
+  it('the arrival link is parsed at resolve time, one-shot by contract', () => {
+    // The gate is a one-shot ref; the LINK is read at the first read — a
+    // client-side navigation (the desk panel's Link) updates the address
+    // bar AFTER the new page renders, so a mount-time parse could see the
+    // old address and miss the link.
+    expect(VIEW).toContain('const deepLinkOpen = useRef(true);');
+    const body = VIEW.split('const resolve = setTimeout(')[1].split('}, 0);')[0];
+    expect(body).toContain('deepLinkOpen.current = false;');
+    expect(body).toContain('const link = deskReportDrawerParam(window.location.search);');
+    expect(body).toContain('if (!link) return; // no link in the address: a plain visit, nothing to answer');
+  });
+
+  it('the arrival resolves against the same read: open names the family, refusal strips the address', () => {
+    const body = VIEW.split('const resolve = setTimeout(')[1].split('}, 0);')[0];
+    expect(body).toContain('deskReportResolveDeepLink(link, data)');
+    expect(body).toContain("if (link.kind === 'reviewer') setOpenReviewer(link.id);");
+    expect(body).toContain('else setOpenRequest(link.id);');
+    expect(body).toContain("history.replaceState(null, '', '/org/desk-report')");
+    expect(body).toContain('setWalkAnnouncement(result.announcement)');
+  });
+
+  it('every drawer has an address: the URL mirrors the open drawer, either family, base when closed', () => {
+    const mirror = VIEW.split("v2.80.0 — every drawer has an address")[1].split('}, [openReviewer, openRequest]);')[0];
+    expect(mirror).toContain("deskReportDrawerHref('request', openRequest)");
+    expect(mirror).toContain("deskReportDrawerHref('reviewer', openReviewer)");
+    expect(mirror).toContain(": '/org/desk-report';");
+    expect(mirror).toContain('history.replaceState(null, \'\', href)');
+    expect(mirror).toContain('if (deepLinkOpen.current) return;');
+    // The mirror never navigates — replaceState only.
+    expect(mirror).not.toContain('history.pushState');
+    expect(mirror).not.toContain('window.location.assign');
+  });
+
+  it('the footnote says the drawer rides the address bar', () => {
+    const foot = VIEW.split('data-testid="desk-report-footnote"')[1].split('</p>')[0];
+    expect(foot).toContain('An open drawer rides the address bar — copy the URL and the same file opens for whoever follows.');
+  });
+
+  it('the deep links add no doors \u2014 the walk stays 6', () => {
+    expect((VIEW.match(/data-desk-door\n/g) || []).length).toBe(6);
+  });
+});
+
+describe('release metadata - v2.80.0', () => {
+  it('bumps package.json to at least 2.80.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.80.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.80.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.80.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-80-0']).toBe('node scripts/verify-v2-80-0.mjs');
+  });
+
+  it('whats-new 2.80.0 leads the feed with the addressable story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.80.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.80.0'")).toBeLessThan(WN.indexOf("version: '2.79.0'"));
+    expect(WN).toContain('The report is addressable');
+  });
+
+  it('keeps every prior surface intact (walk, announcers, drawers, scope chips, report CSV, filing drawers)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
+    expect(VIEW).toContain('data-testid="desk-report-scope-announcer"');
+    expect(VIEW).toContain('data-testid="desk-report-csv"');
+    expect(VIEW).toContain("printReceiptElement('desk-report-content')");
+    expect(VIEW).toContain('const clearDrawers = useCallback(');
+    const MOD = readRepo('src/lib/hr/desk-report.ts');
+    expect(MOD).toContain('export function deskReportDrawerParam(');
+    expect(MOD).toContain('export function deskReportDrawerHref(');
+    expect(MOD).toContain('export function deskReportResolveDeepLink(');
     expect(MOD).toContain('export function deskReportSliceToCsv(');
     expect(MOD).toContain('export function deskReportSliceCsvFilename(');
     expect(MOD).toContain('export function deskReportToCsv(');

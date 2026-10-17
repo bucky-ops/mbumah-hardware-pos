@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.80.0',
+    title: 'The report is addressable \u2014 an open drawer rides the URL, and the desk hands the report a name',
+    bullets: [
+      'Every drawer in the desk report has an address now: open a reviewer or a request and the URL carries it (?reviewer=\u2026 / ?request=\u2026) \u2014 copy the address and the same file opens for whoever follows.',
+      'The address tells the truth both ways: close the drawer \u2014 by click, Escape, a cross-jump or a scope re-key \u2014 and the URL forgets it; the bar never claims a drawer the page is not showing.',
+      'The desk activity panel flows into the report: narrow the ledger to one reviewer and the drill-down bar grows a "Their file in the report" door that opens the report with that drawer already read.',
+      'A deep link answers honestly: it resolves against the same read the report renders, and a link whose subject is outside the window says so out loud \u2014 no silent nothing, no half-opened drawer.',
+      'Refusals are named, not swallowed: a file that drew visits but sits outside the five most-visited says exactly that \u2014 the cap is by design, and now it speaks.',
+    ],
+  },
+  {
     version: '2.79.0',
     title: 'The drawers file themselves \u2014 file a reviewer\u2019s or a request\u2019s visits straight from the desk report',
     bullets: [

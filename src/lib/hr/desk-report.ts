@@ -42,6 +42,16 @@
 // what the desk is looking at. One column voice for both families — the
 // ledger holds every fact either way.
 //
+// v2.80.0: the report is addressable. An open drawer now rides the URL —
+// the desk panel's drill-down hands a reviewer's name to the report as a
+// link (?reviewer=…), the report opens that drawer on arrival, and any
+// open drawer is reflected back into the address bar (?request=… /
+// ?reviewer=…), so the state in front of you is the state you can share.
+// The parser and the resolver live here, pure: one decision made against
+// the same read the report renders, refusals named honestly (a doorless
+// file says exactly that), and the one-drawer rule holds on arrival — a
+// link asks for ONE drawer, never two.
+//
 // WHY: the morning-note family (v2.67.0 strip, v2.68.0 bell) tells the org
 // what happened YESTERDAY; a filing desk needs more than yesterday. The
 // report answers the window questions in one printable page — totals, a
@@ -521,6 +531,102 @@ export function deskReportScopeAnnouncement(
 ): string {
   if (kind === 'window') return `Window: ${label} — report re-keyed.`;
   return label ? `Branch: ${label} — report re-keyed.` : 'All branches — report re-keyed.';
+}
+
+// ── the deep links (v2.80.0) ──────────────────────────────────────────────
+
+/**
+ * The drawer a deep link asks for (v2.80.0). Reads a location.search-style
+ * string ("?request=42" / "?reviewer=Jane Doe") and names the ONE drawer it
+ * opens — the same one-drawer rule the page itself follows, so a link that
+ * carries both params resolves to the more specific subject (the request)
+ * and never asks the report for two drawers. Whitespace-only or missing
+ * params are no link at all; scope params (days, branch) are not drawers
+ * and are ignored.
+ */
+export function deskReportDrawerParam(
+  search: string,
+): { kind: DeskReportSliceKind; id: string } | null {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const request = params.get('request')?.trim();
+  if (request) return { kind: 'request', id: request };
+  const reviewer = params.get('reviewer')?.trim();
+  if (reviewer) return { kind: 'reviewer', id: reviewer };
+  return null;
+}
+
+/**
+ * The address of a drawer (v2.80.0) — the href both directions of the deep
+ * link ride: the desk panel's per-reviewer door builds one to hand a name
+ * into the report, and the report reflects every open drawer back into the
+ * address bar, so the URL always names the drawer on screen.
+ */
+export function deskReportDrawerHref(
+  kind: DeskReportSliceKind,
+  id: string,
+): string {
+  return `/org/desk-report?${kind}=${encodeURIComponent(id)}`;
+}
+
+/**
+ * What a deep link resolves to (v2.80.0) — whether the arrival opens the
+ * drawer, and the one sentence the page says about it. The decision is made
+ * against the SAME read the report renders, so the opened drawer cannot
+ * disagree with the page above it; every refusal is named, not swallowed.
+ */
+export interface DeskReportDeepLinkResult {
+  open: boolean;
+  announcement: string;
+}
+
+/**
+ * The arrival's verdict (v2.80.0). A reviewer link opens when the reviewer
+ * has a roll-up row (a door) in this window; a request link opens only when
+ * the file is one of the most-visited doors — the cap is by design (the
+ * section is a digest, not the whole ledger), so a doorless file with
+ * visits in the ledger is refused WITH that fact named. Pure: same
+ * constraint as every helper here — unit tests run without any mocking.
+ */
+export function deskReportResolveDeepLink(
+  link: { kind: DeskReportSliceKind; id: string },
+  data: {
+    ledger: readonly DeskReportVisitEntry[];
+    reviewers: readonly { name: string; visits: number }[];
+    topRequests: readonly { requestId: string }[];
+  },
+): DeskReportDeepLinkResult {
+  if (link.kind === 'reviewer') {
+    const row = data.reviewers.find((r) => r.name === link.id);
+    if (row) {
+      return {
+        open: true,
+        announcement: `The link opened ${link.id}'s file — ${row.visits} ${row.visits === 1 ? 'visit' : 'visits'} in this window.`,
+      };
+    }
+    return {
+      open: false,
+      announcement: `The link asked for ${link.id}'s file — no visits from ${link.id} in this window's report.`,
+    };
+  }
+  if (deskReportHasRequestDoor(data.topRequests, link.id)) {
+    const subject = deskReportRequestSubject(data.ledger, link.id);
+    return {
+      open: true,
+      announcement: subject
+        ? `The link opened ${subject.employeeName}'s ${subject.leaveTypeName}.`
+        : 'The link opened this file.',
+    };
+  }
+  const visits = deskReportRequestLedger(data.ledger, link.id).length;
+  return visits > 0
+    ? {
+        open: false,
+        announcement: `The link's file drew ${visits} ${visits === 1 ? 'visit' : 'visits'} in this window but is not among the report's ${DESK_REPORT_TOP_REQUESTS_LIMIT} most-visited — no drawer for it here.`,
+      }
+    : {
+        open: false,
+        announcement: 'The link\u2019s file drew no visits in this window — the report has no drawer for it.',
+      };
 }
 
 /**
