@@ -65,7 +65,10 @@ export type LeaveNotificationKind =
   | 'leave_corrected'
   // v2.47.0: payroll-run approval digest rows share this feed section
   // (marker 'payroll_approved' lives in payroll/run-digest.ts).
-  | 'payroll_approved';
+  | 'payroll_approved'
+  // v2.48.0: payroll-run posting digest rows share the same section
+  // (marker 'payroll_posted' lives in payroll/run-digest.ts).
+  | 'payroll_posted';
 
 export type LeaveDecisionStatus = 'APPROVED' | 'REJECTED';
 
@@ -235,7 +238,8 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
       rec.kind === 'leave_on_behalf' ||
       rec.kind === 'leave_edited' ||
       rec.kind === 'leave_corrected' ||
-      rec.kind === 'payroll_approved'
+      rec.kind === 'payroll_approved' ||
+      rec.kind === 'payroll_posted'
     )
       out.kind = rec.kind;
     if (typeof rec.leaveRequestId === 'string') out.leaveRequestId = rec.leaveRequestId;

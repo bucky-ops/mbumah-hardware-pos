@@ -185,6 +185,9 @@ export const NotificationType = {
   PASSWORD_CHANGED: 'PASSWORD_CHANGED',
   // v2.47.0: payroll-run approval digest (maker + payroll group, CSV attached).
   PAYROLL_APPROVED: 'PAYROLL_APPROVED',
+  // v2.48.0: payroll-run posting digest (journal + payslips issued; same
+  // audience minus the poster, CSV attached).
+  PAYROLL_POSTED: 'PAYROLL_POSTED',
   TEST: 'TEST',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

@@ -2896,7 +2896,12 @@ export interface NotificationItem {
   // "Corrected by HR" chip, portal link).
   // v2.43.0: 'leave_corrected' - approver-facing rows for the same
   // corrections (amber file-pen, "Corrected - re-review" chip, Payroll desk).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected';
+  // v2.47.0 (QA fix in v2.48.0): 'payroll_approved' - the approval digest
+  // rows the API has returned since v2.47.0; the type union previously
+  // missed them, so the notification center rendered them without an icon.
+  // v2.48.0: 'payroll_posted' - posting digest rows (journal + payslips
+  // issued; sky surface, same desk).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'payroll_approved' | 'payroll_posted';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
