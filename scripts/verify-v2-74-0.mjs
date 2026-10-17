@@ -69,7 +69,7 @@ check('the back guards read the via state before acting', /if \(!viaRequest\) re
 const toggleReviewer = VIEW.split('const toggleReviewer =')[1]?.split('// v2.72.0 — the report reads the file')[0] ?? '';
 const toggleRequest = VIEW.split('const toggleRequest =')[1]?.split('// v2.74.0 — the cross-links')[0] ?? '';
 check('plain toggles clear the memory', toggleReviewer.includes('setViaRequest(null);') && toggleReviewer.includes('setViaReviewer(null);') && toggleRequest.includes('setViaRequest(null);') && toggleRequest.includes('setViaReviewer(null);'));
-const clearDrawers = VIEW.split('const clearDrawers = () => {')[1]?.split('const toggleReviewer =')[0] ?? '';
+const clearDrawers = VIEW.split('const clearDrawers = useCallback(() => {')[1]?.split('const toggleReviewer =')[0] ?? ''; // memoized since v2.76.0
 check('the shared reset clears drawers AND memory', clearDrawers.includes('setOpenReviewer(null);') && clearDrawers.includes('setOpenRequest(null);') && clearDrawers.includes('setViaRequest(null);') && clearDrawers.includes('setViaReviewer(null);'));
 const pickDays = VIEW.split('const pickDays =')[1]?.split('const pickBranch =')[0] ?? '';
 const pickBranch = VIEW.split('const pickBranch =')[1]?.split('// v2.71.0')[0] ?? '';
@@ -100,7 +100,7 @@ check('the CSV voice survives', VIEW.includes('data-testid="desk-report-csv"'));
 check('the print pipeline survives', VIEW.includes("printReceiptElement('desk-report-content')"));
 check('the one-pass derivation survives', MOD.includes('export function deskReportReviewerLedger(') && MOD.includes('export function deskReportRequestLedger('));
 const CHROME = read('src/components/org/chrome.tsx') ?? '';
-check('the palette still knows the releases', CHROME.includes('data-testid={`palette-release-${r.version}`}') && CHROME.includes('<CommandGroup heading="Jump to release">'));
+check('the palette still knows the releases', CHROME.includes('data-testid={`palette-release-${r.version}`}') && CHROME.includes('Jump to release')); // heading grew the unread counter in v2.75.0
 check('the changelog still lands its jumps', CHROME.includes('data-testid="changelog-jump-pill"'));
 
 console.log('');

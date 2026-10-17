@@ -67,7 +67,29 @@ export function whatsNewUnreadCount(seenVersion: string | null): number {
   return WHATS_NEW.filter((e) => whatsNewReadState(e.version, seenVersion) === 'new').length;
 }
 
+/**
+ * The version a "mark all read" write should stamp (v2.76.0): the feed's
+ * head — the newest release the changelog knows. Stamping it marks the
+ * whole feed read, the same one-truth write the changelog's "Got it"
+ * performs against the shared mbt_seen_version flag. An empty feed has
+ * nothing to stamp → null (and the palette's action simply never renders).
+ */
+export function whatsNewMarkAllTarget(): string | null {
+  return WHATS_NEW[0]?.version ?? null;
+}
+
 export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    version: '2.76.0',
+    title: 'The shortcuts arrive — mark all releases read from the palette, and walk the report doors with j / k',
+    bullets: [
+      'The release inbox clears in place: with unread releases on the board, cmd+K now offers "Mark all releases read" — it writes the same seen flag the changelog\u2019s "Got it" writes, and the palette stays open so you watch the counter and the NEW chips clear.',
+      'The action only exists when there is something to clear — no unread, no button, exactly the honesty rule the inbox already follows.',
+      'The desk report answers the keyboard: j walks the doors in reading order, k walks back, and both wrap — reviewer rows, request rows, every cross-link inside a drawer, and the via chips.',
+      'Escape closes the open drawer and its "via" memory — one key returns the report to its quiet state.',
+      'The keyboard hint lives on screen only (j / k · esc), and the print contract is untouched — the paper never learns about keyboards.',
+    ],
+  },
   {
     version: '2.75.0',
     title: 'The palette knows what you\u2019ve read — release items wear latest/new/seen, and the group counts the unread',

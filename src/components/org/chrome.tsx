@@ -12,9 +12,9 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { ChevronDown, ChevronUp, CloudOff, ExternalLink, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
 import { APP_BUILD_LABEL, APP_VERSION } from '@/lib/version';
-import { WHATS_NEW, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';
+import { WHATS_NEW, whatsNewMarkAllTarget, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';
 import { HealthGauge, kes, type KpiSummaryData, type StoreRow } from './primitives';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 
@@ -267,6 +267,23 @@ export function CommandPalette({ open, onOpenChange, stores, actions, onJumpToRe
     () => (seenState.read ? whatsNewUnreadCount(seenState.value) : 0),
     [seenState],
   );
+  // v2.76.0: the inbox clears in place. With unread releases on the board,
+  // the action stamps the SAME shared flag the changelog's "Got it" writes
+  // — the feed's head, via whatsNewMarkAllTarget — and updates the local
+  // read state immediately, so the counter and the NEW chips clear while
+  // you watch. The palette STAYS OPEN: the effect of the write is the
+  // feedback. If storage is unavailable nothing was written, so nothing is
+  // claimed; and with nothing unread the action simply never renders.
+  const markAllRead = () => {
+    const target = whatsNewMarkAllTarget();
+    if (!target) return;
+    try {
+      localStorage.setItem(SEEN_VERSION_KEY, target);
+    } catch {
+      return; // storage unavailable — nothing was written, claim nothing
+    }
+    setSeenState({ read: true, value: target });
+  };
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput placeholder="Search actions, stores, releases..." />
@@ -306,6 +323,19 @@ export function CommandPalette({ open, onOpenChange, stores, actions, onJumpToRe
                 </>
               }
             >
+              {seenState.read && unreadCount > 0 && whatsNewMarkAllTarget() ? (
+                <CommandItem
+                  data-testid="palette-mark-all-read"
+                  value="mark all releases read inbox got it catch up"
+                  onSelect={markAllRead}
+                  title="Writes the same seen flag the changelog’s “Got it” writes — the palette stays open"
+                  className="aria-selected:bg-emerald-50 aria-selected:text-emerald-900 dark:aria-selected:bg-emerald-500/10 dark:aria-selected:text-emerald-100"
+                >
+                  <CheckCheck className="mr-2 h-3.5 w-3.5 shrink-0 text-emerald-500 dark:text-emerald-400" />
+                  <span className="min-w-0 flex-1 truncate">Mark all releases read</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-slate-400">stays open</span>
+                </CommandItem>
+              ) : null}
               {releaseActions.map((r) => (
                 <CommandItem
                   key={r.version}

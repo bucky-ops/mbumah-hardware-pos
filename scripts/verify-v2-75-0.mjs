@@ -56,7 +56,7 @@ check('whatsNewUnreadCount filters the feed', WN.includes('export function whats
 
 console.log('== The palette: a release inbox, not just a jump list ==');
 const CHROME = read('src/components/org/chrome.tsx') ?? '';
-check('the palette imports the reading-state helpers', CHROME.includes("import { WHATS_NEW, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';"));
+check('the palette imports the reading-state helpers', CHROME.includes("from '@/lib/whats-new';") && CHROME.includes('WHATS_NEW') && CHROME.includes('whatsNewReadState') && CHROME.includes('whatsNewUnreadCount')); // import list may grow (v2.76.0 added the mark-all stamp)
 check('the shared flag is read when the palette OPENS', CHROME.includes('const [seenState, setSeenState] = useState<{ read: boolean; value: string | null }>({ read: false, value: null });') && CHROME.includes('localStorage.getItem(SEEN_VERSION_KEY)'));
 check('the read is deferred (no setState inside the effect body)', /if \(!open\) return;\s*\n\s*const id = window\.setTimeout/.test(CHROME));
 check('the flag is re-read on every open (Got-it lands on next cmd+K)', /localStorage\.getItem\(SEEN_VERSION_KEY\)[\s\S]{0,220}/.test(CHROME) && CHROME.includes('[open]);'));

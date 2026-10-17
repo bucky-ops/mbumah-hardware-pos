@@ -35,7 +35,7 @@ check('whats-new feed has grown past the modal collapse (66+ entries)', (WN.matc
 
 console.log('== Modal contract: the real release feed ==');
 const CHROME = read('src/components/org/chrome.tsx') ?? '';
-check('WHATS_NEW imported (single source of truth)', CHROME.includes("import { WHATS_NEW, type WhatsNewEntry } from '@/lib/whats-new';"));
+check('WHATS_NEW imported (single source of truth)', CHROME.includes("WHATS_NEW") && CHROME.includes("from '@/lib/whats-new';")); // import list grows per release (reading-state helpers v2.75/v2.76)
 check('APP_VERSION imported', CHROME.includes("import { APP_BUILD_LABEL, APP_VERSION } from '@/lib/version';"));
 check('the static v2.18.3-era story is gone', !CHROME.includes('Organization Console joins the unified lineage'));
 check('feed split newest-first (latest + older)', /const \[latest, \.\.\.older\] = WHATS_NEW;/.test(CHROME));

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WHATS_NEW, compareWhatsNewVersions, whatsNewReadState, whatsNewUnreadCount } from '@/lib/whats-new';
+import { WHATS_NEW, compareWhatsNewVersions, whatsNewMarkAllTarget, whatsNewReadState, whatsNewUnreadCount } from '@/lib/whats-new';
 
 /**
  * v2.66.0 contracts — the console catches up on the news.
@@ -37,8 +37,12 @@ describe('ChangelogModal - the console tells the whole release story', () => {
   const CHROME = readRepo('src/components/org/chrome.tsx');
 
   it('imports the shared WHATS_NEW feed (single source of truth)', () => {
-    // v2.75.0 — the reading-state helpers ride the same import.
-    expect(CHROME).toContain("import { WHATS_NEW, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';");
+    // v2.75.0 — the reading-state helpers ride the same import; v2.76.0
+    // added the mark-all stamp, so the pin checks membership, not spelling.
+    expect(CHROME).toContain("from '@/lib/whats-new';");
+    expect(CHROME).toContain('WHATS_NEW');
+    expect(CHROME).toContain('whatsNewReadState');
+    expect(CHROME).toContain('whatsNewUnreadCount');
   });
 
   it('imports APP_VERSION alongside the build label', () => {
@@ -361,9 +365,10 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.75.0 (latest), then 2.74.0, 2.73.0 — a 2.73.0 flag
-    // means 2.74.0 arrived unread (2.75.0 is the latest, marked separately).
-    expect(whatsNewUnreadCount('2.73.0')).toBe(1);
+    // The feed leads 2.76.0 (latest), then 2.75.0, 2.74.0, 2.73.0 — a
+    // 2.74.0 flag means 2.75.0 arrived unread (2.76.0 is the latest,
+    // marked separately).
+    expect(whatsNewUnreadCount('2.74.0')).toBe(1);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(4);
   });
 
@@ -470,5 +475,103 @@ describe('release metadata - v2.75.0', () => {
     const VIEW = readRepo('src/components/org/desk-report-view.tsx');
     expect(VIEW).toContain('data-testid="desk-report-request-visit-reviewer"');
     expect(VIEW).toContain('data-testid="desk-report-reviewer-visit-request"');
+  });
+});
+
+// ── 8. the inbox clears in place (v2.76.0) ──────────────────────────
+
+describe('whatsNewMarkAllTarget - the stamp for mark-all-read (v2.76.0)', () => {
+  it('is the feed head — the same truth the latest badge wears', () => {
+    expect(whatsNewMarkAllTarget()).toBe(WHATS_NEW[0].version);
+    expect(whatsNewMarkAllTarget()).toBe('2.76.0');
+  });
+});
+
+describe('CommandPalette - mark all read (v2.76.0)', () => {
+  const CHROME = readRepo('src/components/org/chrome.tsx');
+
+  it('offers the action only when there is something to clear (flag read, unread > 0, a target exists)', () => {
+    expect(CHROME).toContain('{seenState.read && unreadCount > 0 && whatsNewMarkAllTarget() ? (');
+  });
+
+  it('writes the SAME shared flag, stamped with the feed head, and claims it immediately', () => {
+    const handler = CHROME.split('const markAllRead = () => {')[1].split('  };')[0];
+    expect(handler).toContain('whatsNewMarkAllTarget()');
+    expect(handler).toContain('if (!target) return;');
+    expect(handler).toContain('localStorage.setItem(SEEN_VERSION_KEY, target)');
+    expect(handler).toContain('setSeenState({ read: true, value: target })');
+  });
+
+  it('storage failure claims nothing (the catch returns before any state moves)', () => {
+    const handler = CHROME.split('const markAllRead = () => {')[1].split('  };')[0];
+    expect(handler).toContain('catch {');
+    expect(handler.indexOf('return; // storage unavailable')).toBeGreaterThan(-1);
+    expect(handler.indexOf('setSeenState')).toBeGreaterThan(handler.indexOf('localStorage.setItem'));
+  });
+
+  it('stays open on select — you watch the counter and the NEW chips clear', () => {
+    const item = CHROME.split('data-testid="palette-mark-all-read"')[1].split('</CommandItem>')[0];
+    expect(item).toContain('onSelect={markAllRead}');
+    expect(item).not.toContain('onOpenChange(false)');
+  });
+
+  it('the action carries the inbox family dress (CheckCheck, emerald icon, honest hint)', () => {
+    const item = CHROME.split('data-testid="palette-mark-all-read"')[1].split('</CommandItem>')[0];
+    expect(item).toContain('CheckCheck');
+    expect(item).toContain('Mark all releases read');
+    expect(item).toContain('text-emerald-500 dark:text-emerald-400');
+    expect(item).toContain('stays open');
+    expect(item).toContain('value="mark all releases read inbox got it catch up"');
+  });
+
+  it('sits inside the release group, ahead of the release items', () => {
+    const action = CHROME.indexOf('data-testid="palette-mark-all-read"');
+    expect(action).toBeGreaterThan(CHROME.indexOf('Jump to release'));
+    expect(action).toBeLessThan(CHROME.indexOf('data-testid={`palette-release-${r.version}`}'));
+  });
+
+  it('the action explains itself on hover', () => {
+    expect(CHROME).toContain('Writes the same seen flag the changelog’s “Got it” writes — the palette stays open');
+  });
+});
+
+describe("What's-New 2.76.0", () => {
+  it('leads the feed with the shortcuts story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.76.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.76.0'")).toBeLessThan(WN.indexOf("version: '2.75.0'"));
+    expect(WN).toContain('The shortcuts arrive');
+    expect(WN).toMatch(/Mark all releases read/);
+    expect(WN).toMatch(/j walks the doors/);
+  });
+});
+
+describe('release metadata - v2.76.0', () => {
+  it('bumps package.json to at least 2.76.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.76.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.76.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.76.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-76-0']).toBe('node scripts/verify-v2-76-0.mjs');
+  });
+
+  it('keeps every prior surface intact (release inbox, jump group, cross-links, drawers)', () => {
+    const CHROME = readRepo('src/components/org/chrome.tsx');
+    expect(CHROME).toMatch(/data-testid=\{`palette-release-state-\$\{r\.version\}`\}/);
+    expect(CHROME).toContain('data-testid="palette-release-unread"');
+    expect(CHROME).toContain("state: seenState.read ? whatsNewReadState(e.version, seenState.value) : ('seen' as const),");
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-request-toggle"');
+    expect(VIEW).toContain('data-testid="desk-report-reviewer-toggle"');
+    expect(VIEW).toContain('printReceiptElement(\'desk-report-content\')');
   });
 });
