@@ -833,10 +833,14 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                                     {d.resend ? (
                                       <span
                                         className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                                        title="This envelope was the re-send to the recipients the previous delivery missed"
+                                        title={
+                                          d.manual
+                                            ? 'This envelope was the re-send to the recipients the previous delivery missed'
+                                            : 'This envelope was the sweep\u2019s own automatic retry to the recipients the first attempt missed'
+                                        }
                                       >
                                         <RotateCcw className="h-2.5 w-2.5" aria-hidden />
-                                        re-send
+                                        {d.manual ? 're-send' : 'auto-retry'}
                                       </span>
                                     ) : null}
                                     {d.csvFilename ? (

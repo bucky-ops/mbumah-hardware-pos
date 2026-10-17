@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.56.0',
+    title: 'The sweep self-heals — a failed digest delivery gets one automatic retry before you ever hear about it',
+    bullets: [
+      'When a scheduled digest comes up short (PARTIAL or FAILED), the nightly sweep now retries ONCE on its own — straight after the stumble — to exactly the addresses the first attempt missed.',
+      'A transient provider blip heals itself: if the retry delivers everyone, the schedule quietly shows SENT and the creator\u2019s copy tells the recovery story instead of shouting a red alert.',
+      'If the retry also falls short, the alert is honest about it: "an automatic retry was attempted and also failed" — so nobody re-runs the same thing by hand twice.',
+      'Every retry envelope is labelled in the delivery history with its own amber "auto-retry" chip, its own SENT/FAILED status and the provider\u2019s own error text — retries read as retries, never as fresh sends.',
+      'The cadence never moves: a retry is still not a schedule fire, and the next scheduled delivery lands exactly where it always was.',
+    ],
+  },
+  {
     version: '2.55.0',
     title: 'The failed get another chance — one tap re-sends a digest to exactly the recipients who missed it',
     bullets: [
