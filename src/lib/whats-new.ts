@@ -20,7 +20,65 @@ export interface WhatsNewEntry {
   bullets: string[];
 }
 
+/**
+ * Semver-aware ordering for release versions (v2.75.0): positive when `a`
+ * is NEWER than `b`, negative when older, zero when equal. Component-wise,
+ * missing components read as zero — '2.75' === '2.75.0'. The palette's
+ * reading-state markers order releases against the shared seen flag with
+ * this, so a numeric-looking string compare can never rank 2.9 over 2.10.
+ */
+export function compareWhatsNewVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+/** How the palette (v2.75.0) marks a release against the shared seen flag. */
+export type WhatsNewReadState = 'latest' | 'new' | 'seen';
+
+/**
+ * The reading state of one release (v2.75.0) against the SHARED
+ * mbt_seen_version flag — the same flag the footer pill and the changelog
+ * modal write, so every surface tells one truth about what you've read.
+ *   'latest' — the newest entry in the feed (always exactly one).
+ *   'new'    — strictly NEWER than the flag: it arrived after the user
+ *              last read the notes. Only claimed when the flag EXISTS —
+ *              with no flag there is no reference point, and calling the
+ *              whole backlog "new" would be noise, not honesty.
+ *   'seen'   — everything else.
+ */
+export function whatsNewReadState(version: string, seenVersion: string | null): WhatsNewReadState {
+  if (version === WHATS_NEW[0]?.version) return 'latest';
+  if (seenVersion && compareWhatsNewVersions(version, seenVersion) > 0) return 'new';
+  return 'seen';
+}
+
+/**
+ * How many releases arrived after the user last read the notes (v2.75.0)
+ * — the palette's group-heading counter. Same flag, same honesty rule as
+ * whatsNewReadState: without a flag the count is zero (nothing provably
+ * unread; the footer pill already nags for the latest).
+ */
+export function whatsNewUnreadCount(seenVersion: string | null): number {
+  return WHATS_NEW.filter((e) => whatsNewReadState(e.version, seenVersion) === 'new').length;
+}
+
 export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    version: '2.75.0',
+    title: 'The palette knows what you\u2019ve read — release items wear latest/new/seen, and the group counts the unread',
+    bullets: [
+      'cmd+K\u2019s "Jump to release" group is a release inbox now: every item shows whether it is the latest, arrived after you last read the notes, or is already read.',
+      'A small counter on the group heading — "2 unread" — tells you how many releases arrived since you last acknowledged the notes.',
+      'The markers read the SAME seen flag the footer pill and the changelog\u2019s "Got it" write, so every surface tells one truth about what you\u2019ve read.',
+      'The flag is re-read on every palette open — acknowledge a release in the modal and the very next cmd+K already knows.',
+      'With nothing read yet, the palette stays calm: no unread claims without a reference point, and the latest release still wears its badge.',
+    ],
+  },
   {
     version: '2.74.0',
     title: 'The drawers talk to each other — every visit row names the other ledger, and the name is a door',

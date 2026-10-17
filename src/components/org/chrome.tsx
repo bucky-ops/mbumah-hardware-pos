@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Input } from '@/components/ui/input';
 import { ChevronDown, ChevronUp, CloudOff, ExternalLink, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
 import { APP_BUILD_LABEL, APP_VERSION } from '@/lib/version';
-import { WHATS_NEW, type WhatsNewEntry } from '@/lib/whats-new';
+import { WHATS_NEW, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';
 import { HealthGauge, kes, type KpiSummaryData, type StoreRow } from './primitives';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 
@@ -229,13 +229,43 @@ export function CommandPalette({ open, onOpenChange, stores, actions, onJumpToRe
     () => stores.map((s) => ({ id: `ws-${s.id}`, label: `Open ${s.name} workspace`, hint: storeCode(s), run: () => { window.open(workspaceHref(s), '_blank', 'noopener'); } })),
     [stores],
   );
+  // v2.75.0: the release group knows what you've READ. The SHARED
+  // mbt_seen_version flag (the footer pill reads it, the changelog modal
+  // writes it on "Got it") is read when the palette OPENS — deferred like
+  // every other storage read on this page and re-read on every open, so a
+  // "Got it" in the modal is reflected the very next cmd+K. read=false
+  // until then: items render in their quiet 'seen' dress for that first
+  // paint, and no state is claimed before the flag has actually been read.
+  const [seenState, setSeenState] = useState<{ read: boolean; value: string | null }>({ read: false, value: null });
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setTimeout(() => {
+      try {
+        setSeenState({ read: true, value: localStorage.getItem(SEEN_VERSION_KEY) });
+      } catch {
+        // Storage unavailable — stay quiet, the markers are a nicety.
+        setSeenState({ read: true, value: null });
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [open]);
   // v2.73.0: one palette item per release, newest first — the same WHATS_NEW
   // source the changelog modal renders, so the palette and the archive can
   // never disagree. Search ranks across all groups, so a title keyword
-  // ("CSV", "payslip") finds the release that shipped it.
+  // ("CSV", "payslip") finds the release that shipped it. v2.75.0: each
+  // item carries its reading state (latest / new / seen) derived from the
+  // same flag — the palette is a release inbox, not just a jump list.
   const releaseActions = useMemo(
-    () => WHATS_NEW.map((e) => ({ version: e.version, label: `v${e.version} — ${e.title}` })),
-    [],
+    () => WHATS_NEW.map((e) => ({
+      version: e.version,
+      label: `v${e.version} — ${e.title}`,
+      state: seenState.read ? whatsNewReadState(e.version, seenState.value) : ('seen' as const),
+    })),
+    [seenState],
+  );
+  const unreadCount = useMemo(
+    () => (seenState.read ? whatsNewUnreadCount(seenState.value) : 0),
+    [seenState],
   );
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
@@ -260,7 +290,22 @@ export function CommandPalette({ open, onOpenChange, stores, actions, onJumpToRe
         {releaseActions.length > 0 ? (
           <>
             <CommandSeparator />
-            <CommandGroup heading="Jump to release">
+            <CommandGroup
+              heading={
+                <>
+                  Jump to release
+                  {unreadCount > 0 ? (
+                    <span
+                      data-testid="palette-release-unread"
+                      title={`${unreadCount} release${unreadCount === 1 ? '' : 's'} arrived after you last read the notes`}
+                      className="ml-2 inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300"
+                    >
+                      {unreadCount} unread
+                    </span>
+                  ) : null}
+                </>
+              }
+            >
               {releaseActions.map((r) => (
                 <CommandItem
                   key={r.version}
@@ -268,9 +313,26 @@ export function CommandPalette({ open, onOpenChange, stores, actions, onJumpToRe
                   value={`${r.label} release notes`}
                   onSelect={() => { onOpenChange(false); onJumpToRelease(r.version); }}
                 >
-                  <ScrollText className="mr-2 h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  <span className="min-w-0 flex-1 truncate">{r.label}</span>
-                  <span className="ml-auto shrink-0 text-[10px] text-slate-400">notes</span>
+                  <ScrollText className={`mr-2 h-3.5 w-3.5 shrink-0 ${r.state === 'latest' ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-400'}`} />
+                  <span className={`min-w-0 flex-1 truncate ${r.state === 'latest' ? 'font-semibold text-slate-800 dark:text-slate-100' : ''}`}>{r.label}</span>
+                  {r.state === 'latest' ? (
+                    <span
+                      data-testid={`palette-release-state-${r.version}`}
+                      className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-300 bg-white px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/40 dark:bg-slate-900 dark:text-emerald-300"
+                    >
+                      <Sparkles className="h-2.5 w-2.5" aria-hidden /> latest
+                    </span>
+                  ) : r.state === 'new' ? (
+                    <span
+                      data-testid={`palette-release-state-${r.version}`}
+                      title={`v${r.version} arrived after you last read the notes`}
+                      className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-600 dark:border-emerald-500/30 dark:text-emerald-400"
+                    >
+                      new
+                    </span>
+                  ) : (
+                    <span className="ml-auto shrink-0 text-[10px] text-slate-400">notes</span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>
