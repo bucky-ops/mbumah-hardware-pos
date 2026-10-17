@@ -197,6 +197,9 @@ export function PayrollRunDialog({
   // different audiences and the banner says both honestly.
   const [digestNotice, setDigestNotice] = useState<DigestNotice | null>(null);
   const [employeeNotices, setEmployeeNotices] = useState<EmployeeNoticesNotice | null>(null);
+  // v2.51.0: fail-soft per-employee "you've been paid" counts — the personal
+  // completion of the pay story, riding BOTH disburse actions.
+  const [paidNotices, setPaidNotices] = useState<EmployeeNoticesNotice | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [trace, setTrace] = useState<{ id: string; data: TraceResponse } | null>(null);
@@ -240,6 +243,7 @@ export function PayrollRunDialog({
       setTrace(null);
       setDigestNotice(null);
       setEmployeeNotices(null);
+      setPaidNotices(null);
       void load(runId);
     }
   }, [runId, load]);
@@ -329,6 +333,10 @@ export function PayrollRunDialog({
         setDigestNotice(
           d && typeof d === 'object' && 'emailStatus' in d ? { ...d, kind: 'disbursed' } : null,
         );
+        // v2.51.0: the per-employee "you've been paid" counts ride BOTH
+        // disburse bodies — the personal completion of the pay story.
+        const pn = (respBody as { paidNotices?: EmployeeNoticesNotice | null }).paidNotices;
+        setPaidNotices(pn && typeof pn === 'object' && typeof pn.notifiedUsers === 'number' && pn.notifiedUsers > 0 ? pn : null);
       }
       await load(runId);
       onChanged();
@@ -642,6 +650,22 @@ export function PayrollRunDialog({
                       }`
                     : ' · no employee email addresses on file'}
                   {' — personal notices carry only the employee’s own payslip number and net.'}
+                </div>
+              )}
+              {paidNotices && (
+                <div
+                  className="mt-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  role="status"
+                >
+                  <span className="font-medium">Employee paid notices · </span>
+                  {paidNotices.notifiedUsers ?? paidNotices.portalLinked} employee(s) told they’ve been
+                  paid, with their own receipt in hand
+                  {paidNotices.emailsAttempted
+                    ? ` · emails ${paidNotices.emailsSent ?? 0} sent${
+                        paidNotices.emailsFailed ? ` / ${paidNotices.emailsFailed} failed (logged for review)` : ''
+                      }`
+                    : ' · no employee email addresses on file'}
+                  {' — a payment still in flight (live M-Pesa) stays quiet until the receipt lands.'}
                 </div>
               )}
             </div>

@@ -25,6 +25,7 @@ import {
 import {
   payrollActorContext,
   notifyPayrollRunDisbursed,
+  notifyEmployeesPaid,
 } from '@/lib/hr/payroll/run-service';
 import { payrollErrorResponse, readJson } from '@/lib/hr/payroll/route-helpers';
 
@@ -58,7 +59,12 @@ export const POST = hrGuard('hr.payroll.disburse', DISBURSE_ROLES)(
       // retry would spam the payroll group. BEST-EFFORT by contract: the
       // batch above is already durable; a digest failure must never fail
       // the request.
+      // v2.51.0: the personal "you've been paid" fan-out rides the same
+      // 'all' batch — but ONLY for rows that actually settled PAID (mock
+      // receipts). A live row still in flight (SENT) is not "paid"; its
+      // notice arrives from the Daraja result webhook when the receipt lands.
       let digest = null;
+      let paidNotices = null;
       if (mode === 'all') {
         const actor = payrollActorContext(session);
         digest = await notifyPayrollRunDisbursed({
@@ -91,8 +97,20 @@ export const POST = hrGuard('hr.payroll.disburse', DISBURSE_ROLES)(
           console.warn('[payroll] b2c disbursement digest failed (best-effort):', err);
           return null;
         });
+        paidNotices = await notifyEmployeesPaid({
+          runId: id,
+          storeId: actor.storeId,
+          mode: summary.mode === 'mock' ? 'mpesa-mock' : 'mpesa',
+          paidDetails: (summary.results ?? [])
+            .filter((r) => r.status === 'PAID' && typeof r.detailId === 'string')
+            .map((r) => ({ detailId: r.detailId as string, receipt: r.receipt ?? null })),
+          disbursedAtIso: new Date().toISOString(),
+        }).catch((err) => {
+          console.warn('[payroll] b2c paid notices failed (best-effort):', err);
+          return null;
+        });
       }
-      return Response.json({ success: true, data: summary, digest });
+      return Response.json({ success: true, data: summary, digest, paidNotices });
     } catch (error) {
       const mapped = payrollErrorResponse(error);
       if (mapped) return mapped;

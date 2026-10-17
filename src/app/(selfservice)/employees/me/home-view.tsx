@@ -12,13 +12,16 @@
 // both a fix and a consistency guarantee between server and client renders.
 
 import Link from 'next/link';
-import { ArrowRight, CalendarClock, Palmtree, Wallet, Target, UserRound, BadgeCheck } from 'lucide-react';
+import { ArrowRight, CalendarClock, Palmtree, Wallet, Target, UserRound, BadgeCheck, HandCoins } from 'lucide-react';
 import { EmptyState, ProgressMeter, StatusBadge } from '@/components/hr/self-service-ui';
 // v2.24.0: formatters come from the DIRECTIVE-FREE module - a server
 // component may not call functions exported from a 'use client' module.
 import { formatKes, formatDate } from '@/components/hr/self-service-format';
 
 // v2.49.0: the employee-facing "your payslip is issued" notice strip.
+// v2.51.0: items carry a kind — 'issued' (teal, payslip exists) vs 'paid'
+// (emerald, money settled with the receipt in hand) — so the two moments
+// of one pay story read differently at a glance.
 export interface PayslipNoticeItem {
   id: string;
   title: string;
@@ -26,6 +29,7 @@ export interface PayslipNoticeItem {
   createdAt: string;
   actionUrl: string | null;
   actionLabel: string | null;
+  kind: 'issued' | 'paid';
 }
 
 export interface HomeDashboardDto {
@@ -66,10 +70,12 @@ export function HomeView({ data, payslipNotices = [] }: { data: HomeDashboardDto
 
   return (
     <div className="space-y-4" data-testid="selfservice-home">
-      {/* v2.49.0: "your payslip is issued" notice strip — the personal
-          good news renders FIRST, above the stat tiles, in the same teal
-          family the bell row and the email use. Up to 3 latest notices;
-          the newest carries the badge, the rest stay quiet rows. */}
+      {/* v2.49.0: personal pay notice strip — the good news renders FIRST,
+          above the stat tiles, in the same surface family the bell row and
+          the email use. v2.51.0: the strip tells BOTH moments of the pay
+          story — teal wallet rows for "issued", emerald hand-coins rows
+          for "paid" (with the receipt chip) — newest first, up to 3; the
+          newest carries the badge, the rest stay quiet rows. */}
       {payslipNotices.length > 0 ? (
         <section
           aria-label="Payslip notices"
@@ -78,21 +84,34 @@ export function HomeView({ data, payslipNotices = [] }: { data: HomeDashboardDto
         >
           <div className="rounded-2xl bg-card p-4 sm:p-5">
             <div className="space-y-3">
-              {payslipNotices.map((notice, i) => (
+              {payslipNotices.map((notice, i) => {
+                const paid = notice.kind === 'paid';
+                return (
                 <div key={notice.id} className="flex items-start gap-3">
                   <span
                     className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10 ${
                       i === 0
-                        ? 'bg-gradient-to-br from-teal-500/15 to-emerald-500/15 text-teal-600 dark:text-teal-400'
+                        ? paid
+                          ? 'bg-gradient-to-br from-emerald-500/15 to-green-500/15 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-gradient-to-br from-teal-500/15 to-emerald-500/15 text-teal-600 dark:text-teal-400'
                         : 'bg-muted text-muted-foreground'
                     }`}
                     aria-hidden
                   >
-                    {i === 0 ? <BadgeCheck className="h-5 w-5" /> : <Wallet className="h-4 w-4" />}
+                    {i === 0 ? (
+                      paid ? <HandCoins className="h-5 w-5" /> : <BadgeCheck className="h-5 w-5" />
+                    ) : (
+                      <Wallet className="h-4 w-4" />
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <p className="text-sm font-semibold tracking-tight">{notice.title}</p>
+                      {paid ? (
+                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          Paid
+                        </span>
+                      ) : null}
                       {i === 0 ? (
                         <span className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-300">
                           New
@@ -104,14 +123,17 @@ export function HomeView({ data, payslipNotices = [] }: { data: HomeDashboardDto
                   {notice.actionUrl ? (
                     <Link
                       href={notice.actionUrl}
-                      className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-teal-600 px-2.5 py-1 text-[11px] font-medium text-white shadow-sm transition-colors hover:bg-teal-700"
+                      className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-white shadow-sm transition-colors ${
+                        paid ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-teal-600 hover:bg-teal-700'
+                      }`}
                     >
                       {notice.actionLabel ?? 'View'}
                       <ArrowRight className="h-3 w-3" aria-hidden />
                     </Link>
                   ) : null}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>

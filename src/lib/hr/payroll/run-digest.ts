@@ -692,6 +692,173 @@ export function payrollDisbursementToCsv(
   };
 }
 
+// ── v2.51.0: employee-facing "you've been paid" notice ──────────────────────
+
+/**
+ * v2.51.0: feed-filter marker for the EMPLOYEE-facing "you've been paid"
+ * rows (metadata.kind). The completion of the personal pay family: v2.49.0
+ * told the employee "your payslip is issued"; THIS row tells them the money
+ * actually settled — with their own receipt in hand. Personal rows only,
+ * one per portal-linked employee whose payslip went PAID in this batch.
+ */
+export const PAYROLL_PAID_METADATA_MARKER = 'payroll_paid';
+
+/** v2.51.0: the PERSONAL facts one employee's paid notice is built from. */
+export interface PayrollRunPaidMeta {
+  /** Pay period label, e.g. "October 2026". */
+  periodName: string;
+  /** Store/branch name the run belongs to. */
+  storeName: string;
+  /** The employee's own display name (used in the email greeting only). */
+  employeeName: string;
+  /** The employee's own net pay for the period. */
+  netPay: number;
+  /** Their payslip number, e.g. "PS-20261017-0006" (null tolerated). */
+  payslipNumber: string | null;
+  /** M-Pesa receipt / manual payment reference (MPESA-… / MANUAL-…).
+   *  Null when the channel recorded no reference — the copy stays honest
+   *  and points at the payslip instead of inventing a number. */
+  receipt: string | null;
+  /** mpesa (live Daraja webhook settle) / mpesa-mock (dev simulation) / manual. */
+  mode: PayrollDisbursementMode;
+  /** ISO timestamp of the settlement batch. */
+  disbursedAtIso: string;
+}
+
+/** v2.51.0: notification copy bundle for the personal paid notice. */
+export interface PayrollRunPaidCopy {
+  title: string;
+  message: string;
+  notifType: 'INFO';
+  priority: 'NORMAL';
+  emailSubject: string;
+  emailText: string;
+  emailHtml: string;
+}
+
+/** Mode-specific prose so a settled batch never reads like a simulation and
+ *  a manual mark never reads like an M-Pesa send. Same contract as the
+ *  group's disbursement digest (v2.50.0), pointed at the employee. */
+function paidModeCopy(mode: PayrollDisbursementMode): {
+  label: string;
+  channelLine: string;
+  honestyLine: string;
+} {
+  if (mode === 'mpesa') {
+    return {
+      label: 'M-Pesa B2C',
+      channelLine: 'has been sent to your M-Pesa via M-Pesa B2C',
+      honestyLine: 'This receipt is our record — your M-Pesa message from Safaricom is the payment proof.',
+    };
+  }
+  if (mode === 'mpesa-mock') {
+    return {
+      label: 'simulated M-Pesa B2C',
+      channelLine: 'was settled via simulated M-Pesa B2C (test environment — no real money moved)',
+      honestyLine: 'Simulation mode: this batch is a rehearsal, not a payment.',
+    };
+  }
+  return {
+    label: 'manual confirmation',
+    channelLine: 'was marked paid via manual confirmation (bank run / cash)',
+    honestyLine: 'This is a bookkeeping record, not an M-Pesa send — if the money has not reached your account, talk to HR.',
+  };
+}
+
+/**
+ * Build ONE employee's personalized "you've been paid" copy.
+ *
+ * PRIVACY CONTRACT: personal — carries ONLY the recipient's own pay facts
+ * (net, receipt, payslip number). Never other employees' data, never the
+ * group CSV, never national IDs or bank details. Emerald surface family
+ * (#047857 header) so the settled-money moment reads as the completion of
+ * the payslip family — teal for "issued" (v2.49.0), emerald for "paid"
+ * (v2.51.0) — and never looks like the group's amber disbursement digest
+ * or the approval digest in a shared inbox.
+ */
+export function payrollRunPaidCopy(meta: PayrollRunPaidMeta): PayrollRunPaidCopy {
+  const period = meta.periodName || 'Payroll run';
+  const net = formatKesMoney(meta.netPay);
+  const when = formatApprovedStamp(meta.disbursedAtIso);
+  const slip = meta.payslipNumber || null;
+  const receipt = meta.receipt || null;
+  const mode = paidModeCopy(meta.mode);
+
+  const title = `You've been paid — ${period}`;
+  const receiptSegment = receipt ? ` · receipt ${receipt}` : '';
+  const slipSegment = slip ? `payslip ${slip}` : 'your payslip';
+  const message =
+    `${net} for ${period} ${mode.channelLine}${receiptSegment} — ` +
+    `${slipSegment} is in My Workspace → Payslips.`;
+
+  const firstName = meta.employeeName.split(/\s+/)[0] || 'there';
+  const emailSubject =
+    `You've been paid — ${period} (${net}${receipt ? ` · ${receipt}` : ''})`;
+
+  const emailText = [
+    `${'MBUMAH HARDWARE'} — Your payment is settled`,
+    `${meta.storeName} · ${period}`,
+    '-'.repeat(48),
+    `Hello ${firstName},`,
+    '',
+    `Net pay: ${net}`,
+    `Channel: ${mode.label}`,
+    `Receipt: ${receipt ?? '(none recorded — your payslip carries the payment record)'}`,
+    slip ? `Payslip number: ${slip}` : 'Payslip number: (see My Workspace → Payslips)',
+    `Settled at: ${when}`,
+    '',
+    mode.honestyLine,
+    '',
+    'Open My Workspace → Payslips to view the full breakdown',
+    '(earnings, statutory deductions and the printable copy).',
+    '',
+    'This notice is personal — it carries only your own payment',
+    'summary and is sent only to you.',
+  ].join('\n');
+
+  const rowsHtml = `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Net pay</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:800;font-size:14px;color:#047857;">${esc(net)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Channel</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;font-size:13px;">${esc(mode.label)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Receipt</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;font-size:13px;">${receipt ? esc(receipt) : '<span style="color:#6b7280;font-weight:400;">none recorded — your payslip carries the payment record</span>'}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">Payslip number</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;font-size:13px;">${slip ? esc(slip) : '<span style="color:#6b7280;font-weight:400;">see My Workspace → Payslips</span>'}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 12px;color:#6b7280;font-size:13px;">Settled at</td>
+          <td style="padding:8px 12px;text-align:right;font-size:13px;">${esc(when)}</td>
+        </tr>`;
+
+  const emailHtml = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+    <div style="background:#047857;color:#ffffff;padding:14px 18px;">
+      <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;opacity:0.85;">MBUMAH HARDWARE</div>
+      <div style="font-size:17px;font-weight:700;margin-top:2px;">You've been paid — ${esc(period)}</div>
+    </div>
+    <div style="padding:16px 18px;color:#1f2937;">
+      <p style="margin:0 0 10px 0;font-size:13px;">Hello <strong>${esc(firstName)}</strong>,</p>
+      <p style="margin:10px 0;font-size:13px;">Your net pay for <strong>${esc(period)}</strong> at ${esc(meta.storeName)} ${esc(mode.channelLine)}${receipt ? ` — receipt <strong>${esc(receipt)}</strong>` : ''}.</p>
+      <table style="width:100%;margin:12px 0;border-collapse:collapse;">${rowsHtml}</table>
+      <p style="margin:10px 0;font-size:13px;">${esc(mode.honestyLine)}</p>
+      <p style="margin:10px 0;font-size:13px;">Open <strong>My Workspace → Payslips</strong> to view the full breakdown — earnings, statutory deductions and the printable copy.</p>
+      <p style="margin:14px 0 0 0;font-size:12px;color:#6b7280;">
+        This notice is personal — it carries only your own payment summary<br/>
+        and is sent only to you. It never contains other employees&rsquo; data.
+      </p>
+    </div>
+  </div>`;
+
+  return { title, message, notifType: 'INFO', priority: 'NORMAL', emailSubject, emailText, emailHtml };
+}
+
 // ── CSV attachment ──────────────────────────────────────────────────────────
 
 /**
