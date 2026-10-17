@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.65.0',
+    title: 'The console answers who and where — desk activity drills down per reviewer and filters by branch',
+    bullets: [
+      'Click any row on the console\'s Desk activity panel to review that person\'s desk visits — the panel switches to their ledger with a back button, no page leave.',
+      'The drill-down header answers "how much desk does this reviewer pull": visits on record, corrections cleared, and when they last looked — org-wide figures.',
+      'Branch chips under the stat tiles narrow the trail to one store; counts stay org-wide so the chips never shift under you. Composes with the reviewer drill-down.',
+      'Every reviewer wears their own colour — a deterministic hue per name makes the same person read as the same person across visits, in light and dark.',
+      'The whole panel is now dark-mode complete — card, tiles, chips, timeline and empty states all keep their contrast when the app goes dark.',
+    ],
+  },
+  {
     version: '2.64.0',
     title: 'The ledger steps into the light — visit counts on the desk rows, and the org console sees the trail',
     bullets: [

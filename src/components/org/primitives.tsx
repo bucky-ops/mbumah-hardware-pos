@@ -141,6 +141,12 @@ export interface KpiSummaryData {
 // v2.64.0: the org console's "Desk activity" audit panel (GET
 // /api/org/review-activity) — the v2.63.0 LeaveReviewVisit ledger read
 // org-wide: who looked, where, when, whether the visit cleared a re-check.
+//
+// v2.65.0: the panel answers WHO and WHERE — `branches` (per-store visit
+// counts, org-wide and filter-stable) powers the branch chip row, and
+// `reviewerStats` (present only when the read was drilled down) carries
+// the reviewer's org-wide totals for the drill-down header. `stats` stays
+// org-wide under every filter — the tiles never re-key silently.
 export interface DeskActivityData {
   generatedAt: string;
   stats: { total: number; weekVisits: number; weekClears: number; weekReviewers: number };
@@ -154,6 +160,16 @@ export interface DeskActivityData {
     leaveTypeName: string;
     requestStatus: string;
   }>;
+  branches: Array<{ storeId: string; storeName: string; visits: number }>;
+  reviewerStats?: { visits: number; clears: number; lastVisitAt: string | null };
+}
+
+// v2.65.0: the panel's active drill-down — `reviewer` matches the ledger's
+// denormalised visitedByName (the string the rows render), `branch` is the
+// store id. Both nullable = the unfiltered org view.
+export interface DeskActivityFilter {
+  reviewer: string | null;
+  branch: string | null;
 }
 
 // ── Formatters ───────────────────────────────────────────────────────────────
