@@ -929,7 +929,7 @@ describe('DeskReportView - the request drill-down (v2.72.0)', () => {
     // v2.74.0 — the shared reset closes both drawers and clears the memory.
     expect(pickDays).toContain('clearDrawers();');
     expect(pickBranch).toContain('clearDrawers();');
-    const reset = VIEW.split('const clearDrawers = () => {')[1].split('const toggleReviewer =')[0];
+    const reset = VIEW.split('const clearDrawers = useCallback(() => {')[1].split('const toggleReviewer =')[0]; // memoized since v2.76.0
     expect(reset).toContain('setOpenReviewer(null);');
     expect(reset).toContain('setOpenRequest(null);');
   });
@@ -1137,7 +1137,7 @@ describe('DeskReportView - the drawers talk to each other (v2.74.0)', () => {
   });
 
   it('scope changes reset the whole cross-link state (drawers + memory)', () => {
-    const clearDrawers = VIEW.split('const clearDrawers = () => {')[1].split('const toggleReviewer =')[0];
+    const clearDrawers = VIEW.split('const clearDrawers = useCallback(() => {')[1].split('const toggleReviewer =')[0]; // memoized since v2.76.0
     expect(clearDrawers).toContain('setOpenReviewer(null);');
     expect(clearDrawers).toContain('setOpenRequest(null);');
     expect(clearDrawers).toContain('setViaRequest(null);');
@@ -1244,5 +1244,98 @@ describe('release metadata - v2.74.0', () => {
     const CHROME = readRepo('src/components/org/chrome.tsx');
     expect(CHROME).toContain('data-testid={`palette-release-${r.version}`}');
     expect(CHROME).toContain('data-testid="changelog-jump-pill"');
+  });
+});
+
+// ── the keyboard walks the doors (v2.76.0) ──────────────────────────────────
+
+describe('DeskReportView - the keyboard walks the doors (v2.76.0)', () => {
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('every door carries the walk key - rows, cross-links, and via chips (6 of them)', () => {
+    expect((VIEW.match(/data-desk-door\n/g) || []).length).toBe(6); // attribute form only (the comment + selector mention it too)
+    const anchors = [
+      'desk-report-reviewer-toggle',
+      'desk-report-reviewer-via',
+      'desk-report-reviewer-visit-request',
+      'desk-report-request-toggle',
+      'desk-report-request-via',
+      'desk-report-request-visit-reviewer',
+    ];
+    for (const a of anchors) {
+      const seg = VIEW.split(`data-testid="${a}"`)[1].slice(0, 300);
+      expect(seg).toContain('data-desk-door');
+    }
+  });
+
+  it('binds one document-level keydown listener (and removes it again)', () => {
+    expect(VIEW).toContain("document.addEventListener('keydown', onKeyDown);");
+    expect(VIEW).toContain("document.removeEventListener('keydown', onKeyDown);");
+  });
+
+  it('j is next, k is previous, and both wrap - including the cold start from nowhere', () => {
+    const handler = VIEW.split('const onKeyDown = (e: KeyboardEvent) => {')[1].split('    };')[0];
+    expect(handler).toContain("e.key !== 'j' && e.key !== 'k'");
+    expect(handler).toContain("e.key === 'j' ? doors[0] : doors[doors.length - 1]");
+    expect(handler).toContain("(idx + 1) % doors.length");
+    expect(handler).toContain("(idx - 1 + doors.length) % doors.length");
+    expect(handler).toContain('next.focus()');
+    expect(handler).toContain('e.preventDefault()');
+  });
+
+  it('stays out of the way: no modifiers, never inside an input', () => {
+    const handler = VIEW.split('const onKeyDown = (e: KeyboardEvent) => {')[1].split('    };')[0];
+    expect(handler).toContain('e.metaKey || e.ctrlKey || e.altKey');
+    expect(handler).toContain('target.closest(\'input, textarea, select, [contenteditable="true"]\')');
+  });
+
+  it('escape closes the open drawer and its via memory (the shared reset)', () => {
+    const handler = VIEW.split('const onKeyDown = (e: KeyboardEvent) => {')[1].split('    };')[0];
+    expect(handler).toContain("if (e.key === 'Escape')");
+    expect(handler).toContain('clearDrawers();');
+  });
+
+  it('the keyboard hint lives at the footnote - screen only, never on paper', () => {
+    const hint = VIEW.split('data-testid="desk-report-kbd-hint"')[1].split('</span>')[0];
+    expect(hint).toContain('hidden');
+    expect(hint).toContain('sm:flex');
+    expect(hint).toContain('print:hidden');
+    expect(hint).toContain('walk the doors');
+    expect(hint).toContain('closes a drawer');
+    expect((hint.match(/<kbd /g) || []).length).toBe(3);
+  });
+
+  it('walks in DOM order: reviewers section renders before the most-visited requests', () => {
+    expect(VIEW.indexOf('data-testid="desk-report-reviewers"')).toBeLessThan(VIEW.indexOf('data-testid="desk-report-top-requests"'));
+  });
+});
+
+describe('release metadata - v2.76.0', () => {
+  it('bumps package.json to at least 2.76.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.76.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.76.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.76.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-76-0']).toBe('node scripts/verify-v2-76-0.mjs');
+  });
+
+  it('keeps every prior surface intact (both families, CSV, print, cross-links, palette inbox)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-csv"');
+    expect(VIEW).toContain("printReceiptElement('desk-report-content')");
+    expect(VIEW).toContain('onClick={() => jumpToReviewer(v.reviewer, r.requestId)}');
+    expect(VIEW).toContain('onClick={jumpBackToRequest}');
+    const CHROME = readRepo('src/components/org/chrome.tsx');
+    expect(CHROME).toContain('data-testid="palette-mark-all-read"');
+    expect(CHROME).toContain('data-testid={`palette-release-${r.version}`}');
   });
 });

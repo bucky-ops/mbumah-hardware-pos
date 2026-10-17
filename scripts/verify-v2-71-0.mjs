@@ -73,7 +73,7 @@ console.log('== The view: reviewer rows are doors ==');
 const VIEW = read('src/components/org/desk-report-view.tsx') ?? '';
 check('imports the ledger helpers + the chevron', VIEW.includes('deskReportReviewerLedger,') && VIEW.includes('deskReportVisitTime,') && VIEW.includes('deskReportDayLabel,') && VIEW.includes('ChevronDown,'));
 check('one drawer at a time (openReviewer state + toggle)', VIEW.includes('useState<string | null>(null)') && VIEW.includes('const toggleReviewer = (name: string)') && VIEW.includes('setOpenReviewer((cur) => (cur === name ? null : name));'));
-check('a scope change closes the drawer (window + branch)', VIEW.split('const pickDays =')[1]?.split('const pickBranch =')[0].includes('setOpenReviewer(null)') && VIEW.split('const pickBranch =')[1]?.split('const toggleReviewer =')[0].includes('setOpenReviewer(null)'));
+check('a scope change closes the drawer (window + branch)', VIEW.split('const pickDays =')[1]?.split('const pickBranch =')[0].includes('clearDrawers()') && VIEW.split('const pickBranch =')[1]?.split('// v2.71.0')[0].includes('clearDrawers()')); // the close moved into the shared reset in v2.74.0
 check('the toggle button exposes aria-expanded', VIEW.includes('aria-expanded={open}') && VIEW.includes('data-testid="desk-report-reviewer-toggle"'));
 check('the drawer lists the reviewer visits', VIEW.includes('data-testid="desk-report-reviewer-panel"') && VIEW.includes('data-testid="desk-report-reviewer-visits"') && VIEW.includes('data-testid="desk-report-reviewer-visit"'));
 check('visit rows read day + EAT wall time', VIEW.includes('{deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT'));

@@ -50,12 +50,12 @@ console.log('== The palette: a jump-to-release group ==');
 const CHROME = read('src/components/org/chrome.tsx') ?? '';
 check('the palette takes the jump callback', CHROME.includes('onJumpToRelease: (version: string) => void;'));
 check('release items derive from the SAME WHATS_NEW source', /const releaseActions = useMemo\(\s*\(\) => WHATS_NEW\.map\(/.test(CHROME) && CHROME.includes('label: `v${e.version} — ${e.title}`'));
-check('the group is named "Jump to release" and sits after the workspaces', CHROME.includes('<CommandGroup heading="Jump to release">') && CHROME.indexOf('<CommandGroup heading="Jump to release">') > CHROME.indexOf('<CommandGroup heading="Store workspaces">'));
+check('the group is named "Jump to release" and sits after the workspaces', CHROME.includes('Jump to release') && CHROME.indexOf('Jump to release') > CHROME.indexOf('<CommandGroup heading="Store workspaces">')); // heading grew the unread counter in v2.75.0
 check('items are testid-ed per version', CHROME.includes("data-testid={`palette-release-${r.version}`}"));
 check('items are searchable by their own label + notes', CHROME.includes('value={`${r.label} release notes`}'));
-check('long titles truncate inside the item', CHROME.includes('<span className="min-w-0 flex-1 truncate">{r.label}</span>'));
+check('long titles truncate inside the item', CHROME.includes('min-w-0 flex-1 truncate') && CHROME.includes('{r.label}')); // label wears the latest-bold conditional since v2.75.0
 check('selecting one closes the palette and jumps', CHROME.includes('onSelect={() => { onOpenChange(false); onJumpToRelease(r.version); }}'));
-check('the group wears the changelog icon', CHROME.includes('<ScrollText className="mr-2 h-3.5 w-3.5 shrink-0 text-slate-400" />'));
+check('the group wears the changelog icon', CHROME.includes('<ScrollText className={`mr-2 h-3.5 w-3.5 shrink-0')); // icon went state-conditional in v2.75.0
 check('the search placeholder names releases too', CHROME.includes('placeholder="Search actions, stores, releases..."'));
 check('the group only renders when the feed has entries', CHROME.includes('{releaseActions.length > 0 ? ('));
 check('the store workspaces group survives untouched', CHROME.includes('<CommandGroup heading="Store workspaces">') && CHROME.includes('<Package className="mr-2 h-3.5 w-3.5 text-slate-400" />'));

@@ -148,13 +148,15 @@ export function DeskReportView() {
   // request drawer — the report holds ONE open drawer, whichever family.
   // v2.74.0 — the shared reset: every plain toggle and scope change also
   // clears the cross-link memory, so a "via" chip can only ever describe
-  // the jump that just happened, never a stale one.
-  const clearDrawers = () => {
+  // the jump that just happened, never a stale one. v2.76.0 — memoized:
+  // the keyboard effect subscribes against it, and setters are stable, so
+  // the reset (and with it the listener) is created exactly once.
+  const clearDrawers = useCallback(() => {
     setOpenReviewer(null);
     setOpenRequest(null);
     setViaRequest(null);
     setViaReviewer(null);
-  };
+  }, []);
   const toggleReviewer = (name: string) => {
     setOpenRequest(null);
     setViaRequest(null);
@@ -201,6 +203,37 @@ export function DeskReportView() {
     setViaReviewer(null);
     setOpenRequest(id);
   };
+
+  // v2.76.0 — the keyboard walks the report: j focuses the next door, k the
+  // previous, both wrapping at the ends; escape closes whatever is open.
+  // Every door carries data-desk-door (both families' rows, the cross-link
+  // doors inside the drawers, and the via chips), so the walk follows DOM
+  // order — what you tab through is exactly what j/k visits, and doors that
+  // only exist while a drawer is open join the walk with it. The guards
+  // keep the shortcut out of the way: no modifiers, and never inside an
+  // input (the palette's search, a form field) — typing stays typing.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (e.key === 'Escape') {
+        clearDrawers();
+        return;
+      }
+      if (e.key !== 'j' && e.key !== 'k') return;
+      const doors = Array.from(document.querySelectorAll<HTMLElement>('[data-desk-door]'));
+      if (doors.length === 0) return;
+      const idx = doors.indexOf(document.activeElement as HTMLElement);
+      e.preventDefault();
+      const next = idx === -1
+        ? (e.key === 'j' ? doors[0] : doors[doors.length - 1])
+        : doors[e.key === 'j' ? (idx + 1) % doors.length : (idx - 1 + doors.length) % doors.length];
+      next.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [clearDrawers]);
 
   // v2.70.0 — the report files itself: ?format=csv returns the SAME derived
   // report through the shared server-side builder (RFC-4180 + OWASP guard);
@@ -490,6 +523,7 @@ export function DeskReportView() {
                           onClick={() => toggleReviewer(r.name)}
                           aria-expanded={open}
                           data-testid="desk-report-reviewer-toggle"
+                          data-desk-door
                           className="-mx-1 flex w-full items-center gap-3 rounded-lg px-1 py-2 text-left transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-emerald-500/5"
                         >
                           <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${deskReportAvatarHue(r.name)}`} aria-hidden="true">
@@ -523,6 +557,7 @@ export function DeskReportView() {
                                   type="button"
                                   onClick={jumpBackToRequest}
                                   data-testid="desk-report-reviewer-via"
+                                  data-desk-door
                                   aria-label={`Back to ${viaBackSubject.employeeName}'s ${viaBackSubject.leaveTypeName} visits`}
                                   className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1.5 py-px text-[9px] tracking-wide text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:bg-emerald-500/15"
                                 >
@@ -555,6 +590,7 @@ export function DeskReportView() {
                                           type="button"
                                           onClick={() => jumpToRequest(v.requestId, r.name)}
                                           data-testid="desk-report-reviewer-visit-request"
+                                          data-desk-door
                                           aria-label={`Open ${v.employeeName}'s ${v.leaveTypeName} visits`}
                                           className="group -mx-0.5 inline-flex max-w-full items-center gap-0.5 rounded px-0.5 py-px text-emerald-700 underline decoration-emerald-300 decoration-dotted underline-offset-2 transition-colors hover:text-emerald-800 hover:decoration-emerald-500 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:decoration-emerald-500/50 dark:hover:text-emerald-200"
                                         >
@@ -609,6 +645,7 @@ export function DeskReportView() {
                           onClick={() => toggleRequest(r.requestId)}
                           aria-expanded={open}
                           data-testid="desk-report-request-toggle"
+                          data-desk-door
                           className="-mx-1 flex w-full flex-wrap items-center gap-2 rounded-lg border border-transparent px-1 py-2 text-left transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-emerald-500/5"
                         >
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
@@ -640,6 +677,7 @@ export function DeskReportView() {
                                   type="button"
                                   onClick={jumpBackToReviewer}
                                   data-testid="desk-report-request-via"
+                                  data-desk-door
                                   aria-label={`Back to ${viaRequest}'s visits`}
                                   className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1.5 py-px text-[9px] tracking-wide text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:bg-emerald-500/15"
                                 >
@@ -672,6 +710,7 @@ export function DeskReportView() {
                                         type="button"
                                         onClick={() => jumpToReviewer(v.reviewer, r.requestId)}
                                         data-testid="desk-report-request-visit-reviewer"
+                                        data-desk-door
                                         aria-label={`Open ${v.reviewer}'s visits`}
                                         className="group -mx-0.5 inline-flex max-w-full items-center gap-1 rounded px-0.5 py-px font-semibold text-emerald-700 underline decoration-emerald-300 decoration-dotted underline-offset-2 transition-colors hover:text-emerald-800 hover:decoration-emerald-500 hover:decoration-solid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:decoration-emerald-500/50 dark:hover:text-emerald-200"
                                       >
@@ -699,6 +738,15 @@ export function DeskReportView() {
 
               <p data-testid="desk-report-footnote" className="text-[10px] leading-relaxed text-slate-400 dark:text-slate-500">
                 Computed server-side from the leave review ledger over {data.window.label} ({data.scope.branchName ? 'branch scope' : 'org-wide scope'}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell.
+                <span data-testid="desk-report-kbd-hint" className="mt-1.5 hidden items-center gap-1 sm:flex print:hidden">
+                  Keyboard:
+                  <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">j</kbd>
+                  /
+                  <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">k</kbd>
+                  walk the doors ·
+                  <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">esc</kbd>
+                  closes a drawer
+                </span>
               </p>
             </div>
           )}
