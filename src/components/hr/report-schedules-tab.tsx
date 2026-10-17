@@ -41,6 +41,7 @@ import {
   Pause,
   Play,
   PlusCircle,
+  RotateCcw,
   Send,
   Trash2,
   Users,
@@ -90,6 +91,20 @@ interface DeliveryRow {
   // v2.46.0: the ready-to-file CSV that travelled with this attempt.
   csvFilename: string | null;
   csvBytes: number | null;
+  // v2.55.0: this envelope was the re-send to recipients the previous batch
+  // missed — the history renders an amber "re-send" chip so a retry reads as
+  // a retry.
+  resend: boolean;
+}
+
+// v2.55.0: who would a re-send reach right now (GET …/resend, read-only).
+interface ScheduleResendInfo {
+  available: boolean;
+  lastStatus: string | null;
+  batchAt: string | null;
+  delivered: number;
+  total: number;
+  failedRecipients: string[];
 }
 
 // v2.25.0: dry-run digest preview (identical payload to the email, never sent).
@@ -248,6 +263,12 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
   const [recipientsBusy, setRecipientsBusy] = useState(false);
   const [recipientsError, setRecipientsError] = useState('');
 
+  // v2.55.0: re-send affordance — per-schedule info (who missed the latest
+  // batch) fetched lazily for PARTIAL/FAILED cards only, plus the in-flight
+  // marker for the re-send button.
+  const [resendInfo, setResendInfo] = useState<Record<string, ScheduleResendInfo>>({});
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
   const storeNameFor = useCallback(
     (id: string | null): string | null => (id ? (stores.find((s) => s.id === id)?.name ?? null) : null),
     [stores],
@@ -286,6 +307,21 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
     const timer = window.setTimeout(() => setHighlightId(null), 4000);
     return () => window.clearTimeout(timer);
   }, [highlightScheduleId, rows]);
+
+  // v2.55.0: lazily ask the server who missed the latest batch — only for
+  // cards whose last status says a delivery fell short (PARTIAL / FAILED).
+  // Failures here are silent by design: no info → no affordance, the card
+  // stays exactly as honest as it was. Re-runs whenever rows refresh (after
+  // every action's load()), so a fresh verdict follows a fresh send.
+  useEffect(() => {
+    if (!rows) return;
+    for (const row of rows) {
+      if (row.lastStatus !== 'PARTIAL' && row.lastStatus !== 'FAILED') continue;
+      apiGet<ScheduleResendInfo>(`/api/hr/reports/schedules/${row.id}/resend`)
+        .then((info) => setResendInfo((prev) => ({ ...prev, [row.id]: info })))
+        .catch(() => {});
+    }
+  }, [rows]);
 
   const create = async () => {
     setBusy(true);
@@ -387,6 +423,60 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
     }
   };
 
+  // v2.55.0: re-send the digest to EXACTLY the recipients the latest batch
+  // missed. The server re-derives the target set (the client's list is only
+  // ever display copy) and recomputes the digest fresh; everyone who already
+  // received it is never emailed twice. The 409 NOTHING_TO_RESEND is treated
+  // as an amber note, not an error — "nothing to do" is a good answer.
+  const resendNow = async (s: ScheduleRow) => {
+    setResendingId(s.id);
+    setError('');
+    setSendNote(null);
+    try {
+      const res = await apiSend<{
+        outcome: 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+        reSentTo: string[];
+        digestSummary: { reportLabel: string; periodLabel: string; scopeLabel: string; headlines: string[] } | null;
+        email: { success: boolean; error?: string };
+        csv: { filename: string; byteSize: number } | null;
+      }>(`/api/hr/reports/schedules/${s.id}/resend`, 'POST');
+      const label = res.digestSummary?.reportLabel ?? s.reportLabel;
+      const n = res.reSentTo.length;
+      const csvNote = res.csv ? ` The ready-to-file CSV (${formatCsvSize(res.csv.byteSize)}) rides every envelope.` : '';
+      if (res.outcome === 'SENT') {
+        setSendNote({
+          tone: 'ok',
+          text: `${label} digest re-sent to ${n} recipient${n === 1 ? '' : 's'} who missed it — email delivered.${csvNote} A copy is in your notification center.`,
+        });
+      } else if (res.outcome === 'PARTIAL') {
+        setSendNote({
+          tone: 'warn',
+          text: `${label} re-send delivered to some of the ${n} missed recipient${n === 1 ? '' : 's'} (${res.email.error ?? 'partial delivery'}) — the per-recipient rows are in the delivery history.`,
+        });
+      } else if (res.outcome === 'SKIPPED') {
+        setSendNote({
+          tone: 'warn',
+          text: `${label} re-send not sent: ${res.email.error ?? 'no data for the period'}. Nothing was emailed.`,
+        });
+      } else {
+        setSendNote({
+          tone: 'warn',
+          text: `${label} re-send failed (${res.email.error ?? 'delivery error'}) — the per-recipient failure rows are in the delivery history.`,
+        });
+      }
+      await load();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not re-send the digest.';
+      if (message.toLowerCase().includes('nothing to re-send')) {
+        setSendNote({ tone: 'warn', text: `${s.reportLabel}: nothing to re-send — the latest delivery already reached every recipient.` });
+      } else {
+        setError(message);
+      }
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   // v2.25.0: compute what the next email would contain — no send, no writes,
   // cadence untouched. The dialog mirrors the email template's structure.
   const openPreview = async (s: ScheduleRow) => {
@@ -461,6 +551,10 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
       total: list.length,
       active: list.filter((r) => r.active).length,
       failing: list.filter((r) => r.lastStatus === 'FAILED').length,
+      // v2.55.0: a mixed delivery is its own headline — neither fully green
+      // nor fully red, so it earns its own amber chip instead of hiding
+      // inside "failing".
+      partial: list.filter((r) => r.lastStatus === 'PARTIAL').length,
     };
   }, [rows]);
 
@@ -506,6 +600,15 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
             <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
               <CalendarSync className="h-3.5 w-3.5" aria-hidden />
               {summary.failing} failing delivery
+            </span>
+          )}
+          {summary.partial > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+              title="Deliveries that reached some — but not all — recipients. The re-send affordance on each card targets exactly who missed it."
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              {summary.partial} partial
             </span>
           )}
         </div>
@@ -610,6 +713,53 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                           {s.lastError}
                         </p>
                       ) : null}
+                      {/* v2.55.0: the re-send affordance — names exactly who
+                          missed the latest batch and offers one-tap retry to
+                          ONLY those addresses. Rendered straight under the
+                          failure it answers, in the amber family the PARTIAL
+                          chip established. */}
+                      {resendInfo[s.id]?.available ? (
+                        <div
+                          className="mt-2 rounded-md border border-amber-200 bg-amber-50/70 px-2 py-1.5 dark:border-amber-900 dark:bg-amber-950/30"
+                          role="status"
+                          aria-label={`Re-send available for ${s.reportLabel}: ${resendInfo[s.id].failedRecipients.length} recipient(s) missed the latest delivery`}
+                        >
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                            Missed the latest digest
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {resendInfo[s.id].failedRecipients.map((r) => (
+                              <span
+                                key={r}
+                                className="inline-flex max-w-full items-center gap-0.5 rounded-md border border-rose-200 bg-background px-1.5 py-0.5 font-mono text-[10px] text-rose-800 dark:border-rose-900 dark:text-rose-200"
+                                title={`${r} — this address did not receive the latest batch`}
+                              >
+                                <span aria-hidden className="font-sans">×</span>
+                                <span className="truncate">{r}</span>
+                              </span>
+                            ))}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void resendNow(s)}
+                            disabled={busy || sendingId !== null || resendingId !== null}
+                            className="mt-1.5 h-7 gap-1 border-amber-300 px-2 text-xs text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/60 dark:hover:text-amber-100"
+                            aria-label={`Re-send the ${s.reportLabel} digest to ${resendInfo[s.id].failedRecipients.length} failed recipient(s)`}
+                          >
+                            {resendingId === s.id ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Re-sending…
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="h-3 w-3" aria-hidden />
+                                Re-send to {resendInfo[s.id].failedRecipients.length} failed
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      ) : null}
                     </>
                   ) : (
                     <span className="text-muted-foreground">Not sent yet — first digest when due.</span>
@@ -679,6 +829,15 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                                     <span className="text-muted-foreground">{formatDate(d.createdAt)}</span>
                                     {d.manual ? (
                                       <span className="rounded bg-sky-100 px-1 text-[10px] text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">manual</span>
+                                    ) : null}
+                                    {d.resend ? (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                                        title="This envelope was the re-send to the recipients the previous delivery missed"
+                                      >
+                                        <RotateCcw className="h-2.5 w-2.5" aria-hidden />
+                                        re-send
+                                      </span>
                                     ) : null}
                                     {d.csvFilename ? (
                                       <span

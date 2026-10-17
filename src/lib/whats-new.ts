@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.55.0',
+    title: 'The failed get another chance — one tap re-sends a digest to exactly the recipients who missed it',
+    bullets: [
+      'When a digest delivery comes up short (PARTIAL or FAILED), the schedule card now shows exactly which addresses missed it — with an amber "Re-send to N failed" action right beside them.',
+      'The re-send goes ONLY to the recipients the last batch missed: everyone who already received the digest is never spammed with a second copy, and an address you have since removed stays removed.',
+      'The digest is recomputed fresh at re-send time through the same governed rules (aggregates only, fail-closed scope), so the re-sent copy is the current truth, not a replayed stale email.',
+      'Every re-sent envelope lands in the delivery history with its own amber "re-send" chip, its own SENT/FAILED status and the provider\u2019s own error text — a retry always reads as a retry.',
+      'Nothing to re-send? The action says so honestly instead of pretending — and the cadence never moves: the next scheduled fire stays exactly where it was.',
+    ],
+  },
+  {
     version: '2.54.0',
     title: 'Every recipient stands alone — digest emails go one-per-person, and the delivery history says who got what',
     bullets: [
