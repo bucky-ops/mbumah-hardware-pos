@@ -90,6 +90,10 @@ export function DeskReportView() {
   // only ever describes the jump that just happened.
   const [viaRequest, setViaRequest] = useState<string | null>(null);
   const [viaReviewer, setViaReviewer] = useState<string | null>(null);
+  // v2.77.0: the walk's announcer — an aria-live region that names each
+  // door as j/k lands on it (and the Escape close), mounted unconditionally
+  // so the live region exists before the first message arrives.
+  const [walkAnnouncement, setWalkAnnouncement] = useState('');
   const loadSeq = useRef(0);
 
   const load = useCallback(async (d: number, b: string | null) => {
@@ -212,13 +216,43 @@ export function DeskReportView() {
   // only exist while a drawer is open join the walk with it. The guards
   // keep the shortcut out of the way: no modifiers, and never inside an
   // input (the palette's search, a form field) — typing stays typing.
+  // v2.77.0 — the walk can be FOLLOWED: the focused door glides into view
+  // (focus without the jump, then a smooth nearest-edge scroll), a quiet
+  // aria-live region announces each move ("Door 4 of 13 — …") so screen
+  // readers ride along, and Escape — when a drawer was actually open —
+  // returns focus to the row that owned it, the way a dialog returns focus
+  // to its trigger. The state reads live in the deps: the handler is
+  // re-bound exactly when the drawer it must remember changes.
   useEffect(() => {
+    const announce = (message: string) => setWalkAnnouncement(message);
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       if (target && target.closest('input, textarea, select, [contenteditable="true"]')) return;
       if (e.key === 'Escape') {
+        const wasReviewer = openReviewer;
+        const wasRequest = openRequest;
+        if (!wasReviewer && !wasRequest) return; // nothing open: silence is honest
+        // The owning row's selector, narrowed per family (the compound
+        // guard above cannot tell TypeScript WHICH drawer was open). The
+        // row's human label rides a data attribute, so the announcement
+        // names the place — not a uuid.
+        const closedRow = wasReviewer
+          ? { selector: `[data-desk-door][data-reviewer-name="${CSS.escape(wasReviewer)}"]` }
+          : wasRequest
+            ? { selector: `[data-desk-door][data-request-id="${CSS.escape(wasRequest)}"]` }
+            : null;
+        if (!closedRow) return;
         clearDrawers();
+        // Focus returns to the row that owned the drawer (APG dialog
+        // pattern): the walk continues from where the drawer began.
+        requestAnimationFrame(() => {
+          const row = document.querySelector<HTMLElement>(closedRow.selector);
+          if (row) {
+            row.focus({ preventScroll: true });
+            announce(`Drawer closed — back on ${row.getAttribute('data-desk-row-label') ?? 'its row'}.`);
+          }
+        });
         return;
       }
       if (e.key !== 'j' && e.key !== 'k') return;
@@ -226,14 +260,18 @@ export function DeskReportView() {
       if (doors.length === 0) return;
       const idx = doors.indexOf(document.activeElement as HTMLElement);
       e.preventDefault();
-      const next = idx === -1
-        ? (e.key === 'j' ? doors[0] : doors[doors.length - 1])
-        : doors[e.key === 'j' ? (idx + 1) % doors.length : (idx - 1 + doors.length) % doors.length];
-      next.focus();
+      const nextIdx = idx === -1
+        ? (e.key === 'j' ? 0 : doors.length - 1)
+        : (e.key === 'j' ? (idx + 1) % doors.length : (idx - 1 + doors.length) % doors.length);
+      const next = doors[nextIdx];
+      next.focus({ preventScroll: true });
+      next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const label = next.getAttribute('aria-label') ?? next.textContent?.trim() ?? 'door';
+      announce(`Door ${nextIdx + 1} of ${doors.length} — ${label}`);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [clearDrawers]);
+  }, [clearDrawers, openReviewer, openRequest]);
 
   // v2.70.0 — the report files itself: ?format=csv returns the SAME derived
   // report through the shared server-side builder (RFC-4180 + OWASP guard);
@@ -272,6 +310,12 @@ export function DeskReportView() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6">
+      {/* v2.77.0 — the walk's announcer: mounted unconditionally at the root
+          so the live region exists before the first j/k lands. sr-only: it
+          is for ears, not eyes; the doors' focus rings are for eyes. */}
+      <span data-testid="desk-report-walk-announcer" role="status" aria-live="polite" className="sr-only">
+        {walkAnnouncement}
+      </span>
       {/* Toolbar — screen-only chrome (print:hidden) */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
         <Link
@@ -524,6 +568,8 @@ export function DeskReportView() {
                           aria-expanded={open}
                           data-testid="desk-report-reviewer-toggle"
                           data-desk-door
+                          data-reviewer-name={r.name}
+                          data-desk-row-label={r.name}
                           className="-mx-1 flex w-full items-center gap-3 rounded-lg px-1 py-2 text-left transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-emerald-500/5"
                         >
                           <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${deskReportAvatarHue(r.name)}`} aria-hidden="true">
@@ -646,6 +692,8 @@ export function DeskReportView() {
                           aria-expanded={open}
                           data-testid="desk-report-request-toggle"
                           data-desk-door
+                          data-request-id={r.requestId}
+                          data-desk-row-label={`${r.employeeName}'s ${r.leaveTypeName}`}
                           className="-mx-1 flex w-full flex-wrap items-center gap-2 rounded-lg border border-transparent px-1 py-2 text-left transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-emerald-500/5"
                         >
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">

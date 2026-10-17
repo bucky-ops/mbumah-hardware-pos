@@ -1276,10 +1276,10 @@ describe('DeskReportView - the keyboard walks the doors (v2.76.0)', () => {
   it('j is next, k is previous, and both wrap - including the cold start from nowhere', () => {
     const handler = VIEW.split('const onKeyDown = (e: KeyboardEvent) => {')[1].split('    };')[0];
     expect(handler).toContain("e.key !== 'j' && e.key !== 'k'");
-    expect(handler).toContain("e.key === 'j' ? doors[0] : doors[doors.length - 1]");
+    expect(handler).toContain("e.key === 'j' ? 0 : doors.length - 1"); // cold start (v2.77.0 index form)
     expect(handler).toContain("(idx + 1) % doors.length");
     expect(handler).toContain("(idx - 1 + doors.length) % doors.length");
-    expect(handler).toContain('next.focus()');
+    expect(handler).toContain('next.focus({ preventScroll: true })'); // smooth scroll took over the jump (v2.77.0)
     expect(handler).toContain('e.preventDefault()');
   });
 
@@ -1337,5 +1337,90 @@ describe('release metadata - v2.76.0', () => {
     const CHROME = readRepo('src/components/org/chrome.tsx');
     expect(CHROME).toContain('data-testid="palette-mark-all-read"');
     expect(CHROME).toContain('data-testid={`palette-release-${r.version}`}');
+  });
+});
+
+// ── the walk can be followed (v2.77.0) ──────────────────────────────────────
+
+describe('DeskReportView - the walk can be followed (v2.77.0)', () => {
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('the walk glides: focus without the jump, then a smooth nearest-edge scroll', () => {
+    const handler = VIEW.split('const onKeyDown = (e: KeyboardEvent) => {')[1].split('    };')[0];
+    expect(handler).toContain('next.focus({ preventScroll: true })');
+    expect(handler).toContain("next.scrollIntoView({ block: 'nearest', behavior: 'smooth' })");
+  });
+
+  it('an aria-live announcer exists, mounted unconditionally at the root', () => {
+    expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
+    expect(VIEW).toContain('role="status"');
+    expect(VIEW).toContain('aria-live="polite"');
+    expect(VIEW).toContain('className="sr-only"');
+    const announcer = VIEW.split('data-testid="desk-report-walk-announcer"')[1].split('</span>')[0];
+    expect(announcer).toContain('{walkAnnouncement}');
+    // mounted before any conditional content: it sits directly in the root div
+    const root = VIEW.split('mx-auto w-full max-w-5xl px-4 py-6')[1].split('data-testid="desk-report-walk-announcer"')[0];
+    expect(root.length).toBeLessThan(400);
+  });
+
+  it('every j/k move is named: position and label from the door itself', () => {
+    const handler = VIEW.split('const onKeyDown = (e: KeyboardEvent) => {')[1].split('    };')[0];
+    expect(handler).toContain('announce(`Door ${nextIdx + 1} of ${doors.length} — ${label}`)');
+    expect(handler).toContain("next.getAttribute('aria-label') ?? next.textContent?.trim() ?? 'door'");
+  });
+
+  it('the rows that own drawers carry their identity for focus restoration', () => {
+    const reviewerToggle = VIEW.split('data-testid="desk-report-reviewer-toggle"')[1].split('</button>')[0];
+    expect(reviewerToggle).toContain('data-reviewer-name={r.name}');
+    const requestToggle = VIEW.split('data-testid="desk-report-request-toggle"')[1].split('</button>')[0];
+    expect(requestToggle).toContain('data-request-id={r.requestId}');
+    expect(requestToggle).toContain("data-desk-row-label={`${r.employeeName}'s ${r.leaveTypeName}`}");
+  });
+
+  it('escape restores focus to the row that owned the drawer (APG dialog pattern)', () => {
+    const escape = VIEW.split("if (e.key === 'Escape') {")[1].split('        return;')[0];
+    expect(escape).toContain('const wasReviewer = openReviewer;');
+    expect(escape).toContain('const wasRequest = openRequest;');
+    expect(escape).toContain('if (!wasReviewer && !wasRequest) return; // nothing open: silence is honest');
+    expect(escape).toContain('clearDrawers();');
+    expect(escape).toContain('requestAnimationFrame(');
+    expect(escape).toContain('data-reviewer-name="${CSS.escape(wasReviewer)}"');
+    expect(escape).toContain('data-request-id="${CSS.escape(wasRequest)}"');
+    expect(escape).toContain("row.focus({ preventScroll: true })");
+    expect(escape).toContain("row.getAttribute('data-desk-row-label')");
+  });
+
+  it('the escape announcement names the place, and the effect reads the drawer state live', () => {
+    expect(VIEW).toContain('Drawer closed — back on ${row.getAttribute(\'data-desk-row-label\') ?? \'its row\'}.');
+    expect(VIEW).toContain('[clearDrawers, openReviewer, openRequest]');
+  });
+});
+
+describe('release metadata - v2.77.0', () => {
+  it('bumps package.json to at least 2.77.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.77.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.77.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.77.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-77-0']).toBe('node scripts/verify-v2-77-0.mjs');
+  });
+
+  it('keeps every prior surface intact (walk, doors, announcer predecessor, shortcuts rows)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-desk-door');
+    expect(VIEW).toContain('data-testid="desk-report-kbd-hint"');
+    expect((VIEW.match(/data-desk-door\n/g) || []).length).toBe(6);
+    const CHROME = readRepo('src/components/org/chrome.tsx');
+    expect(CHROME).toContain('data-testid="palette-mark-all-read"');
+    expect(CHROME).toContain("['j', 'Desk report: walk to the next door']");
   });
 });

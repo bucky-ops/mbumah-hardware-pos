@@ -75,8 +75,8 @@ check('rows, cross-links, and via chips are all doors', doorAnchors.every((a) =>
 check('one document-level keydown listener, bound and unbound', VIEW.includes("document.addEventListener('keydown', onKeyDown);") && VIEW.includes("document.removeEventListener('keydown', onKeyDown);"));
 const keyHandler = VIEW.split('const onKeyDown = (e: KeyboardEvent) => {')[1]?.split('    };')[0] ?? '';
 check('j is next with wrap, k is previous with wrap', keyHandler.includes('(idx + 1) % doors.length') && keyHandler.includes('(idx - 1 + doors.length) % doors.length'));
-check('a cold start from nowhere lands on the first (or last) door', keyHandler.includes("e.key === 'j' ? doors[0] : doors[doors.length - 1]"));
-check('the walk moves focus and stops the scroll', keyHandler.includes('next.focus()') && keyHandler.includes('e.preventDefault()'));
+check('a cold start from nowhere lands on the first (or last) door', keyHandler.includes("e.key === 'j' ? 0 : doors.length - 1")); // index form since v2.77.0
+check('the walk moves focus and stops the scroll', keyHandler.includes('next.focus({ preventScroll: true })') && keyHandler.includes("scrollIntoView({ block: 'nearest', behavior: 'smooth' })") && keyHandler.includes('e.preventDefault()')); // smooth glide since v2.77.0
 check('the guards keep typing safe (no modifiers, no inputs)', keyHandler.includes('e.metaKey || e.ctrlKey || e.altKey') && keyHandler.includes('target.closest(\'input, textarea, select, [contenteditable="true"]\')'));
 check('escape runs the shared reset (drawer + via memory)', keyHandler.includes("if (e.key === 'Escape')") && keyHandler.includes('clearDrawers();'));
 check('only j / k / escape are claimed', keyHandler.includes("e.key !== 'j' && e.key !== 'k'"));

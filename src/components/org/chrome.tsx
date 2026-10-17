@@ -12,7 +12,7 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, FileText, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
 import { APP_BUILD_LABEL, APP_VERSION } from '@/lib/version';
 import { WHATS_NEW, whatsNewMarkAllTarget, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';
 import { HealthGauge, kes, type KpiSummaryData, type StoreRow } from './primitives';
@@ -382,6 +382,15 @@ export function ShortcutsModal({ open, onOpenChange }: { open: boolean; onOpenCh
     ['F5', 'Force live feed refresh'],
     ['Esc', 'Close dialogs'],
   ];
+  // v2.77.0: the sheet tells the whole story — the desk report has its own
+  // keys (j/k walk its doors, esc closes a drawer), and the console's
+  // shortcut sheet is where they are discoverable. A labeled section keeps
+  // the sheet honest about WHERE each key works.
+  const deskRows: Array<[string, string]> = [
+    ['j', 'Desk report: walk to the next door'],
+    ['k', 'Desk report: walk to the previous door'],
+    ['esc', 'Desk report: close the open drawer'],
+  ];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
@@ -389,11 +398,25 @@ export function ShortcutsModal({ open, onOpenChange }: { open: boolean; onOpenCh
         <ul className="space-y-1.5 text-xs">
           {rows.map(([k, v]) => (
             <li key={k} className="flex items-center justify-between border-b border-slate-50 pb-1">
-              <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px]">{k}</kbd>
+              <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{k}</kbd>
               <span className="text-slate-600">{v}</span>
             </li>
           ))}
         </ul>
+        <div data-testid="shortcuts-desk-section" className="border-t border-slate-100 pt-2">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <FileText className="h-3 w-3" aria-hidden /> On the desk report
+            <span className="font-normal normal-case tracking-normal text-slate-400/80">/org/desk-report</span>
+          </p>
+          <ul className="space-y-1.5 text-xs">
+            {deskRows.map(([k, v]) => (
+              <li key={k} className="flex items-center justify-between border-b border-slate-50 pb-1">
+                <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{k}</kbd>
+                <span className="text-slate-600">{v}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </DialogContent>
     </Dialog>
   );

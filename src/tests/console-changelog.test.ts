@@ -365,10 +365,10 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.76.0 (latest), then 2.75.0, 2.74.0, 2.73.0 — a
-    // 2.74.0 flag means 2.75.0 arrived unread (2.76.0 is the latest,
+    // The feed leads 2.77.0 (latest), then 2.76.0, 2.75.0, 2.74.0 — a
+    // 2.75.0 flag means 2.76.0 arrived unread (2.77.0 is the latest,
     // marked separately).
-    expect(whatsNewUnreadCount('2.74.0')).toBe(1);
+    expect(whatsNewUnreadCount('2.75.0')).toBe(1);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(4);
   });
 
@@ -482,8 +482,10 @@ describe('release metadata - v2.75.0', () => {
 
 describe('whatsNewMarkAllTarget - the stamp for mark-all-read (v2.76.0)', () => {
   it('is the feed head — the same truth the latest badge wears', () => {
+    // Feed head, whatever release leads (2.77.0 now) — and stamping it
+    // provably leaves nothing unread.
     expect(whatsNewMarkAllTarget()).toBe(WHATS_NEW[0].version);
-    expect(whatsNewMarkAllTarget()).toBe('2.76.0');
+    expect(whatsNewUnreadCount(whatsNewMarkAllTarget())).toBe(0);
   });
 });
 
@@ -573,5 +575,78 @@ describe('release metadata - v2.76.0', () => {
     expect(VIEW).toContain('data-testid="desk-report-request-toggle"');
     expect(VIEW).toContain('data-testid="desk-report-reviewer-toggle"');
     expect(VIEW).toContain('printReceiptElement(\'desk-report-content\')');
+  });
+});
+
+// ── 9. the shortcut sheet tells the whole story (v2.77.0) ────────────────────
+
+describe('ShortcutsModal - the desk report section (v2.77.0)', () => {
+  const CHROME = readRepo('src/components/org/chrome.tsx');
+
+  it('the sheet has a labeled desk-report section', () => {
+    expect(CHROME).toContain('data-testid="shortcuts-desk-section"');
+    expect(CHROME).toContain('On the desk report');
+    expect(CHROME).toContain('/org/desk-report');
+  });
+
+  it('the three desk keys are listed with where they work', () => {
+    expect(CHROME).toContain("['j', 'Desk report: walk to the next door']");
+    expect(CHROME).toContain("['k', 'Desk report: walk to the previous door']");
+    expect(CHROME).toContain("['esc', 'Desk report: close the open drawer']");
+  });
+
+  it('the section renders AFTER the console rows and reuses the kbd row dress', () => {
+    const section = CHROME.indexOf('data-testid="shortcuts-desk-section"');
+    const consoleRows = CHROME.indexOf("['cmd + K', 'Command palette']");
+    expect(section).toBeGreaterThan(consoleRows);
+    const body = CHROME.split('data-testid="shortcuts-desk-section"')[1].split('</div>')[0];
+    expect(body).toContain('deskRows.map');
+    expect(body).toContain('font-mono text-[10px]');
+  });
+
+  it('the section carries the FileText marker and a route hint', () => {
+    const head = CHROME.split('<div data-testid="shortcuts-desk-section"')[1].split('</div>')[0];
+    expect(head).toContain('FileText');
+    expect(head).toContain('/org/desk-report');
+  });
+});
+
+describe("What's-New 2.77.0", () => {
+  it('leads the feed with the discoverable-walk story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.77.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.77.0'")).toBeLessThan(WN.indexOf("version: '2.76.0'"));
+    expect(WN).toContain('The shortcut sheet tells the whole story');
+    expect(WN).toMatch(/aria-live/);
+    expect(WN).toMatch(/returns you to the row that owned the drawer/);
+  });
+});
+
+describe('release metadata - v2.77.0', () => {
+  it('bumps package.json to at least 2.77.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.77.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.77.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.77.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-77-0']).toBe('node scripts/verify-v2-77-0.mjs');
+  });
+
+  it('keeps every prior surface intact (mark-all action, inbox, walk, hint)', () => {
+    const CHROME = readRepo('src/components/org/chrome.tsx');
+    expect(CHROME).toContain('data-testid="palette-mark-all-read"');
+    expect(CHROME).toContain('{seenState.read && unreadCount > 0 && whatsNewMarkAllTarget() ? (');
+    expect(CHROME).toContain("import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, FileText, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';");
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
+    expect(VIEW).toContain('data-testid="desk-report-kbd-hint"');
   });
 });
