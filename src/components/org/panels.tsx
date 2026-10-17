@@ -6,13 +6,14 @@
 // (/api/system-logs with graceful unavailable state).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Activity, AlertOctagon, BadgeCheck, BellRing, Coffee, History, LogIn, MessagesSquare, RadioTower, Send, Sunrise, X } from 'lucide-react';
+import { Activity, AlertOctagon, BadgeCheck, BellRing, Coffee, FileText, History, LogIn, MessagesSquare, RadioTower, Send, Sunrise, X } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
 import { num, timeAgo, type ActivityItem, type ConsoleAlert, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData } from './primitives';
 
@@ -418,6 +419,16 @@ export function DeskActivity({ data, filter, onFilterChange }: {
           <History className="h-4 w-4 text-emerald-500" /> Desk activity — leave review ledger
           <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
         </h2>
+        {/* v2.69.0 — the desk files its report: the printable per-branch
+            roll-up lives at /org/desk-report; this door opens it. */}
+        <Link
+          href="/org/desk-report"
+          data-testid="desk-report-link"
+          title="Open the printable desk report"
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 transition-colors hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:text-emerald-300"
+        >
+          <FileText className="h-3 w-3" aria-hidden /> Report
+        </Link>
         <p className="text-[10px] text-slate-400 dark:text-slate-500">Every desk visit on record, newest first · syncs every 30s</p>
       </div>
 

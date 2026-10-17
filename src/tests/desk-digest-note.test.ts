@@ -248,10 +248,20 @@ describe('release metadata - v2.68.0', () => {
     expect(WN).toMatch(/Morning note/);
   });
 
-  it('bumps package.json to 2.68.0 (all three slots)', () => {
-    const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.68.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.68.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.68.0');
+  it('bumps package.json to at least 2.68.0 (all three slots)', () => {
+    const pkg = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+    };
+    // v2.69.0 precedent: prior-release version pins loosen every round —
+    // this suite must keep passing on this and later versions.
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(pkg.version, '2.68.0')).toBe(true);
+    expect(atLeast(pkg.mbumah.releaseVersion, '2.68.0')).toBe(true);
+    expect(atLeast(pkg.mbumah.baseVersion, '2.68.0')).toBe(true);
   });
 });

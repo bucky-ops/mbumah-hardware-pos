@@ -1,0 +1,385 @@
+'use client';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Desk report view (v2.69.0) — the desk files its report.
+//
+// /org/desk-report renders the per-branch desk report the Desk activity
+// panel links to: totals, a per-branch roll-up, the day-by-day bar strip,
+// the reviewers who did the desk work, and the most-visited requests —
+// computed SERVER-SIDE by GET /api/org/desk-report (the client only fetches
+// and renders, so a printed copy can never disagree with the screen).
+//
+// Print contract: the "Print" button isolates #desk-report-content through
+// the app's print-root pipeline (printReceiptElement clones the node into
+// #print-root; @media print shows ONLY that host) — the nav, sidebar and
+// toolbar never reach the printer, and colors survive via
+// print-color-adjust: exact. The toolbar (window/branch chips + button)
+// carries print:hidden.
+//
+// Scope contract: window chips (7/14/30) and the branch chips re-key the
+// WHOLE report on purpose — an explicit report scope, unlike the org-wide
+// morning note. The heading names the scope in plain words.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import {
+  ArrowLeft, BadgeCheck, Building2, CalendarRange, FileText, Printer,
+  RefreshCw, Sunrise, Users,
+} from 'lucide-react';
+import { authorizedFetchJson } from '@/lib/api';
+import { printReceiptElement } from '@/lib/receipt-pdf';
+import { num, timeAgo } from '@/components/org/primitives';
+import {
+  DESK_REPORT_WINDOW_DAYS,
+  deskReportAvatarHue,
+  deskReportShortStoreName,
+  type DeskReportPayload,
+} from '@/lib/hr/desk-report';
+
+const WINDOW_LABELS: Record<number, string> = { 7: '7 days', 14: '14 days', 30: '30 days' };
+
+// Status chips mirror the desk panel's language (same four states).
+const REPORT_STATUS_CHIP: Record<string, string> = {
+  PENDING: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
+  APPROVED: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
+  REJECTED: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300',
+  CANCELLED: 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400',
+};
+
+export function DeskReportView() {
+  const [days, setDays] = useState<number>(7);
+  const [branch, setBranch] = useState<string | null>(null);
+  const [data, setData] = useState<DeskReportPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const loadSeq = useRef(0);
+
+  const load = useCallback(async (d: number, b: string | null) => {
+    const seq = ++loadSeq.current;
+    setLoading(true);
+    try {
+      const query = `?days=${d}${b ? `&branch=${encodeURIComponent(b)}` : ''}`;
+      const res = await authorizedFetchJson(`/api/org/desk-report${query}`);
+      if (seq !== loadSeq.current) return; // a newer window/branch choice won
+      if (res.ok && res.json?.success) {
+        setData(res.json.data as DeskReportPayload);
+        setError(null);
+      } else {
+        setData(null);
+        setError(
+          res.status === 401
+            ? 'Sign in to file the desk report.'
+            : res.status === 403
+              ? 'The desk report is limited to org roles (SUPER_ADMIN, STORE_OWNER, BRANCH_MANAGER).'
+              : res.json?.error ?? 'Desk report unavailable.',
+        );
+      }
+    } catch {
+      if (seq === loadSeq.current) {
+        setData(null);
+        setError('Desk report unavailable.');
+      }
+    } finally {
+      if (seq === loadSeq.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Deferred initial load keeps the effect body free of synchronous
+    // setState (react-hooks/set-state-in-effect).
+    const initial = setTimeout(() => void load(days, branch), 0);
+    return () => clearTimeout(initial);
+  }, [load, days, branch]);
+
+  const pickDays = (d: number) => {
+    if (d === days) return;
+    setDays(d);
+    void load(d, branch);
+  };
+  const pickBranch = (id: string | null) => {
+    if (id === branch) return;
+    setBranch(id);
+    void load(days, id);
+  };
+
+  const scopeLabel = data?.scope.branchName
+    ? `Branch: ${data.scope.branchName}`
+    : 'All branches';
+
+  return (
+    <div className="mx-auto w-full max-w-5xl px-4 py-6">
+      {/* Toolbar — screen-only chrome (print:hidden) */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
+        <Link
+          href="/console"
+          data-testid="desk-report-back"
+          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Back to desk activity
+        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Report window length" data-testid="desk-report-window-chips" className="flex items-center gap-1">
+            {DESK_REPORT_WINDOW_DAYS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={days === d}
+                onClick={() => pickDays(d)}
+                data-testid={`desk-report-window-${d}`}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${days === d
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200'}`}
+              >
+                {WINDOW_LABELS[d] ?? `${d} days`}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => void load(days, branch)}
+            data-testid="desk-report-refresh"
+            aria-label="Refresh the report"
+            className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => printReceiptElement('desk-report-content')}
+            data-testid="desk-report-print"
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25"
+          >
+            <Printer className="h-3.5 w-3.5" aria-hidden /> Print
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <p
+          data-testid="desk-report-error"
+          role="alert"
+          className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300"
+        >
+          {error}
+        </p>
+      ) : null}
+
+      {!error && !data ? (
+        <p data-testid="desk-report-loading" className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-500">
+          Filing the desk report…
+        </p>
+      ) : null}
+
+      {data ? (
+        <div
+          id="desk-report-content"
+          data-testid="desk-report-content"
+          className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+        >
+          {/* Report header — the dawn voice carries over from the strip */}
+          <header
+            data-testid="desk-report-heading"
+            className="border-b border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-white to-emerald-50/70 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] dark:border-amber-500/20 dark:from-amber-500/10 dark:via-slate-900 dark:to-emerald-500/10 dark:shadow-none"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h1 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
+                <Sunrise className="h-5 w-5 text-amber-500" aria-hidden /> Desk report
+              </h1>
+              <p className="text-[11px] tabular-nums text-slate-400 dark:text-slate-500">
+                Generated {new Date(data.generatedAt).toLocaleString('en-GB', { hour12: false })} · EAT
+              </p>
+            </div>
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <span data-testid="desk-report-window-label" className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200">
+                <CalendarRange className="h-3.5 w-3.5 text-emerald-500" aria-hidden /> {data.window.label}
+              </span>
+              <span data-testid="desk-report-scope" title={data.scope.branchName ?? 'Every branch on the ledger'} className="inline-flex items-center gap-1">
+                <Building2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden /> {scopeLabel}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <FileText className="h-3.5 w-3.5 text-slate-400" aria-hidden /> {data.window.days} EAT calendar days, today included
+              </span>
+            </p>
+          </header>
+
+          {data.totals.visits === 0 ? (
+            <div className="p-5">
+              <p
+                data-testid="desk-report-empty"
+                className="flex items-center gap-2 rounded-lg border border-dashed border-amber-300/60 bg-amber-50/40 px-4 py-6 text-sm text-slate-500 dark:border-amber-500/20 dark:bg-amber-500/5 dark:text-slate-400"
+              >
+                <Sunrise className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+                The desk was quiet for this window — no visits on record{data.scope.branchName ? ` for ${data.scope.branchName}` : ''}. The report fills as reviewers open leave requests.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6 p-5">
+              {/* Totals strip */}
+              <div data-testid="desk-report-totals" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {([
+                  ['visits', 'Visits', data.totals.visits, 'text-slate-800 dark:text-slate-100'],
+                  ['clears', 'Corrections answered', data.totals.clears, 'text-emerald-600 dark:text-emerald-400'],
+                  ['reviewers', 'Reviewers', data.totals.reviewers, 'text-slate-800 dark:text-slate-100'],
+                  ['requests', 'Requests touched', data.totals.requests, 'text-slate-800 dark:text-slate-100'],
+                ] as Array<[string, string, number, string]>).map(([id, label, value, tone]) => (
+                  <div
+                    key={id}
+                    data-testid={`desk-report-tot-${id}`}
+                    className="rounded-xl border border-slate-100 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
+                    <p className={`mt-0.5 text-xl font-bold leading-none tabular-nums ${tone}`}>{num(value)}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Branch chips — the explicit report scope (also re-keys the report) */}
+              <div role="group" aria-label="Narrow the report by branch" data-testid="desk-report-branch-chips" className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-pressed={!branch}
+                  onClick={() => pickBranch(null)}
+                  data-testid="desk-report-branch-chip-all"
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${!branch
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300'
+                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                >
+                  All branches
+                </button>
+                {data.branches.map((b) => {
+                  const active = branch === b.storeId;
+                  return (
+                    <button
+                      key={b.storeId}
+                      type="button"
+                      aria-pressed={active}
+                      title={b.storeName}
+                      onClick={() => pickBranch(active ? null : b.storeId)}
+                      data-testid={`desk-report-branch-chip-${b.storeId}`}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${active
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300'
+                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200'}`}
+                    >
+                      {deskReportShortStoreName(b.storeName)}
+                      <span className="tabular-nums opacity-70">{num(b.visits)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Day-by-day bar strip — every day of the window, honest zeros */}
+              <section aria-label="Visits per day" data-testid="desk-report-series">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <CalendarRange className="h-3.5 w-3.5" aria-hidden /> Day by day
+                </h2>
+                <div className="flex items-end gap-1 overflow-x-auto pb-1">
+                  {data.series.map((p) => {
+                    const maxV = Math.max(...data.series.map((s) => s.visits), 1);
+                    const h = p.visits === 0 ? 6 : Math.max(14, Math.round((p.visits / maxV) * 64));
+                    return (
+                      <div key={p.key} data-testid={`desk-report-day-${p.key}`} className="flex min-w-[34px] flex-1 flex-col items-center gap-1" title={`${p.label} — ${p.visits} visit${p.visits === 1 ? '' : 's'} · ${p.clears} correction${p.clears === 1 ? '' : 's'} answered`}>
+                        <span className={`text-[10px] font-semibold tabular-nums ${p.visits > 0 ? 'text-slate-600 dark:text-slate-300' : 'text-slate-300 dark:text-slate-600'}`}>{p.visits}</span>
+                        <div
+                          className={`w-full max-w-[40px] rounded-t-md ${p.visits > 0 ? 'bg-gradient-to-t from-amber-400 to-emerald-500' : 'bg-slate-100 dark:bg-slate-800'}`}
+                          style={{ height: `${h}px` }}
+                          aria-hidden
+                        />
+                        <span className="whitespace-nowrap text-[9px] tabular-nums text-slate-400 dark:text-slate-500">{p.label.split(', ')[1] ?? p.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Per-branch roll-up — the heart of the report */}
+              <section aria-label="Per-branch desk activity" data-testid="desk-report-branches">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <Building2 className="h-3.5 w-3.5" aria-hidden /> By branch ({data.branches.length})
+                </h2>
+                <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50/70 text-left text-[10px] uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-500">
+                        <th className="px-3 py-2 font-medium">Branch</th>
+                        <th className="px-3 py-2 text-right font-medium">Visits</th>
+                        <th className="px-3 py-2 text-right font-medium">Corrections answered</th>
+                        <th className="px-3 py-2 text-right font-medium">Reviewers</th>
+                        <th className="px-3 py-2 text-right font-medium">Requests</th>
+                        <th className="px-3 py-2 text-right font-medium">Last visit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.branches.map((b) => (
+                        <tr key={b.storeId} data-testid="desk-report-branch-row" className="border-b border-slate-50 transition-colors last:border-0 hover:bg-emerald-50/40 dark:border-slate-800/60 dark:hover:bg-emerald-500/5">
+                          <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-200">{b.storeName}</td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-800 dark:text-slate-100">{num(b.visits)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{num(b.clears)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(b.reviewers)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(b.requests)}</td>
+                          <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400 dark:text-slate-500">{b.lastVisitAt ? `${timeAgo(b.lastVisitAt)} ago` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* Reviewers — who did the desk work */}
+              <section aria-label="Reviewers in this window" data-testid="desk-report-reviewers">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <Users className="h-3.5 w-3.5" aria-hidden /> Reviewers ({data.reviewers.length})
+                </h2>
+                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 dark:divide-slate-800 dark:border-slate-800">
+                  {data.reviewers.map((r) => (
+                    <li key={r.name} data-testid="desk-report-reviewer-row" className="flex items-center gap-3 px-3 py-2">
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${deskReportAvatarHue(r.name)}`} aria-hidden="true">
+                        {r.name.trim().charAt(0).toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{r.name}</span>
+                      {r.clears > 0 ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                          <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> {num(r.clears)} cleared
+                        </span>
+                      ) : null}
+                      <span className="shrink-0 text-xs tabular-nums text-slate-600 dark:text-slate-300">{num(r.visits)} visit{r.visits === 1 ? '' : 's'}</span>
+                      <span className="hidden shrink-0 text-xs tabular-nums text-slate-400 dark:text-slate-500 sm:inline">{r.branches} branch{r.branches === 1 ? '' : 'es'}</span>
+                      <span className="hidden shrink-0 text-[10px] tabular-nums text-slate-400 dark:text-slate-500 md:inline">last {r.lastVisitAt ? timeAgo(r.lastVisitAt) : '—'}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              {/* Most-visited requests */}
+              <section aria-label="Most visited requests" data-testid="desk-report-top-requests">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  <FileText className="h-3.5 w-3.5" aria-hidden /> Most-visited requests
+                </h2>
+                <ul className="space-y-1.5">
+                  {data.topRequests.map((r) => (
+                    <li key={r.requestId} data-testid="desk-report-request-row" className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-800">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
+                        {r.visits}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">
+                        <span className="font-semibold">{r.employeeName}</span>&apos;s {r.leaveTypeName}
+                        {r.storeName ? <span className="text-slate-400 dark:text-slate-500"> · {r.storeName}</span> : null}
+                      </span>
+                      <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium ${REPORT_STATUS_CHIP[r.status] ?? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400'}`}>
+                        {r.status.toLowerCase()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <p data-testid="desk-report-footnote" className="text-[10px] leading-relaxed text-slate-400 dark:text-slate-500">
+                Computed server-side from the leave review ledger over {data.window.label} ({data.scope.branchName ? 'branch scope' : 'org-wide scope'}) — the same ledger the Desk activity panel reads. The report is a read: printing it never rings the bell.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
