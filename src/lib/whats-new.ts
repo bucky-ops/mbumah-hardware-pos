@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.52.0',
+    title: 'Digest CSV, on demand — the filing file downloads from the report you are looking at',
+    bullets: [
+      'Every HR report tab now has a violet "Digest CSV" button: one click downloads the ready-to-file CSV for the report you are viewing and the period you applied — no more waiting for the scheduled email to arrive.',
+      'It is the SAME file the digest email carries — header block, summary, table, formula-injection guard and honest filename — built by one shared server builder, so the numbers in your download can never drift from the numbers in the inbox.',
+      'The leave-balances export honours the leave year selected on screen, so an export of 2025 is exactly the 2025 file even in 2026.',
+      'Empty period? The button says "No report data for this period" instead of handing you a blank spreadsheet — an honest nothing beats a confusing something.',
+      'Every export is audit logged (who, which report, which period, which scope) with field names only — compliance sees the paperwork trail without seeing anyone\u2019s data.',
+    ],
+  },
+  {
     version: '2.51.0',
     title: 'You\u2019ve been paid — employees now hear the moment their money settles, receipt in hand',
     bullets: [

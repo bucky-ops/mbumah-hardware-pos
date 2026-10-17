@@ -27,6 +27,7 @@ import {
   CalendarDays,
   CalendarX2,
   DoorOpen,
+  FileDown,
   Hourglass,
   Landmark,
   History,
@@ -42,9 +43,23 @@ import {
   MailX,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate, formatKes } from '@/components/hr/self-service-ui';
+import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { ReportSchedulesTab } from '@/components/hr/report-schedules-tab';
 
 type Money = number;
+
+// v2.52.0: tab id → schedule report key for the ad-hoc digest CSV export.
+// Tabs without a digest (p10 / schedules / privacy) are absent on purpose:
+// P10 has its own statutory CSV, Schedules has send-now, Privacy has none.
+const DIGEST_EXPORT_KEYS: Record<string, string> = {
+  headcount: 'headcount',
+  cost: 'employment-cost',
+  absence: 'absence',
+  leave: 'leave-utilisation',
+  turnover: 'turnover',
+  tth: 'time-to-hire',
+  statutory: 'statutory-liability',
+};
 
 interface Period {
   from: string;
@@ -482,6 +497,55 @@ export default function HrReportsPage() {
 
   const toggleCol = (key: string) => setHiddenCols((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  // v2.52.0: ad-hoc digest CSV export — the tab the user is LOOKING at, for
+  // the period the user has APPLIED, in the exact governed format a scheduled
+  // digest email carries. One builder on the server (buildDigestPayload) so
+  // the downloaded file can never disagree with the email.
+  const [digestBusy, setDigestBusy] = useState(false);
+  const [digestNote, setDigestNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportDigestCsv = useCallback(async () => {
+    const reportKey = DIGEST_EXPORT_KEYS[tab];
+    if (!reportKey || digestBusy) return;
+    setDigestBusy(true);
+    setDigestNote(null);
+    try {
+      const qs = new URLSearchParams({ report: reportKey });
+      if (reportKey === 'leave-utilisation') {
+        qs.set('year', leaveYear);
+      } else {
+        qs.set('from', from);
+        qs.set('to', to);
+      }
+      if (storeId) qs.set('storeId', storeId);
+      const res = await fetch(`/api/hr/reports/export?${qs.toString()}`, { credentials: 'include' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename =
+        match?.[1] ?? res.headers.get('X-Digest-Csv-Filename') ?? `mbumah-${reportKey}-digest.csv`;
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setDigestNote({
+        tone: 'ok',
+        text: `Digest CSV downloaded — ${filename} (${formatCsvSize(blob.size)}). Same aggregates, labels and scope a scheduled digest email carries.`,
+      });
+    } catch (e) {
+      setDigestNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setDigestBusy(false);
+    }
+  }, [tab, from, to, leaveYear, storeId, digestBusy]);
+
   const Stat = ({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'warn' | 'good' }) => (
     <div className="rounded-xl border bg-card p-3.5 shadow-sm print:shadow-none">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -553,8 +617,35 @@ export default function HrReportsPage() {
           <Button size="sm" onClick={() => void load()} disabled={busy}>
             Apply period
           </Button>
+          {DIGEST_EXPORT_KEYS[tab] ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void exportDigestCsv()}
+              disabled={digestBusy}
+              aria-label={`Download the digest CSV of this report${tab === 'leave' ? ' for the selected leave year' : ' for the applied period'}`}
+              title="The governed digest file: header block, summary and table — the same one a scheduled digest email carries"
+              className="border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40 dark:hover:text-violet-200"
+            >
+              <FileDown className="h-3.5 w-3.5" aria-hidden />
+              {digestBusy ? 'Exporting…' : 'Digest CSV'}
+            </Button>
+          ) : null}
         </div>
       </div>
+
+      {digestNote ? (
+        <p
+          role="status"
+          className={`print:hidden ${
+            digestNote.tone === 'ok'
+              ? 'text-xs font-medium text-violet-700 dark:text-violet-300'
+              : 'text-xs font-medium text-red-600 dark:text-red-400'
+          }`}
+        >
+          {digestNote.text}
+        </p>
+      ) : null}
 
       {error ? <ErrorNote message={error} /> : null}
 
