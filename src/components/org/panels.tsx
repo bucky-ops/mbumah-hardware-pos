@@ -12,9 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Activity, AlertOctagon, BadgeCheck, BellRing, History, LogIn, MessagesSquare, RadioTower, Send } from 'lucide-react';
+import { Activity, AlertOctagon, BadgeCheck, BellRing, History, LogIn, MessagesSquare, RadioTower, Send, X } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
-import { num, timeAgo, type ActivityItem, type ConsoleAlert, type DeskActivityData, type KpiSummaryData } from './primitives';
+import { num, timeAgo, type ActivityItem, type ConsoleAlert, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData } from './primitives';
 
 const SEV: Record<string, string> = {
   critical: 'border-red-200 bg-red-50',
@@ -377,25 +377,51 @@ export function LiveFeed({ refreshKey, signedIn, onRequireSignIn }: {
 // attention leave is getting this week, how many corrections were answered,
 // and how many distinct reviewers are actually reading.
 const DESK_STATUS_CHIP: Record<string, string> = {
-  PENDING: 'border-amber-200 bg-amber-50 text-amber-700',
-  APPROVED: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  REJECTED: 'border-rose-200 bg-rose-50 text-rose-700',
-  CANCELLED: 'border-slate-200 bg-slate-50 text-slate-500',
+  PENDING: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
+  APPROVED: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
+  REJECTED: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300',
+  CANCELLED: 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400',
 };
 
-export function DeskActivity({ data }: { data: DeskActivityData }) {
+// v2.65.0: per-reviewer avatar hue — a deterministic hash of the name picks
+// one of six soft duotones so two reviewers never wear the same colour and
+// the same reviewer reads as the same person across visits. Light + dark.
+const AVATAR_HUES = [
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300',
+  'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300',
+  'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
+  'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+  'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300',
+  'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300',
+];
+const avatarHue = (name: string): string =>
+  AVATAR_HUES[[...name].reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % AVATAR_HUES.length];
+
+// v2.65.0: store names share the "MBUMAH HARDWARE - X" prefix — the chips
+// wear the branch part only; the full name stays on the tooltip.
+const shortStoreName = (name: string): string =>
+  name.replace(/^MBUMAH HARDWARE\s*-\s*/i, '') || name;
+
+export function DeskActivity({ data, filter, onFilterChange }: {
+  data: DeskActivityData;
+  filter: DeskActivityFilter;
+  onFilterChange: (f: DeskActivityFilter) => void;
+}) {
   const { stats, recent } = data;
+  const { reviewer, branch } = filter;
+  const setBranch = (id: string | null) => onFilterChange({ ...filter, branch: id });
+  const clearReviewer = () => onFilterChange({ ...filter, reviewer: null });
   return (
-    <section aria-label="Desk activity" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section aria-label="Desk activity" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <History className="h-4 w-4 text-emerald-500" /> Desk activity — leave review ledger
-          <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
+          <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
         </h2>
-        <p className="text-[10px] text-slate-400">Every desk visit on record, newest first · syncs every 30s</p>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500">Every desk visit on record, newest first · syncs every 30s</p>
       </div>
 
-      {/* Stat tiles — the week's desk-attention figures */}
+      {/* Stat tiles — org-wide figures, never re-keyed by the filters */}
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {([
           ['Visits · 7 days', stats.weekVisits],
@@ -403,49 +429,123 @@ export function DeskActivity({ data }: { data: DeskActivityData }) {
           ['Reviewers active', stats.weekReviewers],
           ['On record', stats.total],
         ] as Array<[string, number]>).map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-slate-100 p-3">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
-            <p className="text-sm font-bold tabular-nums text-slate-800">{num(value)}</p>
+          <div key={label} className="rounded-xl border border-slate-100 p-3 dark:border-slate-800">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
+            <p className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">{num(value)}</p>
           </div>
         ))}
       </div>
 
+      {/* v2.65.0 drill-down bar — who the desk is looking at right now */}
+      {reviewer ? (
+        <div data-testid="desk-drilldown-bar" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
+            {reviewer.trim().charAt(0).toUpperCase()}
+          </span>
+          <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+            Reviewing {reviewer}&apos;s desk visits
+          </p>
+          {data.reviewerStats ? (
+            <span data-testid="desk-drilldown-stats" className="text-[10px] tabular-nums text-emerald-700/80 dark:text-emerald-300/80">
+              {num(data.reviewerStats.visits)} on record · {num(data.reviewerStats.clears)} cleared a re-check{data.reviewerStats.lastVisitAt ? ` · last ${timeAgo(data.reviewerStats.lastVisitAt)}` : ''}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={clearReviewer}
+            aria-label="Back to all reviewers"
+            data-testid="desk-drilldown-clear"
+            className="ml-auto rounded-full p-1 text-emerald-600 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        </div>
+      ) : null}
+
+      {/* v2.65.0 branch chips — org-wide counts, stable while the timeline narrows */}
+      {data.branches.length > 0 ? (
+        <div role="group" aria-label="Filter desk activity by branch" className="mb-3 flex flex-wrap items-center gap-1.5" data-testid="desk-branch-chips">
+          <button
+            type="button"
+            aria-pressed={!branch}
+            onClick={() => setBranch(null)}
+            data-testid="desk-branch-chip-all"
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${!branch
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300'
+              : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200'}`}
+          >
+            All branches
+          </button>
+          {data.branches.map((b) => {
+            const active = branch === b.storeId;
+            return (
+              <button
+                key={b.storeId}
+                type="button"
+                aria-pressed={active}
+                title={b.storeName}
+                onClick={() => setBranch(active ? null : b.storeId)}
+                data-testid={`desk-branch-chip-${b.storeId}`}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${active
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200'}`}
+              >
+                {shortStoreName(b.storeName)}
+                <span className="tabular-nums opacity-70">{num(b.visits)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {recent.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-xs text-slate-500">
-          No desk visits recorded yet — the ledger fills as approvers open leave requests.
+        <p data-testid="desk-empty-state" className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-400">
+          {reviewer
+            ? `No desk visits recorded for ${reviewer}${branch ? ' on this branch' : ''} yet.`
+            : branch
+              ? 'No desk visits recorded for this branch yet — the ledger fills as approvers open leave requests.'
+              : 'No desk visits recorded yet — the ledger fills as approvers open leave requests.'}
         </p>
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
           {recent.map((v) => (
-            <li key={v.id} className="flex items-center gap-3 py-2">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700" aria-hidden="true">
-                {v.visitedByName.trim().charAt(0).toUpperCase()}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-slate-700">
-                  <span className="font-semibold">{v.visitedByName}</span>
-                  {' '}opened {v.employeeName}&apos;s {v.leaveTypeName} request
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  {v.storeName ? `${v.storeName} · ` : ''}{timeAgo(v.visitedAt)} ago
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-                {v.clearedRecheck && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700">
-                    <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> cleared a re-check
-                  </span>
-                )}
-                <span className={`rounded-full border px-1.5 py-px text-[10px] font-medium ${DESK_STATUS_CHIP[v.requestStatus] ?? 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-                  {v.requestStatus.toLowerCase()}
+            <li key={v.id}>
+              <button
+                type="button"
+                onClick={() => onFilterChange({ ...filter, reviewer: v.visitedByName })}
+                aria-label={`Review ${v.visitedByName}'s desk visits`}
+                data-testid="desk-visit-row"
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-slate-800/40"
+              >
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarHue(v.visitedByName)}`} aria-hidden="true">
+                  {v.visitedByName.trim().charAt(0).toUpperCase()}
                 </span>
-              </div>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs text-slate-700 dark:text-slate-200">
+                    <span className="font-semibold">{v.visitedByName}</span>
+                    {' '}opened {v.employeeName}&apos;s {v.leaveTypeName} request
+                  </span>
+                  <span className="block text-[10px] text-slate-400 dark:text-slate-500">
+                    {v.storeName ? `${v.storeName} · ` : ''}{timeAgo(v.visitedAt)} ago
+                  </span>
+                </span>
+                <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+                  {v.clearedRecheck && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                      <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> cleared a re-check
+                    </span>
+                  )}
+                  <span className={`rounded-full border px-1.5 py-px text-[10px] font-medium ${DESK_STATUS_CHIP[v.requestStatus] ?? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400'}`}>
+                    {v.requestStatus.toLowerCase()}
+                  </span>
+                </span>
+              </button>
             </li>
           ))}
         </ul>
       )}
-      <p className="mt-2 text-[10px] text-slate-400">
-        Ledger keeps every visit since v2.63.0 — {num(stats.total)} on record. Each branch&apos;s desk sees the same trail in the request dialog.
+      <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+        Ledger keeps every visit since v2.63.0 — {num(stats.total)} on record. Click a row to review that person&apos;s desk visits; click a branch to narrow the trail.
       </p>
     </section>
   );

@@ -15,7 +15,7 @@
 // "unavailable" state. Guests see the shell + a sign-in prompt.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ChevronDown, History, Landmark, LayoutDashboard, Menu, PackageSearch, PieChart, Radio, ScrollText, Users, Wallet } from 'lucide-react';
 import { ActivityTimeline, ChatDrawer, DecisionSupport, DeskActivity, LiveFeed } from '@/components/org/panels';
@@ -24,7 +24,7 @@ import { ExpertModules } from '@/components/org/experts';
 import { KpiRow } from '@/components/org/kpi-row';
 import { ChangelogModal, CommandPalette, ConsoleFooter, ConsoleHeader, LoginDialog, ShortcutsModal, type SessionUser } from '@/components/org/chrome';
 import { SectionErrorBoundary } from '@/components/error-boundary';
-import { KenyaMap, kes, num, timeAgo, type DeskActivityData, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
+import { KenyaMap, kes, num, timeAgo, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
 import { authorizedFetchJson } from '@/lib/api';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 
@@ -137,8 +137,20 @@ export default function OrgConsolePage() {
   const [summary, setSummary] = useState<OrgSummaryData | null>(null);
   const [kpi, setKpi] = useState<KpiSummaryData | null>(null);
   // v2.64.0: the desk-activity audit panel (GET /api/org/review-activity).
+  // v2.65.0: the panel drills down — the filter state lives here so the
+  // 30s poll fetches the SAME narrowed view the reviewer chose, and a
+  // filter change re-keys `load` for an immediate refetch (no waiting for
+  // the next tick).
   const [deskActivity, setDeskActivity] = useState<DeskActivityData | null>(null);
   const [deskActivityError, setDeskActivityError] = useState<string | null>(null);
+  const [deskFilter, setDeskFilter] = useState<DeskActivityFilter>({ reviewer: null, branch: null });
+  const deskQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (deskFilter.reviewer) params.set('reviewer', deskFilter.reviewer);
+    if (deskFilter.branch) params.set('branch', deskFilter.branch);
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+  }, [deskFilter]);
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [needsAuth, setNeedsAuth] = useState(false);
@@ -163,7 +175,7 @@ export default function OrgConsolePage() {
     const [summaryRes, kpiRes, deskRes] = await Promise.all([
       authorizedFetchJson('/api/org/summary'),
       authorizedFetchJson('/api/org/kpi-summary'),
-      authorizedFetchJson('/api/org/review-activity'),
+      authorizedFetchJson(`/api/org/review-activity${deskQuery}`),
     ]);
 
     if (summaryRes.ok && summaryRes.json?.success) {
@@ -210,7 +222,7 @@ export default function OrgConsolePage() {
 
     setOnline(true);
     setLastSync(new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-  }, []);
+  }, [deskQuery]);
 
   useEffect(() => {
     // Deferred initial load keeps the effect body free of synchronous
@@ -432,7 +444,7 @@ export default function OrgConsolePage() {
           </div>
           <div id="desk-activity">
             <SectionErrorBoundary sectionName="Desk activity">
-              {deskActivity ? <DeskActivity data={deskActivity} /> : <UnavailableCard message={deskActivityError ?? 'Loading desk activity...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
+              {deskActivity ? <DeskActivity data={deskActivity} filter={deskFilter} onFilterChange={setDeskFilter} /> : <UnavailableCard message={deskActivityError ?? 'Loading desk activity...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
             </SectionErrorBoundary>
           </div>
           <div id="timeline">
