@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.81.0',
+    title: 'The link carries the whole scope \u2014 ?days= and ?branch= ride beside the drawer, and the report re-keys on arrival',
+    bullets: [
+      'A drawer address alone opened the DEFAULT window \u2014 a link to a 14-day, Juja-Main-narrowed report lost everything but the drawer. Now the window and the branch ride the link too: ?days=14&branch=store-juja&reviewer=X lands the report in exactly the scope it names.',
+      'The arrival is an honest two-beat: the default window renders first, the link\u2019s scope lands and is announced, then the drawer resolves against the RE-KEYED read \u2014 a reviewer with no visits in the default window still opens when the link widened the window.',
+      'The address bar mirrors the whole state from then on: window, branch and drawer compose into one URL, defaults leave no ink (7 days and no branch = the bare path), and any pick or close rewrites it \u2014 the URL always names exactly what is on screen.',
+      'The desk panel\u2019s "Their file in the report" door hands its branch filter over with the reviewer\u2019s name: narrow the desk to a person on a branch, and the report arrives narrowed the same way, drawer already open.',
+      'A drawer opened by a link wears a small "from the link" chip \u2014 the way a jumped drawer wears its "via" chip \u2014 so the page always says how it got here.',
+    ],
+  },
+  {
     version: '2.80.0',
     title: 'The report is addressable \u2014 an open drawer rides the URL, and the desk hands the report a name',
     bullets: [

@@ -169,9 +169,12 @@ describe('DeskActivity panel - the console answers who and where', () => {
     expect(PANELS).toMatch(/data\.reviewerStats\.lastVisitAt \? ` · last \$\{timeAgo\(data\.reviewerStats\.lastVisitAt\)\}` : ''/);
   });
 
-  it('the drill-down bar hands the narrowed reviewer to the report as a deep link (v2.80.0)', () => {
+  it('the drill-down bar hands the narrowed reviewer to the report as a deep link (v2.80.0, branch rides v2.81.0)', () => {
     expect(PANELS).toContain('data-testid="desk-drilldown-report-link"');
-    expect(PANELS).toContain('href={`/org/desk-report?reviewer=${encodeURIComponent(reviewer)}`}');
+    // The href rides the pure builder, and the panel's branch filter hands
+    // itself over with the name (?branch=… behind ?reviewer=…).
+    expect(PANELS).toContain("import { deskReportDrawerHref } from '@/lib/hr/desk-report';");
+    expect(PANELS).toContain("href={deskReportDrawerHref('reviewer', reviewer, { branch: branch ?? null })}");
     expect(PANELS).toContain("title={`Open ${reviewer}'s file in the desk report`}");
     expect(PANELS).toContain('Their file in the report');
     // The chip wears the panel's emerald family — a door, dressed like one.
