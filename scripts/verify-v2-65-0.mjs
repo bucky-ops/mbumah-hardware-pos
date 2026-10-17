@@ -27,9 +27,9 @@ const check = (name, ok, detail) => {
 
 console.log('== Version slots ==');
 const PKG = JSON.parse(read('package.json') ?? '{}');
-check('package.json version is 2.65.0', PKG.version === '2.65.0', PKG.version ?? 'missing');
-check('mbumah.releaseVersion is 2.65.0', PKG.mbumah?.releaseVersion === '2.65.0');
-check('mbumah.baseVersion is 2.65.0', PKG.mbumah?.baseVersion === '2.65.0');
+check('package.json version is at least 2.65.0', typeof PKG.version === 'string' && PKG.version >= '2.65.0', PKG.version ?? 'missing');
+check('mbumah.releaseVersion is at least 2.65.0', typeof PKG.mbumah?.releaseVersion === 'string' && PKG.mbumah.releaseVersion >= '2.65.0');
+check('mbumah.baseVersion is at least 2.65.0', typeof PKG.mbumah?.baseVersion === 'string' && PKG.mbumah.baseVersion >= '2.65.0');
 check('verify:v2-65-0 script registered', PKG.scripts?.['verify:v2-65-0'] === 'node scripts/verify-v2-65-0.mjs');
 const WN = read('src/lib/whats-new.ts') ?? '';
 check('whats-new carries the 2.65.0 entry first', WN.includes("version: '2.65.0'") && WN.indexOf("version: '2.65.0'") < WN.indexOf("version: '2.64.0'"));

@@ -5,15 +5,16 @@
 // Connected pulse, health gauge, store selector, command palette, chat,
 // notifications, user chip, date, shortcuts) + footer + modals + login.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { CloudOff, History, Keyboard, LogIn, Package, ScrollText, Terminal, Store } from 'lucide-react';
-import { APP_BUILD_LABEL } from '@/lib/version';
+import { ChevronDown, ChevronUp, CloudOff, ExternalLink, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
+import { APP_BUILD_LABEL, APP_VERSION } from '@/lib/version';
+import { WHATS_NEW, type WhatsNewEntry } from '@/lib/whats-new';
 import { HealthGauge, kes, type KpiSummaryData, type StoreRow } from './primitives';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 
@@ -158,27 +159,60 @@ function ChatIcon() {
 }
 
 // ── Footer ───────────────────────────────────────────────────────────────────
+// v2.66.0: the footer is a client island with an SSR-safe mount gate (the
+// useSyncExternalStore pattern) so the release-waiting pill can read the
+// SHARED mbt_seen_version flag (written by the tabs shell's auto-dialog and
+// by this console's changelog modal) without touching localStorage on the
+// server — one flag, no double-nag across surfaces.
+const SEEN_VERSION_KEY = 'mbt_seen_version';
+const mountedProbe = () => true;
+const serverProbe = () => false;
+const subscribeNoop = () => () => {};
+
 export function ConsoleFooter({ kpi, stores, online, onOpenShortcuts, onOpenChangelog, lastSync }: {
   kpi: KpiSummaryData | null; stores: StoreRow[]; online: boolean;
   onOpenShortcuts: () => void; onOpenChangelog: () => void; lastSync: string;
 }) {
+  const mounted = useSyncExternalStore(subscribeNoop, mountedProbe, serverProbe);
+  const [releaseWaiting, setReleaseWaiting] = useState(false);
+  useEffect(() => {
+    if (!mounted) return;
+    // Deferred so no setState runs synchronously inside the effect (the
+    // react-hooks/set-state-in-effect rule — same pattern the console page
+    // uses for its initial load).
+    const id = window.setTimeout(() => {
+      try {
+        setReleaseWaiting(localStorage.getItem(SEEN_VERSION_KEY) !== APP_VERSION);
+      } catch {
+        // Storage unavailable — stay quiet, the pill is a nicety not a need.
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [mounted]);
   return (
-    <footer className="mt-auto border-t border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-[11px] text-slate-500 lg:px-5" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+    <footer className="mt-auto border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-[11px] text-slate-500 lg:px-5 dark:text-slate-400" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-bold text-slate-700">{APP_BUILD_LABEL}</span>
+          <span className="font-bold text-slate-700 dark:text-slate-200">{APP_BUILD_LABEL}</span>
           <span className="flex items-center gap-1">
             <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-emerald-500 anim-live' : 'bg-amber-500'}`} />
             {online ? 'Connected' : 'Offline'}
           </span>
-          <button onClick={onOpenShortcuts} className="hover:text-orange-500">Shortcuts</button>
-          <button onClick={onOpenChangelog} className="hover:text-orange-500">Changelog</button>
+          <button onClick={onOpenShortcuts} className="hover:text-orange-500 dark:hover:text-orange-400">Shortcuts</button>
+          <button onClick={onOpenChangelog} className="relative hover:text-orange-500 dark:hover:text-orange-400" data-testid="footer-changelog-button">
+            Changelog
+            {releaseWaiting && (
+              <span data-testid="footer-changelog-pill" title={`Release notes for v${APP_VERSION} are waiting`} className="absolute -right-2.5 -top-1.5 inline-flex items-center gap-0.5 rounded-full border border-emerald-300 bg-emerald-50 px-1 py-px text-[9px] font-semibold text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300">
+                new
+              </span>
+            )}
+          </button>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span>Health <strong className={kpi && kpi.health.score >= 80 ? 'text-emerald-600' : 'text-amber-600'}>{kpi ? `${kpi.health.score}/100` : '-'}</strong></span>
-          <span>Stores <strong className="text-slate-700">{stores.length}</strong></span>
-          <span>Debt <strong className="text-slate-700">{kpi ? kes(kpi.kpis.debt.total) : '-'}</strong></span>
-          <span>Last sync <strong className="text-slate-700">{lastSync}</strong></span>
+          <span>Health <strong className={kpi && kpi.health.score >= 80 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>{kpi ? `${kpi.health.score}/100` : '-'}</strong></span>
+          <span>Stores <strong className="text-slate-700 dark:text-slate-200">{stores.length}</strong></span>
+          <span>Debt <strong className="text-slate-700 dark:text-slate-200">{kpi ? kes(kpi.kpis.debt.total) : '-'}</strong></span>
+          <span>Last sync <strong className="text-slate-700 dark:text-slate-200">{lastSync}</strong></span>
         </div>
       </div>
     </footer>
@@ -246,33 +280,130 @@ export function ShortcutsModal({ open, onOpenChange }: { open: boolean; onOpenCh
 }
 
 // ── Changelog modal ──────────────────────────────────────────────────────────
+// v2.66.0: the console stops telling a v2.18.3-era story. The modal now
+// renders the SAME WHATS_NEW source the tabs shell's auto-dialog uses —
+// newest first, the latest release highlighted emerald, older releases
+// muted — with a collapse for the backlog (66 entries and counting), the
+// shared mbt_seen_version flag on "Got it" (one flag across surfaces, no
+// double-nag), the GitHub changelog link, and the business contacts kept.
+const CHANGELOG_URL = 'https://github.com/bucky-ops/mbumah-hardware-pos/blob/main/CHANGELOG.md';
+// The modal reads top-down and never drowns: the latest release + this many
+// older ones render open; the rest wait behind one expand button.
+const INITIAL_VISIBLE = 5;
+
+function ChangelogEntry({ entry, latest }: { entry: WhatsNewEntry; latest: boolean }) {
+  return (
+    <div
+      data-testid={`changelog-entry-${entry.version}`}
+      className={
+        latest
+          ? 'rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+          : 'rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-800/30'
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={latest ? 'default' : 'secondary'} className="font-mono text-[11px]">
+          v{entry.version}
+        </Badge>
+        <span className={`text-sm font-semibold leading-tight ${latest ? 'text-emerald-900 dark:text-emerald-200' : 'text-slate-800 dark:text-slate-200'}`}>{entry.title}</span>
+        {latest && (
+          <span data-testid="changelog-latest-pill" className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/40 dark:bg-slate-900 dark:text-emerald-300">
+            <Sparkles className="h-2.5 w-2.5" aria-hidden /> latest
+          </span>
+        )}
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {entry.bullets.map((bullet) => (
+          <li key={bullet} className={`flex items-start gap-2 text-xs leading-relaxed ${latest ? 'text-emerald-900/80 dark:text-emerald-200/80' : 'text-slate-600 dark:text-slate-400'}`}>
+            <span aria-hidden="true" className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${latest ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+            <span>{bullet}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function ChangelogModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const [showAll, setShowAll] = useState(false);
+  const [latest, ...older] = WHATS_NEW;
+  const visibleOlder = showAll ? older : older.slice(0, INITIAL_VISIBLE);
+  const hiddenCount = older.length - visibleOlder.length;
+
+  // "Got it" marks the CURRENT release seen on the SHARED flag — the same
+  // key the tabs shell's auto-dialog writes — so a release read on the
+  // console stays read on the POS and vice versa (the pill in the footer
+  // listens to the same key).
+  const markSeen = () => {
+    try {
+      localStorage.setItem(SEEN_VERSION_KEY, APP_VERSION);
+    } catch {
+      // Nothing to do — the pill just comes back on the next visit.
+    }
+    onOpenChange(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><ScrollText className="h-4 w-4 text-orange-500" /> Changelog</DialogTitle></DialogHeader>
-        <div className="space-y-3 text-xs leading-relaxed text-slate-600">
-          <div>
-            <p className="font-bold text-slate-800">v2.18.3 - Organization Console joins the unified lineage</p>
-            <ul className="mt-1 list-disc space-y-0.5 pl-4">
-              <li>The expert console ships at /console on the main (PostgreSQL, multi-tenant) lineage - the tabs POS app stays at /</li>
-              <li>KPI command row, Store Intelligence Matrix, 9 expert modules, Decision Support, Activity Timeline, Global Chat, Live Feed</li>
-              <li>Every figure is computed from the database via /api/org/summary and the new /api/org/kpi-summary (org roles only)</li>
-              <li>Official brand assets restored per docs/BRAND.md (navy gear + orange house)</li>
-            </ul>
-          </div>
-          <div>
-            <p className="font-bold text-slate-800">v2.18.1 - Branch manager user-store binding</p>
-            <p>Every branch bound to exactly one manager; managers land in their own workspace; cross-branch blocked server-side.</p>
-          </div>
-          <div>
-            <p className="font-bold text-slate-800">v2.16.0 - Subdomain workspaces</p>
-            <p>{'{store}.{root-domain}'} rewrites plus path-mode /stores/{'{slug}'}/... workspaces with host-header allowlisting and audit-logged authorization.</p>
-          </div>
-          <p className="rounded-lg bg-slate-50 p-2 text-[10px] text-slate-400">
-            Contacts: 0795 191 909 · 0759 963 601 · mbumahhardware@gmail.com - Juja Town
-          </p>
+      <DialogContent data-testid="changelog-modal" className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-left">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400">
+              <ScrollText className="h-4.5 w-4.5" aria-hidden="true" />
+            </span>
+            Release changelog
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div className="text-left text-sm text-muted-foreground">
+              You&apos;re on version {APP_VERSION} — every release since the console joined the lineage, newest first.
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3" data-testid="changelog-entries">
+          {latest ? <ChangelogEntry entry={latest} latest /> : null}
+          {visibleOlder.map((entry) => (
+            <ChangelogEntry key={entry.version} entry={entry} latest={false} />
+          ))}
+          {hiddenCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              data-testid="changelog-show-older"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+              Show {hiddenCount} older release{hiddenCount === 1 ? '' : 's'}
+            </button>
+          ) : null}
+          {showAll && older.length > INITIAL_VISIBLE ? (
+            <button
+              type="button"
+              onClick={() => setShowAll(false)}
+              data-testid="changelog-show-fewer"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+              Show fewer
+            </button>
+          ) : null}
         </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="outline" size="sm" asChild>
+            <a href={CHANGELOG_URL} target="_blank" rel="noopener noreferrer" data-testid="changelog-github-link">
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              View changelog on GitHub
+            </a>
+          </Button>
+          <Button size="sm" onClick={markSeen} data-testid="changelog-got-it">
+            Got it
+          </Button>
+        </DialogFooter>
+
+        <p className="rounded-lg bg-slate-50 p-2 text-center text-[10px] text-slate-400 dark:bg-slate-800/50 dark:text-slate-500">
+          Contacts: 0795 191 909 · 0759 963 601 · mbumahhardware@gmail.com - Juja Town
+        </p>
       </DialogContent>
     </Dialog>
   );

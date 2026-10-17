@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.66.0',
+    title: 'The console catches up on the news — the changelog tells the whole release story now',
+    bullets: [
+      'The console\'s Changelog modal no longer shows a frozen v2.18.3-era list — it renders the same release feed as the POS app, newest first, all 66 entries and counting.',
+      'The latest release wears an emerald "latest" highlight at the top; the backlog waits behind a "Show older releases" expand so the modal never drowns.',
+      'A small emerald "new" pill sits on the footer\'s Changelog button whenever release notes you haven\'t read are waiting — it clears the moment you hit Got it.',
+      '"Got it" shares the same seen-flag as the POS app\'s What\'s-New dialog — read a release on either surface and both stay quiet.',
+      'The footer, modal and every entry are dark-mode complete, matching the console\'s new dark pass from v2.65.0.',
+    ],
+  },
+  {
     version: '2.65.0',
     title: 'The console answers who and where — desk activity drills down per reviewer and filters by branch',
     bullets: [
