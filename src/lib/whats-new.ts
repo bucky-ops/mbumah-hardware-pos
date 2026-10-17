@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.73.0',
+    title: 'The palette knows the releases — cmd+K jumps straight to any release\'s notes',
+    bullets: [
+      'The command palette (cmd+K) grew a "Jump to release" group: one item per release, newest first, built from the same source as the changelog — the palette and the archive can never disagree.',
+      'Type a title keyword ("CSV", "payslip", "desk report") and the release that shipped it surfaces — 70+ entries deep — then Enter opens its notes directly.',
+      'A jump opens the changelog with its backlog expanded, scrolls the chosen release into view, and rings it with an orange "via cmd+K" badge so you always know which notes you came for.',
+      'A plain open of the changelog is untouched: latest release highlighted, the older backlog still waiting behind one expand button.',
+      'Closing the modal clears the jump — the next open starts clean at the top of the story.',
+    ],
+  },
+  {
     version: '2.72.0',
     title: 'The report reads the file — click a request to read its visits',
     bullets: [
