@@ -183,6 +183,11 @@ interface LeaveRequest {
    *  fixed their own request from the portal). */
   editedByUserId?: string | null;
   employeeUserId?: string | null;
+  /** v2.59.0: desk visit-tracking — when the desk last opened this request
+   *  (null = never), and whether a correction has landed since that visit
+   *  (the amber "re-check" chip). Computed server-side by needsDeskRecheck. */
+  deskReviewedAt?: string | null;
+  needsRecheck?: boolean;
   /** v2.42.0: supporting document — data URL (governed cap) or http(s) link. */
   attachmentUrl?: string | null;
 }
@@ -403,11 +408,15 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 
 // Stat Card
 
-function StatCard({ icon: Icon, label, value, accent }: {
+function StatCard({ icon: Icon, label, value, accent, hint, hintTone }: {
   icon: React.ElementType;
   label: string;
   value: string | number;
   accent: string;
+  /** v2.59.0: optional one-line pill under the value (e.g. "2 need re-check"). */
+  hint?: string;
+  /** tone picks the pill colour — amber = attention, muted = neutral. */
+  hintTone?: 'amber' | 'muted';
 }) {
   return (
     <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: undefined }}>
@@ -417,6 +426,17 @@ function StatCard({ icon: Icon, label, value, accent }: {
             <div className="min-w-0">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">{label}</p>
               <p className="text-xl font-bold mt-1 truncate">{value}</p>
+              {hint ? (
+                <p
+                  className={`mt-1 inline-flex max-w-full items-center gap-1 truncate rounded-full px-1.5 py-px text-[10px] font-semibold ${
+                    hintTone === 'amber'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {hint}
+                </p>
+              ) : null}
             </div>
             <div className="shrink-0">
               <Icon className="h-7 w-7 opacity-70" />
@@ -1719,7 +1739,60 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const filtered = leaves.filter((l) => statusFilter === 'ALL' || l.status === statusFilter);
+  // v2.59.0: desk visit-tracking — opening the detail dialog stamps
+  // deskReviewedAt so the amber "re-check" chip clears for everyone. The
+  // stamp is fire-and-forget for the OPENING UX (the dialog must never wait
+  // on it) but honest on failure: a failed stamp means the chip stays and
+  // another approver still sees "corrected, not reviewed since", so we log
+  // a quiet toast instead of pretending the read happened. The mutation
+  // updates the cached row in place (needsRecheck is server-computed) and
+  // refetches to stay consistent.
+  const reviewStampMutation = useMutation({
+    mutationFn: (leaveRequestId: string) =>
+      apiFetch<{ success: boolean; data: { id: string; deskReviewedAt: string | null; needsRecheck: boolean } }>(
+        `/api/leaves/${leaveRequestId}/review`,
+        { method: 'POST' },
+      ),
+    onSuccess: (data) => {
+      qc.setQueryData<{ success: boolean; data: LeaveRequest[]; balances?: LeaveBalance[] }>(
+        ['payroll-leaves', storeId],
+        (old) =>
+          old
+            ? {
+                ...old,
+                data: old.data.map((l) =>
+                  l.id === data.data.id
+                    ? { ...l, deskReviewedAt: data.data.deskReviewedAt, needsRecheck: data.data.needsRecheck }
+                    : l,
+                ),
+              }
+            : old,
+      );
+    },
+    onError: () => {
+      toast.info('Could not mark this request as reviewed — the re-check marker stays on the row.');
+    },
+  });
+
+  // v2.59.0: the ONE way the desk opens a request — always stamps the visit
+  // (idempotent server-side: a later stamp simply moves the timestamp, and
+  // the chip only cares whether a correction landed AFTER the last visit).
+  const openLeaveDetail = (l: LeaveRequest) => {
+    setDetail(l);
+    reviewStampMutation.mutate(l.id);
+  };
+
+  const filtered = leaves.filter((l) =>
+    statusFilter === 'ALL'
+      ? true
+      : statusFilter === 'RECHECK'
+        ? l.needsRecheck === true
+        : l.status === statusFilter,
+  );
+  // v2.59.0: how many rows carry the amber re-check marker right now —
+  // surfaced on the Pending stat card so the work is visible without
+  // reading every row.
+  const recheckCount = leaves.filter((l) => l.needsRecheck === true).length;
   const pendingCount = leaves.filter((l) => l.status === 'PENDING').length;
   const approvedCount = leaves.filter((l) => l.status === 'APPROVED').length;
   const pendingDays = leaves.filter((l) => l.status === 'PENDING').reduce((s, l) => s + toNum(l.workingDays), 0);
@@ -1856,7 +1929,14 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={CalendarDays} label="Total Requests" value={leaves.length} accent="border-l-blue-500" />
-        <StatCard icon={Clock3} label="Pending" value={pendingCount} accent="border-l-amber-500" />
+        <StatCard
+          icon={Clock3}
+          label="Pending"
+          value={pendingCount}
+          accent="border-l-amber-500"
+          hint={recheckCount > 0 ? `${recheckCount} need${recheckCount === 1 ? 's' : ''} re-checking` : 'all clear'}
+          hintTone={recheckCount > 0 ? 'amber' : 'muted'}
+        />
         <StatCard icon={CheckCircle} label="Approved" value={approvedCount} accent="border-l-green-500" />
         <StatCard icon={Clock} label="Days Pending" value={pendingDays % 1 === 0 ? pendingDays : pendingDays.toFixed(1)} accent="border-l-purple-500" />
       </div>
@@ -1886,6 +1966,11 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   <SelectContent>
                     <SelectItem value="ALL">All</SelectItem>
                     <SelectItem value="PENDING">Pending</SelectItem>
+                    {/* v2.59.0: one click isolates the corrected-but-unseen
+                        rows — the re-check queue as a filter. */}
+                    <SelectItem value="RECHECK">
+                      Needs re-check{recheckCount > 0 ? ` (${recheckCount})` : ''}
+                    </SelectItem>
                     <SelectItem value="APPROVED">Approved</SelectItem>
                     <SelectItem value="REJECTED">Rejected</SelectItem>
                     <SelectItem value="CANCELLED">Cancelled</SelectItem>
@@ -1900,7 +1985,15 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
             ) : isLoading ? (
               <TableSkeleton />
             ) : filtered.length === 0 ? (
-              <EmptyState icon={CalendarDays} title="No leave requests" description="Leave requests submitted by employees will appear here." />
+              <EmptyState
+                icon={CalendarDays}
+                title="No leave requests"
+                description={
+                  statusFilter === 'RECHECK'
+                    ? 'Nothing needs re-checking — every correction on this desk has been seen.'
+                    : 'Leave requests submitted by employees will appear here.'
+                }
+              />
             ) : (
               <div className="max-h-96 overflow-y-auto custom-scrollbar -mx-2">
                 <table className="w-full text-sm">
@@ -1987,6 +2080,35 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                 </Tooltip>
                               </TooltipProvider>
                             ) : null}
+                            {/* v2.59.0: the re-check marker — a corrected
+                                request that has NOT been opened since the
+                                last edit never gets to look like business
+                                as usual. Stronger amber than the corrected
+                                chip (solid-ish surface + ring) so the two
+                                never blur together; the tooltip says exactly
+                                what the desk has not seen yet, and opening
+                                the request (the Eye button) clears it for
+                                every approver via the deskReviewedAt stamp. */}
+                            {l.needsRecheck ? (
+                              <TooltipProvider delayDuration={120}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span
+                                      tabIndex={0}
+                                      role="status"
+                                      aria-label={`Corrected ${l.editedAt ? new Date(l.editedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'recently'} — not reviewed since. Open to mark re-checked.`}
+                                      className="mt-0.5 inline-flex max-w-fit items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-px text-[10px] font-semibold text-amber-900 ring-1 ring-amber-300 cursor-default outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-700 dark:bg-amber-900/60 dark:text-amber-200 dark:ring-amber-700"
+                                    >
+                                      <Eye className="h-2.5 w-2.5" aria-hidden /> re-check
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" align="start" className="max-w-64">
+                                    <p className="font-medium">Corrected {l.editedAt ? new Date(l.editedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'recently'} — not reviewed since</p>
+                                    <p className="mt-0.5 text-xs opacity-90">No desk visit since the last edit. Open the request to mark it re-checked — the marker clears for every approver.</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : null}
                             {/* v2.42.0 + v2.43.0: at-a-glance attachment
                                 marker — the paperclip now says WHAT is
                                 attached and HOW BIG ("PDF · 12 KB" / "Image ·
@@ -2035,7 +2157,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                 className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                                 title="View details"
                                 aria-label={`View details for ${l.employeeName}`}
-                                onClick={() => setDetail(l)}
+                                onClick={() => openLeaveDetail(l)}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -2310,6 +2432,40 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   {detail.editNote ? <p className="text-sm whitespace-pre-wrap break-words">{detail.editNote}</p> : <p className="text-xs text-muted-foreground">Values were corrected in place — see the dates and days on this dialog.</p>}
                 </div>
               )}
+              {/* v2.59.0: the desk-review receipt — reads the LIVE cached row
+                  (the review stamp mutation updates it in place the moment
+                  the stamp lands) so this rail flips from "not reviewed" to
+                  the fresh timestamp WHILE the dialog is open. Amber while a
+                  correction is unseen, neutral once the visit is on record. */}
+              {(() => {
+                const live = leaves.find((row) => row.id === detail.id) ?? detail;
+                return (
+                  <div
+                    className={`rounded-lg border p-2.5 ${
+                      live.needsRecheck
+                        ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40'
+                        : 'border-border bg-muted/40'
+                    }`}
+                  >
+                    <p
+                      className={`text-xs font-medium mb-0.5 flex items-center gap-1 ${
+                        live.needsRecheck ? 'text-amber-800 dark:text-amber-300' : 'text-muted-foreground'
+                      }`}
+                    >
+                      <Eye className="h-3 w-3" aria-hidden /> Desk review
+                    </p>
+                    {live.needsRecheck ? (
+                      <p className="text-sm text-amber-900 dark:text-amber-200">
+                        Corrected {detail.editedAt ? formatDateTime(detail.editedAt) : 'recently'} — no desk visit since. Opening this dialog marks it re-checked for every approver.
+                      </p>
+                    ) : live.deskReviewedAt ? (
+                      <p className="text-sm text-muted-foreground">Last reviewed {formatDateTime(live.deskReviewedAt)}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Not yet reviewed by the desk — no corrections on file.</p>
+                    )}
+                  </div>
+                );
+              })()}
               {detail.approvedAt && (
                 <p className="text-xs text-muted-foreground">Decided {formatDateTime(detail.approvedAt)}</p>
               )}
