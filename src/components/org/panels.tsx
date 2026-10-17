@@ -537,12 +537,24 @@ export function DeskActivity({ data, filter, onFilterChange }: {
               {num(data.reviewerStats.visits)} on record · {num(data.reviewerStats.clears)} cleared a re-check{data.reviewerStats.lastVisitAt ? ` · last ${timeAgo(data.reviewerStats.lastVisitAt)}` : ''}
             </span>
           ) : null}
+          {/* v2.80.0 — the desk flows into the report: the narrowed reviewer
+              rides the link as a deep link (?reviewer=…), and the report
+              opens that reviewer's drawer on arrival. The chip wears the
+              panel's emerald family — a door, dressed like one. */}
+          <Link
+            href={`/org/desk-report?reviewer=${encodeURIComponent(reviewer)}`}
+            data-testid="desk-drilldown-report-link"
+            title={`Open ${reviewer}'s file in the desk report`}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-500/30 dark:bg-slate-900/60 dark:text-emerald-300 dark:hover:border-emerald-400 dark:hover:bg-emerald-500/15"
+          >
+            <FileText className="h-3 w-3" aria-hidden /> Their file in the report
+          </Link>
           <button
             type="button"
             onClick={clearReviewer}
             aria-label="Back to all reviewers"
             data-testid="desk-drilldown-clear"
-            className="ml-auto rounded-full p-1 text-emerald-600 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
+            className="rounded-full p-1 text-emerald-600 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
           >
             <X className="h-3.5 w-3.5" aria-hidden />
           </button>

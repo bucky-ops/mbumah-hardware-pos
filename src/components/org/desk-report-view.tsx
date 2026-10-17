@@ -61,9 +61,12 @@ import {
   deskReportAvatarHue,
   deskReportChipStep,
   deskReportDayLabel,
+  deskReportDrawerHref,
+  deskReportDrawerParam,
   deskReportHasRequestDoor,
   deskReportRequestLedger,
   deskReportRequestSubject,
+  deskReportResolveDeepLink,
   deskReportReviewerLedger,
   deskReportScopeAnnouncement,
   deskReportShortStoreName,
@@ -122,6 +125,13 @@ export function DeskReportView() {
   // the pick landed (the fetch takes a beat; the words arrive first).
   const [scopeAnnouncement, setScopeAnnouncement] = useState('');
   const loadSeq = useRef(0);
+  // v2.80.0 — the arrival's gate: ONE deep link per mount, answered at the
+  // first read. The link itself is parsed AT RESOLUTION time, not at mount:
+  // a client-side navigation (the desk panel's Link into the report) updates
+  // the address bar AFTER the new page renders, so a mount-time read can
+  // still see the OLD address and miss the link entirely. By the time the
+  // report's first read lands, the address bar is the truth.
+  const deepLinkOpen = useRef(true);
 
   const load = useCallback(async (d: number, b: string | null) => {
     const seq = ++loadSeq.current;
@@ -159,6 +169,49 @@ export function DeskReportView() {
     const initial = setTimeout(() => void load(days, branch), 0);
     return () => clearTimeout(initial);
   }, [load, days, branch]);
+
+  // v2.80.0 — the report answers its mail: when the first read lands, the
+  // arrival link resolves against it (same read, same doors) and either
+  // opens the drawer it names — or says, out loud, why not. The resolution
+  // is deferred one tick like the initial load (same lint hygiene), and it
+  // is one-shot: after this, opening and closing is the page's own business.
+  useEffect(() => {
+    if (!data || !deepLinkOpen.current) return;
+    const resolve = setTimeout(() => {
+      deepLinkOpen.current = false;
+      const link = deskReportDrawerParam(window.location.search);
+      if (!link) return; // no link in the address: a plain visit, nothing to answer
+      const result = deskReportResolveDeepLink(link, data);
+      if (result.open) {
+        if (link.kind === 'reviewer') setOpenReviewer(link.id);
+        else setOpenRequest(link.id);
+      } else {
+        // The address cannot be shown — the bar stops claiming it.
+        history.replaceState(null, '', '/org/desk-report');
+      }
+      setWalkAnnouncement(result.announcement);
+    }, 0);
+    return () => clearTimeout(resolve);
+  }, [data]);
+
+  // v2.80.0 — every drawer has an address: the URL mirrors whatever drawer
+  // is open (either family; one at a time, so one param suffices), and
+  // closing it — by toggle, Escape, a cross-jump or a scope re-key — takes
+  // the param back off. replaceState, never navigation: the page the desk
+  // is reading does not reload because its address learned the drawer's
+  // name. Held while the arrival gate is unresolved, so the link the user
+  // followed is not stripped before it has answered.
+  useEffect(() => {
+    if (deepLinkOpen.current) return;
+    const href = openRequest
+      ? deskReportDrawerHref('request', openRequest)
+      : openReviewer
+        ? deskReportDrawerHref('reviewer', openReviewer)
+        : '/org/desk-report';
+    if (window.location.pathname + window.location.search !== href) {
+      history.replaceState(null, '', href);
+    }
+  }, [openReviewer, openRequest]);
 
   // v2.78.0 — the picks speak: a real re-key (the guard's no-op stays
   // silent) names its new scope through the live region BEFORE the fetch
@@ -911,7 +964,7 @@ export function DeskReportView() {
                     rides the header's own scopeLabel voice ("Branch: …" /
                     "All branches"), so a filed or printed copy says which
                     scope it covers in plain words, not a shape name. */}
-                Computed server-side from the leave review ledger over {data.window.label} ({scopeLabel}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell.
+                Computed server-side from the leave review ledger over {data.window.label} ({scopeLabel}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell. An open drawer rides the address bar — copy the URL and the same file opens for whoever follows.
                 <span data-testid="desk-report-kbd-hint" className="mt-1.5 hidden items-center gap-1 sm:flex print:hidden">
                   Keyboard:
                   <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">j</kbd>

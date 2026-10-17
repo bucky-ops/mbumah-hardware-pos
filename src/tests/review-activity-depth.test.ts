@@ -169,6 +169,22 @@ describe('DeskActivity panel - the console answers who and where', () => {
     expect(PANELS).toMatch(/data\.reviewerStats\.lastVisitAt \? ` · last \$\{timeAgo\(data\.reviewerStats\.lastVisitAt\)\}` : ''/);
   });
 
+  it('the drill-down bar hands the narrowed reviewer to the report as a deep link (v2.80.0)', () => {
+    expect(PANELS).toContain('data-testid="desk-drilldown-report-link"');
+    expect(PANELS).toContain('href={`/org/desk-report?reviewer=${encodeURIComponent(reviewer)}`}');
+    expect(PANELS).toContain("title={`Open ${reviewer}'s file in the desk report`}");
+    expect(PANELS).toContain('Their file in the report');
+    // The chip wears the panel's emerald family — a door, dressed like one.
+    const chip = PANELS.split('data-testid="desk-drilldown-report-link"')[1].split('</Link>')[0];
+    expect(chip).toContain('border-emerald-200 bg-white');
+    expect(chip).toContain('hover:border-emerald-400 hover:bg-emerald-50');
+    expect(chip).toContain('focus-visible:ring-emerald-400');
+    expect(chip).toContain('dark:border-emerald-500/30 dark:bg-slate-900/60 dark:text-emerald-300');
+    expect(chip).toContain('FileText');
+    // The clear button stays — the deep link adds a way out, never replaces one.
+    expect(PANELS).toContain('data-testid="desk-drilldown-clear"');
+  });
+
   it('the back button clears the reviewer and is labelled for assistive tech', () => {
     expect(PANELS).toContain('data-testid="desk-drilldown-clear"');
     expect(PANELS).toContain('aria-label="Back to all reviewers"');
