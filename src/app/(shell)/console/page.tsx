@@ -161,6 +161,10 @@ export default function OrgConsolePage() {
 
   // UI state
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // v2.73.0: the palette's jump-to-release target — the version the changelog
+  // modal should open scrolled to (null = a plain open). Cleared on close so
+  // the next plain open doesn't re-scroll or re-ring.
+  const [releaseJump, setReleaseJump] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
@@ -464,6 +468,7 @@ export default function OrgConsolePage() {
 
       {/* Overlays */}
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} stores={stores}
+        onJumpToRelease={(v) => { setReleaseJump(v); setChangelogOpen(true); }}
         actions={[
           { id: 'overview', label: 'Go to overview', run: () => document.getElementById('kpi-row')?.scrollIntoView({ behavior: 'smooth' }) },
           { id: 'experts', label: 'Go to expert modules', run: () => document.getElementById('experts')?.scrollIntoView({ behavior: 'smooth' }) },
@@ -476,7 +481,7 @@ export default function OrgConsolePage() {
         ]} />
       <ChatDrawer open={chatOpen} onOpenChange={setChatOpen} unread={kpi?.system.notificationsUnread ?? 0} signedIn={signedIn} onRequireSignIn={() => setLoginOpen(true)} />
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-      <ChangelogModal open={changelogOpen} onOpenChange={setChangelogOpen} />
+      <ChangelogModal open={changelogOpen} onOpenChange={(o) => { setChangelogOpen(o); if (!o) setReleaseJump(null); }} jumpTo={releaseJump} />
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} onToast={onToast} onSignedIn={handleSignedIn} />
 
       {/* Screen-reader summary */}

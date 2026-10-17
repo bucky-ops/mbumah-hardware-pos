@@ -220,17 +220,26 @@ export function ConsoleFooter({ kpi, stores, online, onOpenShortcuts, onOpenChan
 }
 
 // ── Command palette (cmd+K) ──────────────────────────────────────────────────
-export function CommandPalette({ open, onOpenChange, stores, actions }: {
+export function CommandPalette({ open, onOpenChange, stores, actions, onJumpToRelease }: {
   open: boolean; onOpenChange: (o: boolean) => void; stores: StoreRow[];
   actions: { id: string; label: string; hint?: string; run: () => void }[];
+  onJumpToRelease: (version: string) => void;
 }) {
   const storeActions = useMemo(
     () => stores.map((s) => ({ id: `ws-${s.id}`, label: `Open ${s.name} workspace`, hint: storeCode(s), run: () => { window.open(workspaceHref(s), '_blank', 'noopener'); } })),
     [stores],
   );
+  // v2.73.0: one palette item per release, newest first — the same WHATS_NEW
+  // source the changelog modal renders, so the palette and the archive can
+  // never disagree. Search ranks across all groups, so a title keyword
+  // ("CSV", "payslip") finds the release that shipped it.
+  const releaseActions = useMemo(
+    () => WHATS_NEW.map((e) => ({ version: e.version, label: `v${e.version} — ${e.title}` })),
+    [],
+  );
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Search actions, stores..." />
+      <CommandInput placeholder="Search actions, stores, releases..." />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
         <CommandGroup heading="Actions">
@@ -248,6 +257,25 @@ export function CommandPalette({ open, onOpenChange, stores, actions }: {
             </CommandItem>
           ))}
         </CommandGroup>
+        {releaseActions.length > 0 ? (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Jump to release">
+              {releaseActions.map((r) => (
+                <CommandItem
+                  key={r.version}
+                  data-testid={`palette-release-${r.version}`}
+                  value={`${r.label} release notes`}
+                  onSelect={() => { onOpenChange(false); onJumpToRelease(r.version); }}
+                >
+                  <ScrollText className="mr-2 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                  <span className="ml-auto shrink-0 text-[10px] text-slate-400">notes</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        ) : null}
       </CommandList>
     </CommandDialog>
   );
@@ -291,15 +319,15 @@ const CHANGELOG_URL = 'https://github.com/bucky-ops/mbumah-hardware-pos/blob/mai
 // older ones render open; the rest wait behind one expand button.
 const INITIAL_VISIBLE = 5;
 
-function ChangelogEntry({ entry, latest }: { entry: WhatsNewEntry; latest: boolean }) {
+function ChangelogEntry({ entry, latest, focused }: { entry: WhatsNewEntry; latest: boolean; focused?: boolean }) {
   return (
     <div
       data-testid={`changelog-entry-${entry.version}`}
-      className={
+      className={`${
         latest
           ? 'rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10'
           : 'rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-800/30'
-      }
+      }${focused ? ' ring-2 ring-orange-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900' : ''}`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={latest ? 'default' : 'secondary'} className="font-mono text-[11px]">
@@ -309,6 +337,11 @@ function ChangelogEntry({ entry, latest }: { entry: WhatsNewEntry; latest: boole
         {latest && (
           <span data-testid="changelog-latest-pill" className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-500/40 dark:bg-slate-900 dark:text-emerald-300">
             <Sparkles className="h-2.5 w-2.5" aria-hidden /> latest
+          </span>
+        )}
+        {focused && (
+          <span data-testid="changelog-jump-pill" className="inline-flex items-center gap-1 rounded-full border border-orange-300 bg-orange-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-orange-700 dark:border-orange-500/40 dark:bg-orange-500/15 dark:text-orange-300">
+            <Terminal className="h-2.5 w-2.5" aria-hidden /> via cmd+K
           </span>
         )}
       </div>
@@ -324,11 +357,29 @@ function ChangelogEntry({ entry, latest }: { entry: WhatsNewEntry; latest: boole
   );
 }
 
-export function ChangelogModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+export function ChangelogModal({ open, onOpenChange, jumpTo }: { open: boolean; onOpenChange: (o: boolean) => void; jumpTo?: string | null }) {
   const [showAll, setShowAll] = useState(false);
   const [latest, ...older] = WHATS_NEW;
-  const visibleOlder = showAll ? older : older.slice(0, INITIAL_VISIBLE);
+  // v2.73.0: the palette's jump — a deep target (older than the five the
+  // modal opens by default) forces the backlog open so the entry is actually
+  // on the page, then a scroll effect brings it into view and the orange
+  // "via cmd+K" pill + ring mark it. A plain open keeps the collapse.
+  const jumpIndex = jumpTo ? WHATS_NEW.findIndex((e) => e.version === jumpTo) : -1;
+  const needsExpand = jumpIndex > INITIAL_VISIBLE;
+  const effectiveShowAll = showAll || needsExpand;
+  const visibleOlder = effectiveShowAll ? older : older.slice(0, INITIAL_VISIBLE);
   const hiddenCount = older.length - visibleOlder.length;
+
+  // Scroll the jumped entry into view once the dialog has painted. No
+  // setState — a pure DOM nudge, cleaned up like any other effect.
+  useEffect(() => {
+    if (!open || !jumpTo || jumpIndex < 0) return;
+    const id = window.setTimeout(() => {
+      document.querySelector(`[data-testid="changelog-entry-${jumpTo}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [open, jumpTo, jumpIndex]);
 
   // "Got it" marks the CURRENT release seen on the SHARED flag — the same
   // key the tabs shell's auto-dialog writes — so a release read on the
@@ -361,9 +412,9 @@ export function ChangelogModal({ open, onOpenChange }: { open: boolean; onOpenCh
         </DialogHeader>
 
         <div className="space-y-3" data-testid="changelog-entries">
-          {latest ? <ChangelogEntry entry={latest} latest /> : null}
+          {latest ? <ChangelogEntry entry={latest} latest focused={jumpTo === latest.version} /> : null}
           {visibleOlder.map((entry) => (
-            <ChangelogEntry key={entry.version} entry={entry} latest={false} />
+            <ChangelogEntry key={entry.version} entry={entry} latest={false} focused={jumpTo === entry.version} />
           ))}
           {hiddenCount > 0 ? (
             <button
