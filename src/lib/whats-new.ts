@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.82.0',
+    title: 'The report files everything \u2014 one button files the whole ledger, every visit the report read',
+    bullets: [
+      'The toolbar grows "File all N visits" beside the report\u2019s own CSV: one click files EVERY visit this window and scope read \u2014 the whole ledger, newest first \u2014 not just the summary.',
+      'It is the drawers\u2019 filing grown to the full read: the same slice builder, the same column voice (EAT date, day and time, branch, reviewer, employee, leave type, status, recheck cleared), the same RFC-4180 and formula-injection guard.',
+      'It cannot disagree with the screen: the file is built client-side from the same one-pass ledger the report renders \u2014 no second fetch, no round-trip, the download lands instantly.',
+      'Filenames never collide: mbumah-desk-all-\u2026 stamps the window bounds and scope (mbumah-desk-all-7d-2026-10-11_2026-10-17-all-branches.csv) \u2014 one stamp now names all three filings: the report, a drawer\u2019s slice, and the whole ledger.',
+      'The button waits for the read (the ledger it files IS the read) and stays an action, not a walk door \u2014 Tab reaches it, j/k does not \u2014 and the footnote says exactly what it files.',
+    ],
+  },
+  {
     version: '2.81.0',
     title: 'The link carries the whole scope \u2014 ?days= and ?branch= ride beside the drawer, and the report re-keys on arrival',
     bullets: [

@@ -35,6 +35,14 @@
 // own words ("Branch: …" / "All branches"), so the printed copy files with
 // its scope spoken plainly — one voice on screen, on paper, in every CSV.
 //
+// v2.82.0: the report files everything. Beside the report's own CSV (the
+// summary filing) the toolbar grows "File all N visits": the WHOLE ledger,
+// every visit this window and scope read, newest first, built client-side
+// from the same ledger through the same slice builder the drawers use —
+// the 'all' family. One stamp names every filing (report / drawer slice /
+// whole ledger), so filed copies never overwrite each other. The button is
+// a plain action, NOT a walk door: Tab reaches it, j/k does not.
+//
 // Print contract: the "Print" button isolates #desk-report-content through
 // the app's print-root pipeline (printReceiptElement clones the node into
 // #print-root; @media print shows ONLY that host) — the nav, sidebar and
@@ -51,7 +59,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, ArrowUpRight, BadgeCheck, Building2, CalendarRange, ChevronDown, CornerUpLeft,
-  FileSpreadsheet, FileText, Link2, Printer, RefreshCw, Sunrise, Users,
+  FileSpreadsheet, FileStack, FileText, Link2, Printer, RefreshCw, Sunrise, Users,
 } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
 import { printReceiptElement } from '@/lib/receipt-pdf';
@@ -63,6 +71,8 @@ import {
   deskReportDayLabel,
   deskReportArrival,
   deskReportHasRequestDoor,
+  deskReportLedgerCsvFilename,
+  deskReportLedgerToCsv,
   deskReportReportHref,
   deskReportRequestLedger,
   deskReportRequestSubject,
@@ -499,6 +509,30 @@ export function DeskReportView() {
     [data],
   );
 
+  // v2.82.0 — the report files everything: the whole ledger (every visit
+  // this window and scope read, newest first) through the SAME slice
+  // builder the drawers use — the 'all' family. A client-side Blob, no
+  // fetch, no round-trip: the data is already in hand, so the filed copy
+  // cannot disagree with the screen, and the filename rides the shared
+  // window + scope stamp. A plain action button, NOT a walk door.
+  const downloadLedgerCsv = useCallback(() => {
+    if (!data) return;
+    const csv = deskReportLedgerToCsv(data.ledger, {
+      scopeLabel: data.scope.branchName ? `Branch: ${data.scope.branchName}` : 'All branches',
+      windowLabel: data.window.label,
+      windowDays: data.window.days,
+    });
+    const blob = new Blob([csv], { type: 'text/csv; charset=utf-8' });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = deskReportLedgerCsvFilename(data);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  }, [data]);
+
   const scopeLabel = data?.scope.branchName
     ? `Branch: ${data.scope.branchName}`
     : 'All branches';
@@ -565,6 +599,22 @@ export function DeskReportView() {
             className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:text-slate-50"
           >
             <FileSpreadsheet className={`h-3.5 w-3.5 ${csvBusy ? 'animate-pulse' : ''}`} aria-hidden /> {csvBusy ? 'Filing…' : 'CSV'}
+          </button>
+          {/* v2.82.0 — the whole ledger, filed: every visit the report read,
+              newest first, through the drawers' own slice builder. A plain
+              action button, NOT a walk door — Tab reaches it, j/k does not.
+              It waits for the read (disabled until data lands) because the
+              ledger it files IS the read. */}
+          <button
+            type="button"
+            onClick={downloadLedgerCsv}
+            disabled={!data}
+            data-testid="desk-report-file-all"
+            title="File every visit in this window as CSV — the whole ledger, newest first (RFC-4180, formula-injection guarded)"
+            aria-label={data ? `File all ${data.ledger.length} visits as CSV` : 'File all visits as CSV'}
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-60 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:border-emerald-400 dark:hover:bg-emerald-500/20"
+          >
+            <FileStack className="h-3.5 w-3.5" aria-hidden /> {data ? `File all ${num(data.ledger.length)} visits` : 'File all visits'}
           </button>
           <button
             type="button"
@@ -1050,7 +1100,7 @@ export function DeskReportView() {
                     rides the header's own scopeLabel voice ("Branch: …" /
                     "All branches"), so a filed or printed copy says which
                     scope it covers in plain words, not a shape name. */}
-                Computed server-side from the leave review ledger over {data.window.label} ({scopeLabel}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell. An open drawer rides the address bar — copy the URL and the same file opens for whoever follows.
+                Computed server-side from the leave review ledger over {data.window.label} ({scopeLabel}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell. “File all visits” files the whole ledger — every visit the report read, newest first. An open drawer rides the address bar — copy the URL and the same file opens for whoever follows.
                 <span data-testid="desk-report-kbd-hint" className="mt-1.5 hidden items-center gap-1 sm:flex print:hidden">
                   Keyboard:
                   <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">j</kbd>

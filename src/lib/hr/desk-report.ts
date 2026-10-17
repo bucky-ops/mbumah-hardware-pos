@@ -811,19 +811,30 @@ export function deskReportToCsv(
 export function deskReportCsvFilename(report: DeskReportPayload): string {
   // EAT wall dates, not UTC slices of the window epochs — the filename names
   // the days the desk means (the window start is an EAT-midnight epoch whose
-  // UTC date is the day before the desk's).
-  const start = deskReportDayKey(new Date(report.window.start));
-  const end = deskReportDayKey(new Date(new Date(report.window.end).getTime() - DAY_MS));
-  const scope = report.scope.branch
-    ? report.scope.branch.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'branch'
-    : 'all-branches';
-  return `mbumah-desk-report-${report.window.days}d-${start}_${end}-${scope}.csv`;
+  // UTC date is the day before the desk's). v2.82.0: the stamp is shared —
+  // one helper, three filings, one voice.
+  return `mbumah-desk-report-${deskReportFileStamp(report)}.csv`;
 }
 
-// ─── v2.79.0 — the drawers file themselves ───────────────────────────────────
+// ─── v2.79.0 — the drawers file themselves ───────────────────────────────
 
-/** Which family a drawer-slice CSV files. */
-export type DeskReportSliceKind = 'reviewer' | 'request';
+/**
+ * Which family a slice CSV files. v2.79.0 added the two drawer families;
+ * v2.82.0 adds 'all' — the whole ledger, filed from the report itself (the
+ * "File all visits" toolbar door): every visit the report read, in the
+ * ledger's own order, with the same header voice and the same guard.
+ */
+export type DeskReportSliceKind = 'reviewer' | 'request' | 'all';
+
+/**
+ * The Report header row's voice for each slice family — one map, so the
+ * three filings can never drift into three different wordings.
+ */
+const DESK_REPORT_SLICE_VOICE: Record<DeskReportSliceKind, string> = {
+  reviewer: 'Desk report — reviewer visits',
+  request: 'Desk report — request visits',
+  all: 'Desk report — all visits',
+};
 
 /**
  * The slice CSV's filing meta — the report page's own scope/window voice,
@@ -857,7 +868,7 @@ export function deskReportSliceToCsv(
   const lines: string[] = [];
   const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
 
-  row(['Report', kind === 'reviewer' ? 'Desk report — reviewer visits' : 'Desk report — request visits']);
+  row(['Report', DESK_REPORT_SLICE_VOICE[kind]]);
   row(['Subject', subject]);
   row(['Scope', meta.scopeLabel]);
   row(['Window', `${meta.windowLabel} (${meta.windowDays} EAT days)`]);
@@ -884,6 +895,21 @@ export function deskReportSliceToCsv(
 }
 
 /**
+ * The stamp every desk-report filename rides: window length + EAT wall-date
+ * bounds + scope slug, e.g. 7d-2026-10-11_2026-10-17-all-branches — one
+ * helper so the report, the drawer slices and the whole-ledger filing can
+ * never disagree about how a filed copy names its window and scope.
+ */
+function deskReportFileStamp(report: DeskReportPayload): string {
+  const start = deskReportDayKey(new Date(report.window.start));
+  const end = deskReportDayKey(new Date(new Date(report.window.end).getTime() - DAY_MS));
+  const scope = report.scope.branch
+    ? report.scope.branch.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'branch'
+    : 'all-branches';
+  return `${report.window.days}d-${start}_${end}-${scope}`;
+}
+
+/**
  * The download filename for a drawer's slice CSV: subject + window bounds +
  * scope, e.g. mbumah-desk-reviewer-grace-wanjiku-7d-2026-10-11_2026-10-17-
  * all-branches.csv or mbumah-desk-request-david-otieno-s-sick-leave-… — the
@@ -896,11 +922,34 @@ export function deskReportSliceCsvFilename(
   subject: string,
   report: DeskReportPayload,
 ): string {
-  const start = deskReportDayKey(new Date(report.window.start));
-  const end = deskReportDayKey(new Date(new Date(report.window.end).getTime() - DAY_MS));
   const slug = subject.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || kind;
-  const scope = report.scope.branch
-    ? report.scope.branch.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'branch'
-    : 'all-branches';
-  return `mbumah-desk-${kind}-${slug}-${report.window.days}d-${start}_${end}-${scope}.csv`;
+  return `mbumah-desk-${kind}-${slug}-${deskReportFileStamp(report)}.csv`;
+}
+
+// ─── v2.82.0 — the report files everything ────────────────────────────
+
+/**
+ * The whole ledger, filed: every visit the report read in this window and
+ * scope, in the LEDGER's own order (newest first), through the same slice
+ * builder the drawers use — the 'all' family is the drawers' filing grown
+ * to the full read, so the voice, the columns and the OWASP guard are the
+ * ones the desk already knows. The subject row reads plainly: this file is
+ * All visits; the Scope and Window rows beside it say which.
+ */
+export function deskReportLedgerToCsv(
+  entries: readonly DeskReportVisitEntry[],
+  meta: DeskReportSliceMeta,
+): string {
+  return deskReportSliceToCsv('all', 'All visits', entries, meta);
+}
+
+/**
+ * The download filename for the whole-ledger CSV — no subject slug (the
+ * whole ledger has no subject but the report itself), so the kind names it:
+ * mbumah-desk-all-7d-2026-10-11_2026-10-17-all-branches.csv. The same
+ * window-bounds + scope stamp keeps filed copies from overwriting each
+ * other, exactly like the report and drawer filings.
+ */
+export function deskReportLedgerCsvFilename(report: DeskReportPayload): string {
+  return `mbumah-desk-all-${deskReportFileStamp(report)}.csv`;
 }
