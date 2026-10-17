@@ -11,9 +11,10 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileArchive, FileDown, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
+import { downloadPayrollBundle } from '@/components/hr/payslip-bundle-download';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/(shell)/hr/payroll/page';
 
 /** Colored payment status chips (v2.21.0 styling pass). */
@@ -219,6 +220,27 @@ export function PayrollRunDialog({
   // filing file" looks the same on every desk.
   const [runCsvBusy, setRunCsvBusy] = useState(false);
   const [runCsvNote, setRunCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  // v2.83.0: the payslip bundle — one zip, every payslip in the run, with a
+  // manifest inside. Same violet filing family as the digest CSV download.
+  const [bundleBusy, setBundleBusy] = useState(false);
+  const [bundleNote, setBundleNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportBundle = useCallback(async () => {
+    if (!runId || bundleBusy) return;
+    setBundleBusy(true);
+    setBundleNote(null);
+    try {
+      const dl = await downloadPayrollBundle(runId);
+      setBundleNote({
+        tone: 'ok',
+        text: `Payslip bundle downloaded — ${dl.filename} (${dl.sizeLabel}). One zip, every payslip in this run, a manifest inside.`,
+      });
+    } catch (e) {
+      setBundleNote({ tone: 'err', text: e instanceof Error ? e.message : 'Bundle export failed.' });
+    } finally {
+      setBundleBusy(false);
+    }
+  }, [runId, bundleBusy]);
 
   const exportRunCsv = useCallback(async () => {
     if (!runId || runCsvBusy) return;
@@ -269,6 +291,7 @@ export function PayrollRunDialog({
       setEmployeeNotices(null);
       setPaidNotices(null);
       setRunCsvNote(null);
+      setBundleNote(null);
       void load(runId);
     }
   }, [runId, load]);
@@ -607,23 +630,43 @@ export function PayrollRunDialog({
               </div>
               {/* v2.53.0: filing row — the run's digest CSV, on demand. Visible
                   from approval onward (the route refuses earlier statuses
-                  honestly); violet family = download-the-filing-file affordance. */}
-              {['APPROVED', 'POSTED', 'LOCKED'].includes(status) && (
+                  honestly); violet family = download-the-filing-file affordance.
+                  v2.83.0: the payslip bundle rides the same row — every slip
+                  in the run as one zip, downloadable the moment slips exist. */}
+              {(['APPROVED', 'POSTED', 'LOCKED'].includes(status) || (payslips?.length ?? 0) > 0) && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void exportRunCsv()}
-                    disabled={runCsvBusy}
-                    aria-label="Download the digest CSV for this run"
-                    title="The run's filing file — the same per-employee summary the approval and posting emails carry"
-                    className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
-                  >
-                    {runCsvBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                    {runCsvBusy ? 'Exporting…' : 'Digest CSV'}
-                  </Button>
+                  {['APPROVED', 'POSTED', 'LOCKED'].includes(status) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void exportRunCsv()}
+                      disabled={runCsvBusy}
+                      aria-label="Download the digest CSV for this run"
+                      title="The run's filing file — the same per-employee summary the approval and posting emails carry"
+                      className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+                    >
+                      {runCsvBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                      {runCsvBusy ? 'Exporting…' : 'Digest CSV'}
+                    </Button>
+                  )}
+                  {(payslips?.length ?? 0) > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void exportBundle()}
+                      disabled={bundleBusy}
+                      aria-label={`Download every payslip in this run as a zip bundle (${payslips?.length ?? 0} payslips)`}
+                      title="One zip, every payslip in this run — the same masked slips the PDF column serves, with a manifest inside naming what it carries"
+                      className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+                    >
+                      {bundleBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileArchive className="h-3.5 w-3.5" />}
+                      {bundleBusy ? 'Zipping…' : `Payslip bundle (${payslips?.length ?? 0})`}
+                    </Button>
+                  )}
                   <span className="text-xs text-muted-foreground">
-                    Filing file for this run — header block, summary and per-employee rows, identical to the digest email attachment.
+                    {['APPROVED', 'POSTED', 'LOCKED'].includes(status)
+                      ? 'Filing file for this run — header block, summary and per-employee rows, identical to the digest email attachment. The bundle hands every slip over as one zip.'
+                      : 'One zip, every payslip in this run — the same masked slips the PDF column serves, a manifest inside.'}
                   </span>
                 </div>
               )}
@@ -637,6 +680,18 @@ export function PayrollRunDialog({
                   }`}
                 >
                   {runCsvNote.text}
+                </div>
+              )}
+              {bundleNote && (
+                <div
+                  role="status"
+                  className={`mt-2 rounded-md border px-3 py-2 text-xs ${
+                    bundleNote.tone === 'ok'
+                      ? 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300'
+                      : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+                  }`}
+                >
+                  {bundleNote.text}
                 </div>
               )}
               {status === 'PENDING_APPROVAL' && can?.approve && can.isPreparer && (
