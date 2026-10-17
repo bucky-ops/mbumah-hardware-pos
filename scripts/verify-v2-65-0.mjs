@@ -76,7 +76,7 @@ check('empty states are filter-aware', /No desk visits recorded for \$\{reviewer
 check('footer teaches the new interactions', PANELS.includes("Click a row to review that person&apos;s desk visits; click a branch to narrow the trail."));
 check('panel dark-mode complete (card + divide + tiles)', PANELS.includes('dark:border-slate-800 dark:bg-slate-900') && PANELS.includes('divide-y divide-slate-100 dark:divide-slate-800'));
 check('status chips keep kind coding with dark variants', /PENDING: '[^']*dark:text-amber-300'/.test(PANELS) && /APPROVED: '[^']*dark:text-emerald-300'/.test(PANELS) && /REJECTED: '[^']*dark:text-rose-300'/.test(PANELS) && /CANCELLED: '[^']*dark:text-slate-400'/.test(PANELS));
-check('X icon imported for the back button', PANELS.includes("History, LogIn, MessagesSquare, RadioTower, Send, X } from 'lucide-react'"));
+check('X icon imported for the back button', /History, LogIn, MessagesSquare, RadioTower, Send,.*X \} from 'lucide-react'/.test(PANELS));
 
 console.log('== Page contract: console wiring ==');
 const PAGE = read('src/app/(shell)/console/page.tsx') ?? '';

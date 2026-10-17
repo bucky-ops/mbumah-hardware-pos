@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.67.0',
+    title: 'The desk writes its own morning note — yesterday\'s desk activity greets the console',
+    bullets: [
+      'The Desk activity panel now opens with a dawn-tinted digest of yesterday: visits taken, corrections answered, reviewers on the desk, requests touched — computed on the desk\'s own Nairobi calendar (EAT), not a vague trailing 24 hours.',
+      'The busiest branch and the most active reviewer wear chips in the strip — the morning question "where did the desk happen?" answers itself before you scroll.',
+      'The note is org-wide on purpose: drill into a reviewer or narrow to a branch and the timeline follows you, but the morning note stays the same shared yesterday for everyone.',
+      'A quiet day says so honestly — "The desk was quiet yesterday" — instead of dressing zeros up as numbers.',
+      'Multi-branch days get per-branch mini chips; the strip is dark-mode complete, with the amber-to-emerald dawn gradient carrying the morning metaphor into the dark.',
+    ],
+  },
+  {
     version: '2.66.0',
     title: 'The console catches up on the news — the changelog tells the whole release story now',
     bullets: [
