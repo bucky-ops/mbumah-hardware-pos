@@ -63,3 +63,25 @@ export function isFailedEmailDigest(input: unknown): boolean {
   const row = input as Record<string, unknown>;
   return row.type === 'hr_digest' && row.emailStatus === 'FAILED';
 }
+
+/**
+ * v2.57.0: notification-center "Retry delivery" affordance predicate — true
+ * for HR digest copies whose email FAILED **and** which still name the
+ * schedule that produced them (the retry endpoint is schedule-scoped:
+ * POST /api/hr/reports/schedules/[id]/resend re-derives the missed set
+ * server-side, so a row without a scheduleId cannot offer the action).
+ *
+ * Pure and fail-soft like every feed predicate: any non-row input, a
+ * non-hr_digest row, a SENT copy, or a schedule-less failure is simply not
+ * retryable — the predicate can never crash the feed, only narrow the rows
+ * that show the amber affordance. Scope guard: payroll digest rows
+ * (payroll_approved / payroll_posted / payroll_disbursed) deliberately do
+ * NOT qualify — their delivery story lives on the Pay Runs desk, and this
+ * endpoint re-computes HR report digests only.
+ */
+export function isRetryableDigestFailure(input: unknown): boolean {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
+  const row = input as Record<string, unknown>;
+  if (row.type !== 'hr_digest' || row.emailStatus !== 'FAILED') return false;
+  return typeof row.scheduleId === 'string' && row.scheduleId.trim().length > 0;
+}

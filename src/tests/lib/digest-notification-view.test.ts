@@ -10,7 +10,7 @@
 // notification center's "Email failed" filter tab.
 
 import { describe, it, expect } from 'vitest';
-import { parseDigestNotificationExtras, isFailedEmailDigest } from '@/lib/hr/digest-notification-view';
+import { parseDigestNotificationExtras, isFailedEmailDigest, isRetryableDigestFailure } from '@/lib/hr/digest-notification-view';
 
 describe('parseDigestNotificationExtras', () => {
   it('parses a complete metadata payload', () => {
@@ -94,6 +94,84 @@ describe('isFailedEmailDigest', () => {
   it('ignores extra truthy junk in matching rows (predicate, not validator)', () => {
     expect(
       isFailedEmailDigest({ type: 'hr_digest', emailStatus: 'FAILED', severity: 'info', junk: true }),
+    ).toBe(true);
+  });
+});
+
+// v2.57.0: isRetryableDigestFailure — the pure predicate behind the
+// notification center's "Retry delivery" affordance on FAILED digest rows.
+// The retry endpoint is schedule-scoped (POST /api/hr/reports/schedules/
+// [id]/resend re-derives the missed set server-side), so a row qualifies
+// ONLY when it is an hr_digest copy, its email FAILED, and it still names
+// its scheduleId.
+describe('isRetryableDigestFailure', () => {
+  it('matches FAILED hr_digest rows that name their schedule', () => {
+    expect(
+      isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'FAILED', scheduleId: 'sched-1' }),
+    ).toBe(true);
+  });
+
+  it('trims whitespace-only scheduleIds away (fail-soft, not coerced)', () => {
+    expect(
+      isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'FAILED', scheduleId: '   ' }),
+    ).toBe(false);
+    expect(
+      isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'FAILED', scheduleId: ' sched-2 ' }),
+    ).toBe(true);
+  });
+
+  it('refuses SENT digests, unstamped digests, and schedule-less failures', () => {
+    expect(
+      isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'SENT', scheduleId: 'sched-1' }),
+    ).toBe(false);
+    expect(isRetryableDigestFailure({ type: 'hr_digest', scheduleId: 'sched-1' })).toBe(false);
+    expect(isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'FAILED' })).toBe(false);
+  });
+
+  it('refuses non-hr_digest rows even when they carry the same fields', () => {
+    expect(
+      isRetryableDigestFailure({ type: 'payroll_posted', emailStatus: 'FAILED', scheduleId: 'run-1' }),
+    ).toBe(false);
+    expect(
+      isRetryableDigestFailure({ type: 'payroll_disbursed', emailStatus: 'FAILED', scheduleId: 'run-1' }),
+    ).toBe(false);
+    expect(
+      isRetryableDigestFailure({ type: 'security', emailStatus: 'FAILED', scheduleId: 'sched-1' }),
+    ).toBe(false);
+  });
+
+  it('refuses scheduleIds with an unexpected shape instead of coercing', () => {
+    expect(
+      isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'FAILED', scheduleId: 42 }),
+    ).toBe(false);
+    expect(
+      isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'FAILED', scheduleId: null }),
+    ).toBe(false);
+    expect(
+      isRetryableDigestFailure({ type: 'hr_digest', emailStatus: 'FAILED', scheduleId: ['sched-1'] }),
+    ).toBe(false);
+  });
+
+  it('is fail-soft on malformed rows (null / scalar / array)', () => {
+    expect(isRetryableDigestFailure(null)).toBe(false);
+    expect(isRetryableDigestFailure(undefined)).toBe(false);
+    expect(isRetryableDigestFailure('hr_digest')).toBe(false);
+    expect(isRetryableDigestFailure(42)).toBe(false);
+    expect(
+      isRetryableDigestFailure([{ type: 'hr_digest', emailStatus: 'FAILED', scheduleId: 'sched-1' }]),
+    ).toBe(false);
+  });
+
+  it('ignores extra truthy junk in matching rows (predicate, not validator)', () => {
+    expect(
+      isRetryableDigestFailure({
+        type: 'hr_digest',
+        emailStatus: 'FAILED',
+        scheduleId: 'sched-3',
+        manual: true,
+        severity: 'warning',
+        junk: 'yes',
+      }),
     ).toBe(true);
   });
 });

@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore, useAuthStore, type AppTab } from '@/lib/stores';
 import { notificationsApi, formatDateTime, formatRelativeTime, type NotificationItem } from '@/lib/api';
-import { isFailedEmailDigest } from '@/lib/hr/digest-notification-view';
+import { isFailedEmailDigest, isRetryableDigestFailure } from '@/lib/hr/digest-notification-view';
+// v2.57.0: the bell's Retry delivery calls the SAME server-governed re-send
+// endpoint the schedule card uses (lean JSON helper, CSRF-safe headers).
+import { apiSend } from '@/components/hr/self-service-ui';
 import { useNotificationReadState } from '@/lib/notification-read-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -297,6 +300,64 @@ export function NotificationCenter({
     router.push(`/hr/reports?tab=schedules&schedule=${encodeURIComponent(notification.scheduleId)}`);
   };
 
+  // v2.57.0: the bell closes the loop — a FAILED digest row that still names
+  // its schedule carries its own "Retry delivery" action, calling the SAME
+  // server-governed re-send the schedule card uses (POST …/resend): the
+  // target set is derived SERVER-SIDE from the NotificationLog (delivered-
+  // wins), the digest is recomputed fresh, the cadence never moves. The
+  // honest outcome renders inline on the row — SENT (emerald), PARTIAL /
+  // FAILED / SKIPPED (amber), 409 nothing-to-re-send (amber note, not an
+  // error), 403/404 (rose, scope refused). Per-row state keeps sibling rows
+  // independent while one is in flight.
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryNotes, setRetryNotes] = useState<Record<string, { tone: 'ok' | 'warn' | 'error'; text: string }>>({});
+
+  const handleRetryDelivery = async (e: React.MouseEvent, notification: NotificationItem) => {
+    e.stopPropagation();
+    if (!notification.scheduleId || retryingId !== null) return;
+    setRetryingId(notification.id);
+    setRetryNotes((prev) => {
+      const next = { ...prev };
+      delete next[notification.id];
+      return next;
+    });
+    try {
+      const res = await apiSend<{
+        outcome: 'SENT' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+        reSentTo: string[];
+        digestSummary: { reportLabel: string } | null;
+        email: { success: boolean; error?: string };
+      }>(`/api/hr/reports/schedules/${notification.scheduleId}/resend`, 'POST');
+      const label = res.digestSummary?.reportLabel ?? notification.title;
+      const n = res.reSentTo.length;
+      if (res.outcome === 'SENT') {
+        setRetryNotes((prev) => ({ ...prev, [notification.id]: { tone: 'ok', text: `${label} digest re-sent to ${n} recipient${n === 1 ? '' : 's'} who missed it — email delivered. A fresh copy lands in your bell.` } }));
+      } else if (res.outcome === 'SKIPPED') {
+        setRetryNotes((prev) => ({ ...prev, [notification.id]: { tone: 'warn', text: `${label} digest not re-sent: ${res.email.error ?? 'no data for the period'}. Nothing was emailed.` } }));
+      } else if (res.outcome === 'PARTIAL') {
+        setRetryNotes((prev) => ({ ...prev, [notification.id]: { tone: 'warn', text: `${label} re-send delivered to some of the ${n} missed recipient${n === 1 ? '' : 's'} (${res.email.error ?? 'partial delivery'}) — the per-recipient rows are on the schedule's delivery history.` } }));
+      } else {
+        setRetryNotes((prev) => ({ ...prev, [notification.id]: { tone: 'warn', text: `${label} re-send failed (${res.email.error ?? 'delivery error'}) — the per-recipient failure rows are on the schedule's delivery history.` } }));
+      }
+    } catch (err) {
+      const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined;
+      const message = err instanceof Error ? err.message : 'Could not re-send the digest.';
+      if (status === 409 || message.toLowerCase().includes('nothing to re-send')) {
+        setRetryNotes((prev) => ({ ...prev, [notification.id]: { tone: 'warn', text: 'Nothing to re-send — the latest delivery already reached every recipient.' } }));
+      } else if (status === 403 || status === 404) {
+        setRetryNotes((prev) => ({ ...prev, [notification.id]: { tone: 'error', text: 'Retry refused — this schedule sits outside your desk\u2019s scope.' } }));
+      } else {
+        setRetryNotes((prev) => ({ ...prev, [notification.id]: { tone: 'error', text: message } }));
+      }
+    } finally {
+      setRetryingId(null);
+      // A manual re-send writes a fresh manual copy into the feed — pull it
+      // in (and refresh the badge) so the bell tells the whole story.
+      queryClient.invalidateQueries({ queryKey: ['notification-count', storeId] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', storeId] });
+    }
+  };
+
   const handleDismiss = (e: React.MouseEvent, notificationId: string) => {
     e.stopPropagation();
     dismiss(notificationId);
@@ -542,6 +603,14 @@ export function NotificationCenter({
                   No security notifications
                 </p>
               )}
+              {/* v2.57.0: the Email failed tab explains itself — the rows below
+                  are failed digest copies, and the ones naming their schedule
+                  carry the one-tap fix right on the row. */}
+              {filter === 'email_failed' && !showDismissed && visibleNotifications.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  These digest copies failed to deliver. Rows that name their schedule carry a Retry delivery action — one tap re-sends to exactly who missed it.
+                </div>
+              )}
               {visibleNotifications.map((notification) => {
                 if (showDismissed) {
                   return (
@@ -777,6 +846,42 @@ export function NotificationCenter({
                               >
                                 <CalendarSync className="h-3 w-3" aria-hidden /> Manage schedule
                               </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {/* v2.57.0: the bell closes the loop — a FAILED digest
+                            row naming its schedule offers the SAME server-
+                            governed re-send the schedule card uses, with the
+                            honest outcome rendered inline on the row (the
+                            button never bubbles into the row's deep link). */}
+                        {isRetryableDigestFailure(notification) ? (
+                          <div className="mt-1.5 space-y-1">
+                            <button
+                              type="button"
+                              onClick={(e) => void handleRetryDelivery(e, notification)}
+                              disabled={retryingId !== null}
+                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-900/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                              aria-label={`Retry delivery of ${notification.title}`}
+                            >
+                              <RotateCcw
+                                className={`h-3 w-3 ${retryingId === notification.id ? 'animate-spin' : ''}`}
+                                aria-hidden
+                              />
+                              {retryingId === notification.id ? 'Retrying…' : 'Retry delivery'}
+                            </button>
+                            {retryNotes[notification.id] ? (
+                              <p
+                                role="status"
+                                className={`rounded-md border px-2 py-1 text-[11px] leading-snug ${
+                                  retryNotes[notification.id].tone === 'ok'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
+                                    : retryNotes[notification.id].tone === 'warn'
+                                      ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                                      : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200'
+                                }`}
+                              >
+                                {retryNotes[notification.id].text}
+                              </p>
                             ) : null}
                           </div>
                         ) : null}
