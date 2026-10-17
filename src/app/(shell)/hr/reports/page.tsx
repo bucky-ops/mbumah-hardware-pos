@@ -209,21 +209,6 @@ interface ErasureDto {
 
 const YEARS = [new Date().getUTCFullYear(), new Date().getUTCFullYear() - 1, new Date().getUTCFullYear() - 2];
 
-function csvEscape(v: unknown): string {
-  const s = v === null || v === undefined ? '' : String(v);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function downloadCSV(filename: string, header: string[], rows: unknown[][]): void {
-  const csv = [header.map(csvEscape).join(','), ...rows.map((r) => r.map(csvEscape).join(','))].join('\r\n');
-  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const REPORT_TAB_KEYS = ['headcount', 'cost', 'absence', 'leave', 'turnover', 'tth', 'statutory', 'p10', 'schedules', 'privacy'] as const;
 
@@ -546,6 +531,55 @@ export default function HrReportsPage() {
     }
   }, [tab, from, to, leaveYear, storeId, digestBusy]);
 
+  // v2.58.0: per-table CSV exports ride the SAME governed server builder the
+  // digest emails use (header block, OWASP formula-injection guard, honest
+  // filename) — the table section only, so the button delivers the table the
+  // user is LOOKING at in the exact shape every other filing file uses. The
+  // unguarded client-side builder this replaces had neither the guard nor
+  // the header, so a downloaded table could disagree with the email.
+  const [tableBusy, setTableBusy] = useState<string | null>(null);
+
+  const exportTableCsv = useCallback(async (reportKey: string) => {
+    if (tableBusy) return;
+    setTableBusy(reportKey);
+    setDigestNote(null);
+    try {
+      const qs = new URLSearchParams({ report: reportKey, table: '1' });
+      if (reportKey === 'leave-utilisation') {
+        qs.set('year', leaveYear);
+      } else {
+        qs.set('from', from);
+        qs.set('to', to);
+      }
+      if (storeId) qs.set('storeId', storeId);
+      const res = await fetch(`/api/hr/reports/export?${qs.toString()}`, { credentials: 'include' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename =
+        match?.[1] ?? res.headers.get('X-Digest-Csv-Filename') ?? `mbumah-${reportKey}-table.csv`;
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setDigestNote({
+        tone: 'ok',
+        text: `Table CSV downloaded — ${filename} (${formatCsvSize(blob.size)}). The governed digest format, table section only.`,
+      });
+    } catch (e) {
+      setDigestNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setTableBusy(null);
+    }
+  }, [from, to, leaveYear, storeId, tableBusy]);
+
   const Stat = ({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'warn' | 'good' }) => (
     <div className="rounded-xl border bg-card p-3.5 shadow-sm print:shadow-none">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -560,7 +594,7 @@ export default function HrReportsPage() {
     </div>
   );
 
-  const TableToolbar = ({ columns, exportCsv }: { columns: Array<{ key: string; label: string }>; exportCsv: () => void }) => (
+  const TableToolbar = ({ columns, exportCsv, busyKey }: { columns: Array<{ key: string; label: string }>; exportCsv: () => void; busyKey?: string }) => (
     <div className="mb-2 flex flex-wrap items-center justify-end gap-2 print:hidden">
       <Select
         value={columns.filter((c) => !hiddenCols[c.key]).length === columns.length ? 'all' : 'custom'}
@@ -583,8 +617,22 @@ export default function HrReportsPage() {
           ))}
         </SelectContent>
       </Select>
-      <Button size="sm" variant="outline" onClick={exportCsv}>
-        <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden /> CSV
+      {/* v2.58.0: the table CSV is the governed digest file (table section) —
+          the tooltip says so, the busy state spins while the server builds,
+          and the button disables while any table export is in flight. */}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={exportCsv}
+        disabled={tableBusy !== null}
+        title="Table CSV - the governed digest format (header block, injection guard), table section only"
+        aria-label={busyKey && tableBusy === busyKey ? 'Building the table CSV' : 'Download table CSV'}
+      >
+        <FileSpreadsheet
+          className={`h-3.5 w-3.5 ${busyKey && tableBusy === busyKey ? 'animate-pulse' : ''}`}
+          aria-hidden
+        />
+        {busyKey && tableBusy === busyKey ? 'Building…' : 'CSV'}
       </Button>
       <Button size="sm" variant="outline" onClick={() => window.print()}>
         <Printer className="h-3.5 w-3.5" aria-hidden /> Print PDF
@@ -768,13 +816,8 @@ export default function HrReportsPage() {
                       { key: 'total', label: 'Total' },
                       { key: 'net', label: 'Net' },
                     ]}
-                    exportCsv={() =>
-                      downloadCSV(
-                        `employment-cost-${from}-${to}.csv`,
-                        ['Period', 'Gross (KES)', 'Employer statutory (KES)', 'Total cost (KES)', 'Net (KES)'],
-                        cost.monthly.map((m) => [m.label, m.grossPay.toFixed(2), m.employerStatutory.toFixed(2), m.totalCost.toFixed(2), m.netPay.toFixed(2)]),
-                      )
-                    }
+                    exportCsv={() => void exportTableCsv('employment-cost')}
+                    busyKey='employment-cost'
                   />
                   <div className="max-h-96 overflow-y-auto">
                     <Table>
@@ -826,13 +869,8 @@ export default function HrReportsPage() {
                 <CardContent>
                   <TableToolbar
                     columns={[{ key: 'status', label: 'Status' }, { key: 'days', label: 'Days' }, { key: 'share', label: 'Share' }]}
-                    exportCsv={() =>
-                      downloadCSV(
-                        `absence-${from}-${to}.csv`,
-                        ['Status', 'Days', 'Share %'],
-                        absence.byStatus.map((s) => [s.status, s.days, shareOf(s.days, absence.byStatus)]),
-                      )
-                    }
+                    exportCsv={() => void exportTableCsv('absence')}
+                    busyKey='absence'
                   />
                   <Table>
                     <TableHeader><TableRow>
@@ -962,24 +1000,8 @@ export default function HrReportsPage() {
                       { key: 'rail', label: 'Committed' },
                       { key: 'flag', label: 'Flag' },
                     ]}
-                    exportCsv={() =>
-                      downloadCSV(
-                        `leave-utilisation-${leaveUtil.year}.csv`,
-                        ['Employee', 'Job title', 'Branch', 'Leave type', 'Allocated', 'Carried', 'Used', 'Pending', 'Available', 'Committed %', 'Flag'],
-                        leaveUtil.rows.map((r) => [
-                          r.employeeCode,
-                          r.jobTitle,
-                          r.storeName,
-                          r.typeName,
-                          r.allocated.toFixed(1),
-                          r.used.toFixed(1),
-                          r.pending.toFixed(1),
-                          r.available.toFixed(1),
-                          r.committedPct.toFixed(1),
-                          r.flag,
-                        ]),
-                      )
-                    }
+                    exportCsv={() => void exportTableCsv('leave-utilisation')}
+                    busyKey='leave-utilisation'
                   />
                   {leaveUtil.rows.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
@@ -1250,13 +1272,8 @@ export default function HrReportsPage() {
                       { key: 'code', label: 'Code' }, { key: 'title', label: 'Title' }, { key: 'type', label: 'Type' },
                       { key: 'hired', label: 'Hired' }, { key: 'left', label: 'Left' }, { key: 'tenure', label: 'Tenure' },
                     ]}
-                    exportCsv={() =>
-                      downloadCSV(
-                        `turnover-${from}-${to}.csv`,
-                        ['Employee code', 'Job title', 'Type', 'Hired', 'Left', 'Tenure (y)'],
-                        turnover.exitRows.map((r) => [r.employeeCode, r.jobTitle, r.employmentType, formatDate(r.hireDate), formatDate(r.terminationDate), r.tenureYears]),
-                      )
-                    }
+                    exportCsv={() => void exportTableCsv('turnover')}
+                    busyKey='turnover'
                   />
                   <div className="max-h-96 overflow-y-auto">
                     <Table>
@@ -1310,13 +1327,8 @@ export default function HrReportsPage() {
                 <CardContent>
                   <TableToolbar
                     columns={[{ key: 'job', label: 'Position' }, { key: 'applied', label: 'Applied' }, { key: 'accepted', label: 'Accepted' }, { key: 'days', label: 'Days' }]}
-                    exportCsv={() =>
-                      downloadCSV(
-                        `time-to-hire-${from}-${to}.csv`,
-                        ['Position', 'Applied', 'Accepted', 'Days'],
-                        tth.rows.map((r) => [r.jobTitle, formatDate(r.appliedOn), r.acceptedOn ? formatDate(r.acceptedOn) : '—', r.daysToHire ?? '']),
-                      )
-                    }
+                    exportCsv={() => void exportTableCsv('time-to-hire')}
+                    busyKey='time-to-hire'
                   />
                   <div className="max-h-96 overflow-y-auto">
                     <Table>
@@ -1373,13 +1385,8 @@ export default function HrReportsPage() {
                       { key: 'label', label: 'Period' }, { key: 'paye', label: 'PAYE' }, { key: 'nssf', label: 'NSSF' },
                       { key: 'shif', label: 'SHIF' }, { key: 'ahl', label: 'Housing levy' }, { key: 'arr', label: 'Arrears' },
                     ]}
-                    exportCsv={() =>
-                      downloadCSV(
-                        `statutory-liability-${from}-${to}.csv`,
-                        ['Period', 'PAYE (KES)', 'NSSF (KES)', 'SHIF (KES)', 'Housing levy (KES)', 'PAYE arrears (KES)'],
-                        statutory.monthly.map((m) => [m.label, m.paye.toFixed(2), m.nssf.toFixed(2), m.shif.toFixed(2), m.housingLevy.toFixed(2), m.payeArrears.toFixed(2)]),
-                      )
-                    }
+                    exportCsv={() => void exportTableCsv('statutory-liability')}
+                    busyKey='statutory-liability'
                   />
                   <div className="max-h-96 overflow-y-auto">
                     <Table>

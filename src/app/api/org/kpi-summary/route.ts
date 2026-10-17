@@ -19,7 +19,7 @@
 // branch-only roles out. No customer PII beyond debtor names/branches, which
 // these roles already see in their own store debt views.
 
-import { db, runWithoutTenant } from '@/lib/db';
+import { rawDb, runWithoutTenant } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { withErrorBoundary } from '@/lib/logger';
 import { LogComponent } from '@/lib/types';
@@ -40,6 +40,14 @@ function maskPhone(phone: string | null | undefined): string | null {
 }
 
 async function orgKpiSummaryHandler(): Promise<Response> {
+  // v2.58.0: the org console aggregates ALL stores by contract — every read
+// below is org-wide (per-store loops / cross-store groupBys) guarded to
+// ORG_ROLES. The reads go through rawDb (the un-intercepted client) so the
+// v2.57.0 leak class (a runWithoutTenant bypass silently ignored inside a
+// Next.js request, AND-narrowing the query to the browsing store) can never
+// shrink an org total to one branch's numbers for a store-scoped viewer.
+// Read-only route: rawDb's missing immutability guard is irrelevant here.
+
   return runWithoutTenant(async () => {
     const now = new Date();
     const startToday = new Date(now);
@@ -54,22 +62,22 @@ async function orgKpiSummaryHandler(): Promise<Response> {
 
     // ── Revenue: today, 7d, prior 7d + per-day sparkline ────────────────────
     const [todayAgg, weekAgg, priorAgg, sparkRows] = await Promise.all([
-      db.salesTransaction.aggregate({
+      rawDb.salesTransaction.aggregate({
         where: { ...SALE_WHERE, createdAt: { gte: startToday } },
         _sum: { totalAmount: true, taxAmount: true },
         _count: { _all: true },
       }),
-      db.salesTransaction.aggregate({
+      rawDb.salesTransaction.aggregate({
         where: { ...SALE_WHERE, createdAt: { gte: weekAgo } },
         _sum: { totalAmount: true, taxAmount: true },
         _count: { _all: true },
       }),
-      db.salesTransaction.aggregate({
+      rawDb.salesTransaction.aggregate({
         where: { ...SALE_WHERE, createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
         _sum: { totalAmount: true, taxAmount: true },
         _count: { _all: true },
       }),
-      db.salesTransaction.findMany({
+      rawDb.salesTransaction.findMany({
         where: { ...SALE_WHERE, createdAt: { gte: weekAgo } },
         select: { createdAt: true, totalAmount: true, taxAmount: true },
       }),
@@ -102,7 +110,7 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     const spark = sparkBuckets.map((v) => round2(v));
 
     // ── Debt: org-wide outstanding + aging buckets (precomputed column) ─────
-    const debtGrouped = await db.debtLedger.groupBy({
+    const debtGrouped = await rawDb.debtLedger.groupBy({
       by: ['agingBucket'],
       where: { status: { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] }, balance: { gt: 0 } },
       _sum: { balance: true },
@@ -119,7 +127,7 @@ async function orgKpiSummaryHandler(): Promise<Response> {
 
     // Top debtors (aggregate + name only - these org roles already see debt
     // lists in their own stores; no phone/email is shipped).
-    const topDebts = await db.debtLedger.findMany({
+    const topDebts = await rawDb.debtLedger.findMany({
       where: { status: { in: ['OUTSTANDING', 'PARTIAL', 'OVERDUE'] }, balance: { gt: 0 } },
       orderBy: { balance: 'desc' },
       take: 10,
@@ -134,12 +142,12 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     });
 
     const [activePlans, sentReminders] = await Promise.all([
-      db.debtPaymentPlan.count({ where: { status: { not: 'COMPLETED' } } }),
-      db.debtReminder.count({ where: { status: { in: ['SENT', 'DELIVERED'] } } }),
+      rawDb.debtPaymentPlan.count({ where: { status: { not: 'COMPLETED' } } }),
+      rawDb.debtReminder.count({ where: { status: { in: ['SENT', 'DELIVERED'] } } }),
     ]);
 
     // ── Inventory: org-wide stock health ────────────────────────────────────
-    const products = await db.product.findMany({
+    const products = await rawDb.product.findMany({
       where: { isActive: true },
       select: {
         id: true, name: true, sku: true, quantityInStock: true, reorderLevel: true,
@@ -169,9 +177,9 @@ async function orgKpiSummaryHandler(): Promise<Response> {
 
     // ── Rentals ─────────────────────────────────────────────────────────────
     const [rentalsActive, rentalsOverdue, rentalRows] = await Promise.all([
-      db.equipmentRental.count({ where: { status: 'ACTIVE' } }),
-      db.equipmentRental.count({ where: { status: 'OVERDUE' } }),
-      db.equipmentRental.findMany({
+      rawDb.equipmentRental.count({ where: { status: 'ACTIVE' } }),
+      rawDb.equipmentRental.count({ where: { status: 'OVERDUE' } }),
+      rawDb.equipmentRental.findMany({
         where: { status: { in: ['ACTIVE', 'OVERDUE'] } },
         orderBy: { expectedReturnDate: 'asc' },
         take: 8,
@@ -187,8 +195,8 @@ async function orgKpiSummaryHandler(): Promise<Response> {
 
     // ── Suppliers / purchase orders (delivery signals from real rows) ───────
     const [supplierCount, poRows] = await Promise.all([
-      db.supplier.count({ where: { isActive: true } }),
-      db.purchaseOrder.findMany({
+      rawDb.supplier.count({ where: { isActive: true } }),
+      rawDb.purchaseOrder.findMany({
         where: { status: { in: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED'] } },
         select: {
           id: true, status: true, expectedDate: true, totalAmount: true,
@@ -203,7 +211,7 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     const overduePOs = poRows.filter((p) => p.expectedDate && p.expectedDate < now).length;
 
     // ── M-Pesa (STK push ledger, phones masked) ─────────────────────────────
-    const mpesaRows = await db.mpesaTransaction.findMany({
+    const mpesaRows = await rawDb.mpesaTransaction.findMany({
       orderBy: { createdAt: 'desc' },
       take: 20,
       select: {
@@ -219,7 +227,7 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     const mpesaFailed = mpesaRows.filter((m) => m.status === 'FAILED' || m.status === 'CANCELLED').length;
 
     // ── eTIMS (KRA transmission state off SalesTransaction) ─────────────────
-    const etimsGrouped = await db.salesTransaction.groupBy({
+    const etimsGrouped = await rawDb.salesTransaction.groupBy({
       by: ['etimsStatus'],
       where: { transactionType: 'SALE', etimsStatus: { not: null } },
       _count: { _all: true },
@@ -229,23 +237,23 @@ async function orgKpiSummaryHandler(): Promise<Response> {
 
     // ── Action queue (real pending states in the main-lineage models) ───────
     const [pendingPOs, openShifts, pendingExpenses] = await Promise.all([
-      db.purchaseOrder.count({ where: { status: { in: ['DRAFT', 'PENDING_APPROVAL'] } } }),
-      db.shift.count({ where: { status: 'ACTIVE' } }),
+      rawDb.purchaseOrder.count({ where: { status: { in: ['DRAFT', 'PENDING_APPROVAL'] } } }),
+      rawDb.shift.count({ where: { status: 'ACTIVE' } }),
       // Main's Expense model has ACTIVE/VOIDED only (no PENDING approval
       // state) - the count stays DB-derived (0 in this release).
-      db.expense.count({ where: { status: 'PENDING' } }),
+      rawDb.expense.count({ where: { status: 'PENDING' } }),
     ]);
 
     // ── Engagement + system counters ────────────────────────────────────────
     const [chatCount, storeCount, activeUsers, unreadNotifications] = await Promise.all([
-      db.conversationMessage.count(),
-      db.store.count({ where: { status: { not: 'ARCHIVED' } } }),
-      db.user.count({ where: { isActive: true } }),
-      db.notification.count({ where: { isRead: false } }),
+      rawDb.conversationMessage.count(),
+      rawDb.store.count({ where: { status: { not: 'ARCHIVED' } } }),
+      rawDb.user.count({ where: { isActive: true } }),
+      rawDb.notification.count({ where: { isRead: false } }),
     ]);
 
     // ── Activity (org-wide AuditLog with user join) ─────────────────────────
-    const auditRows = await db.auditLog.findMany({
+    const auditRows = await rawDb.auditLog.findMany({
       orderBy: { timestamp: 'desc' },
       take: 10,
       include: { user: { select: { name: true, role: true } } },

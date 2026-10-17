@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.58.0',
+    title: 'One builder to file them all — every per-table CSV is now the governed digest file, and the org console can never shrink to one branch',
+    bullets: [
+      'The per-table CSV buttons on the HR reports tabs now download the SAME governed file a digest email carries — header block, honest filename, OWASP formula-injection guard — with just the table section instead of a bare grid.',
+      'The old client-side CSV builder is gone: an ad-hoc download can no longer disagree with the email, and a tampered cell can no longer reach a spreadsheet as a formula.',
+      'Every table export is audit-logged with its section (table vs digest), so the paperwork trail knows exactly which file was filed.',
+      'Fixed the same silent-narrowing bug class in the org console: for a store-scoped viewer the org totals (revenue, debt, stock, headcount) could quietly shrink to their own branch — the org-wide reads now bypass store scoping by construction.',
+      'A permanent audit test now pins the whole bypass-read surface: any new bypass that could be silently narrowed fails the build until a human gives it a written reason.',
+    ],
+  },
+  {
     version: '2.57.0',
     title: 'The bell closes the loop — a failed digest notification carries its own Retry delivery action',
     bullets: [
