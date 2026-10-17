@@ -53,6 +53,9 @@ export interface B2CDisburseSummary {
    * every eligible payslip in this batch with its outcome (PAID settled now,
    * SENT in flight, FAILED, SKIPPED). Optional so older callers/records
    * without the field stay valid.
+   * v2.51.0: rows also carry the payroll detail id so the employee
+   * "you've been paid" fan-out can target exactly the rows that settled
+   * PAID in this batch (optional for the same backward compatibility).
    */
   results?: Array<{
     employeeCode: string;
@@ -60,6 +63,7 @@ export interface B2CDisburseSummary {
     net: number;
     status: 'PAID' | 'SENT' | 'FAILED' | 'SKIPPED';
     receipt?: string | null;
+    detailId?: string;
   }>;
 }
 
@@ -130,7 +134,7 @@ export async function disburseRunViaMpesa(
     const net = Number(detail.netPay);
     if (!detail.employee.phone) {
       summary.skipped.push({ employeeCode: code, reason: 'No M-Pesa phone number on the employee record.' });
-      summary.results?.push({ employeeCode: code, employeeName, net, status: 'SKIPPED' });
+      summary.results?.push({ employeeCode: code, employeeName, net, status: 'SKIPPED', detailId: detail.id });
       continue;
     }
     try {
@@ -144,11 +148,11 @@ export async function disburseRunViaMpesa(
       });
       if (result.alreadyInitiated) {
         summary.alreadyInitiated += 1;
-        summary.results?.push({ employeeCode: code, employeeName, net, status: 'SENT' });
+        summary.results?.push({ employeeCode: code, employeeName, net, status: 'SENT', detailId: detail.id });
         continue;
       }
       summary.initiated += 1;
-      summary.results?.push({ employeeCode: code, employeeName, net, status: 'SENT' });
+      summary.results?.push({ employeeCode: code, employeeName, net, status: 'SENT', detailId: detail.id });
       if (result.mode === 'mock' && result.status === 'COMPLETED' && result.receiptNumber) {
         // MOCK: no webhook will arrive - settle the payslip now.
         await withImmutabilityBypass(async () =>
@@ -175,7 +179,7 @@ export async function disburseRunViaMpesa(
         code: 'B2C_INITIATION_FAILED',
         message: error instanceof Error ? error.message : 'Unknown B2C failure',
       });
-      summary.results?.push({ employeeCode: code, employeeName, net, status: 'FAILED' });
+      summary.results?.push({ employeeCode: code, employeeName, net, status: 'FAILED', detailId: detail.id });
     }
   }
 

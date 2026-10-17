@@ -23,6 +23,7 @@ import { LogSeverity, LogComponent } from '@/lib/types';
 import { isRateLimited } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/security';
 import { settlePayrollB2CResult, type B2CResultPayload } from '@/lib/hr/payroll/disbursement-service';
+import { notifyEmployeesPaid } from '@/lib/hr/payroll/run-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,6 +113,36 @@ async function b2cResultHandler(...args: unknown[]): Promise<Response> {
     }
 
     const outcome = await settlePayrollB2CResult(body);
+
+    // v2.51.0: the personal "you've been paid" notice rides the FIRST webhook
+    // settlement of a live B2C payment — the moment the real receipt exists.
+    // Idempotent for free: alreadySettled replays never reach this branch
+    // (the atomic claim in settlePayrollB2CResult wins exactly once).
+    // BEST-EFFORT by contract: Daraja already got its 200 shape below; a
+    // notice failure is logged and can never fail the webhook.
+    if (outcome.settled && outcome.outcome === 'COMPLETED' && outcome.payrollDetailId) {
+      try {
+        const detail = await db.payrollDetail.findUnique({
+          where: { id: outcome.payrollDetailId },
+          select: { payrollRunId: true, storeId: true },
+        });
+        if (detail) {
+          const receipt =
+            body.TransactionID || body.Result?.TransactionID || null;
+          await notifyEmployeesPaid({
+            runId: detail.payrollRunId,
+            storeId: detail.storeId,
+            mode: 'mpesa',
+            paidDetails: [
+              { detailId: outcome.payrollDetailId, receipt: receipt ? `MPESA-${receipt}` : null },
+            ],
+            disbursedAtIso: new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        console.warn('[payroll] b2c webhook paid notice failed (best-effort):', err);
+      }
+    }
 
     await systemLog({
       action: 'MPESA_B2C_RESULT',

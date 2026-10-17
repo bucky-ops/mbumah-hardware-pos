@@ -16,12 +16,14 @@ export const POST = hrGuard('hr.payroll.disburse', DISBURSE_ROLES)(
       // v2.50.0: the digest rides the manual confirmation the same way it
       // rides the B2C batch — the payroll group hears the money moved, and
       // the honest "who was told" banner shows in the run dialog.
-      const { disbursed, digest } = await disbursePayrollRun(
+      // v2.51.0: paidNotices rides too — every portal-linked employee in the
+      // batch is told "you've been paid" with their own receipt.
+      const { disbursed, digest, paidNotices } = await disbursePayrollRun(
         payrollActorContext(session),
         id,
         typeof body.paymentRef === 'string' ? body.paymentRef : undefined,
       );
-      return Response.json({ success: true, data: { disbursed }, digest });
+      return Response.json({ success: true, data: { disbursed }, digest, paidNotices });
     } catch (error) {
       const mapped = payrollErrorResponse(error);
       if (mapped) return mapped;

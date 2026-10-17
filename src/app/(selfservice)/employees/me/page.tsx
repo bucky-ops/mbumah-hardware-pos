@@ -22,11 +22,14 @@ import { HomeView, type HomeDashboardDto } from './home-view';
 import { SelfDashboardCacheWriter } from './cache-writer';
 import { loadSelfPortal } from './self-portal';
 import { db, runWithoutTenant } from '@/lib/db';
-import { PAYSLIP_ISSUED_METADATA_MARKER } from '@/lib/hr/payroll/run-digest';
+import { PAYSLIP_ISSUED_METADATA_MARKER, PAYROLL_PAID_METADATA_MARKER } from '@/lib/hr/payroll/run-digest';
 
 export const dynamic = 'force-dynamic';
 
-/** v2.49.0: the employee-facing "your payslip is issued" notice strip. */
+/** v2.49.0: the employee-facing "your payslip is issued" notice strip.
+ *  v2.51.0: the strip now carries BOTH personal pay moments — 'issued'
+ *  (teal, the payslip exists) and 'paid' (emerald, the money settled with
+ *  the employee's own receipt in hand) — merged newest-first. */
 export interface PayslipNoticeDto {
   id: string;
   title: string;
@@ -34,6 +37,8 @@ export interface PayslipNoticeDto {
   createdAt: string;
   actionUrl: string | null;
   actionLabel: string | null;
+  /** 'issued' = payslip exists (v2.49.0) · 'paid' = money settled (v2.51.0). */
+  kind: 'issued' | 'paid';
 }
 
 async function loadPayslipNotices(userId: string): Promise<PayslipNoticeDto[]> {
@@ -47,7 +52,12 @@ async function loadPayslipNotices(userId: string): Promise<PayslipNoticeDto[]> {
         where: {
           userId,
           category: 'HR',
-          metadata: { contains: PAYSLIP_ISSUED_METADATA_MARKER },
+          OR: [
+            { metadata: { contains: PAYSLIP_ISSUED_METADATA_MARKER } },
+            // v2.51.0: the personal "you've been paid" rows ride the same
+            // strip — the two moments of one pay story, newest first.
+            { metadata: { contains: PAYROLL_PAID_METADATA_MARKER } },
+          ],
         },
         orderBy: { createdAt: 'desc' },
         take: 3,
@@ -60,6 +70,7 @@ async function loadPayslipNotices(userId: string): Promise<PayslipNoticeDto[]> {
       createdAt: r.createdAt.toISOString(),
       actionUrl: r.actionUrl,
       actionLabel: r.actionLabel,
+      kind: (r.metadata ?? '').includes(PAYROLL_PAID_METADATA_MARKER) ? ('paid' as const) : ('issued' as const),
     }));
   } catch {
     // The notice strip is best-effort garnish — the dashboard must render

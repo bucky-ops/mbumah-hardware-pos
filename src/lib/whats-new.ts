@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.51.0',
+    title: 'You\u2019ve been paid — employees now hear the moment their money settles, receipt in hand',
+    bullets: [
+      'The pay story is complete: a payslip that actually goes PAID — by M-Pesa B2C, a simulated batch, or a manual bank-run confirmation — now tells the EMPLOYEE personally: "You\u2019ve been paid", with their own net, their own receipt, and a one-tap link to their Payslips page.',
+      'Honesty is the contract: a live M-Pesa payment that is still in flight never claims to be paid — the employee\u2019s notice arrives from the Daraja receipt webhook the moment the real receipt exists, and a simulated batch always says so.',
+      'The self-service home strip now tells both moments of the story side by side — teal "payslip issued" rows and emerald "Paid" rows, newest first — so the good news is the first thing an employee sees when they sign in.',
+      'The run dialog\u2019s disbursement banner gained an emerald "Employee paid notices" line: how many employees were told, how many emails left, and the reminder that in-flight payments stay quiet until the receipt lands.',
+      'Personal by design: each notice carries only that employee\u2019s own numbers — no group CSV, no colleagues\u2019 figures — and unlinked employees stay exactly as before, with paper payslips as their channel.',
+    ],
+  },
+  {
     version: '2.50.0',
     title: 'The money now announces its exit — disbursement batches land in the payroll group\u2019s bell and inbox',
     bullets: [

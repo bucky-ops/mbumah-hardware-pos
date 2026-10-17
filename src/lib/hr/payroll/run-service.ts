@@ -32,10 +32,12 @@ import {
   PAYROLL_POSTED_METADATA_MARKER,
   PAYSLIP_ISSUED_METADATA_MARKER,
   PAYROLL_DISBURSED_METADATA_MARKER,
+  PAYROLL_PAID_METADATA_MARKER,
   payrollRunApprovalCopy,
   payrollRunPostedCopy,
   payslipIssuedCopy,
   payrollRunDisbursedCopy,
+  payrollRunPaidCopy,
   payrollRunDigestToCsv,
   payrollDisbursementToCsv,
   type PayrollRunDigestEmployeeRow,
@@ -1416,6 +1418,190 @@ export async function notifyPayrollRunDisbursed(params: {
   };
 }
 
+// ── 3.d v2.51.0: employee-facing "you've been paid" notices ──────────────
+
+/**
+ * v2.51.0: fan out the "you've been paid" notices for a just-settled
+ * payment batch — the personal completion of the pay story. v2.49.0 told
+ * the employee "your payslip is issued"; v2.50.0 told the payroll GROUP
+ * "money left the door"; this closes the loop by telling the EMPLOYEE the
+ * money actually settled, with their own receipt in hand.
+ *
+ * AUDIENCE + IDEMPOTENCE CONTRACT: the caller passes exactly the payslips
+ * that went PAID in THIS batch (detailIds + per-row receipt) — the service
+ * never re-derives "all PAID payslips of the run", so an earlier batch's
+ * notices can never be re-sent by a later one. Only portal-linked
+ * employees receive anything (same posture as v2.49.0): an unlinked
+ * employee has no bell to ring, and paper/offline channels stay theirs.
+ *
+ * PRIVACY DESIGN: personal rows only — net, receipt, payslip number, and
+ * a mode-honest channel line (live M-Pesa B2C vs simulated vs manual
+ * bookkeeping mark). No group CSV, no colleagues' figures, ever.
+ *
+ * HONESTY GATE: callers only fire for rows that actually settled PAID
+ * (manual marks, mock receipts, or the Daraja result webhook). A live B2C
+ * row still in flight (SENT) is NOT "paid" — its notice arrives from the
+ * result webhook when the real receipt lands.
+ *
+ * Delivery: createMany for the in-app rows, then per-employee emails in
+ * batches of 5 (every send individually caught). Best-effort by contract:
+ * callers wrap this in .catch — the money is already durable.
+ */
+export async function notifyEmployeesPaid(params: {
+  runId: string;
+  storeId: string;
+  mode: PayrollDisbursementMode;
+  /** Exactly the payslips that settled PAID in THIS batch, with their
+   *  receipts (MPESA-… / MANUAL-… / null). Drives the audience — never
+   *  re-derived from the run, so replays cannot re-notify. */
+  paidDetails: Array<{ detailId: string; receipt: string | null }>;
+  disbursedAtIso: string;
+}): Promise<PayslipIssuedFanoutResult> {
+  if (params.paidDetails.length === 0) {
+    return { portalLinked: 0, notifiedUsers: 0, emailsAttempted: 0, emailsSent: 0, emailsFailed: 0 };
+  }
+
+  const detailIds = params.paidDetails.map((d) => d.detailId).filter((id) => typeof id === 'string' && id.length > 0);
+  if (detailIds.length === 0) {
+    return { portalLinked: 0, notifiedUsers: 0, emailsAttempted: 0, emailsSent: 0, emailsFailed: 0 };
+  }
+
+  const [store, period, run] = await Promise.all([
+    db.store.findUnique({ where: { id: params.storeId }, select: { name: true } }),
+    db.payrollRun
+      .findUnique({ where: { id: params.runId }, select: { payrollPeriod: { select: { name: true } } } })
+      .then((r) => r?.payrollPeriod?.name ?? null),
+    db.payrollRun.findUnique({ where: { id: params.runId }, select: { id: true } }),
+  ]);
+  // Unknown run / store: nothing honest can be said — fail soft.
+  if (!run || !period) {
+    return { portalLinked: 0, notifiedUsers: 0, emailsAttempted: 0, emailsSent: 0, emailsFailed: 0 };
+  }
+
+  // Scope the audience to THIS batch's rows AND this run (the runId guard
+  // keeps a stray detailId from another run ever leaking a notice).
+  const details = await db.payrollDetail.findMany({
+    where: { id: { in: detailIds }, payrollRunId: params.runId },
+    select: {
+      id: true,
+      netPay: true,
+      payslipNumber: true,
+      employee: {
+        select: { firstName: true, lastName: true, userId: true, email: true },
+      },
+    },
+  });
+
+  const periodName = period;
+  const storeName = store?.name ?? 'MBUMAH HARDWARE';
+  const receiptByDetail = new Map(params.paidDetails.map((d) => [d.detailId, d.receipt]));
+
+  // Portal-linked employees only (schema guarantees the employee relation).
+  const audience = details.filter(
+    (d) => typeof d.employee?.userId === 'string' && d.employee.userId.length > 0,
+  );
+  if (audience.length === 0) {
+    return { portalLinked: 0, notifiedUsers: 0, emailsAttempted: 0, emailsSent: 0, emailsFailed: 0 };
+  }
+
+  // In-app bell rows (one per portal-linked employee, personalized copy).
+  // Deep link straight to the portal Payslips page — the row IS the route,
+  // and the payslip carries the printable record.
+  const notices = audience.map((d) => {
+    const receipt = receiptByDetail.get(d.id) ?? null;
+    const meta = {
+      periodName,
+      storeName,
+      employeeName: `${d.employee.firstName ?? ''} ${d.employee.lastName ?? ''}`.trim(),
+      netPay: Number(d.netPay),
+      payslipNumber: d.payslipNumber,
+      receipt,
+      mode: params.mode,
+      disbursedAtIso: params.disbursedAtIso,
+    };
+    const copy = payrollRunPaidCopy(meta);
+    return { userId: d.employee.userId as string, copy, receipt };
+  });
+
+  await db.notification.createMany({
+    data: notices.map(({ userId, copy, receipt }) => ({
+      storeId: params.storeId,
+      userId,
+      title: copy.title,
+      message: copy.message,
+      type: copy.notifType,
+      category: 'HR',
+      priority: copy.priority,
+      // v2.51.0: the row deep-links the portal Payslips page — the in-shell
+      // feed (and the portal home strip) route the employee straight there.
+      actionUrl: '/employees/me/payslips',
+      actionLabel: 'View payslip',
+      metadata: JSON.stringify({
+        kind: PAYROLL_PAID_METADATA_MARKER,
+        runId: params.runId,
+        periodName,
+        receipt,
+        mode: params.mode,
+      }),
+    })),
+  });
+
+  // Per-employee emails in batches of 5 — personalized content cannot share
+  // one envelope. Every send is individually caught; RESEND failures (and
+  // the dev no-API-key skip) surface honestly in the counts and the log.
+  const emailable = audience
+    .map((d, i) => ({ d, notice: notices[i] }))
+    .filter(
+      (x): x is { d: (typeof audience)[number]; notice: (typeof notices)[number] } =>
+        typeof x.d.employee.email === 'string' && x.d.employee.email.includes('@'),
+    );
+
+  let emailsSent = 0;
+  let emailsFailed = 0;
+  const BATCH = 5;
+  for (let i = 0; i < emailable.length; i += BATCH) {
+    const batch = emailable.slice(i, i + BATCH);
+    const settled = await Promise.allSettled(
+      batch.map(({ d, notice }) =>
+        sendEmail({
+          to: d.employee.email as string,
+          subject: notice.copy.emailSubject,
+          html: notice.copy.emailHtml,
+          text: notice.copy.emailText,
+          userId: d.employee.userId ?? undefined,
+          type: 'PAYROLL_PAID',
+          metadata: {
+            runId: params.runId,
+            periodName,
+            payslipNumber: d.payslipNumber,
+            receipt: receiptByDetail.get(d.id) ?? null,
+            mode: params.mode,
+          },
+        }).then((res) => {
+          if (res.success) emailsSent += 1;
+          else emailsFailed += 1;
+        }),
+      ),
+    );
+    // A rejected promise (bug in the send path itself) counts as FAILED —
+    // allSettled means it cannot stall the rest of the batch.
+    for (const s of settled) {
+      if (s.status === 'rejected') {
+        emailsFailed += 1;
+        console.warn('[payroll] paid-notice email rejected (best-effort):', s.reason);
+      }
+    }
+  }
+
+  return {
+    portalLinked: audience.length,
+    notifiedUsers: audience.length,
+    emailsAttempted: emailable.length,
+    emailsSent,
+    emailsFailed,
+  };
+}
+
 // ── 4. Post (idempotent journal + payslip issuance) ─────────────────────────
 
 export async function postPayrollRun(ctx: RunActorContext, runId: string) {
@@ -1677,9 +1863,12 @@ export async function disbursePayrollRun(
   }
   // v2.50.0: snapshot the batch BEFORE the updateMany so the digest CSV can
   // carry the per-payslip payment rows (employee, staff number, net).
+  // v2.51.0: the snapshot also carries detail ids — the employee paid
+  // notices need exactly THIS batch's rows (never re-derived from the run).
   const batch = await db.payrollDetail.findMany({
     where: { payrollRunId: run.id, paymentStatus: 'PENDING', netPay: { gt: 0 } },
     select: {
+      id: true,
       netPay: true,
       employee: { select: { firstName: true, lastName: true, employeeCode: true } },
     },
@@ -1737,7 +1926,21 @@ export async function disbursePayrollRun(
     return null;
   });
 
-  return { disbursed: result.count, digest };
+  // v2.51.0: the personal "you've been paid" fan-out — every portal-linked
+  // employee in THIS batch hears the settlement with their own receipt.
+  // Best-effort by contract: the marks above are already durable.
+  const paidNotices = await notifyEmployeesPaid({
+    runId: run.id,
+    storeId: ctx.storeId,
+    mode: 'manual',
+    paidDetails: batch.map((d) => ({ detailId: d.id, receipt: paymentRef ?? null })),
+    disbursedAtIso: now.toISOString(),
+  }).catch((err) => {
+    console.warn('[payroll] manual disbursement paid notices failed (best-effort):', err);
+    return null;
+  });
+
+  return { disbursed: result.count, digest, paidNotices };
 }
 
 // ── 6. Corrections (reverse and replace) ─────────────────────────────────────
