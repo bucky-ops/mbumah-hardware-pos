@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.70.0',
+    title: 'The report files itself — the desk report downloads as CSV now',
+    bullets: [
+      'The desk report grew a "CSV" button beside Print: the same figures the page shows — totals, day-by-day rhythm, per-branch roll-up, reviewers, most-visited requests — land in one RFC-4180 file, built server-side so a downloaded copy can never disagree with the screen.',
+      'The file follows the house filing shape: an header block (report, organization, scope, window, generated-at), a Summary block, then one section per table — ready for reconciliation, not retyping.',
+      'Honest to the last row: every window day appears even when empty, a quiet window still files with its header + zero series, and the window/scope you chose is what gets serialized.',
+      'Formula-injection guarded: every cell passes the shared CSV escaper (the OWASP guard the digest attachments have used since v2.46.0), so a tampered name can never arrive as a spreadsheet formula.',
+      'Filenames tell the truth — mbumah-desk-report-7d-<start>_<end>-all-branches.csv (or the branch slug when narrowed) — so filed copies never overwrite each other.',
+    ],
+  },
+  {
     version: '2.69.0',
     title: 'The desk files its report — a printable per-branch ledger roll-up',
     bullets: [

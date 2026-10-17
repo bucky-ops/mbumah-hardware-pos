@@ -21,6 +21,10 @@
 // This module is PURE: no db, no network, no env (same constraint as
 // desk-digest-note.ts) — unit tests run without any mocking.
 
+// The CSV builder reuses the digest CSV's escaper (OWASP formula-injection
+// guard included) — one escaping implementation for every filing file.
+import { csvCell } from '@/lib/hr/digest-csv';
+
 /** The selectable window lengths, in EAT calendar days (today included). */
 export const DESK_REPORT_WINDOW_DAYS = [7, 14, 30] as const;
 
@@ -320,4 +324,118 @@ export function deriveDeskReport(
     series,
     topRequests,
   };
+}
+
+// ── the CSV builder (v2.70.0) ───────────────────────────────────────────────
+
+
+/**
+ * Build the ready-to-file CSV for a desk report — the same figures the page
+ * prints, serialized server-side so a downloaded file can never disagree
+ * with the screen (the same rule the digest CSVs follow since v2.46.0). The
+ * OWASP formula-injection guard rides along free: every cell goes through
+ * the shared csvCell escaper (a leading `=`, `+`, `-`, `@` or tab gets a
+ * `'` prefix), so a tampered store or reviewer name can never arrive as a
+ * spreadsheet formula.
+ *
+ * Layout (RFC-4180, CRLF records):
+ *   Report,Desk report
+ *   Organization,<org>
+ *   Scope,All branches | Branch: <name>
+ *   Window,<label> (<days> EAT days)
+ *   Generated (UTC),<iso>
+ *   (blank)
+ *   Summary
+ *   Metric,Value
+ *   <4 totals rows>
+ *   (blank)
+ *   Day by day
+ *   Date,Day,Visits,Corrections answered
+ *   <one row per window day, honest zeros included>
+ *   (blank)
+ *   By branch
+ *   Branch,Visits,Corrections answered,Reviewers,Requests,Last visit (UTC)
+ *   <one row per branch, visits desc>
+ *   (blank)
+ *   Reviewers
+ *   Name,Visits,Corrections answered,Branches,Last visit (UTC)
+ *   <one row per reviewer, visits desc>
+ *   (blank)
+ *   Most-visited requests
+ *   Employee,Leave type,Branch,Status,Visits,Last visit (UTC)
+ *   <up to five rows>
+ *
+ * The report is derived from the ledger either way — an empty window yields
+ * the honest header + all-zero series (a quiet window still files).
+ */
+export function deskReportToCsv(
+  report: DeskReportData,
+  meta: { organizationName: string; scopeLabel: string; generatedAt?: Date },
+): string {
+  const generatedAt = meta.generatedAt ?? new Date();
+  const lines: string[] = [];
+  const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
+
+  row(['Report', 'Desk report']);
+  row(['Organization', meta.organizationName]);
+  row(['Scope', meta.scopeLabel]);
+  row(['Window', `${report.window.label} (${report.window.days} EAT days)`]);
+  row(['Generated (UTC)', generatedAt.toISOString()]);
+
+  lines.push('');
+  lines.push('Summary');
+  row(['Metric', 'Value']);
+  row(['Visits', report.totals.visits]);
+  row(['Corrections answered', report.totals.clears]);
+  row(['Reviewers', report.totals.reviewers]);
+  row(['Requests touched', report.totals.requests]);
+
+  lines.push('');
+  lines.push('Day by day');
+  row(['Date', 'Day', 'Visits', 'Corrections answered']);
+  for (const p of report.series) {
+    row([p.key, p.label, p.visits, p.clears]);
+  }
+
+  lines.push('');
+  lines.push('By branch');
+  row(['Branch', 'Visits', 'Corrections answered', 'Reviewers', 'Requests', 'Last visit (UTC)']);
+  for (const b of report.branches) {
+    row([b.storeName, b.visits, b.clears, b.reviewers, b.requests, b.lastVisitAt ?? '']);
+  }
+
+  lines.push('');
+  lines.push('Reviewers');
+  row(['Name', 'Visits', 'Corrections answered', 'Branches', 'Last visit (UTC)']);
+  for (const r of report.reviewers) {
+    row([r.name, r.visits, r.clears, r.branches, r.lastVisitAt ?? '']);
+  }
+
+  lines.push('');
+  lines.push('Most-visited requests');
+  row(['Employee', 'Leave type', 'Branch', 'Status', 'Visits', 'Last visit (UTC)']);
+  for (const r of report.topRequests) {
+    row([r.employeeName, r.leaveTypeName, r.storeName ?? '', r.status, r.visits, r.lastVisitAt ?? '']);
+  }
+
+  // RFC-4180: CRLF between records, trailing CRLF at end of file.
+  return lines.join('\r\n') + '\r\n';
+}
+
+/**
+ * The download filename for the CSV: window bounds + scope, e.g.
+ * mbumah-desk-report-7d-2026-10-11_2026-10-17-all-branches.csv (EAT wall
+ * dates of the window bounds; the branch slug when narrowed — filed copies
+ * never overwrite each other).
+ */
+export function deskReportCsvFilename(report: DeskReportPayload): string {
+  // EAT wall dates, not UTC slices of the window epochs — the filename names
+  // the days the desk means (the window start is an EAT-midnight epoch whose
+  // UTC date is the day before the desk's).
+  const start = deskReportDayKey(new Date(report.window.start));
+  const end = deskReportDayKey(new Date(new Date(report.window.end).getTime() - DAY_MS));
+  const scope = report.scope.branch
+    ? report.scope.branch.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'branch'
+    : 'all-branches';
+  return `mbumah-desk-report-${report.window.days}d-${start}_${end}-${scope}.csv`;
 }

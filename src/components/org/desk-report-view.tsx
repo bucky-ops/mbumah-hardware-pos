@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, BadgeCheck, Building2, CalendarRange, FileText, Printer,
+  ArrowLeft, BadgeCheck, Building2, CalendarRange, FileSpreadsheet, FileText, Printer,
   RefreshCw, Sunrise, Users,
 } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
@@ -53,6 +53,9 @@ export function DeskReportView() {
   const [data, setData] = useState<DeskReportPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // v2.70.0: the CSV voice — a busy flag keeps the button honest while the
+  // file downloads (the fetch carries the session cookie, same as the read).
+  const [csvBusy, setCsvBusy] = useState(false);
   const loadSeq = useRef(0);
 
   const load = useCallback(async (d: number, b: string | null) => {
@@ -103,6 +106,37 @@ export function DeskReportView() {
     void load(days, id);
   };
 
+  // v2.70.0 — the report files itself: ?format=csv returns the SAME derived
+  // report through the shared server-side builder (RFC-4180 + OWASP guard);
+  // the filename comes from the Content-Disposition the route stamps, so
+  // the filed copy always names its window and scope truthfully.
+  const downloadCsv = useCallback(async (d: number, b: string | null) => {
+    setCsvBusy(true);
+    try {
+      const query = `?days=${d}${b ? `&branch=${encodeURIComponent(b)}` : ''}&format=csv`;
+      const res = await fetch(`/api/org/desk-report${query}`, { credentials: 'include' });
+      if (!res.ok) {
+        setError(res.status === 401 ? 'Sign in to file the desk report.' : 'Desk report CSV unavailable.');
+        return;
+      }
+      const disposition = res.headers.get('content-disposition') ?? '';
+      const filename = /filename="(.+?)"/.exec(disposition)?.[1] ?? 'mbumah-desk-report.csv';
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch {
+      setError('Desk report CSV unavailable.');
+    } finally {
+      setCsvBusy(false);
+    }
+  }, []);
+
   const scopeLabel = data?.scope.branchName
     ? `Branch: ${data.scope.branchName}`
     : 'All branches';
@@ -143,6 +177,16 @@ export function DeskReportView() {
             className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadCsv(days, branch)}
+            disabled={csvBusy}
+            data-testid="desk-report-csv"
+            title="Download the report as CSV (RFC-4180, formula-injection guarded)"
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:text-slate-50"
+          >
+            <FileSpreadsheet className={`h-3.5 w-3.5 ${csvBusy ? 'animate-pulse' : ''}`} aria-hidden /> {csvBusy ? 'Filing…' : 'CSV'}
           </button>
           <button
             type="button"
@@ -374,7 +418,7 @@ export function DeskReportView() {
               </section>
 
               <p data-testid="desk-report-footnote" className="text-[10px] leading-relaxed text-slate-400 dark:text-slate-500">
-                Computed server-side from the leave review ledger over {data.window.label} ({data.scope.branchName ? 'branch scope' : 'org-wide scope'}) — the same ledger the Desk activity panel reads. The report is a read: printing it never rings the bell.
+                Computed server-side from the leave review ledger over {data.window.label} ({data.scope.branchName ? 'branch scope' : 'org-wide scope'}) — the same ledger the Desk activity panel reads. The report is a read: printing or filing it never rings the bell.
               </p>
             </div>
           )}
