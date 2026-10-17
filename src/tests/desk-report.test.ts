@@ -51,6 +51,8 @@ import {
   deskReportRequestLedger,
   deskReportRequestSubject,
   deskReportReviewerLedger,
+  deskReportChipStep,
+  deskReportScopeAnnouncement,
   deskReportVisitTime,
   deriveDeskReport,
   type DeskReportVisitEntry,
@@ -1302,7 +1304,10 @@ describe('DeskReportView - the keyboard walks the doors (v2.76.0)', () => {
     expect(hint).toContain('print:hidden');
     expect(hint).toContain('walk the doors');
     expect(hint).toContain('closes a drawer');
-    expect((hint.match(/<kbd /g) || []).length).toBe(3);
+    // v2.78.0 — the hint grew the chips' keys (arrows + enter): six chips now.
+    expect(hint).toContain('move the chips');
+    expect(hint).toContain('re-keys the report');
+    expect((hint.match(/<kbd /g) || []).length).toBe(6);
   });
 
   it('walks in DOM order: reviewers section renders before the most-visited requests', () => {
@@ -1359,8 +1364,10 @@ describe('DeskReportView - the walk can be followed (v2.77.0)', () => {
     const announcer = VIEW.split('data-testid="desk-report-walk-announcer"')[1].split('</span>')[0];
     expect(announcer).toContain('{walkAnnouncement}');
     // mounted before any conditional content: it sits directly in the root div
+    // (v2.78.0 re-anchored: the mount comment grew, and the scope announcer
+    // joins AFTER the walk announcer — the walk keeps the first slot)
     const root = VIEW.split('mx-auto w-full max-w-5xl px-4 py-6')[1].split('data-testid="desk-report-walk-announcer"')[0];
-    expect(root.length).toBeLessThan(400);
+    expect(root.length).toBeLessThan(700);
   });
 
   it('every j/k move is named: position and label from the door itself', () => {
@@ -1422,5 +1429,165 @@ describe('release metadata - v2.77.0', () => {
     const CHROME = readRepo('src/components/org/chrome.tsx');
     expect(CHROME).toContain('data-testid="palette-mark-all-read"');
     expect(CHROME).toContain("['j', 'Desk report: walk to the next door']");
+  });
+});
+
+// ── v2.78.0 — the scope speaks the keyboard ─────────────────────────────────
+// The window and branch chips were mouse-only scope: the walk (j/k) covered
+// the doors, but the chips answered neither the arrows nor the announcer.
+// v2.78.0 completes the a11y arc: the chips are APG roving groups (arrows
+// move, Enter/Space commit, one tab stop per group) and every re-key is
+// announced through a second sr-only live region.
+
+describe('v2.78.0 - the roving step (pure module)', () => {
+  it('arrows move forward, wrapping at the end', () => {
+    expect(deskReportChipStep('ArrowRight', 0, 3)).toBe(1);
+    expect(deskReportChipStep('ArrowRight', 2, 3)).toBe(0); // wrap
+    expect(deskReportChipStep('ArrowDown', 1, 3)).toBe(2);
+  });
+
+  it('arrows move back, wrapping to the end', () => {
+    expect(deskReportChipStep('ArrowLeft', 2, 3)).toBe(1);
+    expect(deskReportChipStep('ArrowLeft', 0, 3)).toBe(2); // wrap
+    expect(deskReportChipStep('ArrowUp', 1, 3)).toBe(0);
+  });
+
+  it('Home and End jump to the ends', () => {
+    expect(deskReportChipStep('Home', 2, 3)).toBe(0);
+    expect(deskReportChipStep('End', 0, 3)).toBe(2);
+  });
+
+  it('keys that are not the group\'s business move nothing', () => {
+    expect(deskReportChipStep('Enter', 0, 3)).toBeNull();
+    expect(deskReportChipStep('Tab', 0, 3)).toBeNull();
+    expect(deskReportChipStep('j', 0, 3)).toBeNull();
+  });
+
+  it('a focus outside the group (or an empty group) moves nothing', () => {
+    expect(deskReportChipStep('ArrowRight', -1, 3)).toBeNull();
+    expect(deskReportChipStep('ArrowRight', 3, 3)).toBeNull();
+    expect(deskReportChipStep('ArrowRight', 0, 0)).toBeNull();
+  });
+});
+
+describe('v2.78.0 - the re-key sentence (pure module)', () => {
+  it('a window re-key names the window', () => {
+    expect(deskReportScopeAnnouncement('window', '14 days')).toBe('Window: 14 days — report re-keyed.');
+  });
+
+  it('a branch re-key names the branch', () => {
+    expect(deskReportScopeAnnouncement('branch', 'MBUMAH HARDWARE - Juja Main')).toBe('Branch: MBUMAH HARDWARE - Juja Main — report re-keyed.');
+  });
+
+  it('clearing the scope is its own honest sentence, not a branch with an empty name', () => {
+    expect(deskReportScopeAnnouncement('branch', null)).toBe('All branches — report re-keyed.');
+  });
+});
+
+describe('v2.78.0 - the view: the chips answer the arrows', () => {
+  const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+
+  it('imports both new helpers', () => {
+    expect(VIEW).toContain('deskReportChipStep,');
+    expect(VIEW).toContain('deskReportScopeAnnouncement,');
+  });
+
+  it('the scope announcer is a second sr-only live region beside the walk announcer', () => {
+    expect(VIEW).toContain("const [scopeAnnouncement, setScopeAnnouncement] = useState('');");
+    const root = VIEW.split('mx-auto w-full max-w-5xl px-4 py-6')[1];
+    const walkIdx = root.indexOf('data-testid="desk-report-walk-announcer"');
+    const scopeIdx = root.indexOf('data-testid="desk-report-scope-announcer"');
+    expect(walkIdx).toBeGreaterThan(-1);
+    expect(scopeIdx).toBeGreaterThan(walkIdx);
+    const span = root.split('data-testid="desk-report-scope-announcer"')[1].split('</span>')[0];
+    expect(span).toContain('role="status"');
+    expect(span).toContain('aria-live="polite"');
+    expect(span).toContain('sr-only');
+  });
+
+  it('pickDays announces the window before re-keying (the no-op guard stays silent)', () => {
+    const pick = VIEW.split('const pickDays = (d: number) => {')[1].split('};')[0];
+    expect(pick).toContain('if (d === days) return;');
+    expect(pick).toContain("setScopeAnnouncement(deskReportScopeAnnouncement('window', WINDOW_LABELS[d] ?? `${d} days`))");
+  });
+
+  it('pickBranch announces the named branch, and clearing the scope its own sentence', () => {
+    const pick = VIEW.split('const pickBranch = (id: string | null) => {')[1].split('};')[0];
+    expect(pick).toContain('if (id === branch) return;');
+    expect(pick).toContain("data?.branches.find((b) => b.storeId === id)?.storeName ?? null");
+    expect(pick).toContain("setScopeAnnouncement(deskReportScopeAnnouncement('branch', label))");
+  });
+
+  it('the chipNav handler walks the sibling chips through the pure step', () => {
+    const nav = VIEW.split('const chipNav = (e: React.KeyboardEvent<HTMLButtonElement>) => {')[1].split('  };')[0];
+    expect(nav).toContain('const group = e.currentTarget.parentElement;');
+    expect(nav).toContain("Array.from(group.querySelectorAll<HTMLButtonElement>('button'))");
+    expect(nav).toContain('const next = deskReportChipStep(e.key, idx, chips.length);');
+    expect(nav).toContain('if (next === null) return;');
+    expect(nav).toContain('e.preventDefault();');
+    expect(nav).toContain('chips[next].focus();');
+  });
+
+  it('the handler is shared by all three chip families (one JSX anchor per family)', () => {
+    expect((VIEW.match(/onKeyDown=\{chipNav\}/g) || []).length).toBe(3);
+  });
+
+  it('the window chips wear the roving tabindex (one tab stop, on the active chip)', () => {
+    expect(VIEW).toContain('tabIndex={days === d ? 0 : -1}');
+  });
+
+  it('the branch chips wear the roving tabindex on both families', () => {
+    expect(VIEW).toContain('tabIndex={!branch ? 0 : -1}');
+    expect(VIEW).toContain('tabIndex={active ? 0 : -1}');
+  });
+
+  it('the footnote hint names the arrows and the commit key', () => {
+    const hint = VIEW.split('data-testid="desk-report-kbd-hint"')[1].split('</span>')[0];
+    expect(hint).toContain('>←</kbd>');
+    expect(hint).toContain('>→</kbd>');
+    expect(hint).toContain('>enter</kbd>');
+    expect(hint).toContain('move the chips');
+  });
+
+  it('the picks ride the same quiet channel: the live regions are for ears, the rings for eyes', () => {
+    // Both announcers are sr-only; the chips keep their emerald focus rings.
+    const root = VIEW.split('mx-auto w-full max-w-5xl px-4 py-6')[1].split('desk-report-content')[0];
+    expect((root.match(/className="sr-only"/g) || []).length).toBe(2);
+    expect(VIEW).toContain('focus-visible:ring-2 focus-visible:ring-emerald-400');
+  });
+});
+
+describe('release metadata - v2.78.0', () => {
+  it('bumps package.json to at least 2.78.0 (all three slots) and registers the verify script', () => {
+    const PKG = JSON.parse(readRepo('package.json')) as {
+      version: string;
+      mbumah: { releaseVersion: string; baseVersion: string };
+      scripts: Record<string, string>;
+    };
+    const atLeast = (v: string, base: string) => {
+      const [a, b, c] = v.split('.').map(Number);
+      const [x, y, z] = base.split('.').map(Number);
+      return a > x || (a === x && (b > y || (b === y && c >= z)));
+    };
+    expect(atLeast(PKG.version, '2.78.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.78.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.78.0')).toBe(true);
+    expect(PKG.scripts['verify:v2-78-0']).toBe('node scripts/verify-v2-78-0.mjs');
+  });
+
+  it('whats-new 2.78.0 leads the feed with the scope-keyboard story', () => {
+    const WN = readRepo('src/lib/whats-new.ts');
+    expect(WN.indexOf("version: '2.78.0'")).toBeGreaterThan(-1);
+    expect(WN.indexOf("version: '2.78.0'")).toBeLessThan(WN.indexOf("version: '2.77.0'"));
+    expect(WN).toContain('The scope speaks the keyboard');
+    expect(WN).toContain('All branches \\u2014 report re-keyed.');
+  });
+
+  it('keeps every prior surface intact (walk, announcer, drawers, roving neighbors)', () => {
+    const VIEW = readRepo('src/components/org/desk-report-view.tsx');
+    expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
+    expect(VIEW).toContain('announce(`Door ${nextIdx + 1} of ${doors.length} — ${label}`)');
+    expect(VIEW).toContain('const clearDrawers = useCallback(');
+    expect((VIEW.match(/data-desk-door\n/g) || []).length).toBe(6);
   });
 });

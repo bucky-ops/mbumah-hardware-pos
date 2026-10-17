@@ -26,6 +26,14 @@
 // shows two drawers at once, so the report never splits the reader's
 // attention. The drill-downs complete each other.
 //
+// v2.78.0: the scope speaks the keyboard. The window and branch chips are
+// a roving group now — arrows move between them (wrapping at the ends),
+// Enter/Space commits the picked chip, and every re-key is ANNOUNCED: a
+// quiet aria-live region says which window or branch the report just
+// re-keyed to, so a keyboard or screen-reader user never wonders whether
+// the click landed. The walk (j/k) covers the doors; the chips answer the
+// arrows. Both speak, neither shouts.
+//
 // WHY: the morning-note family (v2.67.0 strip, v2.68.0 bell) tells the org
 // what happened YESTERDAY; a filing desk needs more than yesterday. The
 // report answers the window questions in one printable page — totals, a
@@ -460,6 +468,51 @@ export function deskReportHasRequestDoor(
   requestId: string,
 ): boolean {
   return topRequests.some((r) => r.requestId === requestId);
+}
+
+/**
+ * The next chip index for an arrow keypress (v2.78.0) — the APG roving
+ * pattern for the report's scope chips: ArrowRight/ArrowDown move forward,
+ * ArrowLeft/ArrowUp move back, both WRAPPING at the group's ends; Home and
+ * End jump to the first and last chip. Anything else (Tab, Enter, a letter)
+ * is not the group's business → null, and the caller leaves the key alone.
+ * A focus index outside the group, or an empty group, moves nothing — the
+ * step is only honest when it starts somewhere real.
+ */
+export function deskReportChipStep(
+  key: string,
+  index: number,
+  count: number,
+): number | null {
+  if (count <= 0 || index < 0 || index >= count) return null;
+  switch (key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      return (index + 1) % count;
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      return (index - 1 + count) % count;
+    case 'Home':
+      return 0;
+    case 'End':
+      return count - 1;
+    default:
+      return null;
+  }
+}
+
+/**
+ * The scope re-key's announcement (v2.78.0) — one sentence naming what the
+ * report just re-keyed to, for the aria-live region. A window pick names
+ * the window; a branch pick names the branch; clearing the branch scope is
+ * its own sentence ("All branches"), not a branch with an empty name.
+ */
+export function deskReportScopeAnnouncement(
+  kind: 'window' | 'branch',
+  label: string | null,
+): string {
+  if (kind === 'window') return `Window: ${label} — report re-keyed.`;
+  return label ? `Branch: ${label} — report re-keyed.` : 'All branches — report re-keyed.';
 }
 
 /**

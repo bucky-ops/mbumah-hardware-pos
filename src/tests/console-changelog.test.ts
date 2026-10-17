@@ -365,11 +365,11 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.77.0 (latest), then 2.76.0, 2.75.0, 2.74.0 — a
-    // 2.75.0 flag means 2.76.0 arrived unread (2.77.0 is the latest,
-    // marked separately).
-    expect(whatsNewUnreadCount('2.75.0')).toBe(1);
-    expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(4);
+    // The feed leads 2.78.0 (latest), then 2.77.0, 2.76.0, 2.75.0 — a
+    // 2.76.0 flag means 2.77.0 arrived unread (2.78.0 is the latest,
+    // marked separately). Re-anchored for the v2.78.0-fed feed.
+    expect(whatsNewUnreadCount('2.76.0')).toBe(1);
+    expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(6);
   });
 
   it('zero when everything is read, zero when nothing is provably unread', () => {

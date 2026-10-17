@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.78.0',
+    title: 'The scope speaks the keyboard \u2014 the window and branch chips answer the arrows, and every re-key is announced',
+    bullets: [
+      'The window chips (7 / 14 / 30 days) and the branch chips are keyboard groups now: \u2190/\u2192 (and \u2191/\u2193) move between the chips \u2014 wrapping at the ends \u2014 Home/End jump, and only the active chip holds the group\u2019s tab stop, the APG roving pattern.',
+      'The pick stays deliberate: arrows move focus, Enter/Space commit \u2014 so walking the chips never fires a fetch you didn\u2019t ask for.',
+      'Every re-key is announced \u2014 a quiet aria-live region says "Window: 14 days \u2014 report re-keyed." or "Branch: Juja Main \u2014 report re-keyed." before the numbers arrive, so a screen-reader user is never left guessing whether the pick landed.',
+      'Clearing the branch scope gets its own honest sentence: "All branches \u2014 report re-keyed." \u2014 not a branch with an empty name.',
+      'The footnote\u2019s screen-only keyboard hint grew the new keys (\u2190/\u2192 move the chips, enter re-keys the report) \u2014 and the print contract stays untouched: the paper never learns about keyboards.',
+    ],
+  },
+  {
     version: '2.77.0',
     title: 'The shortcut sheet tells the whole story \u2014 the desk report\u2019s keys are discoverable, and the walk can be followed',
     bullets: [

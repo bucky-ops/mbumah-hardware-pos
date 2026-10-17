@@ -19,6 +19,14 @@
 // still governs the whole page — opening either family closes the other,
 // so the report never shows two drawers at once.
 //
+// v2.78.0: the scope speaks the keyboard. The window and branch chips are
+// a roving group — arrows move between the chips in a group (wrapping at
+// the ends), Enter/Space commits the focused chip, and only the active
+// chip holds the group's single tab stop (APG roving tabindex). Every
+// re-key is announced through a second sr-only live region: "Window: 14
+// days — report re-keyed." The walk (j/k) covers the doors; the arrows
+// answer the chips; both speak through the same quiet channel.
+//
 // Print contract: the "Print" button isolates #desk-report-content through
 // the app's print-root pipeline (printReceiptElement clones the node into
 // #print-root; @media print shows ONLY that host) — the nav, sidebar and
@@ -43,11 +51,13 @@ import { num, timeAgo } from '@/components/org/primitives';
 import {
   DESK_REPORT_WINDOW_DAYS,
   deskReportAvatarHue,
+  deskReportChipStep,
   deskReportDayLabel,
   deskReportHasRequestDoor,
   deskReportRequestLedger,
   deskReportRequestSubject,
   deskReportReviewerLedger,
+  deskReportScopeAnnouncement,
   deskReportShortStoreName,
   deskReportVisitTime,
   type DeskReportPayload,
@@ -94,6 +104,11 @@ export function DeskReportView() {
   // door as j/k lands on it (and the Escape close), mounted unconditionally
   // so the live region exists before the first message arrives.
   const [walkAnnouncement, setWalkAnnouncement] = useState('');
+  // v2.78.0: the scope's announcer — the same quiet channel for the other
+  // hand on the report: picking a window or branch chip names what the
+  // report re-keyed to, so a keyboard user is never left guessing whether
+  // the pick landed (the fetch takes a beat; the words arrive first).
+  const [scopeAnnouncement, setScopeAnnouncement] = useState('');
   const loadSeq = useRef(0);
 
   const load = useCallback(async (d: number, b: string | null) => {
@@ -133,17 +148,40 @@ export function DeskReportView() {
     return () => clearTimeout(initial);
   }, [load, days, branch]);
 
+  // v2.78.0 — the picks speak: a real re-key (the guard's no-op stays
+  // silent) names its new scope through the live region BEFORE the fetch
+  // resolves — the words land first, the numbers follow.
   const pickDays = (d: number) => {
     if (d === days) return;
+    setScopeAnnouncement(deskReportScopeAnnouncement('window', WINDOW_LABELS[d] ?? `${d} days`));
     setDays(d);
     clearDrawers();
     void load(d, branch);
   };
   const pickBranch = (id: string | null) => {
     if (id === branch) return;
+    const label = id ? data?.branches.find((b) => b.storeId === id)?.storeName ?? null : null;
+    setScopeAnnouncement(deskReportScopeAnnouncement('branch', label));
     setBranch(id);
     clearDrawers();
     void load(days, id);
+  };
+
+  // v2.78.0 — the chips answer the arrows: a roving keydown handler shared
+  // by both chip groups. The arrows (and Home/End) move focus between the
+  // group's chips — wrapping at the ends — and leave the rest alone (Tab
+  // keeps its native order, Enter/Space keep their native click). Focus
+  // moves; the pick is deliberate: committing the re-key is the focused
+  // chip's native Enter/Space, so arrowing through never fires a fetch.
+  const chipNav = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const group = e.currentTarget.parentElement;
+    if (!group) return;
+    const chips = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
+    const idx = chips.indexOf(e.currentTarget);
+    const next = deskReportChipStep(e.key, idx, chips.length);
+    if (next === null) return;
+    e.preventDefault();
+    chips[next].focus();
   };
 
   // v2.71.0 — the report opens its ledger: one drawer at a time, toggling
@@ -312,9 +350,15 @@ export function DeskReportView() {
     <div className="mx-auto w-full max-w-5xl px-4 py-6">
       {/* v2.77.0 — the walk's announcer: mounted unconditionally at the root
           so the live region exists before the first j/k lands. sr-only: it
-          is for ears, not eyes; the doors' focus rings are for eyes. */}
+          is for ears, not eyes; the doors' focus rings are for eyes.
+          v2.78.0 — the scope's announcer joins it: the same channel for the
+          chips' re-keys ("Window: 14 days — report re-keyed."), mounted the
+          same way, for the same reason. */}
       <span data-testid="desk-report-walk-announcer" role="status" aria-live="polite" className="sr-only">
         {walkAnnouncement}
+      </span>
+      <span data-testid="desk-report-scope-announcer" role="status" aria-live="polite" className="sr-only">
+        {scopeAnnouncement}
       </span>
       {/* Toolbar — screen-only chrome (print:hidden) */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
@@ -332,6 +376,10 @@ export function DeskReportView() {
                 key={d}
                 type="button"
                 aria-pressed={days === d}
+                // v2.78.0 — roving tabindex: the active chip holds the
+                // group's single tab stop; arrows walk the rest.
+                tabIndex={days === d ? 0 : -1}
+                onKeyDown={chipNav}
                 onClick={() => pickDays(d)}
                 data-testid={`desk-report-window-${d}`}
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${days === d
@@ -456,6 +504,10 @@ export function DeskReportView() {
                 <button
                   type="button"
                   aria-pressed={!branch}
+                  // v2.78.0 — roving tabindex, same rule as the window chips:
+                  // one tab stop per group, on the active chip.
+                  tabIndex={!branch ? 0 : -1}
+                  onKeyDown={chipNav}
                   onClick={() => pickBranch(null)}
                   data-testid="desk-report-branch-chip-all"
                   className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${!branch
@@ -472,6 +524,8 @@ export function DeskReportView() {
                       type="button"
                       aria-pressed={active}
                       title={b.storeName}
+                      tabIndex={active ? 0 : -1}
+                      onKeyDown={chipNav}
                       onClick={() => pickBranch(active ? null : b.storeId)}
                       data-testid={`desk-report-branch-chip-${b.storeId}`}
                       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${active
@@ -793,7 +847,12 @@ export function DeskReportView() {
                   <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">k</kbd>
                   walk the doors ·
                   <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">esc</kbd>
-                  closes a drawer
+                  closes a drawer ·
+                  <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">←</kbd>
+                  <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">→</kbd>
+                  move the chips,
+                  <kbd className="rounded border border-slate-200 bg-white px-1 font-mono text-[9px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">enter</kbd>
+                  re-keys the report
                 </span>
               </p>
             </div>
