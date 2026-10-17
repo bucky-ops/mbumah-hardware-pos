@@ -27,6 +27,7 @@ import {
   MoreVertical, Eye, EyeOff, RotateCcw, ShieldAlert, Shield, BarChart3, ArrowRight,
   CalendarSync, MailX, CalendarCheck2, CalendarX2, CalendarPlus, CalendarOff, UserCheck,
   PenLine, FilePenLine, Banknote, BookOpenCheck, Wallet, HandCoins, ScanEye, BadgeCheck,
+  Sunrise,
 } from 'lucide-react';
 
 type NotificationFilter = 'all' | 'critical' | 'warning' | 'info' | 'security' | 'email_failed';
@@ -449,6 +450,12 @@ export function NotificationCenter({
       // different rail).
       case 'payroll_paid':
         return <HandCoins className="h-4 w-4 text-emerald-600" />;
+      // v2.68.0: the desk's morning note - orange sunrise, the same dawn
+      // voice the org dashboard's strip carries (amber morning → emerald
+      // answered); orange keeps the row distinct from the amber correction
+      // rails it shares the feed with.
+      case 'desk_digest':
+        return <Sunrise className="h-4 w-4 text-orange-600 dark:text-orange-400" />;
     }
   };
 
@@ -660,7 +667,7 @@ export function NotificationCenter({
                     onClick={() => handleNotificationClick(notification)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
                     tabIndex={0}
-                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'leave_cancel' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_on_behalf' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_edited' ? 'border-l-[3px] border-l-indigo-400 dark:border-l-indigo-500' : ''} ${notification.type === 'leave_corrected' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'leave_review_seen' ? 'border-l-[3px] border-l-cyan-400 dark:border-l-cyan-500' : ''} ${notification.type === 'leave_review_answered' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_approved' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_posted' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'payslip_issued' ? 'border-l-[3px] border-l-teal-400 dark:border-l-teal-500' : ''} ${notification.type === 'payroll_disbursed' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'payroll_paid' ? 'border-l-[3px] border-l-green-400 dark:border-l-green-500' : ''}`}
+                    className={`w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm cursor-pointer group ${getSeverityBg(notification.severity)} ${isUnread ? 'ring-1 ring-primary/20' : 'opacity-70'} ${notification.type === 'hr_digest' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_decision' ? (notification.leaveStatus === 'REJECTED' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500') : ''} ${notification.type === 'leave_request' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'leave_cancel' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_on_behalf' ? 'border-l-[3px] border-l-violet-400 dark:border-l-violet-500' : ''} ${notification.type === 'leave_edited' ? 'border-l-[3px] border-l-indigo-400 dark:border-l-indigo-500' : ''} ${notification.type === 'leave_corrected' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'leave_review_seen' ? 'border-l-[3px] border-l-cyan-400 dark:border-l-cyan-500' : ''} ${notification.type === 'leave_review_answered' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_approved' ? 'border-l-[3px] border-l-emerald-400 dark:border-l-emerald-500' : ''} ${notification.type === 'payroll_posted' ? 'border-l-[3px] border-l-sky-400 dark:border-l-sky-500' : ''} ${notification.type === 'payslip_issued' ? 'border-l-[3px] border-l-teal-400 dark:border-l-teal-500' : ''} ${notification.type === 'payroll_disbursed' ? 'border-l-[3px] border-l-amber-400 dark:border-l-amber-500' : ''} ${notification.type === 'payroll_paid' ? 'border-l-[3px] border-l-green-400 dark:border-l-green-500' : ''} ${notification.type === 'desk_digest' ? 'border-l-[3px] border-l-orange-400 dark:border-l-orange-500' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="shrink-0 mt-0.5">{getNotificationIcon(notification.type, notification.leaveStatus)}</div>
@@ -748,6 +755,16 @@ export function NotificationCenter({
                           <div className="mt-1 flex flex-wrap items-center gap-1">
                             <span className="inline-flex items-center gap-0.5 rounded border border-cyan-200 bg-cyan-50 px-1 py-0 text-[10px] font-medium text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-300">
                               Correction seen
+                            </span>
+                          </div>
+                        ) : null}
+                        {/* v2.68.0: desk-digest rows carry an orange "Morning
+                            note" chip - the bell row of the v2.67.0 dawn
+                            strip, in the feed's own chip language. */}
+                        {notification.type === 'desk_digest' ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="inline-flex items-center gap-0.5 rounded border border-orange-200 bg-orange-50 px-1 py-0 text-[10px] font-medium text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300">
+                              Morning note
                             </span>
                           </div>
                         ) : null}

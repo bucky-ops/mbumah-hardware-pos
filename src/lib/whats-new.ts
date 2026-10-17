@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.68.0',
+    title: 'The morning note rings the bell — yesterday at the desk travels to every org inbox',
+    bullets: [
+      'The desk\'s morning note grew a second voice: when yesterday had visits, the bell now rings every org role with "Yesterday at the desk — {day}" and the same figures the console strip shows.',
+      'The copy stays honest — "1 visit · 1 correction answered" in exact singular/plural, with the busiest branch and most active reviewer called by name.',
+      'Once per day, guaranteed: the note is deduped on the summarized Nairobi-calendar day, so opening the console twice in a morning rings the bell once.',
+      'Quiet days stay quiet — the bell says nothing when the desk was empty; the strip\'s honest silence is the only notice a quiet desk gets.',
+      'Each row wears the dawn-orange sunrise chip "Morning note" and deep-links straight to the org dashboard\'s Desk activity panel.',
+    ],
+  },
+  {
     version: '2.67.0',
     title: 'The desk writes its own morning note — yesterday\'s desk activity greets the console',
     bullets: [

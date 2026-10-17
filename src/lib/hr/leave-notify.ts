@@ -106,7 +106,11 @@ export type LeaveNotificationKind =
   | 'payroll_disbursed'
   // v2.51.0: employee-facing "you've been paid" rows share the same section
   // (marker 'payroll_paid' lives in payroll/run-digest.ts).
-  | 'payroll_paid';
+  | 'payroll_paid'
+  // v2.68.0: the desk's morning-note bell rows share the same section
+  // (marker 'desk_digest' lives in hr/desk-digest-note.ts — org-role
+  // audience, one per summarized EAT day).
+  | 'desk_digest';
 
 export type LeaveDecisionStatus = 'APPROVED' | 'REJECTED';
 
@@ -261,6 +265,9 @@ export interface LeaveDecisionExtras {
   /** v2.47.0: delivery stamp on payroll_approved rows — drives the
    *  warning-vs-info severity in the feed mapping (FAILED → warning). */
   emailStatus?: string;
+  /** v2.68.0: the summarized EAT day (YYYY-MM-DD) on desk_digest rows —
+   *  drives the feed row's date chip. */
+  deskDigestDate?: string;
 }
 
 /** Fail-soft metadata parser for the notification feed (same contract as
@@ -285,7 +292,8 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
       rec.kind === 'payroll_posted' ||
       rec.kind === 'payslip_issued' ||
       rec.kind === 'payroll_disbursed' ||
-      rec.kind === 'payroll_paid'
+      rec.kind === 'payroll_paid' ||
+      rec.kind === 'desk_digest'
     )
       out.kind = rec.kind;
     if (typeof rec.leaveRequestId === 'string') out.leaveRequestId = rec.leaveRequestId;
@@ -297,6 +305,7 @@ export function parseLeaveDecisionExtras(metadata: unknown): LeaveDecisionExtras
     if (typeof rec.editedByName === 'string') out.editedByName = rec.editedByName;
     if (typeof rec.reviewerName === 'string') out.reviewerName = rec.reviewerName;
     if (typeof rec.emailStatus === 'string') out.emailStatus = rec.emailStatus;
+    if (typeof rec.deskDigestDate === 'string') out.deskDigestDate = rec.deskDigestDate;
     return out;
   } catch {
     return {};

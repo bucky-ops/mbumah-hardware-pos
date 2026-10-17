@@ -2913,7 +2913,10 @@ export interface NotificationItem {
   // v2.62.0: 'leave_review_answered' - approver-facing "the correction you
   // were told about was answered" rows (the same clearing visit; emerald
   // badge-check, "Correction answered" chip, Payroll Leave desk routing).
-  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid';
+  // v2.68.0: 'desk_digest' - org-facing "Yesterday at the desk" rows (the
+  // v2.67.0 morning note's second voice; dawn-orange sunrise surface, one
+  // per summarized EAT day, deep link → the org dashboard panel).
+  type: 'out_of_stock' | 'low_stock' | 'overdue_rental' | 'large_debt' | 'new_customer' | 'recent_transaction' | 'security' | 'hr_digest' | 'leave_decision' | 'leave_request' | 'leave_cancel' | 'leave_on_behalf' | 'leave_edited' | 'leave_corrected' | 'leave_review_seen' | 'leave_review_answered' | 'payroll_approved' | 'payroll_posted' | 'payslip_issued' | 'payroll_disbursed' | 'payroll_paid' | 'desk_digest';
   title: string;
   description: string;
   severity: 'critical' | 'warning' | 'info';
