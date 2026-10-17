@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.85.0',
+    title: 'The walk gains its missing step \u2014 the handover gets its own stamp',
+    bullets: [
+      'The run history now tells the whole story: "Submitted for approval" sits between Prepared and Approved \u2014 the indigo step that names WHO handed the run to the checker, and the EAT moment they did it.',
+      'Submit-for-approval was the one lifecycle transition with no timestamp of its own (its stamp rode inside "Prepared"); now Prepared marks when the payslips were computed and Submitted marks the handover \u2014 the two moments finally read apart.',
+      'Older runs are not left behind: the migration copies the old stamp into its properly-named column, and any run the state machine proves was submitted still shows the step \u2014 with an honest "no timestamp recorded" if no stamp survived.',
+      'Maker-checker tightens with the boundary: whoever PREPARED or SUBMITTED the run cannot be the one who approves it \u2014 the server enforces it, and the dialog\u2019s approve button now stands down for both.',
+      'The Run history header counts the steps the run has lived ("7 steps"), so the walk\u2019s length is visible at a glance \u2014 a fresh draft shows 1, a locked-and-paid run shows the whole story.',
+    ],
+  },
+  {
     version: '2.84.0',
     title: 'The run remembers its own steps \u2014 who did what, and when (EAT)',
     bullets: [

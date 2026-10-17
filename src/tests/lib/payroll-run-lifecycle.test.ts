@@ -113,6 +113,7 @@ function runFixture(overrides: Partial<Record<string, unknown>> = {}) {
     status: 'DRAFT',
     initiatedBy: 'user-1',
     preparedByUserId: null,
+    submittedById: null,
     approvedByUserId: null,
     rejectedByUserId: null,
     rejectionReason: null,
@@ -261,16 +262,29 @@ describe('state machine', () => {
     await expect(submitPayrollRun(CTX, 'run-1')).rejects.toMatchObject({ code: 'NOT_PREPARED' });
   });
 
-  it('captures the preparer on submit (maker identity)', async () => {
+  it('captures the submitter on the handover (v2.85.0: its own columns)', async () => {
     db.payrollRun.findFirst.mockResolvedValue(runFixture({ employeeCount: 3 }));
     db.payrollRun.update.mockResolvedValue(runFixture({ status: 'PENDING_APPROVAL' }));
     const updated = await submitPayrollRun(CTX, 'run-1');
     expect(updated.status).toBe('PENDING_APPROVAL');
     expect(db.payrollRun.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'PENDING_APPROVAL', preparedByUserId: 'user-1' }),
+        data: expect.objectContaining({
+          status: 'PENDING_APPROVAL',
+          submittedById: 'user-1',
+          submittedAt: expect.any(Date),
+        }),
       }),
     );
+  });
+
+  it('the handover no longer borrows the Prepared stamp (v2.85.0 split)', async () => {
+    db.payrollRun.findFirst.mockResolvedValue(runFixture({ employeeCount: 3 }));
+    db.payrollRun.update.mockResolvedValue(runFixture({ status: 'PENDING_APPROVAL' }));
+    await submitPayrollRun(CTX, 'run-1');
+    const data = (db.payrollRun.update as ReturnType<typeof vi.fn>).mock.calls[0][0].data;
+    expect(data).not.toHaveProperty('preparedByUserId');
+    expect(data).not.toHaveProperty('preparedAt');
   });
 
   it('blocks approval from DRAFT (state machine)', async () => {
@@ -280,6 +294,16 @@ describe('state machine', () => {
 
   it('enforces maker-checker: the preparer cannot approve', async () => {
     db.payrollRun.findFirst.mockResolvedValue(runFixture({ status: 'PENDING_APPROVAL', preparedByUserId: 'user-1' }));
+    await expect(approvePayrollRun(CTX, 'run-1')).rejects.toMatchObject({
+      code: 'MAKER_CHECKER_VIOLATION',
+      status: 403,
+    });
+  });
+
+  it('maker-checker binds the submitter too — the handover is the boundary (v2.85.0)', async () => {
+    db.payrollRun.findFirst.mockResolvedValue(
+      runFixture({ status: 'PENDING_APPROVAL', preparedByUserId: 'user-2', submittedById: 'user-1' }),
+    );
     await expect(approvePayrollRun(CTX, 'run-1')).rejects.toMatchObject({
       code: 'MAKER_CHECKER_VIOLATION',
       status: 403,
@@ -357,6 +381,13 @@ describe('prepare gates', () => {
     seedHappyPrepare();
     const result = await preparePayrollRun(CTX, 'run-1');
     expect(result.prepared).toBe(1);
+    // v2.85.0: the Prepared stamp lives with the compute step — the run row
+    // records WHO calculated the payslips and WHEN, not at the later handover.
+    expect(db.payrollRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ preparedByUserId: 'user-1', preparedAt: expect.any(Date) }),
+      }),
+    );
 
     const expected = computePayslip({
       employee: {

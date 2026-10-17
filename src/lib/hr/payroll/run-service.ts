@@ -575,6 +575,11 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
           totalDeductions: KES(totalDeductionsCents),
           totalNet: KES(totalNetCents),
           employeeCount: computed.length,
+          // v2.85.0: the Prepared stamp lives with the COMPUTE step — the
+          // moment the payslips were actually calculated (refreshed on every
+          // re-prepare), not the later handover. Submit stamps its own column.
+          preparedByUserId: ctx.actorId,
+          preparedAt: new Date(),
           errorMessage: null,
         },
       });
@@ -612,12 +617,16 @@ export async function submitPayrollRun(ctx: RunActorContext, runId: string) {
       'Prepare the run (compute payslips) before submitting it for approval.',
     );
   }
+  // v2.85.0: the handover stamps ITS OWN columns (submittedAt/submittedById)
+  // — the one lifecycle transition that had no timestamp of its own. The
+  // Prepared stamp belongs to the compute step; this is the maker handing the
+  // run to the checker, and the timeline now tells the two moments apart.
   const updated = await db.payrollRun.update({
     where: { id: run.id },
     data: {
       status: 'PENDING_APPROVAL',
-      preparedByUserId: ctx.actorId,
-      preparedAt: new Date(),
+      submittedById: ctx.actorId,
+      submittedAt: new Date(),
       rejectionReason: null,
     },
   });
@@ -676,7 +685,13 @@ export async function approvePayrollRun(ctx: RunActorContext, runId: string) {
   assertTransition(run.status, 'APPROVED');
   // MAKER-CHECKER (spec rule 21): the preparer can never approve, whatever
   // their role. There is no role combination that bypasses this check.
-  if (run.preparedByUserId && run.preparedByUserId === ctx.actorId) {
+  // v2.85.0: the boundary is the HANDOVER, so the submitter is bound by the
+  // same rule — whoever carried the run to the checker's door cannot be the
+  // one who opens it. Either stamp matching the approver is a violation.
+  if (
+    (run.preparedByUserId && run.preparedByUserId === ctx.actorId) ||
+    (run.submittedById && run.submittedById === ctx.actorId)
+  ) {
     throw new PayrollLifecycleError(
       'MAKER_CHECKER_VIOLATION',
       'The user who prepared this payroll run cannot approve it.',
