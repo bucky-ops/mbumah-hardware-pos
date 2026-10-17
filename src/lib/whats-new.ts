@@ -22,6 +22,17 @@ export interface WhatsNewEntry {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.46.0',
+    title: 'Digest emails now arrive with the spreadsheet — plus no more silent admin resets',
+    bullets: [
+      'Every HR report digest email (scheduled or "Send now") now carries a ready-to-file CSV attachment with the same aggregate numbers as the email body — file it, forward it, or drop it into your month-end workbook without retyping a figure.',
+      'The CSV opens cleanly in Excel and Google Sheets: proper escaping, one summary block plus the report table, and a filename that says what it is (mbumah-absence-2026-10-01_2026-10-31.csv).',
+      'Delivery history now shows a violet "CSV · 1.2 KB" chip on every send that carried the file, and the in-app copy confirms the attachment — so you always know what a recipient received.',
+      'Admin password resets are no longer silent: the account owner now receives an "An administrator changed your password" security notice telling them who reset it, that their sessions are locked at the set-a-new-password screen, and what to do next.',
+      'Both security notices (self-service change and admin reset) remain best-effort and are logged to the notification log with names and sizes only — attachment contents are never persisted.',
+    ],
+  },
+  {
     version: '2.45.0',
     title: 'You can now fix your own pending leave request — no withdraw, no refile',
     bullets: [

@@ -22,6 +22,7 @@
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import { sendEmail } from '@/lib/email-service';
+import { digestToCsv, formatCsvSize } from '@/lib/hr/digest-csv';
 import {
   hrReportDigestTemplate,
   hrReportDigestText,
@@ -626,6 +627,8 @@ async function writeDigestNotification(params: {
   digest: HrReportDigestData | null;
   email: { success: boolean; error?: string | null };
   manual: boolean;
+  /** v2.46.0: set when the email carried the ready-to-file CSV. */
+  attachmentLabel?: string | null;
 }): Promise<string | null> {
   try {
     const tab = REPORT_KEY_TO_TAB[params.reportKey as HrScheduleReportKey];
@@ -640,12 +643,15 @@ async function writeDigestNotification(params: {
     const delivery = params.email.success
       ? 'Email delivered.'
       : `Email not delivered${params.email.error ? `: ${params.email.error}` : '.'}`;
+    // v2.46.0: the attachment is only claimed when the email actually went
+    // out — a failed send must not promise a CSV the recipient never got.
+    const attachment = params.email.success && params.attachmentLabel ? ` ${params.attachmentLabel} attached.` : '';
     const row = await db.notification.create({
       data: {
         storeId: params.storeId,
         userId: params.recipientUserId,
         title: `${label} digest — ${params.digest?.scopeLabel ?? 'All branches'}`.trim(),
-        message: `${params.digest?.periodLabel ?? ''} · ${headlineText} · ${delivery}${params.manual ? ' (manual send)' : ''}`,
+        message: `${params.digest?.periodLabel ?? ''} · ${headlineText} · ${delivery}${attachment}${params.manual ? ' (manual send)' : ''}`,
         type: 'SYSTEM',
         category: 'HR',
         priority: params.email.success ? 'NORMAL' : 'HIGH',
@@ -697,14 +703,24 @@ export async function runDueHrReportSchedules(
         result.results.push({ id: schedule.id, reportKey: schedule.reportKey, status: 'SKIPPED', recipients: recipients.length });
         continue;
       }
+      // v2.46.0: every digest travels with a ready-to-file CSV built from
+      // the SAME aggregate-only payload — no new data leaves the service.
+      const csv = digestToCsv(digest, now);
       const email = await sendEmail({
         to: recipients,
         subject: `${digest.reportLabel} digest — ${digest.organizationName} (${digest.periodLabel})`,
         html: hrReportDigestTemplate(digest),
         text: hrReportDigestText(digest),
+        ...(csv ? { attachments: [csv] } : {}),
         type: 'HR_REPORT_DIGEST',
-        metadata: { scheduleId: schedule.id, reportKey: schedule.reportKey, frequency: schedule.frequency },
+        metadata: {
+          scheduleId: schedule.id,
+          reportKey: schedule.reportKey,
+          frequency: schedule.frequency,
+          ...(csv ? { csvFilename: csv.filename, csvBytes: csv.byteSize } : {}),
+        },
       });
+      const attachmentLabel = csv ? `CSV (${formatCsvSize(csv.byteSize)})` : null;
       if (email.success) {
         await db.hrReportSchedule.update({
           where: { id: schedule.id },
@@ -721,6 +737,7 @@ export async function runDueHrReportSchedules(
           digest,
           email: { success: true },
           manual: false,
+          attachmentLabel,
         });
       } else {
         await db.hrReportSchedule.update({
@@ -739,6 +756,7 @@ export async function runDueHrReportSchedules(
           digest,
           email: { success: false, error: email.error ?? 'Email send failed' },
           manual: false,
+          attachmentLabel,
         });
       }
     } catch (error) {
@@ -775,6 +793,8 @@ export interface SendScheduleNowResult {
   digestSummary: { reportLabel: string; periodLabel: string; scopeLabel: string; headlines: string[] } | null;
   email: { success: boolean; error?: string };
   notificationId: string | null;
+  /** v2.46.0: set when the send carried the ready-to-file CSV attachment. */
+  csv: { filename: string; byteSize: number } | null;
 }
 
 /**
@@ -824,6 +844,7 @@ export async function sendScheduleNow(
   let outcome: SendNowOutcome;
   let email: { success: boolean; error?: string } = { success: false };
   let notificationId: string | null = null;
+  let csv: SendScheduleNowResult['csv'] = null;
 
   if (!digest) {
     outcome = 'SKIPPED';
@@ -843,14 +864,23 @@ export async function sendScheduleNow(
       manual: true,
     });
   } else {
+    const attachment = digestToCsv(digest, now);
     email = await sendEmail({
       to: recipients,
       subject: `${digest.reportLabel} digest — ${digest.organizationName} (${digest.periodLabel})`,
       html: hrReportDigestTemplate(digest),
       text: hrReportDigestText(digest),
+      ...(attachment ? { attachments: [attachment] } : {}),
       type: 'HR_REPORT_DIGEST',
-      metadata: { scheduleId: row.id, reportKey: row.reportKey, manual: true, actorId: actor.id },
+      metadata: {
+        scheduleId: row.id,
+        reportKey: row.reportKey,
+        manual: true,
+        actorId: actor.id,
+        ...(attachment ? { csvFilename: attachment.filename, csvBytes: attachment.byteSize } : {}),
+      },
     });
+    if (attachment) csv = { filename: attachment.filename, byteSize: attachment.byteSize };
     if (email.success) {
       outcome = 'SENT';
       await db.hrReportSchedule.update({
@@ -872,6 +902,7 @@ export async function sendScheduleNow(
       digest,
       email,
       manual: true,
+      attachmentLabel: csv ? `CSV (${formatCsvSize(csv.byteSize)})` : null,
     });
   }
 
@@ -904,6 +935,7 @@ export async function sendScheduleNow(
       : null,
     email,
     notificationId,
+    csv,
   };
 }
 
@@ -967,6 +999,10 @@ export interface ScheduleDeliveryRow {
   // into per-recipient chips.
   recipientList: string[];
   manual: boolean; // manual "send now" vs scheduled sweep
+  // v2.46.0: the ready-to-file CSV that travelled with the email (name +
+  // decoded byte size from the send metadata; null for pre-2.46.0 rows).
+  csvFilename: string | null;
+  csvBytes: number | null;
 }
 
 /**
@@ -1035,6 +1071,10 @@ export async function listScheduleDeliveries(
       recipients: typeof meta.recipientCount === 'number' ? meta.recipientCount : recipientList.length,
       recipientList,
       manual: meta.manual === true,
+      // v2.46.0: the ready-to-file CSV travels with the digest email — the
+      // delivery row surfaces it as a chip so recipients know what to expect.
+      csvFilename: typeof meta.csvFilename === 'string' ? meta.csvFilename : null,
+      csvBytes: typeof meta.csvBytes === 'number' ? meta.csvBytes : null,
     };
   });
 }

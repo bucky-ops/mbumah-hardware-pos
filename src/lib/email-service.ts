@@ -58,6 +58,70 @@ export interface SendEmailParams {
   type?: string;
   /** Optional metadata to persist in NotificationLog.metadata (JSON string). */
   metadata?: Record<string, unknown>;
+  /**
+   * v2.46.0: optional file attachments (base64 content, Resend contract).
+   * Only NAMES + SIZES reach NotificationLog metadata — the content itself
+   * is never persisted (log rows stay small; payloads stay private).
+   */
+  attachments?: EmailAttachment[];
+}
+
+/** v2.46.0: a base64-encoded email attachment (content per Resend SDK). */
+export interface EmailAttachment {
+  filename: string;
+  /** base64-encoded file content. */
+  content: string;
+}
+
+// Attachment limits (decoded sizes). Resend accepts up to 40MB per request;
+// we stay far below so one attachment can never crowd out the message and
+// failures surface as a clean `success:false` instead of an API error.
+const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB per file
+const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024; // 20 MB per email
+
+/** Decoded byte size of a base64 string (no Buffer allocation; padding-aware). */
+function base64ByteSize(content: string): number {
+  const padding = content.endsWith('==') ? 2 : content.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((content.length * 3) / 4) - padding);
+}
+
+/**
+ * Validate the attachments array. Returns an error string (or null when
+ * valid). Rejects empty filenames/content, oversized files and oversized
+ * totals BEFORE any Resend call so the failure is attributable in the log.
+ */
+function validateAttachments(attachments: EmailAttachment[] | undefined): string | null {
+  if (!attachments || attachments.length === 0) return null;
+  if (attachments.length > MAX_ATTACHMENTS) {
+    return `Too many attachments (${attachments.length}; max ${MAX_ATTACHMENTS}).`;
+  }
+  let total = 0;
+  for (const a of attachments) {
+    if (!a || typeof a.filename !== 'string' || a.filename.trim().length === 0) {
+      return 'Every attachment needs a filename.';
+    }
+    if (typeof a.content !== 'string' || a.content.length === 0) {
+      return `Attachment "${a.filename}" has no content.`;
+    }
+    const bytes = base64ByteSize(a.content);
+    if (bytes > MAX_ATTACHMENT_BYTES) {
+      return `Attachment "${a.filename}" exceeds the ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB per-file limit.`;
+    }
+    total += bytes;
+  }
+  if (total > MAX_TOTAL_ATTACHMENT_BYTES) {
+    return `Attachments exceed the ${Math.round(MAX_TOTAL_ATTACHMENT_BYTES / 1024 / 1024)} MB total limit.`;
+  }
+  return null;
+}
+
+/** Attachment audit metadata: names + sizes ONLY, never content. */
+function attachmentLogMeta(attachments: EmailAttachment[] | undefined):
+  | Array<{ filename: string; bytes: number }>
+  | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+  return attachments.map((a) => ({ filename: a.filename, bytes: base64ByteSize(a.content) }));
 }
 
 export interface ReceiptEmailParams {
@@ -165,9 +229,11 @@ async function logNotification(
   status: 'SENT' | 'FAILED',
   error?: string,
   messageId?: string,
+  attachments?: EmailAttachment[],
 ): Promise<void> {
   try {
     const recipient = Array.isArray(params.to) ? params.to.join(', ') : params.to;
+    const attachmentMeta = attachmentLogMeta(attachments);
     await db.notificationLog.create({
       data: {
         userId: params.userId || null,
@@ -178,6 +244,7 @@ async function logNotification(
         error: error || null,
         metadata: JSON.stringify({
           ...(params.metadata || {}),
+          ...(attachmentMeta ? { attachments: attachmentMeta } : {}),
           ...(messageId ? { messageId } : {}),
         }),
         sentAt: status === 'SENT' ? new Date() : null,
@@ -209,7 +276,7 @@ async function logNotification(
  *   });
  */
 export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
-  const { to, subject, html, text, userId, type } = params;
+  const { to, subject, html, text, userId, type, attachments } = params;
 
   // SSR-safety: never run on the client. The 'resend' SDK is server-only.
   if (typeof window !== 'undefined') {
@@ -223,7 +290,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   if (!isEmailConfigured()) {
     const warning = 'RESEND_API_KEY not configured - email send skipped.';
     console.warn(`[email-service] ${warning}`, { to, subject, type });
-    await logNotification(params, 'FAILED', warning);
+    await logNotification(params, 'FAILED', warning, undefined, attachments);
     return { success: false, error: warning };
   }
 
@@ -232,8 +299,16 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
   const validRecipients = recipients.filter((r) => r && typeof r === 'string' && r.includes('@'));
   if (validRecipients.length === 0) {
     const err = 'No valid recipient email address provided.';
-    await logNotification(params, 'FAILED', err);
+    await logNotification(params, 'FAILED', err, undefined, attachments);
     return { success: false, error: err };
+  }
+
+  // v2.46.0: attachment validation — a bad attachment fails BEFORE the Resend
+  // call so the error names the limit, not an opaque API code.
+  const attachmentError = validateAttachments(attachments);
+  if (attachmentError) {
+    await logNotification(params, 'FAILED', attachmentError, undefined, undefined);
+    return { success: false, error: attachmentError };
   }
 
   try {
@@ -246,11 +321,12 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       subject,
       html,
       ...(text ? { text } : {}),
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
     });
 
     if (error) {
       const errMsg = error.message || 'Resend API returned an error.';
-      await logNotification(params, 'FAILED', errMsg);
+      await logNotification(params, 'FAILED', errMsg, undefined, attachments);
       await systemLog({
         action: 'EMAIL_SEND_FAILED',
         component: LogComponent.SYSTEM,
@@ -263,13 +339,13 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
     }
 
     const messageId = data?.id || `resend_${Date.now()}`;
-    await logNotification(params, 'SENT', undefined, messageId);
+    await logNotification(params, 'SENT', undefined, messageId, attachments);
 
     return { success: true, messageId };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Unknown email send error.';
     console.error('[email-service] Send error:', errMsg, { to: validRecipients, subject, type });
-    await logNotification(params, 'FAILED', errMsg);
+    await logNotification(params, 'FAILED', errMsg, undefined, attachments);
     await systemLog({
       action: 'EMAIL_SEND_EXCEPTION',
       component: LogComponent.SYSTEM,

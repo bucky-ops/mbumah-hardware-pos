@@ -23,6 +23,8 @@ import { type NextRequest } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { withErrorBoundary, systemLog } from '@/lib/logger';
+import { sendEmail, NotificationType } from '@/lib/email-service';
+import { passwordChangedTemplate } from '@/lib/email-templates';
 import { requireAuth, recordPermissionDenied, noteDeniedAndMaybeLock, type AuthSession } from '@/lib/auth';
 // v2.12.2 (PR B - RBAC): feature-level role-management gate.
 import { hasFeaturePermission, PERMISSION_DENIED_MESSAGES } from '@/lib/permissions';
@@ -247,6 +249,35 @@ async function updateUserHandler(
     storeId: session.storeId || undefined,
     metadata: { targetUserId: id, fields: Object.keys(data) },
   }).catch(() => {});
+
+  // v2.46.0: admin password resets are no longer silent. The account owner
+  // gets the same PASSWORD_CHANGED security notice as a self-service change,
+  // in its admin-reset variant (who acted, what happens to sessions, what to
+  // do next). Best-effort by design: a failed send (no RESEND_API_KEY in dev
+  // — logged to NotificationLog as FAILED) never fails the PATCH itself.
+  if (password !== undefined) {
+    const resetAtIso = new Date().toISOString();
+    await sendEmail({
+      to: updated.email,
+      subject: 'An administrator changed your MBUMAH HARDWARE password',
+      html: passwordChangedTemplate({
+        userEmail: updated.email,
+        changedAtIso: resetAtIso,
+        sessionsRevoked: 0,
+        changedByAdmin: true,
+        changedByAdminEmail: session.email,
+      }),
+      text: `An administrator (${session.email}) changed the password for ${updated.email} on ${resetAtIso}. Sign in with the temporary password you were given and choose your own. If you didn't expect this, contact your administrator immediately.`,
+      userId: id,
+      type: NotificationType.PASSWORD_CHANGED,
+      metadata: {
+        changedByAdmin: true,
+        changedByAdminEmail: session.email,
+        targetUserId: id,
+        resetAtIso,
+      },
+    }).catch(() => undefined);
+  }
 
   if (data.role) {
     await systemLog({

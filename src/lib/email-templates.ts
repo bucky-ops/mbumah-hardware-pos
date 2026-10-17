@@ -684,13 +684,50 @@ export function hrReportDigestText(data: HrReportDigestData): string {
  * route). Tells the account owner WHAT changed, WHEN, and how many other
  * devices were signed out, with an honest "wasn't you? act now" footer.
  * No link, no action button — a notice, not a call to click.
+ *
+ * v2.46.0: the ADMIN-RESET variant. PATCH /api/users/[id] fires the same
+ * notice with changedByAdmin=true when an administrator sets a password —
+ * until now an admin reset was completely silent for the account owner.
+ * The copy differs where the facts differ: who acted, what happens to
+ * running sessions (locked at the forced-rotation screen, not signed out),
+ * and what the recipient should do (sign in and set their own password).
  */
 export function passwordChangedTemplate(data: {
   userEmail: string;
   changedAtIso: string;
   sessionsRevoked: number;
+  /** v2.46.0: true when the change came from PATCH /api/users/[id]. */
+  changedByAdmin?: boolean;
+  /** v2.46.0: the admin who performed the reset (transparency). */
+  changedByAdminEmail?: string;
 }): string {
   const when = new Date(data.changedAtIso).toUTCString();
+
+  if (data.changedByAdmin) {
+    const adminLine = data.changedByAdminEmail
+      ? `An administrator (<strong>${data.changedByAdminEmail}</strong>) set a new temporary password for <strong>${data.userEmail}</strong>.`
+      : `An administrator set a new temporary password for <strong>${data.userEmail}</strong>.`;
+    return emailShell(
+      'An administrator changed your password',
+      `
+      <h2>An administrator changed your password</h2>
+      <p>${adminLine}</p>
+
+      <div class="alert alert-info">
+        <strong>When:</strong> ${when}<br/>
+        <strong>Your sessions:</strong> signed-in devices are locked at the "Set a new password" screen until the change is completed<br/>
+        <strong>Next step:</strong> sign in with the temporary password you were given and choose your own
+      </div>
+
+      <div class="alert alert-warning">
+        <strong>Didn't expect this?</strong> Contact your administrator immediately — do not sign in with the temporary password until an administrator confirms the reset was intended.
+      </div>
+
+      <p style="font-size:12px;color:${BRAND.textMuted};">This is a security notice — it reaches you whenever the password on your account is changed by an administrator. ${BRAND.name} will never ask for your password by email.</p>
+    `,
+    );
+  }
+
   return emailShell(
     'Your password was changed',
     `

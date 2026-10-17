@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ import {
   History,
   Loader2,
   Mail,
+  Paperclip,
   Pause,
   Play,
   PlusCircle,
@@ -82,6 +84,9 @@ interface DeliveryRow {
   // v2.27.0: per-recipient chips (parsed server-side from the joined column).
   recipientList: string[];
   manual: boolean;
+  // v2.46.0: the ready-to-file CSV that travelled with this attempt.
+  csvFilename: string | null;
+  csvBytes: number | null;
 }
 
 // v2.25.0: dry-run digest preview (identical payload to the email, never sent).
@@ -340,12 +345,14 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
         digestSummary: { reportLabel: string; periodLabel: string; scopeLabel: string; headlines: string[] } | null;
         email: { success: boolean; error?: string };
         notificationId: string | null;
+        csv: { filename: string; byteSize: number } | null;
       }>(`/api/hr/reports/schedules/${s.id}/send-now`, 'POST');
       const label = res.digestSummary?.reportLabel ?? s.reportLabel;
+      const csvNote = res.csv ? ` The ready-to-file CSV (${formatCsvSize(res.csv.byteSize)}) is attached to the email.` : '';
       if (res.outcome === 'SENT') {
         setSendNote({
           tone: 'ok',
-          text: `${label} digest sent to ${s.recipients.length} recipient(s) - email delivered. A copy is in your notification center.`,
+          text: `${label} digest sent to ${s.recipients.length} recipient(s) - email delivered.${csvNote} A copy is in your notification center.`,
         });
       } else if (res.outcome === 'SKIPPED') {
         setSendNote({
@@ -653,6 +660,15 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                                     <span className="text-muted-foreground">{formatDate(d.createdAt)}</span>
                                     {d.manual ? (
                                       <span className="rounded bg-sky-100 px-1 text-[10px] text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">manual</span>
+                                    ) : null}
+                                    {d.csvFilename ? (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 rounded bg-violet-100 px-1 text-[10px] font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                                        title={`${d.csvFilename} — the ready-to-file CSV attached to this digest email`}
+                                      >
+                                        <Paperclip className="h-2.5 w-2.5" aria-hidden />
+                                        CSV{d.csvBytes ? ` · ${formatCsvSize(d.csvBytes)}` : ''}
+                                      </span>
                                     ) : null}
                                     <span className="text-muted-foreground">· {d.recipientList.length} recipient(s)</span>
                                   </p>
