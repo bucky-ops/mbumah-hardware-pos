@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.97.0',
+    title: 'Every performance list files itself',
+    bullets: [
+      'The family completes: the Cycles and Goals tabs grow the same CSV button the Reviews tab got \u2014 the exact rows on screen download as the governed filing file, header block and injection guard included.',
+      'The cycles file keeps the manager\u2019s calibration notes out: the file carries the meter\u2019s counts, never the private notes \u2014 the same construction-level privacy the reviews file gives ratings.',
+      'The goals file rides your filters: employee, source and status chips steer the download, and the file always matches what the board shows \u2014 never more, never less.',
+      'One button, one story: every CSV downloads with an honest name (mbumah-performance-\u2026csv) and lands an audit row that says what was filed, never who is in it.',
+    ],
+  },
+  {
     version: '2.96.0',
     title: 'The performance page files itself',
     bullets: [

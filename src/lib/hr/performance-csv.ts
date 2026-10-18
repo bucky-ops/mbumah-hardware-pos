@@ -4,6 +4,15 @@
 // EXACT filtered subset the Reviews tab shows, built by ONE server-side
 // builder so a downloaded file can never disagree with the screen.
 //
+// v2.97.0: the family completes — cycles and goals file through the SAME
+// contract (same header-block layout, same escaper, same filename honesty).
+// The cycles filing carries a deliberate narrowing: CycleCsvRow has NO
+// calibrationNotes field, because the export route is read-guarded
+// (hr.performance.review) while notes are manage-only content — a reviewer
+// who can file the list must not receive the manager's private notes in the
+// file. The input type makes that leak impossible by construction, the same
+// way the reviews builder's rating-free input does.
+//
 // WHY: the desk report (v2.70) and every per-table report tab (v2.58) file
 // themselves through a governed builder — header block, OWASP formula-
 // injection guard, honest filename. The performance reviews list was the
@@ -127,6 +136,151 @@ export function reviewsToCsv(
   const cycle = slug(meta.cycleLabel, 'all-cycles');
   const status = slug(meta.statusLabel, 'all');
   const filename = `mbumah-performance-reviews-${cycle}-${status}.csv`;
+
+  return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
+}
+
+/**
+ * v2.97.0: the filing row for one review cycle — deliberately NOT the full
+ * CycleDto. The DTO carries calibrationNotes (manage-only content, shown in
+ * the drawer behind canEditNotes); this slice omits it, so a read-guarded
+ * export can compile-time never leak the notes into a reviewer's file.
+ */
+export interface CycleCsvRow {
+  name: string;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+  reviewCount: number;
+  statusCounts: { DRAFT: number; SUBMITTED: number; ACKNOWLEDGED: number; CALIBRATED: number };
+  createdAt: string;
+}
+
+export interface CycleCsvMeta {
+  organizationName: string;
+  scopeLabel: string;
+}
+
+/**
+ * Build the governed CSV for the cycles list (v2.97.0). The cycles tab has
+ * no filters — the file is the whole list the screen shows, newest period
+ * first (the service's order). Status stays the raw lifecycle enum
+ * (DRAFT / ACTIVE / CLOSED); the per-status counts ride as their own
+ * columns so a reconciliation can rebuild the calibration meter offline.
+ */
+export function cyclesToCsv(
+  cycles: readonly CycleCsvRow[],
+  meta: CycleCsvMeta,
+  generatedAt: Date = new Date(),
+): ReviewCsvFile | null {
+  if (cycles.length === 0) return null;
+
+  const lines: string[] = [];
+  const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
+
+  row(['Report', 'Performance cycles']);
+  row(['Organization', meta.organizationName]);
+  row(['Scope', meta.scopeLabel]);
+  row(['Generated (UTC)', generatedAt.toISOString()]);
+
+  lines.push('');
+  lines.push('Cycles');
+  row(['Cycle', 'Period start', 'Period end', 'Status', 'Reviews', 'Calibrated', 'Draft', 'Submitted', 'Acknowledged', 'Created']);
+  for (const c of cycles) {
+    row([
+      c.name,
+      dayKey(c.periodStart),
+      dayKey(c.periodEnd),
+      c.status,
+      c.reviewCount,
+      c.statusCounts.CALIBRATED,
+      c.statusCounts.DRAFT,
+      c.statusCounts.SUBMITTED,
+      c.statusCounts.ACKNOWLEDGED,
+      dayKey(c.createdAt),
+    ]);
+  }
+
+  const csv = lines.join('\r\n') + '\r\n';
+  const filename = 'mbumah-performance-cycles.csv';
+
+  return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
+}
+
+/**
+ * v2.97.0: the filing row for one team goal — the board DTO's visible
+ * facts. Values stay the service's fixed-two-decimal strings (machine-
+ * readable, locale-independent); progress is the service's clamped 0-100
+ * number. metricLabel is the CUSTOM metric's own name — the same honesty
+ * the board card shows; empty when the source needs no label.
+ */
+export interface GoalCsvRow {
+  title: string;
+  employeeName: string | null;
+  cycleName: string | null;
+  metricSource: string;
+  metricLabel: string | null;
+  status: string;
+  currentValue: string;
+  targetValue: string;
+  progressPct: number;
+  dueDate: string | null;
+}
+
+export interface GoalCsvMeta {
+  organizationName: string;
+  scopeLabel: string;
+  /** Human label of the source filter, e.g. "sales total" or "all". */
+  sourceLabel: string;
+  /** Human label of the status filter, e.g. "open" or "all". */
+  statusLabel: string;
+}
+
+/**
+ * Build the governed CSV for the goals list (v2.97.0) — the EXACT filtered
+ * subset the Goals tab shows (employee / source / status filters ride the
+ * query, re-run by the service). Deleted goals never file: the export
+ * re-runs listGoals (live board), and the bench has its own reconcile view.
+ */
+export function goalsToCsv(
+  goals: readonly GoalCsvRow[],
+  meta: GoalCsvMeta,
+  generatedAt: Date = new Date(),
+): ReviewCsvFile | null {
+  if (goals.length === 0) return null;
+
+  const lines: string[] = [];
+  const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
+
+  row(['Report', 'Team goals']);
+  row(['Organization', meta.organizationName]);
+  row(['Scope', meta.scopeLabel]);
+  row(['Source', meta.sourceLabel]);
+  row(['Status', meta.statusLabel]);
+  row(['Generated (UTC)', generatedAt.toISOString()]);
+
+  lines.push('');
+  lines.push('Goals');
+  row(['Goal', 'Employee', 'Cycle', 'Source', 'Metric', 'Status', 'Current', 'Target', 'Progress %', 'Due']);
+  for (const g of goals) {
+    row([
+      g.title,
+      g.employeeName ?? '',
+      g.cycleName ?? '',
+      g.metricSource,
+      g.metricLabel ?? '',
+      g.status,
+      g.currentValue,
+      g.targetValue,
+      g.progressPct,
+      dayKey(g.dueDate),
+    ]);
+  }
+
+  const csv = lines.join('\r\n') + '\r\n';
+  const source = slug(meta.sourceLabel, 'all');
+  const status = slug(meta.statusLabel, 'all');
+  const filename = `mbumah-performance-goals-${source}-${status}.csv`;
 
   return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
 }
