@@ -30,6 +30,9 @@ export interface GoalDto {
   dueDate: string | null;
   isPosSourced: boolean;
   cycleName?: string | null;
+  // v2.91.0: the details panel shows the honest recency of the goal —
+  // when the manager last touched it (listMyGoals folds updatedAt through).
+  updatedAt?: string;
 }
 
 // v2.90.0: the portal reads the same shape — status chips wear the same
@@ -71,6 +74,9 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
   // chips with live counts from the FULL list, an honest "Showing X of Y"
   // line, and a filtered-empty state that offers the way back.
   const [goalStatus, setGoalStatus] = useState('ALL');
+  // v2.91.0: the details drill-down — one goal expanded at a time, the
+  // mirror of the reviews read-half below (expand, never a page jump).
+  const [openGoalId, setOpenGoalId] = useState<string | null>(null);
   const goalStatusCounts = initialGoals.reduce<Record<string, number>>((acc, g) => {
     if (g.status === 'OPEN' || g.status === 'ACHIEVED' || g.status === 'MISSED' || g.status === 'CLOSED') {
       acc[g.status] = (acc[g.status] ?? 0) + 1;
@@ -157,7 +163,9 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
               </Button>
             </div>
           ) : (
-            visibleGoals.map((g) => (
+            visibleGoals.map((g) => {
+            const isOpen = openGoalId === g.id;
+            return (
             <div key={g.id} className="rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md" data-testid={`my-goal-card-${g.id}`}>
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -181,14 +189,53 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
                 <StatusBadge status={g.status} />
               </div>
               <ProgressMeter pct={g.progressPct} label={`Progress on ${g.title}`} tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'} />
-              <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
+              <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
                   <strong className="text-foreground tabular-nums">{Number(g.currentValue).toLocaleString()}</strong> of{' '}
                   <span className="tabular-nums">{Number(g.targetValue).toLocaleString()}</span> ({g.progressPct}%)
                 </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  aria-expanded={isOpen}
+                  data-testid={`my-goal-details-${g.id}`}
+                  onClick={() => setOpenGoalId(isOpen ? null : g.id)}
+                >
+                  {isOpen ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+                  Details
+                </Button>
               </div>
+              {isOpen ? (
+                <div className="mt-3 space-y-2.5 rounded-xl border bg-background p-3" data-testid={`my-goal-panel-${g.id}`}>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg border p-2.5">
+                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Metric source</p>
+                      <p className="text-sm">{g.isPosSourced ? 'POS sales (computed)' : 'Manual'}</p>
+                    </div>
+                    <div className="rounded-lg border p-2.5">
+                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Review cycle</p>
+                      <p className="text-sm">{g.cycleName || 'No cycle'}</p>
+                    </div>
+                    <div className="rounded-lg border p-2.5">
+                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Due</p>
+                      <p className="text-sm">{g.dueDate ? formatDate(g.dueDate) : 'No due date'}</p>
+                    </div>
+                    <div className="rounded-lg border p-2.5">
+                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Last updated</p>
+                      <p className="text-sm">{g.updatedAt ? formatDate(g.updatedAt) : '—'}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {g.isPosSourced
+                      ? 'This goal reads POS sales directly — the number moves when sales move, never by hand.'
+                      : 'A manual goal: your manager keeps the progress value current.'}
+                  </p>
+                </div>
+              ) : null}
             </div>
-            ))
+            );
+            })
           )}
         </section>
       )}

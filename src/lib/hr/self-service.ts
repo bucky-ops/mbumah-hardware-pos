@@ -640,6 +640,10 @@ export async function listMyGoalProgress(employee: SelfEmployee): Promise<Array<
     isPosSourced: g.metricSource === 'SALES_TOTAL' || g.metricSource === 'SALES_COUNT',
     // v2.90.0: the portal goal card names its review cycle when linked.
     cycleName: g.cycleName,
+    // v2.91.0: the details panel shows the honest recency of the goal —
+    // every field the portal renders must ride this mapping (the
+    // per-path lesson from v2.90: a new DTO field is checked per read).
+    updatedAt: g.updatedAt,
   }));
 }
 

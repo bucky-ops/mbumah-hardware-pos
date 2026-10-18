@@ -6,6 +6,7 @@
 // narratives appear only in the permission-gated review detail dialog.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, Pencil, Plus, RefreshCw, Star, Target, X } from 'lucide-react';
+import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, LockKeyhole, Pencil, Plus, RefreshCw, Star, Target, X } from 'lucide-react';
+import { hasHrPermission } from '@/lib/hr/permissions';
 import {
   apiGet,
   apiSend,
@@ -79,6 +81,7 @@ interface GoalDto {
   progressPct: number;
   status: string;
   dueDate: string | null;
+  updatedAt: string;
 }
 interface PersonDto {
   id: string;
@@ -128,6 +131,11 @@ const STATUS_CHIP_ACTIVE: Record<string, string> = {
 export default function PerformancePage() {
   const [cycles, setCycles] = useState<CycleDto[] | null>(null);
   const [reviews, setReviews] = useState<ReviewListItemDto[] | null>(null);
+  // v2.91.0: the door is honest — the page mirrors the server's role gate
+  // client-side (hasHrPermission over the /api/auth/me role) so a visitor
+  // without hr.performance.review sees a lock panel, never interactive
+  // tabs whose every action would 403. Null = still resolving.
+  const [viewerRole, setViewerRole] = useState<string | null>(null);
   const [goals, setGoals] = useState<GoalDto[] | null>(null);
   const [people, setPeople] = useState<PersonDto[]>([]);
   const [error, setError] = useState('');
@@ -175,6 +183,48 @@ export default function PerformancePage() {
   // v2.90.0: the goals meet their cycles — the New goal dialog offers the
   // review cycles the calibration story lives in; '' reads "No cycle".
   const [goalCycleId, setGoalCycleId] = useState('none');
+
+  // v2.91.0: the goals take edits — a dedicated edit dialog backed by
+  // PATCH /api/hr/goals/[id] (service updateGoal: title / target / due /
+  // status OPEN-CLOSED / currentValue for MANUAL-CUSTOM only). Employee and
+  // metric source are load-bearing facts the service never rewrites, so the
+  // dialog shows them as read-only meta instead of pretending they move.
+  const [editGoal, setEditGoal] = useState<GoalDto | null>(null);
+  const [editGoalTitle, setEditGoalTitle] = useState('');
+  const [editGoalTarget, setEditGoalTarget] = useState('');
+  const [editGoalCurrent, setEditGoalCurrent] = useState('');
+  const [editGoalStatus, setEditGoalStatus] = useState<'OPEN' | 'CLOSED'>('OPEN');
+  const [editGoalDue, setEditGoalDue] = useState('');
+
+  const openGoalEdit = (g: GoalDto) => {
+    setEditGoal(g);
+    setEditGoalTitle(g.title);
+    setEditGoalTarget(g.targetValue);
+    setEditGoalCurrent(g.currentValue);
+    setEditGoalStatus(g.status === 'CLOSED' ? 'CLOSED' : 'OPEN');
+    setEditGoalDue(g.dueDate ? g.dueDate.slice(0, 10) : '');
+  };
+
+  useEffect(() => {
+    let alive = true;
+    apiGet<{ role?: string }>('/api/auth/me')
+      .then((me) => {
+        if (alive) setViewerRole(me.role ?? null);
+      })
+      .catch(() => {
+        // /me failed (signed out, network) — leave null so the page keeps
+        // its existing error behaviour instead of claiming a role.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Server truth: hrGuard('hr.performance.review') allows BRANCH_MANAGER /
+  // HR_MANAGER / STORE_OWNER (SUPER_ADMIN bypasses); .manage allows
+  // HR_MANAGER / STORE_OWNER. Same map, same bypass — one file, no drift.
+  const canReview = viewerRole !== null && hasHrPermission(viewerRole, 'hr.performance.review');
+  const canManage = viewerRole !== null && hasHrPermission(viewerRole, 'hr.performance.manage');
 
   const load = useCallback(async () => {
     setError('');
@@ -303,8 +353,46 @@ export default function PerformancePage() {
         </Button>
       </div>
 
-      {error ? <ErrorNote message={error} /> : null}
+      {/* v2.91.0: when the door is locked the lock panel IS the honest
+          explanation — the raw 403 note would only repeat it louder, so
+          it stays quiet behind the lock. */}
+      {error && viewerRole === null ? <ErrorNote message={error} /> : null}
+      {error && viewerRole !== null && canReview ? <ErrorNote message={error} /> : null}
 
+      {/* ── v2.91.0 the honest HR door ──
+          A viewer whose role holds no hr.performance.review gets a lock
+          panel that names the role and the keys it lacks — not a shell of
+          interactive tabs whose every action would 403, and never an empty
+          state lying that the list is empty when it never loaded. */}
+      {viewerRole !== null && !canReview ? (
+        <Card className="border-amber-300/70 dark:border-amber-900" data-testid="perf-lock">
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50">
+              <LockKeyhole className="h-6 w-6 text-amber-600 dark:text-amber-400" aria-hidden />
+            </span>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">HR performance is locked for your role</p>
+              <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                Your role{' '}
+                <Badge variant="outline" className="border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-300" data-testid="perf-lock-role">
+                  {viewerRole.replace(/_/g, ' ')}
+                </Badge>{' '}
+                does not hold the <code className="rounded bg-muted px-1 py-0.5 text-[11px]">hr.performance.review</code> permission,
+                so this workspace stays closed — cycles, reviews, and goals alike.
+              </p>
+              <p className="mx-auto max-w-md text-xs text-muted-foreground">
+                Ask an HR manager or the store owner for access. Your own goals and reviews live in the{' '}
+                <Link href="/employees/me" className="font-medium text-sky-700 underline underline-offset-2 hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200">
+                  self-service portal
+                </Link>
+                .
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : viewerRole === null && !cycles && !reviews && !goals ? (
+        <Skeleton className="h-40 w-full" />
+      ) : (
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="cycles">Cycles</TabsTrigger>
@@ -314,11 +402,13 @@ export default function PerformancePage() {
 
         {/* ── Cycles ── */}
         <TabsContent value="cycles" className="space-y-4">
+          {canManage ? (
           <div className="flex justify-end">
             <Button size="sm" onClick={() => setCycleOpen(true)}>
               <Plus className="h-4 w-4" aria-hidden /> New cycle
             </Button>
           </div>
+          ) : null}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Review cycles</CardTitle>
@@ -549,7 +639,7 @@ export default function PerformancePage() {
         {/* ── Goals ── */}
         <TabsContent value="goals" className="space-y-4">
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {posGoalCount > 0 ? (
+            {canManage && posGoalCount > 0 ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -562,9 +652,11 @@ export default function PerformancePage() {
                 <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden /> Recompute all POS goals
               </Button>
             ) : null}
-            <Button size="sm" onClick={() => setGoalOpen(true)}>
-              <Plus className="h-4 w-4" aria-hidden /> New goal
-            </Button>
+            {canManage ? (
+              <Button size="sm" onClick={() => setGoalOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden /> New goal
+              </Button>
+            ) : null}
           </div>
           <Card>
             <CardHeader className="pb-3">
@@ -697,6 +789,19 @@ export default function PerformancePage() {
                                 <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} aria-hidden /> Recompute from POS sales
                               </Button>
                             ) : null}
+                            {canManage ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="w-full"
+                                data-testid={`goal-edit-${g.id}`}
+                                aria-label={`Edit goal ${g.title}`}
+                                disabled={busy}
+                                onClick={() => openGoalEdit(g)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit goal
+                              </Button>
+                            ) : null}
                           </CardContent>
                         </Card>
                       ))}
@@ -708,6 +813,7 @@ export default function PerformancePage() {
           </Card>
         </TabsContent>
       </Tabs>
+      )}
 
       {/* ── New cycle dialog ── */}
       <Dialog open={cycleOpen} onOpenChange={setCycleOpen}>
@@ -893,6 +999,114 @@ export default function PerformancePage() {
               <Star className="h-4 w-4" aria-hidden /> Create goal
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── v2.91.0 Edit goal dialog ── */}
+      <Dialog open={editGoal !== null} onOpenChange={(open) => !open && setEditGoal(null)}>
+        <DialogContent className="sm:max-w-md" data-testid="goal-edit-dialog">
+          {editGoal ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Pencil className="h-5 w-5 text-sky-500" aria-hidden /> Edit goal
+                </DialogTitle>
+                <DialogDescription>
+                  Title, target, due date, and status move here. The metric source never changes — achieved and missed are computed, never typed.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                {/* load-bearing facts the service never rewrites — shown, not editable */}
+                <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground" data-testid="goal-edit-meta">
+                  <Target className="h-3.5 w-3.5" aria-hidden />
+                  <span className="font-medium text-foreground">{editGoal.employeeName ?? 'Employee'}</span>
+                  <span aria-hidden>·</span>
+                  <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[editGoal.metricSource] ?? ''}`}>
+                    {SOURCE_LABELS[editGoal.metricSource] ?? editGoal.metricSource}
+                  </Badge>
+                  {editGoal.cycleName ? (
+                    <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-300">
+                      <CalendarRange className="h-3 w-3" aria-hidden /> {editGoal.cycleName}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="goal-edit-title">Title</Label>
+                  <Input id="goal-edit-title" data-testid="goal-edit-title" value={editGoalTitle} onChange={(e) => setEditGoalTitle(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="goal-edit-target">Target</Label>
+                    <Input id="goal-edit-target" data-testid="goal-edit-target" inputMode="decimal" value={editGoalTarget} onChange={(e) => setEditGoalTarget(e.target.value)} />
+                  </div>
+                  {editGoal.metricSource === 'MANUAL' || editGoal.metricSource === 'CUSTOM' ? (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="goal-edit-current">Current value</Label>
+                      <Input id="goal-edit-current" data-testid="goal-edit-current" inputMode="decimal" value={editGoalCurrent} onChange={(e) => setEditGoalCurrent(e.target.value)} />
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label>Current value</Label>
+                      <p className="rounded-md border border-sky-300 bg-sky-50 px-2.5 py-2 text-xs text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300" data-testid="goal-edit-pos-note">
+                        Computed from POS sales — use recompute, never a typed value.
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Status</Label>
+                  <div className="flex gap-1.5" role="group" aria-label="Goal status">
+                    {(['OPEN', 'CLOSED'] as const).map((s) => {
+                      const active = editGoalStatus === s;
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          aria-pressed={active}
+                          data-testid={`goal-edit-status-${s.toLowerCase()}`}
+                          disabled={busy}
+                          onClick={() => setEditGoalStatus(s)}
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                            active ? GOAL_CHIP_ACTIVE[s] : 'border-border bg-transparent text-muted-foreground hover:bg-muted/60'
+                          }`}
+                        >
+                          {s === 'OPEN' ? 'Reopen (open)' : 'Park (closed)'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    ACHIEVED and MISSED are computed from progress — you can only park or reopen a goal.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="goal-edit-due">Due date</Label>
+                  <Input id="goal-edit-due" data-testid="goal-edit-due" type="date" value={editGoalDue} onChange={(e) => setEditGoalDue(e.target.value)} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" data-testid="goal-edit-cancel" disabled={busy} onClick={() => setEditGoal(null)}>Cancel</Button>
+                <Button
+                  data-testid="goal-edit-save"
+                  disabled={busy || editGoalTitle.trim().length < 3 || !editGoalTarget}
+                  onClick={() =>
+                    void run(async () => {
+                      await apiSend(`/api/hr/goals/${editGoal.id}`, 'PATCH', {
+                        title: editGoalTitle,
+                        targetValue: editGoalTarget,
+                        dueDate: editGoalDue ? new Date(editGoalDue).toISOString() : '',
+                        status: editGoalStatus,
+                        ...(editGoal.metricSource === 'MANUAL' || editGoal.metricSource === 'CUSTOM' ? { currentValue: editGoalCurrent } : {}),
+                      });
+                      setEditGoal(null);
+                    })
+                  }
+                >
+                  <CheckCircle2 className="h-4 w-4" aria-hidden /> Save changes
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
 
