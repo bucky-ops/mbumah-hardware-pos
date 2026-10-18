@@ -44,6 +44,7 @@ export const TAB_LOADERS: Record<AppTab, TabLoader> = {
   loyalty: () => import('../app/(shell)/tabs/loyalty-tab'),
   security: () => import('../app/(shell)/tabs/security-tab'),
   payroll: () => import('../app/(shell)/tabs/payroll-tab'),
+  'people-payroll': () => import('../app/(shell)/tabs/people-payroll-tab'),
   etims: () => import('../app/(shell)/tabs/etims-tab'),
   'debt-management': () => import('../app/(shell)/tabs/debt-management-tab'),
   'debt-plans': () => import('../app/(shell)/tabs/debt-plans-tab'),

@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.109.0',
+    title: 'People & payroll joins Finance & Insights',
+    bullets: [
+      'The People & payroll by branch panel now lives in the main app\u2019s Finance & Insights group: per-branch headcount, employment cost, absence, latest run and expiry alerts, without leaving the POS shell.',
+      'One shared panel serves both homes (the new tab and the Expert Console) from the same /api/org/summary truth \u2014 and when the server answers without the HR block, the tab says exactly why instead of going blank.',
+      'The Expert Console grows a Home button: one click returns to the POS workspace, through one internal navigation helper \u2014 no open redirects, no lost context.',
+      'Branch Selector, Organization Console, Expert Console and Global Chat now follow the Admin module, in that order, each wearing its own icon (Building2, Network, Gauge, MessagesSquare).',
+      'Both consoles now render through one shared shell with one Home helper and one panel \u2014 the parity matrix in docs/ records where every feature lives.',
+    ],
+  },
+  {
     version: '2.108.0',
     title: 'The chart files its year',
     bullets: [

@@ -11,6 +11,10 @@ export const ALL_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'CASHI
 export const MGMT_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER', 'ACCOUNTANT'];
 export const SENIOR_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'BRANCH_MANAGER'];
 export const ADMIN_ROLES = ['SUPER_ADMIN', 'STORE_OWNER'];
+// v2.109.0: the exact trio /api/org/summary's own guard serves (ORG_ROLES) —
+// the People & Payroll tab reads that endpoint, so it is visible to exactly
+// whom the server would answer (the server still re-validates per request).
+export const ORG_SUMMARY_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'];
 // v2.12.2 (PR B - RBAC): catalog-steward role - catalog/inventory + inbound
 // supply-chain tabs only (NO financial/sales/HR tabs). User.role is a string
 // column (no schema change); membership enforced via these role arrays.
@@ -50,8 +54,8 @@ import {
   KeyRound, Truck, ClipboardList, BarChart3, FileText,
   CreditCard, Ticket, Receipt, Building2,
   CircleDollarSign, BadgeDollarSign, MessageSquare, MessagesSquare,
-  ArrowUpDown, Landmark, Award, Wallet, Shield, Settings,
-  LineChart, Database, CalendarDays,
+  ArrowUpDown, Landmark, Award, Wallet, Shield, ShieldCheck,
+  LineChart, Database, CalendarDays, UserCog,
 } from 'lucide-react';
 
 export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: string[] }[] = [
@@ -81,10 +85,16 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
   { id: 'banking', label: 'Banking', icon: Landmark, roles: ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'] },
   { id: 'loyalty', label: 'Loyalty', icon: Award, roles: SENIOR_ROLES },
   { id: 'payroll', label: 'Payroll', icon: Wallet, roles: MGMT_ROLES },
+  // v2.109.0: People & payroll by branch — the EMS HR drill-down now lives
+  // under Finance & Insights (the server still fail-closes: /api/org/summary
+  // is ORG_ROLES-only and hrPerStore needs HR report permission).
+  { id: 'people-payroll', label: 'People & Payroll', icon: UserCog, roles: ORG_SUMMARY_ROLES },
   { id: 'data-exports', label: 'Data Exports', icon: Database, roles: MGMT_ROLES },
   { id: 'shift-scheduling', label: 'Shift Scheduling', icon: CalendarDays, roles: MGMT_ROLES },
   { id: 'security', label: 'Security', icon: Shield, roles: ADMIN_ROLES },
-  { id: 'admin', label: 'Admin', icon: Settings, roles: ADMIN_ROLES },
+  // v2.109.0: the Admin module wears ShieldCheck (the icon system's admin
+  // mark — Settings remains a settings-page icon elsewhere).
+  { id: 'admin', label: 'Admin', icon: ShieldCheck, roles: ADMIN_ROLES },
 ];
 
 // Navigation Groups (used by AppSidebar)
@@ -92,7 +102,7 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
 export const NAV_GROUPS: { label: string; ids: AppTab[] }[] = [
   { label: 'Main', ids: ['dashboard', 'pos', 'catalog', 'inventory', 'customers', 'transactions'] },
   { label: 'Sales & Credit', ids: ['invoices', 'delivery', 'credits', 'debt-management', 'debt-plans', 'vouchers', 'gift-cards', 'loyalty'] },
-  { label: 'Finance & Insights', ids: ['financial', 'analytics', 'banking', 'payroll', 'transfers'] },
+  { label: 'Finance & Insights', ids: ['financial', 'analytics', 'banking', 'payroll', 'people-payroll', 'transfers'] },
   { label: 'Operations', ids: ['rentals', 'suppliers', 'messaging', 'conversations', 'shift-scheduling'] },
   { label: 'Compliance & System', ids: ['etims', 'reports', 'data-exports', 'security', 'admin'] },
 ];

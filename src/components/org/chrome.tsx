@@ -12,7 +12,8 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, FileText, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, FileText, History, Home, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';
+import { goHomeToPos } from '@/components/console/unified-console';
 import { APP_BUILD_LABEL, APP_VERSION } from '@/lib/version';
 import { WHATS_NEW, whatsNewMarkAllTarget, whatsNewReadState, whatsNewUnreadCount, type WhatsNewEntry } from '@/lib/whats-new';
 import { HealthGauge, kes, type KpiSummaryData, type StoreRow } from './primitives';
@@ -25,11 +26,13 @@ const workspaceHref = (s: StoreRow) =>
 const storeCode = (s: StoreRow) => s.code ?? s.slug ?? s.id.slice(0, 3);
 
 // ── Header ───────────────────────────────────────────────────────────────────
-export function ConsoleHeader({ kpi, stores, online, onOpenPalette, onOpenChat, onOpenShortcuts, onOpenLogin, onOpenNotifications, session, signedIn, onToast }: {
+export function ConsoleHeader({ kpi, stores, online, onOpenPalette, onOpenChat, onOpenShortcuts, onOpenLogin, onOpenNotifications, session, signedIn, onToast, showHome = false }: {
   kpi: KpiSummaryData | null; stores: StoreRow[]; online: boolean;
   onOpenPalette: () => void; onOpenChat: () => void; onOpenShortcuts: () => void;
   onOpenLogin: () => void; onOpenNotifications: () => void;
   session: SessionUser | null; signedIn: boolean; onToast: (m: string) => void;
+  /** v2.109.0: the Expert Console's Home action — back to the POS workspace. */
+  showHome?: boolean;
 }) {
   const [date, setDate] = useState('');
   useEffect(() => {
@@ -58,6 +61,25 @@ export function ConsoleHeader({ kpi, stores, online, onOpenPalette, onOpenChat, 
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* v2.109.0: the Home action — the unified console's way back to the
+              POS workspace. First in the actions row so it can never overlap
+              the health gauge, store selector, chat, notifications or user
+              chip; keyboard-reachable with a visible focus ring; navigates
+              through the ONE internal helper (goHomeToPos), never a URL from
+              outside, so it cannot become an open redirect. */}
+          {showHome && (
+            <Button
+              variant="ghost"
+              size="sm"
+              data-testid="console-home-pos"
+              aria-label="Back to POS"
+              title="Back to POS"
+              className="h-8 border border-white/15 text-[11px] text-slate-200 hover:bg-white/10"
+              onClick={goHomeToPos}
+            >
+              <Home className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Home
+            </Button>
+          )}
           {kpi && (
             <div className="hidden items-center gap-2 rounded-xl bg-white/5 px-2 py-1 md:flex" title={`Health ${kpi.health.score}/100 - ${kpi.health.label}`}>
               <HealthGauge score={kpi.health.score} size={44} />

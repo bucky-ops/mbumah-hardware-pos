@@ -20,7 +20,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import {
   Store, LogOut, Sun, Moon, Bell, X, ChevronDown, ChevronLeft, ChevronRight,
-  ChevronsRight, Keyboard, ShieldCheck, CheckCircle, Lock, Maximize2, MessagesSquare,
+  Building2, Keyboard, Network, CheckCircle, Lock, Maximize2, MessagesSquare,
+  ChevronsRight, ShieldCheck,
   Gauge,
 } from 'lucide-react';
 // v2.16.0 (subdomain workspaces): pinned-branch awareness for the selector.
@@ -420,9 +421,6 @@ export function AppSidebar() {
           {/* Store Selector (v2.16.0 workspace-aware) */}
           <WorkspaceStoreSelector collapsed={collapsed} />
 
-          {/* Workspace links (v2.16.0): org console, branch selector, chat */}
-          <WorkspaceLinks collapsed={collapsed} />
-
           {/* Navigation */}
           <nav className={`flex-1 py-2 space-y-1 overflow-y-auto overflow-x-hidden custom-scrollbar ${collapsed ? 'px-1' : 'px-3'}`}>
             {navGroups.map((group, idx) => (
@@ -440,6 +438,13 @@ export function AppSidebar() {
               </div>
             ))}
           </nav>
+
+          {/* Workspace links (v2.109.0): Branch Selector, Organization
+              Console, Expert Console, Global Chat — pushed DOWN so they
+              follow the Admin module (the last item of Compliance & System)
+              in this exact visible order: Admin, Branch Selector,
+              Organization Console, Expert Console, Global Chat. */}
+          <WorkspaceLinks collapsed={collapsed} />
 
           {/* Footer - User Profile Dropdown - role-based avatar ring */}
           <div className={`border-t border-white/10 py-3 space-y-2 ${collapsed ? 'px-1' : 'px-3'}`}>
@@ -677,7 +682,7 @@ function WorkspaceLinks({ collapsed }: { collapsed: boolean }) {
                 className="w-full flex items-center justify-center px-2 py-2 rounded-lg text-slate-300 hover:bg-white/10 transition-colors"
                 aria-label="Branch selector"
               >
-                <ChevronsRight className="h-3.5 w-3.5" />
+                <Building2 className="h-3.5 w-3.5" />
               </a>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8}>Branch selector</TooltipContent>
@@ -691,7 +696,7 @@ function WorkspaceLinks({ collapsed }: { collapsed: boolean }) {
                 className="w-full flex items-center justify-center px-2 py-2 rounded-lg text-slate-300 hover:bg-white/10 transition-colors"
                 aria-label="Organization console"
               >
-                <ShieldCheck className="h-3.5 w-3.5" />
+                <Network className="h-3.5 w-3.5" />
               </a>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8}>Organization console</TooltipContent>
@@ -734,7 +739,7 @@ function WorkspaceLinks({ collapsed }: { collapsed: boolean }) {
           href="/branches/select"
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 transition-colors"
         >
-          <ChevronsRight className="h-3.5 w-3.5 shrink-0" />
+          <Building2 className="h-3.5 w-3.5 shrink-0" />
           <span>Branch Selector</span>
         </a>
       )}
@@ -743,7 +748,7 @@ function WorkspaceLinks({ collapsed }: { collapsed: boolean }) {
           href="/org/dashboard"
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-slate-300 hover:bg-white/10 transition-colors"
         >
-          <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+          <Network className="h-3.5 w-3.5 shrink-0" />
           <span>Organization Console</span>
         </a>
       )}
