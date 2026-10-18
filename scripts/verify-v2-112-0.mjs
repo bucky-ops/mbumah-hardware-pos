@@ -24,11 +24,20 @@ const assert = (cond, msg) => {
 };
 
 // ── version + release discipline ───────────────────────────────────────────
-check('version: package.json leads 2.112.0 (all three slots)', () => {
+check('version: package.json stays at-or-above 2.112.0 (all three slots)', () => {
+  // v2.113.0 chore re-anchor (the PR #235 precedent): a superseded release's
+  // verify must survive future bumps — the floor holds (never backward),
+  // the slots must AGREE with each other (no half-bumped trees).
   const pkg = JSON.parse(read('package.json'));
-  assert(pkg.version === '2.112.0', `version=${pkg.version}`);
-  assert(pkg.mbumah.releaseVersion === '2.112.0', `release=${pkg.mbumah.releaseVersion}`);
-  assert(pkg.mbumah.baseVersion === '2.112.0', `base=${pkg.mbumah.baseVersion}`);
+  const atLeast = (v, floor) => {
+    const p = v.split('.').map(Number);
+    const f = floor.split('.').map(Number);
+    return p[0] > f[0] || (p[0] === f[0] && (p[1] > f[1] || (p[1] === f[1] && p[2] >= f[2])));
+  };
+  assert(atLeast(pkg.version, '2.112.0'), `version=${pkg.version}`);
+  assert(atLeast(pkg.mbumah.releaseVersion, '2.112.0'), `release=${pkg.mbumah.releaseVersion}`);
+  assert(atLeast(pkg.mbumah.baseVersion, '2.112.0'), `base=${pkg.mbumah.baseVersion}`);
+  assert(pkg.version === pkg.mbumah.releaseVersion && pkg.mbumah.releaseVersion === pkg.mbumah.baseVersion, 'slots disagree');
 });
 
 check('whats-new: 2.112.0 leads the feed with the hand-over story', () => {
