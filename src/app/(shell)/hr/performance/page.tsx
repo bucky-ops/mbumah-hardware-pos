@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, History, LockKeyhole, LogIn, Pencil, Plus, RefreshCw, Star, Target, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, History, LockKeyhole, LogIn, Pencil, Plus, RefreshCw, Star, StickyNote, Target, Trash2, Undo2, X } from 'lucide-react';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import {
   apiGet,
@@ -66,8 +66,20 @@ interface ReviewDetailDto extends ReviewListItemDto {
   canCalibrate: boolean;
 }
 
+// v2.94.0: the cycle detail — meta + the cycle's own reviews (list-item
+// shape; ratings stay in the gated review dialog) + the honest affordance
+// flag the service computes (manage AND the cycle still has a future).
+interface CycleDetailDto extends CycleDto {
+  calibrationNotes: string | null;
+  reviews: ReviewListItemDto[];
+  canEditNotes: boolean;
+}
+
 const RATING_MAX = 5;
 const NARRATIVE_MAX = 4000;
+// v2.94.0: the notes textarea mirrors the service's ceiling (textarea
+// maxLength keeps the honest counter from ever promising more).
+const CALIBRATION_NOTES_MAX = 4000;
 interface GoalDto {
   id: string;
   employeeId: string;
@@ -238,6 +250,48 @@ export default function PerformancePage() {
     void apiGet<DeletedGoalDto[]>('/api/hr/goals/deleted')
       .then((rows) => setDeletedGoals(rows))
       .catch(() => setDeletedGoals([]));
+  };
+
+  // v2.94.0: the cycle opens up — clicking a cycle's name fetches the
+  // detail (meta, its reviews, its notes) into the drawer. Loading state
+  // rides cycleDetail === 'loading' so the drawer never renders a fake
+  // empty state over a fetch in flight.
+  const [cycleDetail, setCycleDetail] = useState<CycleDetailDto | 'loading' | null>(null);
+  const [notesEditing, setNotesEditing] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
+  const openCycleDetail = (cycleId: string) => {
+    setCycleDetail('loading');
+    setNotesEditing(false);
+    setNotesDraft('');
+    void apiGet<CycleDetailDto>(`/api/hr/performance/cycles/${cycleId}`)
+      .then((d) => setCycleDetail(d))
+      .catch(() => setCycleDetail(null));
+  };
+  const closeCycleDetail = () => {
+    setCycleDetail(null);
+    setNotesEditing(false);
+  };
+  // One drawer at a time: opening a review from the cycle drawer hands the
+  // conversation to the gated review dialog (the same single-drawer rule
+  // the desk report family follows).
+  const openCycleReview = (reviewId: string) =>
+    void run(async () => {
+      const d = await apiGet<ReviewDetailDto>(`/api/hr/performance/reviews/${reviewId}`);
+      setDetail(d);
+      setEditing(false);
+      setCycleDetail(null);
+    });
+  const saveCycleNotes = () => {
+    if (!cycleDetail || cycleDetail === 'loading') return;
+    void run(async () => {
+      const res = await apiSend<{ id: string; status: string; calibrationNotes: string | null }>(
+        `/api/hr/performance/cycles/${cycleDetail.id}`,
+        'PATCH',
+        { action: 'CALIBRATION_NOTES', calibrationNotes: notesDraft },
+      );
+      setCycleDetail((prev) => (prev && prev !== 'loading' ? { ...prev, calibrationNotes: res.calibrationNotes } : prev));
+      setNotesEditing(false);
+    });
   };
 
   useEffect(() => {
@@ -495,7 +549,19 @@ export default function PerformancePage() {
                   <TableBody>
                     {cycles.map((c) => (
                       <TableRow key={c.id}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
+                        <TableCell className="font-medium">
+                          {/* v2.94.0: the cycle's name IS the door — click it
+                              and the cycle opens into its detail drawer. */}
+                          <button
+                            type="button"
+                            data-testid={`cycle-open-${c.id}`}
+                            aria-label={`Open cycle ${c.name}`}
+                            className="-mx-0.5 rounded px-0.5 text-left font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                            onClick={() => openCycleDetail(c.id)}
+                          >
+                            {c.name}
+                          </button>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">
                           {formatDate(c.periodStart)} → {formatDate(c.periodEnd)}
                         </TableCell>
@@ -1342,6 +1408,195 @@ export default function PerformancePage() {
               Close
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── v2.94.0 the cycle detail drawer — the cycle opens up ──
+          Meta, its own reviews, and its calibration notes in one honest
+          panel. Reviews keep their list-item shape (ratings live only in
+          the gated review dialog); notes take ink while the cycle has a
+          future and freeze with a CLOSED cycle. */}
+      <Dialog open={cycleDetail !== null} onOpenChange={(open) => !open && closeCycleDetail()}>
+        <DialogContent className="sm:max-w-xl" data-testid="cycle-detail-dialog">
+          {cycleDetail === 'loading' ? (
+            <div className="space-y-3 py-2" data-testid="cycle-detail-loading">
+              {/* A title even while loading — Radix's a11y contract holds for
+                  the drawer's whole life, not just after the fetch lands. */}
+              <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+                <CalendarRange className="h-5 w-5 text-amber-500" aria-hidden /> Loading cycle…
+              </DialogTitle>
+              <Skeleton className="h-6 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : cycleDetail ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex flex-wrap items-center gap-2">
+                  <CalendarRange className="h-5 w-5 text-amber-500" aria-hidden /> {cycleDetail.name}{' '}
+                  <StatusBadge status={cycleDetail.status} />
+                </DialogTitle>
+                <DialogDescription>
+                  {formatDate(cycleDetail.periodStart)} → {formatDate(cycleDetail.periodEnd)} · the
+                  cycle&apos;s reviews and its calibration notes, in one place. Ratings stay in the
+                  gated review dialog, never in lists.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+                {/* ── the meter, again — the drawer speaks the table's language ── */}
+                {cycleDetail.reviewCount > 0 ? (
+                  <div className="space-y-1.5 rounded-md border bg-muted/30 px-3 py-2.5" data-testid={`cycle-detail-meter-${cycleDetail.id}`}>
+                    <ProgressMeter
+                      pct={Math.round((cycleDetail.statusCounts.CALIBRATED / cycleDetail.reviewCount) * 100)}
+                      tone={calibrationTone(Math.round((cycleDetail.statusCounts.CALIBRATED / cycleDetail.reviewCount) * 100))}
+                      label={`Calibration progress for ${cycleDetail.name}: ${cycleDetail.statusCounts.CALIBRATED} of ${cycleDetail.reviewCount} reviews calibrated`}
+                    />
+                    <p className="text-xs text-muted-foreground tabular-nums" data-testid="cycle-detail-meter-text">
+                      {cycleDetail.statusCounts.CALIBRATED} of {cycleDetail.reviewCount} calibrated
+                      {cycleDetail.statusCounts.DRAFT > 0 ? ` · ${cycleDetail.statusCounts.DRAFT} draft` : ''}
+                      {cycleDetail.statusCounts.SUBMITTED > 0 ? ` · ${cycleDetail.statusCounts.SUBMITTED} submitted` : ''}
+                      {cycleDetail.statusCounts.ACKNOWLEDGED > 0 ? ` · ${cycleDetail.statusCounts.ACKNOWLEDGED} acknowledged` : ''}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground" data-testid="cycle-detail-no-reviews">
+                    No reviews in this cycle yet.
+                  </p>
+                )}
+
+                {/* ── the cycle's own reviews — list-item shape, no ratings ── */}
+                {cycleDetail.reviews.length > 0 ? (
+                  <div className="space-y-2" data-testid="cycle-detail-reviews">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Reviews in this cycle</p>
+                    {cycleDetail.reviews.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-3 rounded-md border border-slate-200/70 bg-slate-50/40 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/30"
+                        data-testid={`cycle-detail-review-row-${r.id}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{r.employeeName}</p>
+                          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                            <span>{r.jobTitle ?? '—'}</span>
+                            <span aria-hidden>·</span>
+                            <StatusBadge status={r.status} />
+                            <span aria-hidden>·</span>
+                            <span>ack {formatDate(r.acknowledgedAt)}</span>
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          data-testid={`cycle-detail-review-open-${r.id}`}
+                          aria-label={`Open review for ${r.employeeName}`}
+                          disabled={busy}
+                          className="shrink-0"
+                          onClick={() => openCycleReview(r.id)}
+                        >
+                          Open <ArrowRight className="h-3 w-3" aria-hidden />
+                        </Button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      data-testid="cycle-detail-view-reviews"
+                      className="inline-flex items-center gap-0.5 text-xs font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-400"
+                      onClick={() => {
+                        closeCycleDetail();
+                        viewCycleReviews(cycleDetail.id);
+                      }}
+                    >
+                      View in the Reviews tab <ArrowRight className="h-3 w-3" aria-hidden />
+                    </button>
+                  </div>
+                ) : null}
+
+                {/* ── calibration notes — the manager's working record ── */}
+                <div className="rounded-md border border-amber-200/70 bg-amber-50/40 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20" data-testid="cycle-detail-notes">
+                  <div className="flex items-center gap-1.5">
+                    <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
+                    <p className="text-xs font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300">Calibration notes</p>
+                    {cycleDetail.canEditNotes && !notesEditing ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        data-testid="cycle-detail-notes-edit"
+                        aria-label="Edit calibration notes"
+                        className="ml-auto h-7 px-2 text-amber-700 hover:text-amber-800 dark:text-amber-300"
+                        onClick={() => {
+                          setNotesDraft(cycleDetail.calibrationNotes ?? '');
+                          setNotesEditing(true);
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" aria-hidden /> Edit
+                      </Button>
+                    ) : null}
+                  </div>
+                  {notesEditing ? (
+                    <div className="mt-2 space-y-2">
+                      <Textarea
+                        data-testid="cycle-detail-notes-input"
+                        aria-label="Calibration notes"
+                        value={notesDraft}
+                        maxLength={CALIBRATION_NOTES_MAX}
+                        rows={5}
+                        onChange={(e) => setNotesDraft(e.target.value)}
+                        placeholder="e.g. Grace's draft needs the Q3 numbers attached before submit; David calibrated against the H1 baseline."
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-muted-foreground tabular-nums" data-testid="cycle-detail-notes-counter">
+                          {notesDraft.length} / {CALIBRATION_NOTES_MAX}
+                        </span>
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid="cycle-detail-notes-cancel"
+                            disabled={busy}
+                            onClick={() => setNotesEditing(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            data-testid="cycle-detail-notes-save"
+                            disabled={busy}
+                            onClick={saveCycleNotes}
+                          >
+                            Save notes
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : cycleDetail.calibrationNotes ? (
+                    <p className="mt-1.5 whitespace-pre-wrap text-sm" data-testid="cycle-detail-notes-body">
+                      {cycleDetail.calibrationNotes}
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-sm text-muted-foreground" data-testid="cycle-detail-notes-empty">
+                      No calibration notes yet{cycleDetail.canEditNotes ? ' — Edit writes the first line.' : '.'}
+                    </p>
+                  )}
+                  {!cycleDetail.canEditNotes ? (
+                    <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground" data-testid="cycle-detail-frozen">
+                      <LockKeyhole className="h-3 w-3" aria-hidden />
+                      {cycleDetail.status === 'CLOSED'
+                        ? 'This cycle is closed — its notes are history and no longer take ink.'
+                        : 'Notes take ink for managers only.'}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" data-testid="cycle-detail-close" onClick={closeCycleDetail}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
 

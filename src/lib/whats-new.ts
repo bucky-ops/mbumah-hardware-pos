@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.94.0',
+    title: 'The cycle opens up \u2014 and calibration takes notes',
+    bullets: [
+      'A review cycle is no longer just a row: click its name and it opens into a detail drawer \u2014 period, status, the calibration meter, every review in the cycle, and its calibration notes, in one place.',
+      'Calibration notes finally take ink: managers write the cycle\u2019s working record inline (up to 4,000 characters, an honest counter, audited with field names only \u2014 the text itself never enters the audit log).',
+      'The drawer crosses links honestly: each review opens straight into the gated review dialog (where ratings live), and "View in the Reviews tab" lands pre-filtered to the cycle.',
+      'A closed cycle is history \u2014 its notes stay readable but frozen (CYCLE_FROZEN), and reviewers get a read-only drawer by design.',
+    ],
+  },
+  {
     version: '2.93.0',
     title: 'The bench remembers \u2014 deleted goals come home',
     bullets: [
