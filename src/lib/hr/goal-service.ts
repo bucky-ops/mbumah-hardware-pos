@@ -28,6 +28,7 @@ export interface GoalDto {
   employeeId: string;
   employeeName: string | null;
   cycleId: string | null;
+  cycleName: string | null;
   title: string;
   metricSource: string;
   targetValue: string;
@@ -77,7 +78,7 @@ function progressPct(current: Prisma.Decimal, target: Prisma.Decimal): number {
   return Math.max(0, Math.min(100, pct));
 }
 
-function toDto(goal: GoalRow, employeeName: string | null): GoalDto {
+function toDto(goal: GoalRow, employeeName: string | null, cycleName: string | null = null): GoalDto {
   const current = goal.currentValue ?? new Prisma.Decimal(0);
   const target = goal.targetValue ?? new Prisma.Decimal(0);
   const window = goalWindow(goal);
@@ -86,6 +87,7 @@ function toDto(goal: GoalRow, employeeName: string | null): GoalDto {
     employeeId: goal.employeeId,
     employeeName,
     cycleId: goal.cycleId ?? null,
+    cycleName,
     title: goal.title,
     metricSource: goal.metricSource,
     targetValue: target.toFixed(2),
@@ -97,6 +99,22 @@ function toDto(goal: GoalRow, employeeName: string | null): GoalDto {
     windowEnd: window.end.toISOString(),
     updatedAt: goal.updatedAt.toISOString(),
   };
+}
+
+/**
+ * v2.90.0: the goals meet their cycles — the Goal model stores a bare
+ * cycleId (no Prisma relation, SQLite-parity convention), so cycle names
+ * fold in through ONE findMany-in query per read. A goal with no cycle
+ * (or a cycle deleted since) reads null — never a dangling id.
+ */
+async function cycleNamesFor(cycleIds: Array<string | null | undefined>): Promise<Map<string, string>> {
+  const ids = [...new Set(cycleIds.filter((x): x is string => Boolean(x)))];
+  if (ids.length === 0) return new Map();
+  const rows = await db.reviewCycle.findMany({
+    where: { id: { in: ids }, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  return new Map(rows.map((r) => [r.id, r.name]));
 }
 
 async function loadGoal(goalId: string, session: Session) {
@@ -140,7 +158,8 @@ export async function listGoals(
     take: 200,
     include: { employee: { select: { firstName: true, lastName: true } } },
   });
-  return goals.map((g) => toDto(g, `${g.employee.firstName} ${g.employee.lastName}`));
+  const cycleNames = await cycleNamesFor(goals.map((g) => g.cycleId));
+  return goals.map((g) => toDto(g, `${g.employee.firstName} ${g.employee.lastName}`, cycleNames.get(g.cycleId ?? '') ?? null));
 }
 
 // ── POS computation (spec acceptance rule 2) ────────────────────────────────
@@ -220,6 +239,7 @@ export async function recomputeGoal(goalId: string, session: Session): Promise<G
   return toDto(
     { ...goal, currentValue: updated.currentValue, status: updated.status, updatedAt: updated.updatedAt },
     await employeeNameFor(goal.employeeId),
+    (await cycleNamesFor([goal.cycleId])).get(goal.cycleId ?? '') ?? null,
   );
 }
 
@@ -316,13 +336,15 @@ export async function createGoal(
   }
 
   let cycleId: string | null = null;
+  let cycleName: string | null = null;
   if (input.cycleId) {
     const cycle = await db.reviewCycle.findFirst({
       where: { id: String(input.cycleId), deletedAt: null, organizationId: session.organizationId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!cycle) throw new StageGError('CYCLE_NOT_FOUND', 'Review cycle not found.', 404);
     cycleId = cycle.id;
+    cycleName = cycle.name;
   }
 
   let metricConfig: string | null = null;
@@ -394,6 +416,7 @@ export async function createGoal(
       status: firstCompute?.status ?? goal.status,
     },
     await employeeNameFor(employee.id),
+    cycleName,
   );
 }
 
@@ -478,6 +501,7 @@ export async function updateGoal(
   return toDto(
     { ...goal, ...updated, currentValue: updated.currentValue, status: updated.status, updatedAt: updated.updatedAt },
     await employeeNameFor(goal.employeeId),
+    (await cycleNamesFor([goal.cycleId])).get(goal.cycleId ?? '') ?? null,
   );
 }
 
@@ -493,6 +517,7 @@ export async function listMyGoals(employeeId: string): Promise<GoalDto[]> {
     include: { employee: { select: { userId: true, storeId: true } } },
   });
   const result: GoalDto[] = [];
+  const cycleNames = await cycleNamesFor(goals.map((g) => g.cycleId));
   for (const goal of goals) {
     let current = goal.currentValue ?? new Prisma.Decimal(0);
     let status = goal.status;
@@ -505,7 +530,7 @@ export async function listMyGoals(employeeId: string): Promise<GoalDto[]> {
         else status = 'OPEN';
       }
     }
-    result.push(toDto({ ...goal, employee: undefined, currentValue: current, status }, null));
+    result.push(toDto({ ...goal, employee: undefined, currentValue: current, status }, null, cycleNames.get(goal.cycleId ?? '') ?? null));
   }
   return result;
 }

@@ -70,6 +70,8 @@ interface GoalDto {
   id: string;
   employeeId: string;
   employeeName: string | null;
+  cycleId: string | null;
+  cycleName: string | null;
   title: string;
   metricSource: string;
   targetValue: string;
@@ -170,6 +172,9 @@ export default function PerformancePage() {
   const [goalSource, setGoalSource] = useState('MANUAL');
   const [goalTarget, setGoalTarget] = useState('');
   const [goalDue, setGoalDue] = useState('');
+  // v2.90.0: the goals meet their cycles — the New goal dialog offers the
+  // review cycles the calibration story lives in; '' reads "No cycle".
+  const [goalCycleId, setGoalCycleId] = useState('none');
 
   const load = useCallback(async () => {
     setError('');
@@ -662,13 +667,24 @@ export default function PerformancePage() {
                               pct={g.progressPct}
                               tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'}
                             />
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                               <span className="tabular-nums">
                                 {Number(g.currentValue).toLocaleString()} / {Number(g.targetValue).toLocaleString()}
                               </span>
-                              <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[g.metricSource] ?? ''}`}>
-                                {SOURCE_LABELS[g.metricSource] ?? g.metricSource}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                {g.cycleName ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-300"
+                                    title="Linked review cycle"
+                                  >
+                                    <CalendarRange className="h-3 w-3" aria-hidden /> {g.cycleName}
+                                  </Badge>
+                                ) : null}
+                                <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[g.metricSource] ?? ''}`}>
+                                  {SOURCE_LABELS[g.metricSource] ?? g.metricSource}
+                                </Badge>
+                              </div>
                             </div>
                             {g.metricSource === 'SALES_TOTAL' || g.metricSource === 'SALES_COUNT' ? (
                               <Button
@@ -837,6 +853,18 @@ export default function PerformancePage() {
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label>Review cycle (optional)</Label>
+              <Select value={goalCycleId} onValueChange={setGoalCycleId}>
+                <SelectTrigger aria-label="Goal review cycle" data-testid="goal-cycle-picker"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No cycle</SelectItem>
+                  {(cycles ?? []).filter((c) => c.status !== 'CLOSED').map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="goal-due">Due date (optional)</Label>
               <Input id="goal-due" type="date" value={goalDue} onChange={(e) => setGoalDue(e.target.value)} />
             </div>
@@ -853,10 +881,12 @@ export default function PerformancePage() {
                     metricSource: goalSource,
                     targetValue: goalTarget,
                     ...(goalDue ? { dueDate: new Date(goalDue).toISOString() } : {}),
+                    ...(goalCycleId !== 'none' ? { cycleId: goalCycleId } : {}),
                   });
                   setGoalOpen(false);
                   setGoalTitle('');
                   setGoalTarget('');
+                  setGoalCycleId('none');
                 })
               }
             >

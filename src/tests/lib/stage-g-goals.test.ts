@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { computePosGoalValue, createGoal, listGoals, recomputeAllGoals, recomputeGoal, updateGoal } from '@/lib/hr/goal-service';
+import { computePosGoalValue, createGoal, listGoals, listMyGoals, recomputeAllGoals, recomputeGoal, updateGoal } from '@/lib/hr/goal-service';
 
 /**
  * Phase 4.7 contracts (v2.19.0): POS-sourced goals are COMPUTED from
@@ -302,5 +302,87 @@ describe('recomputeAllGoals (v2.89.0) — one call, every POS goal', () => {
     const summary = await recomputeAllGoals(session);
     expect(summary).toEqual({ recomputed: 0, achieved: 0, missed: 0, open: 0, closed: 0 });
     expect(db.goal.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('cycleName fold (v2.90.0) — the goals meet their cycles', () => {
+  const cycledGoal = {
+    id: 'goal-cyc',
+    employeeId: 'emp-1',
+    cycleId: 'cycle-1',
+    title: 'Cycled sales',
+    metricSource: 'MANUAL',
+    metricConfig: null,
+    targetValue: new Prisma.Decimal(10),
+    currentValue: new Prisma.Decimal(2),
+    status: 'OPEN',
+    createdAt: new Date('2026-06-01T00:00:00Z'),
+    dueDate: null,
+    updatedAt: new Date(),
+    deletedAt: null,
+    employee: { userId: 'user-emp', storeId: 'store-1' },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.reviewCycle.findMany.mockResolvedValue([{ id: 'cycle-1', name: 'H2 2026 Reviews' }]);
+    db.employee.findUnique.mockResolvedValue(employee);
+    db.goal.update.mockResolvedValue(cycledGoal);
+  });
+
+  it('listGoals folds cycle names through ONE in-query (deduped, deletedAt:null)', async () => {
+    db.goal.findMany.mockResolvedValue([cycledGoal, { ...cycledGoal, id: 'goal-cyc-2', cycleId: 'cycle-1' }]);
+    const dtos = await listGoals(session);
+    expect(dtos.every((d) => d.cycleName === 'H2 2026 Reviews')).toBe(true);
+    const call = db.reviewCycle.findMany.mock.calls[0][0];
+    expect(call.where.id).toEqual({ in: ['cycle-1'] });
+    expect(call.where.deletedAt).toBe(null);
+  });
+
+  it('a goal whose cycle is gone (or never was) reads cycleName null — never a dangling id', async () => {
+    db.goal.findMany.mockResolvedValue([cycledGoal, { ...cycledGoal, id: 'g2', cycleId: null }]);
+    db.reviewCycle.findMany.mockResolvedValue([]); // cycle deleted since
+    const dtos = await listGoals(session);
+    expect(dtos[0].cycleName).toBe(null);
+    expect(dtos[0].cycleId).toBe('cycle-1');
+    expect(dtos[1].cycleName).toBe(null);
+  });
+
+  it('no cycles anywhere → the fold never queries (zero-cost read)', async () => {
+    db.goal.findMany.mockResolvedValue([{ ...cycledGoal, cycleId: null }]);
+    await listGoals(session);
+    expect(db.reviewCycle.findMany).not.toHaveBeenCalled();
+  });
+
+  it('createGoal resolves and returns the linked cycle name', async () => {
+    db.employee.findFirst.mockResolvedValue(employee);
+    db.reviewCycle.findFirst.mockResolvedValue({ id: 'cycle-1', name: 'H2 2026 Reviews' });
+    db.goal.create.mockResolvedValue({ ...cycledGoal, createdAt: new Date(), updatedAt: new Date() });
+    db.goal.findFirst.mockResolvedValue(null);
+
+    const dto = await createGoal(
+      { employeeId: 'emp-1', title: 'Cycled goal', metricSource: 'MANUAL', targetValue: '10', cycleId: 'cycle-1' },
+      session,
+    );
+    expect(dto.cycleName).toBe('H2 2026 Reviews');
+    expect(dto.cycleId).toBe('cycle-1');
+  });
+
+  it('recomputeGoal keeps the cycle name honest through the update', async () => {
+    db.goal.findFirst.mockResolvedValue({ ...cycledGoal, metricSource: 'SALES_TOTAL' });
+    db.salesTransaction.aggregate.mockResolvedValue({ _sum: { totalAmount: new Prisma.Decimal(500) } });
+    const dto = await recomputeGoal('goal-cyc', session);
+    expect(dto.cycleName).toBe('H2 2026 Reviews');
+  });
+
+  it('listMyGoals folds the cycle into cycleName — never into the employeeName seat (the E2E-found arity bug)', async () => {
+    db.goal.findMany.mockResolvedValue([
+      cycledGoal,
+      { ...cycledGoal, id: 'goal-plain', cycleId: null },
+    ]);
+    const dtos = await listMyGoals('emp-1');
+    expect(dtos[0].cycleName).toBe('H2 2026 Reviews');
+    expect(dtos[0].employeeName).toBe(null); // the fold must not squat in the name seat
+    expect(dtos[1].cycleName).toBe(null);
   });
 });
