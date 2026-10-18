@@ -343,7 +343,7 @@ describe('routes — the year window widens nothing', () => {
     expect(PAGE.includes('yearMonthRollups(drill.opening.balance, drill.movements, drill.account.normalBalance, y)')).toBe(true);
     expect(PAGE.includes("Number(drill.period.windowLabel.slice(0, 4))")).toBe(true);
     expect(PAGE.includes("movementSideCellCompact(mo.closing, drill.account.normalBalance)")).toBe(true);
-    expect(PAGE.includes("import { yearMonthRollups, movementSideCellCompact } from '@/lib/hr/payroll/period-journal';")).toBe(true);
+    expect(PAGE.includes("import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';")).toBe(true);
   });
 
   it('window-aware honesty on screen: the year says year, the month says month', () => {

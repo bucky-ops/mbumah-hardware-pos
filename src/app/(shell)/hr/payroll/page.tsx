@@ -16,13 +16,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, Wallet } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
-import { yearMonthRollups, movementSideCellCompact } from '@/lib/hr/payroll/period-journal';
+import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
   id: string;
@@ -749,6 +749,16 @@ function PeriodJournalDrawer({
   // and per period (the same stale-state hygiene the ledger CSV note taught).
   const [movementCsvBusy, setMovementCsvBusy] = useState(false);
   const [movementCsvNote, setMovementCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  // v2.105.0: the picker — the ledger answers for any account. The index
+  // (the org's chart, lite, with in-period activity counts) fetches once per
+  // period; the query/highlight/open state resets with it, so one month's
+  // typing never greets the next. A failed index stays honest by absence:
+  // no suggestions render, typing a code still asks the ledger, and the
+  // drill's own 404 answers an unknown code plainly.
+  const [pickerAccounts, setPickerAccounts] = useState<AccountPickerEntry[]>([]);
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerHighlight, setPickerHighlight] = useState(0);
   useEffect(() => {
     setCsvNote(null);
     setCsvBusy(false);
@@ -764,7 +774,67 @@ function PeriodJournalDrawer({
     // v2.103.0: the movement CSV's note rides the same hygiene.
     setMovementCsvBusy(false);
     setMovementCsvNote(null);
+    // v2.105.0: the picker's query and highlight belong to THIS open — the
+    // next period starts with an empty box, like every other state here.
+    setPickerQuery('');
+    setPickerOpen(false);
+    setPickerHighlight(0);
   }, [periodName]);
+
+  // v2.105.0: the picker's index — the org's chart of accounts, lite, with
+  // in-period activity counts. One fetch per period (keyed on the period
+  // id, the same anchor the drill rides), envelope-narrowed BEFORE any
+  // cast (the house discipline): a wrapped, foreign or failed response
+  // leaves the index empty, and an empty index is honest — the suggestions
+  // simply never render, while typing a code still asks the ledger and the
+  // drill's own 404 answers an unknown code plainly. A cancelled fetch
+  // (the drawer moved to another period mid-flight) never writes state.
+  const pickerPeriodId = payload?.period?.id ?? null;
+  useEffect(() => {
+    if (!pickerPeriodId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/payroll/period-journal/accounts?periodId=${encodeURIComponent(pickerPeriodId)}`,
+          { credentials: 'include' },
+        );
+        const body = (await res.json().catch(() => ({}))) as {
+          success?: boolean;
+          data?: { accounts?: unknown };
+          error?: string;
+        };
+        if (
+          !res.ok ||
+          !body.success ||
+          !body.data ||
+          !Array.isArray(body.data.accounts)
+        ) {
+          throw new Error(body.error || `Account index failed (${res.status}).`);
+        }
+        if (!cancelled) setPickerAccounts(body.data.accounts as AccountPickerEntry[]);
+      } catch {
+        if (!cancelled) setPickerAccounts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pickerPeriodId]);
+
+  // The suggestions are PURE — the same rank every test pins: exact code
+  // hit, then code prefix, then name substring; a fresh query starts the
+  // highlight at the top match.
+  const pickerSuggestions = filterAccountSuggestions(pickerAccounts, pickerQuery);
+
+  const pickAccount = (code: string) => {
+    setPickerQuery('');
+    setPickerOpen(false);
+    setPickerHighlight(0);
+    // A picker door opens on the month — the same doctrine every line door
+    // follows; the year is one click away on the dialog's window switch.
+    void openAccountMovement(code, 'month');
+  };
 
   const exportLedgerCsv = async () => {
     if (csvBusy || !payload?.period?.id) return;
@@ -924,7 +994,17 @@ function PeriodJournalDrawer({
   return (
     <>
     <Dialog open={periodName !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="print:hidden max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="print:hidden max-h-[85vh] overflow-y-auto sm:max-w-2xl"
+        onEscapeKeyDown={(e) => {
+          // v2.105.0, E2E-caught: while the picker's suggestions speak, the
+          // first Esc must dismiss THEM, not the drawer. preventDefault on
+          // Radix's own escape event vetoes the dismiss; the picker's input
+          // handler has already closed the box. The next Esc (box closed)
+          // passes through and the drawer closes the normal way.
+          if (pickerOpen && pickerQuery.trim().length > 0) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Landmark className="h-4 w-4 text-violet-600 dark:text-violet-400" aria-hidden />
@@ -937,6 +1017,158 @@ function PeriodJournalDrawer({
             the month&apos;s posted journals, lines and all. The header&apos;s settled net, checkable to the account.
           </DialogDescription>
         </DialogHeader>
+
+        {/* v2.105.0: the picker — the ledger answers for any account, not
+            just the lines this period happened to post. Same read contract
+            as the drill it opens; a fresh door opens on the month. */}
+        {p && (
+          <div className="relative" data-testid="payroll-account-picker">
+            <label
+              htmlFor="payroll-account-picker-input"
+              className="mb-1 block text-[10px] uppercase tracking-wide text-muted-foreground"
+            >
+              Find any account
+            </label>
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60"
+                aria-hidden
+              />
+              <input
+                id="payroll-account-picker-input"
+                data-testid="payroll-account-picker-input"
+                value={pickerQuery}
+                onChange={(e) => {
+                  setPickerQuery(e.target.value);
+                  setPickerOpen(true);
+                  setPickerHighlight(0);
+                }}
+                onFocus={() => {
+                  if (pickerQuery.trim()) setPickerOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (!pickerSuggestions.length) return;
+                    setPickerOpen(true);
+                    setPickerHighlight((h) => Math.min(h + 1, pickerSuggestions.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!pickerSuggestions.length) return;
+                    setPickerHighlight((h) => Math.max(h - 1, 0));
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const pick = pickerSuggestions[pickerHighlight] ?? pickerSuggestions[0];
+                    if (pick) {
+                      pickAccount(pick.code);
+                    } else if (pickerQuery.trim()) {
+                      // No index match is not a refusal: the query goes to
+                      // the ledger as a code, and an unknown one gets the
+                      // drill's honest 404 — the answer, not a guess.
+                      pickAccount(pickerQuery.trim());
+                    }
+                  } else if (e.key === 'Escape') {
+                    // E2E-caught (v2.105.0): a bare Esc here dismissed the
+                    // suggestions AND closed the whole ledger drawer —
+                    // Radix's dismissable layer hears the key above React's
+                    // synthetic reach (a stopPropagation here was proven
+                    // NOT to stop it live). So the local handler only
+                    // closes the box; the drawer's own onEscapeKeyDown
+                    // guard below decides whether the drawer may close:
+                    // the FIRST Esc (box open) belongs to the suggestions,
+                    // the SECOND (box closed) closes the drawer the Radix
+                    // way.
+                    if (pickerOpen) setPickerOpen(false);
+                  }
+                }}
+                placeholder="Type a code or name — e.g. 5200 or Salaries"
+                autoComplete="off"
+                role="combobox"
+                aria-controls="payroll-account-picker-suggestions"
+                aria-expanded={pickerOpen && pickerQuery.trim().length > 0}
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  pickerOpen && pickerSuggestions[pickerHighlight]
+                    ? `payroll-account-picker-opt-${pickerHighlight}`
+                    : undefined
+                }
+                className="w-full rounded-md border bg-background py-1.5 pl-8 pr-3 text-xs outline-none transition-colors placeholder:text-muted-foreground/50 focus-visible:border-violet-400 focus-visible:ring-2 focus-visible:ring-violet-500/30 dark:focus-visible:border-violet-600"
+              />
+            </div>
+            {pickerOpen && pickerQuery.trim().length > 0 && (
+              <div
+                role="listbox"
+                id="payroll-account-picker-suggestions"
+                aria-label="Account suggestions"
+                data-testid="payroll-account-picker-suggestions"
+                className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-lg"
+              >
+                {pickerSuggestions.length === 0 ? (
+                  <p
+                    className="px-3 py-2.5 text-xs text-muted-foreground"
+                    data-testid="payroll-account-picker-empty"
+                  >
+                    Nothing in the chart matches &ldquo;{pickerQuery.trim()}&rdquo; — pressing Enter still asks the ledger, and an unknown code gets an honest no.
+                  </p>
+                ) : (
+                  pickerSuggestions.map((a, i) => (
+                    <button
+                      type="button"
+                      key={a.code}
+                      role="option"
+                      id={`payroll-account-picker-opt-${i}`}
+                      aria-selected={i === pickerHighlight}
+                      data-testid="payroll-account-picker-option"
+                      data-code={a.code}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickAccount(a.code)}
+                      onMouseEnter={() => setPickerHighlight(i)}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left outline-none transition-colors ${
+                        i === pickerHighlight
+                          ? 'bg-violet-50 dark:bg-violet-950/40'
+                          : 'bg-transparent'
+                      }`}
+                    >
+                      <span className="font-mono text-[11px] text-muted-foreground">{a.code}</span>
+                      <span className="min-w-0 truncate text-xs">{a.name}</span>
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                        <span className="rounded-full border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                          {String(a.type ?? '').replaceAll('_', ' ')}
+                        </span>
+                        {a.periodLines > 0 ? (
+                          <span
+                            data-testid="payroll-account-picker-activity"
+                            title={`${a.periodLines} posted ${a.periodLines === 1 ? 'line' : 'lines'} in this period — the drill opens on the month`}
+                            className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-300"
+                          >
+                            in this month · {a.periodLines}
+                          </span>
+                        ) : (
+                          <span
+                            data-testid="payroll-account-picker-quiet"
+                            title="No posted lines in this period — the account is still askable, the drill will say what it finds"
+                            className="rounded-full border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[9px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+                          >
+                            quiet
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  ))
+                )}
+                <div
+                  className="flex items-center gap-3 border-t px-3 py-1.5 text-[10px] text-muted-foreground"
+                  data-testid="payroll-account-picker-hint"
+                >
+                  <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">↑↓</kbd> move</span>
+                  <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">Enter</kbd> open</span>
+                  <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">Esc</kbd> dismiss</span>
+                  <span className="ml-auto">{pickerAccounts.length} accounts in the chart</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {loading && (
           <div className="space-y-2" data-testid="payroll-ledger-loading">
