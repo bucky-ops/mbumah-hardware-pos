@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.124.0',
+    title: 'The broom answers the desk',
+    bullets: [
+      'The retention desk grows a Sweep now door — a settings manager can run the nightly sweep early instead of waiting for the cron, using the exact same audited function.',
+      'Anonymising now is destructive, so it asks twice: the confirm row quotes the live backlog ("N rows would be anonymised immediately") before Confirm sweep.',
+      'The outcome reports in the card\u2019s own note, per scope — "Sweep ran — 2 rows anonymised (2 applicant records)", with held scopes named as skipped.',
+      'After the run the desk refetches, so the dry-run counts drop to the honest zero the sweep just made true.',
+      'The door only appears for settings managers — everyone else sees the desk exactly as before, never a button that would refuse them.',
+    ],
+  },
+  {
     version: '2.123.0',
     title: 'The sweep shows its hand',
     bullets: [
