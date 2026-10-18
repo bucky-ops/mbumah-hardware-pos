@@ -113,7 +113,8 @@ describe('console — the Goals tab speaks the same shape', () => {
 
   it('the recompute-all door appears only when a POS-sourced goal exists', () => {
     expect(page).toMatch(/data-testid="goal-recompute-all"/);
-    expect(page).toMatch(/\{posGoalCount > 0 \? \(/);
+    // v2.91.0: the door is manage-gated too — read-only viewers never see it.
+    expect(page).toMatch(/\{canManage && posGoalCount > 0 \? \(/);
     expect(page).toMatch(/Recompute all POS goals/);
     expect(page).toMatch(/title=\{`Recompute \$\{posGoalCount\} POS-sourced/);
   });

@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.91.0',
+    title: 'The HR door is honest \u2014 and the goals take edits',
+    bullets: [
+      'The performance workspace now checks your role at the door: if your role holds no hr.performance.review permission you see a clear lock panel naming the role and the key it lacks \u2014 not a shell of tabs whose every click would be denied.',
+      'The lock panel points you home: your own goals and reviews live in the self-service portal, one link away.',
+      'Goals finally take edits: every goal card grows an "Edit goal" action \u2014 title, target, due date, current value (manual goals), and a park-or-reopen status switch, all backed by the audited update path the service always had.',
+      'The metric source never moves: the edit dialog shows employee and source as read-only facts, and POS-sourced goals honestly refuse a typed value \u2014 recompute stays the only writer of sales progress.',
+      'The portal\u2019s My goals cards unfold a Details panel \u2014 metric source, review cycle, due date, and when the goal was last touched \u2014 the same expand-in-place pattern your reviews already use.',
+    ],
+  },
+  {
     version: '2.90.0',
     title: 'The goals meet their cycles \u2014 and the portal reads the same shape',
     bullets: [
