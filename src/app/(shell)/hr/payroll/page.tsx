@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Wallet } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
@@ -89,6 +89,31 @@ export interface PeriodJournalPayload {
   missingJournal: Array<{ runId: string; runType: string; status: string }>;
 }
 
+// v2.102.0: the account movement's payload — served by
+// GET /api/payroll/period-journal/account, shaped by the pure builder
+// (buildAccountMovement in period-journal.ts). The running balance rides
+// SIGNED ON THE ACCOUNT'S NORMAL SIDE: positive reads Dr for a debit-normal
+// account, Cr for a credit-normal one; a negative value sits on the other
+// side — the UI renders the side letter, never a bare negative.
+export interface AccountMovementPayload {
+  account: { code: string; name: string; type: string; normalBalance: string };
+  period: { name: string; windowLabel: string };
+  opening: { debit: number; credit: number; balance: number; priorLines: number };
+  movements: Array<{
+    entryNumber: string;
+    entryDate: string;
+    entryDescription: string;
+    source: string;
+    debit: number;
+    credit: number;
+    lineDescription: string | null;
+    running: number;
+  }>;
+  totals: { debit: number; credit: number };
+  closing: { balance: number };
+  normalBalanceAssumed: boolean;
+}
+
 export const RUN_STATUS_STYLES: Record<string, string> = {
   DRAFT: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
   PENDING_APPROVAL: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-900',
@@ -117,6 +142,16 @@ export function StatusBadge({ status, styles }: { status: string; styles: Record
 
 export const kes = (value: string | number): string =>
   `KES ${Number(value).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// v2.102.0: a normal-side balance reads the way an accountant reads a
+// T-account — positive on the account's own side (Dr/Cr per normalBalance),
+// negative on the other, zero as an em-dash. Never a bare negative.
+export const sideLabel = (balance: number, normalBalance: string): string => {
+  if (Math.round(Math.abs(balance) * 100) === 0) return '—';
+  const normal = normalBalance === 'CREDIT' ? 'Cr' : 'Dr';
+  const opposite = normal === 'Dr' ? 'Cr' : 'Dr';
+  return `${kes(Math.abs(balance))} ${balance >= 0 ? normal : opposite}`;
+};
 
 export interface ApiIssue {
   employeeName?: string;
@@ -694,9 +729,21 @@ function PeriodJournalDrawer({
   // a stale note from a previous period must never greet the next open.
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvNote, setCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  // v2.102.0: the account opens its month — the per-line drill state.
+  // drillCode (which account's door is open) + the movement payload/error.
+  const [drillCode, setDrillCode] = useState<string | null>(null);
+  const [drill, setDrill] = useState<AccountMovementPayload | null>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState<string | null>(null);
   useEffect(() => {
     setCsvNote(null);
     setCsvBusy(false);
+    // v2.102.0: a drill opened on one period must never greet the next —
+    // same stale-state hygiene the CSV note taught.
+    setDrillCode(null);
+    setDrill(null);
+    setDrillError(null);
+    setDrillLoading(false);
   }, [periodName]);
 
   const exportLedgerCsv = async () => {
@@ -733,7 +780,55 @@ function PeriodJournalDrawer({
     }
   };
 
+  // v2.102.0: the account opens its month — the per-line drill fetch.
+  // Same envelope-narrowing discipline the ledger drawer taught (v2.100):
+  // unwrap body.data with honest guards BEFORE any cast, so a wrapped or
+  // failed response can never masquerade as a movement.
+  const openAccountMovement = async (code: string) => {
+    if (!payload?.period?.id) return;
+    setDrillCode(code);
+    setDrillLoading(true);
+    setDrillError(null);
+    setDrill(null);
+    try {
+      const res = await fetch(
+        `/api/payroll/period-journal/account?periodId=${encodeURIComponent(payload.period.id)}&accountCode=${encodeURIComponent(code)}`,
+        { credentials: 'include' },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        data?: Partial<AccountMovementPayload>;
+        error?: string;
+      };
+      if (
+        !res.ok ||
+        !body.success ||
+        !body.data ||
+        typeof body.data.account?.code !== 'string' ||
+        !Array.isArray(body.data.movements) ||
+        !body.data.opening ||
+        !body.data.closing
+      ) {
+        throw new Error(body.error || `Movement API unreachable (${res.status}).`);
+      }
+      setDrill(body.data as AccountMovementPayload);
+    } catch (e) {
+      setDrillError(e instanceof Error ? e.message : 'Movement failed.');
+    } finally {
+      setDrillLoading(false);
+    }
+  };
+
+  // Back to the ledger: the drill closes, the drawer stays put.
+  const closeDrill = () => {
+    setDrillCode(null);
+    setDrill(null);
+    setDrillError(null);
+    setDrillLoading(false);
+  };
+
   return (
+    <>
     <Dialog open={periodName !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="print:hidden max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
@@ -809,10 +904,30 @@ function PeriodJournalDrawer({
                   </TableHeader>
                   <TableBody>
                     {entry.lines.map((line, i) => (
-                      <TableRow key={`${entry.runId}-${i}`} className="odd:bg-muted/40" data-testid="payroll-ledger-line">
+                      <TableRow
+                        key={`${entry.runId}-${i}`}
+                        className="cursor-pointer odd:bg-muted/40 hover:bg-violet-50/60 dark:hover:bg-violet-950/20"
+                        data-testid="payroll-ledger-line"
+                        onClick={(e) => {
+                          // The button is THE door (keyboard + aria); row
+                          // clicks open too, but never double-fire when the
+                          // door itself was the target.
+                          if ((e.target as HTMLElement).closest('[data-testid=payroll-ledger-line-door]')) return;
+                          void openAccountMovement(line.accountCode);
+                        }}
+                      >
                         <TableCell className="py-1.5">
-                          <span className="font-mono text-[11px] text-muted-foreground">{line.accountCode}</span>{' '}
-                          <span className="text-xs">{line.accountName}</span>
+                          <button
+                            type="button"
+                            className="group/line flex items-center gap-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                            onClick={() => void openAccountMovement(line.accountCode)}
+                            aria-label={`Open ${line.accountCode} ${line.accountName} — the account's month movement across this period's ledger`}
+                            data-testid="payroll-ledger-line-door"
+                          >
+                            <span className="font-mono text-[11px] text-muted-foreground">{line.accountCode}</span>{' '}
+                            <span className="text-xs underline-offset-2 group-hover/line:underline group-hover/line:decoration-violet-400 dark:group-hover/line:decoration-violet-500">{line.accountName}</span>
+                            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/line:text-violet-500" aria-hidden />
+                          </button>
                           <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
                             {line.accountType.replaceAll('_', ' ')}
                           </span>
@@ -903,6 +1018,155 @@ function PeriodJournalDrawer({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* v2.102.0: the account opens its month — the per-line drill dialog,
+        layered above the ledger drawer. Back returns to the ledger, never
+        closes the drawer; a drill opened on one account never greets the
+        next (state resets per open and per period). */}
+    <Dialog open={drillCode !== null} onOpenChange={(o) => { if (!o) closeDrill(); }}>
+      <DialogContent className="print:hidden max-h-[85vh] overflow-y-auto sm:max-w-3xl" data-testid="payroll-account-movement">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Landmark className="h-4 w-4 text-violet-600 dark:text-violet-400" aria-hidden />
+            Account movement — {drill ? `${drill.account.code} ${drill.account.name}` : drillCode}
+          </DialogTitle>
+          <DialogDescription>
+            {drill
+              ? `${drill.period.name} · ${drill.period.windowLabel} — the account's month, replayed line by line.`
+              : ''}
+          </DialogDescription>
+        </DialogHeader>
+
+        {drillLoading && (
+          <div className="space-y-2" data-testid="payroll-account-loading">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        )}
+
+        {!drillLoading && drillError && (
+          <div className="space-y-2">
+            <div
+              role="alert"
+              data-testid="payroll-account-error"
+              className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+            >
+              {drillError}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => drillCode && void openAccountMovement(drillCode)}
+              data-testid="payroll-account-retry"
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {!drillLoading && !drillError && drill && (
+          <div className="min-w-0 space-y-4">
+            {/* The honest opening: what the ledger posted before this window,
+                aggregated over every source — zero prior lines says so. */}
+            <div
+              className="rounded-md border bg-muted/30 px-3 py-2 text-xs"
+              data-testid="payroll-account-opening"
+            >
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="font-medium">
+                  Opening — before {drill.period.name}:
+                </span>
+                <span className="font-semibold tabular-nums">
+                  {sideLabel(drill.opening.balance, drill.account.normalBalance)}
+                </span>
+                <span className="ml-auto rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+                  {drill.account.normalBalance === 'CREDIT' ? 'Credit-normal' : 'Debit-normal'}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {drill.opening.priorLines === 0
+                  ? 'No posted lines before this window — the account starts the month at zero.'
+                  : `Summed from ${drill.opening.priorLines} posted ${drill.opening.priorLines === 1 ? 'line' : 'lines'} before this window — every source, not just payroll.`}
+              </p>
+            </div>
+
+            {/* table-fixed keeps the 5-column replay INSIDE the dialog:
+                a plain auto table's max-content blows the grid track past
+                the dialog box and clips the footer (found live in E2E). */}
+            {drill.movements.length === 0 ? (
+              <p className="px-1 py-6 text-center text-sm text-muted-foreground" data-testid="payroll-account-empty">
+                Nothing posted on this account inside the window.
+              </p>
+            ) : (
+              <Table className="table-fixed">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-8 w-[150px] text-[11px]">Day</TableHead>
+                    <TableHead className="h-8 text-[11px]">Entry</TableHead>
+                    <TableHead className="h-8 w-[110px] text-right text-[11px]">Debit</TableHead>
+                    <TableHead className="h-8 w-[110px] text-right text-[11px]">Credit</TableHead>
+                    <TableHead className="h-8 w-[140px] text-right text-[11px]">Running</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {drill.movements.map((m, i) => (
+                    <TableRow key={`${m.entryNumber}-${i}`} className="odd:bg-muted/40" data-testid="payroll-account-row">
+                      <TableCell className="whitespace-nowrap py-1.5 text-[11px] text-muted-foreground">
+                        {formatEatStamp(new Date(m.entryDate))}
+                      </TableCell>
+                      <TableCell className="py-1.5">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-[11px]">{m.entryNumber}</span>
+                          <span className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-300">
+                            {m.source.replaceAll('_', ' ')}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block max-w-full truncate text-[10px] text-muted-foreground" title={m.entryDescription}>
+                          {m.entryDescription}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-1.5 text-right text-xs tabular-nums">{m.debit ? kes(m.debit) : '—'}</TableCell>
+                      <TableCell className="py-1.5 text-right text-xs tabular-nums">{m.credit ? kes(m.credit) : '—'}</TableCell>
+                      <TableCell className="py-1.5 text-right text-xs font-medium tabular-nums" data-testid="payroll-account-running">
+                        {sideLabel(m.running, drill.account.normalBalance)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="border-t-2">
+                    <TableCell className="py-1.5 text-xs font-semibold" colSpan={2}>Month totals</TableCell>
+                    <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">{kes(drill.totals.debit)}</TableCell>
+                    <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">{kes(drill.totals.credit)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                  <TableRow className="bg-violet-50/50 dark:bg-violet-950/20">
+                    <TableCell className="py-1.5 text-xs font-semibold" colSpan={4}>
+                      Closing — {drill.period.name}
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums" data-testid="payroll-account-closing">
+                      {sideLabel(drill.closing.balance, drill.account.normalBalance)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
+
+            {/* The honesty floor: what this replay counts, and the one flag
+                that must never pass silently (an assumed normal side). */}
+            <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-[11px] text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
+              The replay counts only POSTED, never-voided entries — a voided entry is a closed door, an in-motion entry does not exist yet.
+              {drill.normalBalanceAssumed && ' Note: this account carries no known normal side; DEBIT was assumed.'}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="mt-2">
+          <Button variant="outline" size="sm" onClick={closeDrill} data-testid="payroll-account-back">
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+            Back to ledger
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
