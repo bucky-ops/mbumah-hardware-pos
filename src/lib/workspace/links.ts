@@ -135,6 +135,20 @@ export function buildRunDeepLinkHref(runId: string): string {
 }
 
 /**
+ * v2.114.0: the People & Payroll panel's expiry-alerts door — the assets
+ * half of the alert count opens the HR assets list pre-filtered to overdue
+ * returns for that branch (`overdue=1` mirrors the panel's own assetsOverdue
+ * definition: ASSIGNED with dueReturnOn in the past). Pure:
+ * URLSearchParams-encoded, relative, never throws.
+ */
+export function buildOverdueAssetsHref(storeId: string): string {
+  const params = new URLSearchParams();
+  params.set('overdue', '1');
+  params.set('storeId', storeId || '');
+  return `/hr/assets?${params.toString()}`;
+}
+
+/**
  * The configured workspace mode as a safe hint string (v2.18.1). Pure and
  * env-derived: 'path' | 'subdomain' | 'auto' | 'off'. The actual per-request
  * decision (path fallback on localhost and raw IPs) always happens in the

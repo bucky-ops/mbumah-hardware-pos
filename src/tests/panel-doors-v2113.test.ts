@@ -179,7 +179,9 @@ describe('source contracts — the panel renders doors with honest degrade paths
     expect(p).toContain('data-testid="people-payroll-expiry-door"');
     // the door never renders for a role the list would 403 (lesson 29)
     expect(p).toContain('EMPLOYEE_LIST_READ_ROLES.includes(role || \'\')');
-    expect(p).toMatch(/if \(docs > 0 && canOpenExpiry\) \{/);
+    // v2.114.0 re-anchor: the gate renamed canOpenExpiry -> canOpenDocs when
+    // the assets half grew its own parallel door (canOpenAssets)
+    expect(p).toMatch(/if \(docs > 0 && canOpenDocs\) \{/);
     // the assets half never links cross-branch
     expect(p).toContain('Overdue asset assignments: ${assets} — see the Assets page');
     // mobile cards reuse the same cells (one implementation, two surfaces)

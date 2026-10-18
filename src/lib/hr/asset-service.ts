@@ -8,6 +8,7 @@
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import { StageGError, employeeScopeWhere, employeeInScope, toDate } from './stage-g-shared';
+import { storeInOrganization } from './employee-service';
 import { hasHrPermission } from './permissions';
 import type { AuthSession } from '@/lib/auth';
 
@@ -101,14 +102,36 @@ async function loadAsset(assetId: string, session: Session) {
 
 export async function listAssets(
   session: Session,
-  filters: { employeeId?: string; status?: string } = {},
+  filters: { employeeId?: string; status?: string; storeId?: string; overdue?: boolean } = {},
 ): Promise<AssetDto[]> {
+  // v2.114.0: an explicit storeId narrows the list only when the caller is an
+  // org-scope actor (no session store) whose organization owns the store, or
+  // the store IS the session's own — fail-closed; any other request silently
+  // keeps the session scope (the page's mismatch notice says so, mirroring
+  // the employees list's honesty).
+  let storeFilter: string | null = null;
+  if (filters.storeId) {
+    if (session.storeId) {
+      if (session.storeId === filters.storeId) storeFilter = filters.storeId;
+    } else if (await storeInOrganization(filters.storeId, session.organizationId)) {
+      storeFilter = filters.storeId;
+    }
+  }
+  const scope = employeeScopeWhere(session);
   const assets = await db.assetAssignment.findMany({
     where: {
       deletedAt: null,
       ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
-      ...(filters.status ? { status: filters.status } : {}),
-      employee: employeeScopeWhere(session),
+      // v2.114.0: the overdue window mirrors the panel's assetsOverdue count
+      // exactly (ASSIGNED with dueReturnOn in the past) so the door lands on
+      // the number the alert promised; when overdue is asked, it wins over
+      // any conflicting status filter.
+      ...(filters.overdue
+        ? { status: 'ASSIGNED', dueReturnOn: { lt: new Date() } }
+        : filters.status
+          ? { status: filters.status }
+          : {}),
+      employee: storeFilter ? { ...scope, storeId: storeFilter } : scope,
     },
     orderBy: { assignedOn: 'desc' },
     take: 200,

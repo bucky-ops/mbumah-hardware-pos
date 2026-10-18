@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.114.0',
+    title: 'The assets half of the alert opens its door',
+    bullets: [
+      'The People & Payroll panel\u2019s expiry count is now two doors: the documents half opens the branch\u2019s employees list (2.113.0), and the overdue-assets half opens the branch\u2019s Assets page pre-filtered to returns past due \u2014 /hr/assets?overdue=1&storeId=<id>, one click from the alert to the follow-up.',
+      'The door lands on the number the alert promised: the assets list\u2019s overdue window mirrors the panel\u2019s own definition exactly (assigned with the return date in the past), so the count you clicked is the count you see \u2014 one definition, two homes.',
+      'Scope stays fail-closed: the assets list honors an explicit branch only for org-scope roles whose organization owns it (or whose session store matches); everyone else keeps their own store and an honest notice says when the answer came from somewhere else.',
+      'The Assets page grows an \u201cOverdue only\u201d toggle with the same amber manners as the employees list\u2019s expiring-documents toggle \u2014 link-seeded \u201c(from link)\u201d until first touch, filters mirrored into the URL so the view stays shareable, and a live assignment count.',
+      'Every door is gated on exactly the roles the list answers: accountants keep the honest text (payroll + reports is their grant), owners and HR managers get the door \u2014 never a link that 403s.',
+    ],
+  },
+  {
     version: '2.113.0',
     title: 'The dead columns open their doors; the HR roster finally exists',
     bullets: [

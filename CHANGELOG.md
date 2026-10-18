@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.114.0] The assets half of the alert opens its door
+
+Door-completion release: v2.113.0 made the People & Payroll panel's expiry count split honestly — documents became a door, overdue assets stayed text because the assets list was session-scoped. This release teaches the assets list org-scoped, windowed reads, so the second half of the alert opens its own door too.
+
+### Added
+- **The overdue-assets door** (`src/components/finance/people-payroll-by-branch.tsx`, `src/lib/workspace/links.ts`): the expiry cell's assets half renders as a link to `/hr/assets?overdue=1&storeId=<id>` (built by the pure `buildOverdueAssetsHref`) with aria-label, title, hover manners and a visible focus ring — same amber family as the documents door, `+N` compact form when the documents door is present, full-size when it is the only alert. Zero halves never render as links; roles the list would refuse keep the same honest text as before.
+- **`GET /api/hr/assets` grew two honest query params**: `?overdue=1` mirrors the panel's `assetsOverdue` definition exactly (status ASSIGNED with `dueReturnOn` in the past, deleted excluded) so the door lands on the number the alert promised, and wins over any conflicting status filter; `?storeId=` is honored only for org-scope roles whose organization owns the store (via `storeInOrganization`, fail-closed) or when it matches the session's own store — any other request silently keeps the session scope.
+- **The Assets page grew the door's landing** (`src/app/(shell)/hr/assets/page.tsx`): an "Overdue only" toggle (amber, `aria-pressed`, disabled status select while on — overdue assets are assigned by definition), link-seeded `(from link)` chip that retires on the first filter touch, filters mirrored into the URL (shareable views, refresh-stable), a live assignment count, and the same store-scope honesty notice the employees list rides on (only claims a mismatch when a row actually names another store).
+
+### Changed
+- `listAssets` (`src/lib/hr/asset-service.ts`) accepts `storeId` + `overdue` filters; the DTO already carried the row's `storeId`, so the mismatch notice needed no schema change.
+- The What's-New feed leads with the two-doors story; the unread counter test re-anchored for the 2.114.0-fed feed (2.110.0→3, 2.109.0→4, 2.108.0→5, 2.77.0→36).
+- The v2.113.0 panel pin re-anchored (`canOpenExpiry` → `canOpenDocs`) now that a second, parallel gate (`canOpenAssets`) exists beside it.
+
+### Security
+- Scope never widened by request: the assets list verifies organization ownership server-side before honoring any explicit branch (`storeInOrganization`, fail-closed); the overdue filter exposes assignment rows the roles already hold — no new data leaves the server; the panel's door is gated client-side on `ASSET_LIST_READ_ROLES` (mirroring the route's `hr.asset.manage` guard) so it can never promise a view the role would be refused.
+
 ## [2.113.0] The dead columns open their doors; the HR roster finally exists
 
 Bug-fix-and-doors release: QA found the HR workspace nav's oldest link (`/hr/employees`) landing on a 404 — the page had never shipped. This release builds it, and the People & Payroll panel's last two dead columns (latest run, expiry alerts) become real doors that land somewhere useful.

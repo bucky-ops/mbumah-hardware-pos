@@ -178,3 +178,37 @@ The per-branch table's last two read-only columns learned to move:
   answer came from somewhere else.
 - **Pinned by** `src/tests/panel-doors-v2113.test.ts` and
   `scripts/verify-v2-113-0.mjs`.
+
+## The second half of the alert opens its door (v2.114.0)
+
+v2.113.0 left the expiry cell's ASSETS half as honest text: the assets list
+was session-scoped, so a cross-branch door would have promised a view it
+could not open. This release teaches the assets list the same org-scoped,
+windowed reads the employees list gained — and the second half opens:
+
+- **Overdue assets → the pre-filtered Assets page**: the assets half renders
+  as a door to `/hr/assets?overdue=1&storeId=<id>` (built by the pure
+  `buildOverdueAssetsHref`). `?overdue=1` mirrors the panel's own
+  `assetsOverdue` definition exactly — status ASSIGNED with `dueReturnOn` in
+  the past, deleted excluded — so the count you clicked is the count you
+  see. It wins over any conflicting status filter (an overdue asset is
+  assigned by definition; the page disables the status select while the
+  toggle is on).
+- **The landing**: `/hr/assets` grows an "Overdue only" toggle with the same
+  amber manners as the employees list's expiring-documents toggle —
+  link-seeded `(from link)` until first touch, filters mirrored into the URL
+  (shareable, refresh-stable), a live assignment count, and the same
+  store-scope honesty notice (only claims a mismatch when a row actually
+  names another store — an assignment with no store never triggers it).
+- **Scope stays fail-closed**: `/api/hr/assets` honors an explicit `storeId`
+  only for org-scope roles whose organization owns the store
+  (`storeInOrganization` verification) or when it matches the session's own
+  store; every other request silently keeps the session scope. No role ever
+  gains rows by asking.
+- **Gated like every door**: the panel's assets door renders only for
+  `ASSET_LIST_READ_ROLES` (`SUPER_ADMIN`, `STORE_OWNER`, `HR_MANAGER` — the
+  roles `hr.asset.manage` answers; the accountant's grant stops at payroll +
+  reports). For every other role the half stays the same text as before —
+  never a link that 403s.
+- **Pinned by** `src/tests/assets-door-v2114.test.ts` and
+  `scripts/verify-v2-114-0.mjs`.
