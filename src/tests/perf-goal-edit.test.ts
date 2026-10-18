@@ -92,8 +92,9 @@ describe('console — the honest HR door', () => {
   });
 
   it('write affordances hide without hr.performance.manage', () => {
-    // New cycle button gated
-    expect(page).toMatch(/\{canManage \? \(\n\s*<div className="flex justify-end">/);
+    // New cycle button gated (v2.97.0: the action row always renders for
+    // the read-level CSV door; the create button after it stays gated)
+    expect(page).toMatch(/\{canManage \? \(\n\s*<Button size="sm" onClick=\{\(\) => setCycleOpen\(true\)\}>/);
     // New goal button gated
     expect(page).toMatch(/\{canManage \? \(\n\s*<Button size="sm" onClick=\{\(\) => setGoalOpen\(true\)\}>/);
     // recompute-all gated (manage key, matching the route)

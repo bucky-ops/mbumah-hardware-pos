@@ -497,6 +497,86 @@ export default function PerformancePage() {
     }
   };
 
+  // v2.97.0: the Cycles tab files itself — the whole list the screen shows,
+  // no filters (the cycles tab has none to ride). Same governed contract,
+  // same note-where-you-can-read-it rule.
+  const [cyclesCsvBusy, setCyclesCsvBusy] = useState(false);
+  const [cyclesCsvNote, setCyclesCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportCyclesCsv = async () => {
+    if (cyclesCsvBusy) return;
+    setCyclesCsvBusy(true);
+    setCyclesCsvNote(null);
+    try {
+      const res = await fetch('/api/hr/performance/cycles/export', { credentials: 'include' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'mbumah-performance-cycles.csv';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setCyclesCsvNote({
+        tone: 'ok',
+        text: `Cycles CSV downloaded — ${filename}. The governed filing format (header block, injection guard), exactly the list on screen.`,
+      });
+    } catch (e) {
+      setCyclesCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setCyclesCsvBusy(false);
+    }
+  };
+
+  // v2.97.0: the Goals board files itself — the EXACT filtered subset the
+  // screen shows: employee / source / status ride the query, the route
+  // re-runs the service with the same predicates, so the file cannot drift.
+  const [goalsCsvBusy, setGoalsCsvBusy] = useState(false);
+  const [goalsCsvNote, setGoalsCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportGoalsCsv = async () => {
+    if (goalsCsvBusy) return;
+    setGoalsCsvBusy(true);
+    setGoalsCsvNote(null);
+    try {
+      const qs = new URLSearchParams();
+      if (filterGoalEmployee !== 'ALL') qs.set('employeeId', filterGoalEmployee);
+      if (filterGoalSource !== 'ALL') qs.set('source', filterGoalSource);
+      if (filterGoalStatus !== 'ALL') qs.set('status', filterGoalStatus);
+      const res = await fetch(`/api/hr/goals/export?${qs.toString()}`, { credentials: 'include' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'mbumah-performance-goals.csv';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setGoalsCsvNote({
+        tone: 'ok',
+        text: `Goals CSV downloaded — ${filename}. The governed filing format (header block, injection guard), exactly the filtered rows on screen.`,
+      });
+    } catch (e) {
+      setGoalsCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setGoalsCsvBusy(false);
+    }
+  };
+
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
@@ -594,12 +674,43 @@ export default function PerformancePage() {
 
         {/* ── Cycles ── */}
         <TabsContent value="cycles" className="space-y-4">
-          {canManage ? (
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => setCycleOpen(true)}>
-              <Plus className="h-4 w-4" aria-hidden /> New cycle
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* v2.97.0: the filing door completes the family — the cycles
+                list files through the same governed builder. The button is
+                read-level (the route is read-guarded), so it renders for
+                every viewer the list renders for. Honest idle state: with
+                no cycles there is nothing to file, and the button says so. */}
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="cycles-csv"
+              aria-label="Download the cycles CSV of the current list"
+              disabled={cyclesCsvBusy || !cycles || cycles.length === 0}
+              title={
+                cycles && cycles.length === 0
+                  ? 'Nothing to file — no cycles yet'
+                  : 'The governed filing format (header block, injection guard), the list on screen'
+              }
+              onClick={() => void exportCyclesCsv()}
+              className="border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-slate-200"
+            >
+              <FileDown className={`h-4 w-4 ${cyclesCsvBusy ? 'animate-pulse' : ''}`} aria-hidden />
+              {cyclesCsvBusy ? 'Building…' : 'CSV'}
             </Button>
+            {canManage ? (
+              <Button size="sm" onClick={() => setCycleOpen(true)}>
+                <Plus className="h-4 w-4" aria-hidden /> New cycle
+              </Button>
+            ) : null}
           </div>
+          {cyclesCsvNote ? (
+            <p
+              data-testid="cycles-csv-note"
+              className={`text-xs ${cyclesCsvNote.tone === 'ok' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}
+              role="status"
+            >
+              {cyclesCsvNote.text}
+            </p>
           ) : null}
           <Card>
             <CardHeader className="pb-3">
@@ -884,6 +995,27 @@ export default function PerformancePage() {
         {/* ── Goals ── */}
         <TabsContent value="goals" className="space-y-4">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* v2.97.0: the board files itself — the governed CSV of the
+                EXACT filtered subset on screen (employee / source / status
+                ride the query). Read-level like the list itself; honest
+                idle state when the filters match nothing. */}
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="goals-csv"
+              aria-label="Download the goals CSV of the current filtered list"
+              disabled={goalsCsvBusy || !goals || filteredGoals.length === 0}
+              title={
+                goals && filteredGoals.length === 0
+                  ? 'Nothing to file — no goals match the current filters'
+                  : 'The governed filing format (header block, injection guard), the filtered rows on screen'
+              }
+              onClick={() => void exportGoalsCsv()}
+              className="border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-slate-200"
+            >
+              <FileDown className={`h-4 w-4 ${goalsCsvBusy ? 'animate-pulse' : ''}`} aria-hidden />
+              {goalsCsvBusy ? 'Building…' : 'CSV'}
+            </Button>
             {/* v2.93.0: the bench door — a soft-deleted goal is never gone
                 forever. The count rides the button so a manager sees there
                 is something to reconcile before ever opening the dialog. */}
@@ -927,6 +1059,15 @@ export default function PerformancePage() {
               </Button>
             ) : null}
           </div>
+          {goalsCsvNote ? (
+            <p
+              data-testid="goals-csv-note"
+              className={`text-xs ${goalsCsvNote.tone === 'ok' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}
+              role="status"
+            >
+              {goalsCsvNote.text}
+            </p>
+          ) : null}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Team goals</CardTitle>

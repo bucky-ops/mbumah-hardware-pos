@@ -153,7 +153,7 @@ async function employeeNameFor(employeeId: string): Promise<string | null> {
 
 export async function listGoals(
   session: Session,
-  filters: { employeeId?: string; cycleId?: string; status?: string } = {},
+  filters: { employeeId?: string; cycleId?: string; status?: string; source?: string } = {},
 ): Promise<GoalDto[]> {
   const goals = await db.goal.findMany({
     where: {
@@ -161,6 +161,11 @@ export async function listGoals(
       ...(filters.employeeId ? { employeeId: filters.employeeId } : {}),
       ...(filters.cycleId ? { cycleId: filters.cycleId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
+      // v2.97.0: the goals filing door re-runs the screen's filters — the
+      // board also narrows by metric source (client-side), so the export
+      // needs the same predicate server-side or the file could disagree
+      // with the screen. Exact match, same as the other three.
+      ...(filters.source ? { metricSource: filters.source } : {}),
       employee: employeeScopeWhere(session),
     },
     orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
