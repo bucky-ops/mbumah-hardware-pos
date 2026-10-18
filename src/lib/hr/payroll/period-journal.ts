@@ -425,3 +425,199 @@ export function buildAccountMovement(
     normalBalanceAssumed,
   };
 }
+
+// ── v2.103.0: the account files its month ────────────────────────────────────
+//
+// The movement dialog said "the account's month, replayed line by line" —
+// now the replay can LEAVE the console as a governed file, through the same
+// filing family the period ledger (v2.101), the desk report (v2.70), the run
+// digest (v2.53) and the performance exports (v2.96–v2.99) file through.
+//
+// HONESTY CONTRACT (inherits the movement's):
+//   • The file is THE DIALOG — one row per replay line in the dialog's
+//     chronological order, the opening/totals/closing footer carrying the
+//     same numbers the screen shows. The file cannot disagree with the
+//     screen.
+//   • The file CLOSES THE LOOP BY ITSELF: the Closing line's balance cell
+//     is the LAST replay row's running cell, byte for byte (or the Opening
+//     cell when the window posted nothing) — a teller can prove the file
+//     without opening the console, the same self-check the ledger CSV's
+//     Totals line taught.
+//   • Balances file the accountant's way: the side letter (Dr/Cr) instead
+//     of a bare negative, the screen's own convention — a balance sitting
+//     on the OTHER side reads "… Cr" on a debit-normal account, never
+//     "-70414.80". Zero is "0.00 —", the em-dash the screen taught.
+//   • An assumed normal side is FILED, not smoothed over: "DEBIT (assumed)"
+//     in the header — the file never silently picks a side.
+//   • The opening's basis is stated: zero prior lines says the account
+//     starts the month at zero; an aggregate says how many lines it summed.
+//
+// Returns null on an empty replay — the route turns that into an honest 404
+// NO_MOVEMENT_DATA (never an empty-looking sheet): nothing posted inside
+// the window means nothing to file. Money files as bare 2dp numbers (the
+// family's machine-readable convention); the shared csvCell escaper guards
+// every cell (one OWASP formula-injection guard family-wide).
+
+/** A running/opening/closing balance as the file prints it: the 2dp
+ *  magnitude, a space, the SIDE letter on the account's normal side —
+ *  '258000.00 Dr', '70414.80 Cr', zero as '0.00 —'. The same story the
+ *  screen's sideLabel tells, in the file's bare-money dialect. */
+export function movementSideCell(signed: number, normalBalance: string): string {
+  const magnitude = money2(Math.abs(Number(signed || 0)));
+  if (magnitude === 0) return '0.00 —';
+  const normal = normalBalance === 'CREDIT' ? 'Cr' : 'Dr';
+  const opposite = normal === 'Dr' ? 'Cr' : 'Dr';
+  return `${magnitude.toFixed(2)} ${Number(signed) > 0 ? normal : opposite}`;
+}
+
+export interface AccountMovementCsvMeta {
+  organizationName: string;
+  scopeLabel: string;
+  periodName: string;
+  /** The period's honest date range, dayKey form: '2026-10-01 → 2026-10-31'. */
+  windowLabel: string;
+}
+
+/**
+ * Build the governed CSV of the account's month movement — the EXACT replay
+ * the movement dialog shows (v2.102), through the filing family.
+ *
+ * Layout:
+ *   Report,Payroll account movement
+ *   Organization,<org>
+ *   Scope,<scope>
+ *   Period,<period name>
+ *   Window,<start → end>
+ *   Generated (UTC),<iso>
+ *   Account Code,<code>
+ *   Account Name,<name>
+ *   Account Type,<type>
+ *   Normal Balance,DEBIT            ← or "DEBIT (assumed — no known normal side)"
+ *   Opening Basis,<the opening's honesty story>
+ *
+ *   Movement
+ *   Day,Entry Number,Source,Entry Description,Line Description,Debit,Credit,Running (Dr/Cr)
+ *   <one row per replay line, chronological (dialog order)>
+ *
+ *   Opening,,,,,,<open debit>,<open credit>,<balance cell>
+ *   Month totals,,,,,,<sum debit>,<sum credit>,
+ *   Closing,,,,,,<close debit>,<close credit>,<balance cell>
+ *     ↑ the Closing balance cell IS the last replay row's running cell —
+ *       the file closes its own loop.
+ */
+export function accountMovementToCsv(
+  movement: AccountMovement,
+  meta: AccountMovementCsvMeta,
+  generatedAt: Date = new Date(),
+): PeriodLedgerCsvFile | null {
+  if (movement.movements.length === 0) return null;
+
+  const lines: string[] = [];
+  const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
+
+  row(['Report', 'Payroll account movement']);
+  row(['Organization', meta.organizationName]);
+  row(['Scope', meta.scopeLabel]);
+  row(['Period', meta.periodName]);
+  row(['Window', meta.windowLabel]);
+  row(['Generated (UTC)', generatedAt.toISOString()]);
+  row(['Account Code', movement.account.code]);
+  row(['Account Name', movement.account.name]);
+  row(['Account Type', movement.account.type]);
+  row([
+    'Normal Balance',
+    movement.normalBalanceAssumed
+      ? `${movement.account.normalBalance} (assumed — no known normal side)`
+      : movement.account.normalBalance,
+  ]);
+  row([
+    'Opening Basis',
+    movement.opening.priorLines === 0
+      ? 'No posted lines before the window — the account starts the month at zero'
+      : `Summed from ${movement.opening.priorLines} posted ${movement.opening.priorLines === 1 ? 'line' : 'lines'} before the window — every source, not just payroll`,
+  ]);
+
+  lines.push('');
+  lines.push('Movement');
+  row([
+    'Day',
+    'Entry Number',
+    'Source',
+    'Entry Description',
+    'Line Description',
+    'Debit',
+    'Credit',
+    'Running (Dr/Cr)',
+  ]);
+
+  for (const m of movement.movements) {
+    row([
+      dayKey(m.entryDate),
+      m.entryNumber,
+      m.source,
+      m.entryDescription,
+      m.lineDescription ?? '',
+      m.debit.toFixed(2),
+      m.credit.toFixed(2),
+      movementSideCell(m.running, movement.account.normalBalance),
+    ]);
+  }
+
+  // The footer carries the same three numbers the screen's footer cards do:
+  // the opening aggregate, the month's own sums, and the closing — whose
+  // balance cell equals the LAST replay row's running cell (or the opening's
+  // when the window posted nothing — unreachable here, the builder's only
+  // null path is the empty replay, but the identity keeps the footer honest
+  // for any future caller).
+  const closingDebit = money2(movement.opening.debit + movement.totals.debit);
+  const closingCredit = money2(movement.opening.credit + movement.totals.credit);
+  const lastRunning =
+    movement.movements.length > 0
+      ? movementSideCell(movement.movements[movement.movements.length - 1].running, movement.account.normalBalance)
+      : movementSideCell(movement.opening.balance, movement.account.normalBalance);
+
+  lines.push('');
+  row([
+    'Opening',
+    '',
+    '',
+    '',
+    '',
+    '',
+    movement.opening.debit.toFixed(2),
+    movement.opening.credit.toFixed(2),
+    movementSideCell(movement.opening.balance, movement.account.normalBalance),
+  ]);
+  row([
+    'Month totals',
+    '',
+    '',
+    '',
+    '',
+    '',
+    movement.totals.debit.toFixed(2),
+    movement.totals.credit.toFixed(2),
+    '',
+  ]);
+  row([
+    'Closing',
+    '',
+    '',
+    '',
+    '',
+    '',
+    closingDebit.toFixed(2),
+    closingCredit.toFixed(2),
+    lastRunning,
+  ]);
+
+  const csv = lines.join('\r\n') + '\r\n';
+  const accountSlug = periodSlug(
+    `${movement.account.code}-${movement.account.name}`,
+    'account',
+  );
+  const periodPart = periodSlug(meta.periodName, 'period');
+  const filename = `mbumah-account-movement-${accountSlug}-${periodPart}.csv`;
+
+  return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
+}
