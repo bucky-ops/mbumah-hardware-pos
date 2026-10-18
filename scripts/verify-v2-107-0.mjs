@@ -117,13 +117,19 @@ check('route: tenant scope and honest failures (400, 3×404, NO_MOVEMENT_DATA)',
   assert(ROUTE.includes('NO_MOVEMENT_DATA'), 'empty-window honesty missing');
 });
 
-check('route: the window is the drawer\u2019s OWN month — no window param exists', () => {
+check('route: the window defaults to the drawer\u2019s OWN month — year is explicit', () => {
   assert(ROUTE.includes('monthEnd.setUTCDate(monthEnd.getUTCDate() + 1);'), 'window not end+1day');
-  assert(ROUTE.includes('entryDate: { gte: period.startDate, lt: monthEnd },'), 'window bounds missing');
+  // v2.114.0 chore re-anchor: the bounds now flow through windowStart/windowEnd
+  // (the v2.108.0 year-window refactor); the honest pin is that BOTH fall back
+  // to the period's own month when no explicit window is asked.
+  assert(ROUTE.includes("const windowStart = window === 'year' ? new Date(Date.UTC(year, 0, 1)) : period.startDate;"), 'windowStart fallback missing');
+  assert(ROUTE.includes("const windowEnd = window === 'year' ? new Date(Date.UTC(year + 1, 0, 1)) : monthEnd;"), 'windowEnd fallback missing');
+  assert(ROUTE.includes('entryDate: { gte: windowStart, lt: windowEnd },'), 'window bounds missing');
   assert(ROUTE.includes('isPosted: true,'), 'posted filter missing');
   assert(ROUTE.includes('isVoided: false,'), 'voided filter missing');
-  assert(!ROUTE.includes("searchParams.get('window')"), 'no window param may exist');
-  assert(ROUTE.includes("windowNoun: 'month',"), 'the file must say month');
+  // v2.108.0 added an EXPLICIT window param — the honest pin is that month
+  // REMAINS the default, not that the param cannot exist.
+  assert(ROUTE.includes("windowParam === 'year' ? 'year' : 'month'"), 'month must stay the default');
 });
 
 check('route: built from the SAME builders; audited with COUNTS only', () => {
@@ -201,10 +207,12 @@ check('tests: the bundle suite exists with real coverage', () => {
   assert(TEST.includes("WN.indexOf(\"version: '2.107.0'\")"), 'whats-new lead untested');
 });
 
-check('tests: the changelog counter re-anchored for the 2.107.0-fed feed', () => {
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.105.0')).toBe(1);"), 'one-behind count missing');
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.104.0')).toBe(2);"), 'two-behind count missing');
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.77.0')).toBe(29);"), '2.77.0 count missing');
+check('tests: the changelog counter re-anchored for the 2.114.0-fed feed', () => {
+  // v2.114.0 chore re-anchor (mechanical): the counter test now rides the
+  // 2.114.0-fed feed — these are the lines the committed test carries TODAY.
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.109.0')).toBe(4);"), 'three-behind count missing');
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.108.0')).toBe(5);"), 'four-behind count missing');
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.77.0')).toBe(36);"), '2.77.0 count missing');
 });
 
 console.log(`\nverify-v2-107-0: ${pass} passed, ${fail} failed`);
