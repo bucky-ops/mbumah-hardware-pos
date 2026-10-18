@@ -69,6 +69,30 @@ function toIso(value: Date | null | undefined): string | null {
 
 // ── Cycles ──────────────────────────────────────────────────────────────────
 
+// v2.94.0: the per-cycle status counts stopped being listCycles' private
+// query — the cycle detail drawer reads the same shape for ONE cycle, so
+// the grouped query is shared (one implementation, one semantics: every
+// non-deleted review of the cycle, never a role subset).
+async function statusCountsFor(cycleIds: string[]): Promise<Map<string, CycleStatusCounts>> {
+  const countsByCycle = new Map<string, CycleStatusCounts>();
+  if (cycleIds.length === 0) return countsByCycle;
+  const grouped = await db.performanceReview.groupBy({
+    by: ['cycleId', 'status'],
+    _count: { _all: true },
+    where: { deletedAt: null, cycleId: { in: cycleIds } },
+  });
+  for (const row of grouped) {
+    const counts =
+      countsByCycle.get(row.cycleId) ??
+      ({ DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 } as CycleStatusCounts);
+    if (row.status === 'DRAFT' || row.status === 'SUBMITTED' || row.status === 'ACKNOWLEDGED' || row.status === 'CALIBRATED') {
+      counts[row.status] = row._count._all;
+    }
+    countsByCycle.set(row.cycleId, counts);
+  }
+  return countsByCycle;
+}
+
 export async function listCycles(session: Session): Promise<CycleDto[]> {
   const cycles = await db.reviewCycle.findMany({
     where: { deletedAt: null, organizationId: session.organizationId },
@@ -80,23 +104,7 @@ export async function listCycles(session: Session): Promise<CycleDto[]> {
   // query across the listed cycles; unknown statuses fold away (the service
   // only ever writes the four lifecycle values). Counts match reviewCount's
   // semantics — every non-deleted review of the cycle, not a role subset.
-  const countsByCycle = new Map<string, CycleStatusCounts>();
-  if (cycles.length > 0) {
-    const grouped = await db.performanceReview.groupBy({
-      by: ['cycleId', 'status'],
-      _count: { _all: true },
-      where: { deletedAt: null, cycleId: { in: cycles.map((c) => c.id) } },
-    });
-    for (const row of grouped) {
-      const counts =
-        countsByCycle.get(row.cycleId) ??
-        ({ DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 } as CycleStatusCounts);
-      if (row.status === 'DRAFT' || row.status === 'SUBMITTED' || row.status === 'ACKNOWLEDGED' || row.status === 'CALIBRATED') {
-        counts[row.status] = row._count._all;
-      }
-      countsByCycle.set(row.cycleId, counts);
-    }
-  }
+  const countsByCycle = await statusCountsFor(cycles.map((c) => c.id));
   return cycles.map((c) => ({
     id: c.id,
     name: c.name,
@@ -218,6 +226,98 @@ export async function transitionCycle(
   });
 
   return { id: updated.id, status: updated.status };
+}
+
+// ── v2.94.0 Cycle detail — the cycle opens up ──────────────────────────────
+
+export interface CycleDetailDto extends CycleDto {
+  /**
+   * The cycle's own reviews in list-item shape — employee, status,
+   * acknowledged date. Ratings and narratives are deliberately absent
+   * (spec rule 7): the drawer links to the permission-gated review
+   * detail dialog instead of smuggling ratings into a list.
+   */
+  reviews: ReviewListItemDto[];
+  /** Notes are writable while the cycle has a future (DRAFT or ACTIVE). */
+  canEditNotes: boolean;
+}
+
+async function loadScopedCycle(cycleId: string, session: Session) {
+  const cycle = await db.reviewCycle.findFirst({
+    where: { id: cycleId, deletedAt: null, organizationId: session.organizationId },
+  });
+  if (!cycle) throw new StageGError('CYCLE_NOT_FOUND', 'Review cycle not found.', 404);
+  return cycle;
+}
+
+export async function getCycleDetail(cycleId: string, session: Session): Promise<CycleDetailDto> {
+  const cycle = await loadScopedCycle(cycleId, session);
+  const [countsByCycle, reviews] = await Promise.all([
+    statusCountsFor([cycle.id]),
+    listReviews(session, { cycleId: cycle.id }),
+  ]);
+  const canManage =
+    session.role === 'HR_MANAGER' || session.role === 'STORE_OWNER' || session.role === 'SUPER_ADMIN';
+  return {
+    id: cycle.id,
+    name: cycle.name,
+    periodStart: cycle.periodStart.toISOString(),
+    periodEnd: cycle.periodEnd.toISOString(),
+    status: cycle.status,
+    calibrationNotes: cycle.calibrationNotes ?? null,
+    reviewCount: reviews.length,
+    statusCounts: countsByCycle.get(cycle.id) ?? { DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 },
+    createdAt: cycle.createdAt.toISOString(),
+    reviews,
+    canEditNotes: canManage && cycle.status !== 'CLOSED',
+  };
+}
+
+export const CALIBRATION_NOTES_MAX = 4000;
+
+export async function updateCycleCalibration(
+  cycleId: string,
+  input: { calibrationNotes?: unknown },
+  session: Session,
+): Promise<{ id: string; status: string; calibrationNotes: string | null }> {
+  const cycle = await loadScopedCycle(cycleId, session);
+  // A CLOSED cycle is history: its meter stopped and its notes stopped with
+  // it. Frozen notes stay readable in the detail, never rewritable.
+  if (cycle.status === 'CLOSED') {
+    throw new StageGError(
+      'CYCLE_FROZEN',
+      'A closed cycle is history — its calibration notes no longer take ink.',
+      409,
+    );
+  }
+  const raw = input.calibrationNotes;
+  if (typeof raw !== 'string') {
+    throw new StageGError('NOTHING_TO_UPDATE', 'Provide calibrationNotes as text to save.', 400);
+  }
+  const notes = raw.trim();
+  if (notes.length > CALIBRATION_NOTES_MAX) {
+    throw new StageGError(
+      'TEXT_TOO_LONG',
+      `Calibration notes must be at most ${CALIBRATION_NOTES_MAX} characters.`,
+      400,
+    );
+  }
+  const updated = await db.reviewCycle.update({
+    where: { id: cycle.id },
+    data: { calibrationNotes: notes.length > 0 ? notes : null },
+  });
+  await hrAudit({
+    actorId: session.userId,
+    actorRole: session.role,
+    action: 'PERFORMANCE_CYCLE_CALIBRATION_NOTES',
+    resourceType: HrEntityType.REVIEW_CYCLE,
+    resourceId: cycle.id,
+    storeId: session.storeId,
+    // Field-name-only metadata — the notes text itself never enters the
+    // audit (the same masking rule every performance mutation follows).
+    metadata: { fields: ['calibrationNotes'] },
+  });
+  return { id: updated.id, status: updated.status, calibrationNotes: updated.calibrationNotes ?? null };
 }
 
 // ── Reviews ─────────────────────────────────────────────────────────────────
