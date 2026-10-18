@@ -24,6 +24,9 @@ const db = vi.hoisted(() => {
     disciplinaryCase: model(),
     employee: model(),
     user: model(),
+    // v2.116.0: the restricted-read path reads the trail back BEFORE writing
+    // its own event — re-anchored with an empty default (first logged view).
+    auditLog: model(),
   };
 });
 
@@ -71,6 +74,7 @@ describe('asset recovery authorization', () => {
     vi.clearAllMocks();
     db.assetAssignment.findFirst.mockResolvedValue(assigned);
     db.employee.findUnique.mockResolvedValue(employee);
+    db.auditLog.findMany.mockResolvedValue([]);
   });
 
   it('records a plain RETURN with conditionIn and no authorizer', async () => {

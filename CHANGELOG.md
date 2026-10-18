@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.116.0] The trail reads back
+
+Loop-closing release: v2.115.0 made restricted reads *write* an audit trail; this release lets the discipline desk *read* it back, in the two places a decision actually happens — the record's own detail dialog and the case list. The trail stays content-free: it names who and when, never the description.
+
+### Added
+- **Access trail in the detail dialog** (`src/lib/hr/discipline-service.ts`, `src/lib/hr/discipline-ui.ts`, `src/app/(shell)/hr/discipline/page.tsx`): a granted restricted read now returns the folded history of its case — `buildAccessTrail` (pure, order-independent, null-honest) turns the case's `DISCIPLINARY_RESTRICTED_VIEWED` / `_DENIED` audit rows into "last opened by <name> · <date> · N prior opens · M denied attempts". The trail is queried *before* the current view writes its own event, so "last opened by" always means the previous reader, never the in-flight caller. A restricted record with no prior trail says so honestly: "This is the first logged view of this restricted record."
+- **Trail badges on the case list** (`src/app/(shell)/hr/discipline/page.tsx`): restricted rows carry a compact "N opens" chip (honest at zero) fed by one index-backed `auditLog.groupBy` over the page's restricted case ids — a record that has been quietly opened many times is visible before anyone clicks it. STANDARD rows carry no trail field at all (their reads are not logged, and the DTO says so by absence).
+- **`restrictedViews` on the list DTO and `accessTrail` on the detail DTO**: aggregate metadata only — counts, moments, and the last viewer's resolved name (`User.name`); the denied actor's identity stays in the security log, the read-back counts refusals without naming who was refused.
+
+### Changed
+- The What's-New feed leads with the read-back story; the unread-counter test re-anchored for the 2.116.0-fed feed (2.110.0→5, 2.109.0→6, 2.108.0→7, 2.77.0→38). The v2.115.0 suite re-anchored for the read-back query (empty defaults = first logged view). The CSV serializer's column contract is pinned untouched by tests — no trail column, still no description column.
+
+### Security
+- The read-back adds no new place for sensitive text to live: the summary is folded from the same audit events the security log already holds, the trail query admits exactly the two confidentiality actions (pinned by tests), the deny path never reads the trail back (no trail rides a 403), and a viewer whose name cannot resolve degrades to "an unknown user" rather than a fabricated label.
+
 ## [2.115.0] The restricted read leaves a trace
 
 Confidentiality-hardening release: grievance confidentiality (EMS spec Phase 4.7 acceptance 5) was enforced at the detail level since v2.19.0 — descriptions stayed out of lists and behind an explicit allow-list. This release makes the enforcement *traceable*: a restricted read (granted or denied) now leaves an audit record, and the discipline desk grows the search, filters, countdown chips and honest CSV export a working caseload needs.

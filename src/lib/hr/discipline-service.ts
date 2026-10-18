@@ -10,6 +10,7 @@
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import { StageGError, employeeScopeWhere, employeeInScope, toDate } from './stage-g-shared';
+import { buildAccessTrail, RESTRICTED_TRAIL_ACTIONS, type AccessTrailDto } from './discipline-ui';
 import type { AuthSession } from '@/lib/auth';
 
 export const CASE_TYPES = ['WARNING', 'GRIEVANCE', 'INVESTIGATION'] as const;
@@ -30,11 +31,20 @@ export interface CaseListItemDto {
   confidentiality: string;
   // NOTE: description deliberately absent (spec rule 7 - sensitive data).
   createdAt: string;
+  // v2.116.0: RESTRICTED rows only — the count of prior granted restricted
+  // reads recorded in the audit trail (aggregate metadata, never the
+  // description). STANDARD rows carry no trail by construction (their reads
+  // are not logged), so the field stays absent there.
+  restrictedViews?: number | null;
 }
 
 export interface CaseDetailDto extends CaseListItemDto {
   description: string;
   resolutionNotes: string | null;
+  // v2.116.0: the read-back of the v2.115.0 write — who last opened this
+  // restricted record BEFORE the current view, how many prior opens and
+  // denied attempts the trail holds. null = first logged view (or STANDARD).
+  accessTrail: (AccessTrailDto & { lastViewedByName: string | null }) | null;
 }
 
 function toIso(value: Date | null | undefined): string | null {
@@ -130,7 +140,27 @@ export async function listCases(
   });
   // Sensitive-data rule: descriptions never enter list payloads, regardless
   // of confidentiality level.
-  return cases.map((c) => toListItem(c, `${c.employee.firstName} ${c.employee.lastName}`));
+  const dtos = cases.map((c) => toListItem(c, `${c.employee.firstName} ${c.employee.lastName}`));
+  // v2.116.0: one grouped count gives every restricted row its trail size —
+  // the badge proves the trail exists where decisions happen, not only
+  // inside the record. The [entityType, entityId] index backs the where.
+  const restrictedIds = cases.filter((c) => c.confidentiality === 'RESTRICTED').map((c) => c.id);
+  if (restrictedIds.length > 0) {
+    const grouped = await db.auditLog.groupBy({
+      by: ['entityId'],
+      where: {
+        entityType: 'DisciplinaryCase',
+        entityId: { in: restrictedIds },
+        action: 'DISCIPLINARY_RESTRICTED_VIEWED',
+      },
+      _count: { _all: true },
+    });
+    const counts = new Map(grouped.map((g) => [g.entityId, g._count._all]));
+    for (const d of dtos) {
+      if (d.confidentiality === 'RESTRICTED') d.restrictedViews = counts.get(d.id) ?? 0;
+    }
+  }
+  return dtos;
 }
 
 async function loadCase(caseId: string, session: Session) {
@@ -178,7 +208,30 @@ export async function getCaseDetail(caseId: string, session: Session): Promise<C
       403,
     );
   }
+  let accessTrail: (AccessTrailDto & { lastViewedByName: string | null }) | null = null;
   if (record.confidentiality === 'RESTRICTED') {
+    // v2.116.0: the trail is read back BEFORE this view writes its own
+    // event — "last opened by" is the previous reader, never the in-flight
+    // caller. The [entityType, entityId] index backs the where.
+    const priorEvents = await db.auditLog.findMany({
+      where: {
+        entityType: 'DisciplinaryCase',
+        entityId: caseId,
+        action: { in: [...RESTRICTED_TRAIL_ACTIONS] },
+      },
+      select: { action: true, userId: true, timestamp: true },
+      orderBy: { timestamp: 'asc' },
+    });
+    const trail = buildAccessTrail(priorEvents);
+    let lastViewedByName: string | null = null;
+    if (trail?.lastViewedByUserId) {
+      const u = await db.user.findUnique({
+        where: { id: trail.lastViewedByUserId },
+        select: { name: true },
+      });
+      lastViewedByName = u?.name ?? null;
+    }
+    accessTrail = trail ? { ...trail, lastViewedByName } : null;
     // v2.115.0: a granted restricted read leaves a trace as well — who
     // opened which record, when, from which store. The metadata names the
     // confidentiality level and no case content: the audit trail proves the
@@ -197,6 +250,7 @@ export async function getCaseDetail(caseId: string, session: Session): Promise<C
     ...toListItem(record, await employeeNameFor(record.employeeId)),
     description: record.description,
     resolutionNotes: record.resolutionNotes ?? null,
+    accessTrail,
   };
 }
 

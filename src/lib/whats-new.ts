@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.116.0',
+    title: 'The trail reads back',
+    bullets: [
+      'Opening a restricted grievance now shows its access trail: who last opened the record before you, when, and how many prior opens the audit trail holds \u2014 the loop v2.115.0 started (writing the trail) closes where the decision happens.',
+      'Denied attempts read back too: if anyone outside the confidentiality allow-list ever reached for the record, the trail counts the refusals beside the granted reads \u2014 visible to the reader the audit concerns.',
+      'The case list wears its history: restricted rows carry a compact \u201cN opens\u201d chip (honest at zero), so a record that has been quietly opened many times is visible before you click it.',
+      'The trail stays clean by construction: it names who and when, never the description \u2014 the summary is folded from the same audit events the security log already holds, with no new place for sensitive text to live.',
+      'First view says so: a restricted record with no prior trail honestly reports \u201cthis is the first logged view\u201d instead of pretending history exists.',
+    ],
+  },
+  {
     version: '2.115.0',
     title: 'The restricted read leaves a trace',
     bullets: [

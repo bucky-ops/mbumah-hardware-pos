@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Download, Eye, EyeOff, Gavel, Lock, Plus, RefreshCw } from 'lucide-react';
+import { Download, Eye, EyeOff, Gavel, History, Lock, Plus, RefreshCw } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 import { buildDisciplineListCsv } from '@/lib/hr/discipline-list-csv';
 import { expiresSoonLabel } from '@/lib/hr/discipline-ui';
@@ -29,10 +29,19 @@ interface CaseListItemDto {
   issuedOn: string;
   expiresOn: string | null;
   confidentiality: string;
+  // v2.116.0: RESTRICTED rows only — prior restricted opens on the audit trail.
+  restrictedViews?: number | null;
 }
 interface CaseDetailDto extends CaseListItemDto {
   description: string;
   resolutionNotes: string | null;
+  accessTrail: {
+    viewCount: number;
+    deniedCount: number;
+    lastViewedAt: string | null;
+    lastViewedByName: string | null;
+    lastDeniedAt: string | null;
+  } | null;
 }
 interface PersonDto {
   id: string;
@@ -242,6 +251,15 @@ export default function DisciplinePage() {
                             Restricted
                           </span>
                         ) : null}
+                        {c.confidentiality === 'RESTRICTED' ? (
+                          <span
+                            data-testid="hr-discipline-trail-chip"
+                            className="ml-1 inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300"
+                            title="Prior restricted opens recorded in the audit trail"
+                          >
+                            {c.restrictedViews ?? 0} {c.restrictedViews === 1 ? 'open' : 'opens'}
+                          </span>
+                        ) : null}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{c.severity ?? '—'}</TableCell>
@@ -412,6 +430,30 @@ export default function DisciplinePage() {
                     className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-300"
                   >
                     <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> Viewing this restricted record is logged to the audit trail.
+                  </p>
+                ) : null}
+                {detail.confidentiality === 'RESTRICTED' && detail.accessTrail ? (
+                  <div
+                    data-testid="hr-discipline-access-trail"
+                    className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-xs text-violet-900 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-200"
+                  >
+                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-400">
+                      <History className="h-3.5 w-3.5" aria-hidden /> Access trail
+                    </p>
+                    <p className="tabular-nums">
+                      Last opened by{' '}
+                      <span className="font-medium">{detail.accessTrail.lastViewedByName ?? 'an unknown user'}</span>
+                      {detail.accessTrail.lastViewedAt ? ` · ${formatDate(detail.accessTrail.lastViewedAt)}` : ''}
+                      {' · '}
+                      {detail.accessTrail.viewCount} prior {detail.accessTrail.viewCount === 1 ? 'open' : 'opens'}
+                      {detail.accessTrail.deniedCount > 0
+                        ? ` · ${detail.accessTrail.deniedCount} denied ${detail.accessTrail.deniedCount === 1 ? 'attempt' : 'attempts'}`
+                        : ''}
+                    </p>
+                  </div>
+                ) : detail.confidentiality === 'RESTRICTED' ? (
+                  <p data-testid="hr-discipline-trail-first" className="text-xs text-muted-foreground">
+                    This is the first logged view of this restricted record.
                   </p>
                 ) : null}
                 <div className="rounded-lg border p-3">
