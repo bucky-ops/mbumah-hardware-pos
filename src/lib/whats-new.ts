@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.115.0',
+    title: 'The restricted read leaves a trace',
+    bullets: [
+      'Grievance confidentiality grows teeth you can see: opening a RESTRICTED record now writes an audit event naming who viewed which case and when \u2014 the trail proves the access happened without ever copying the description into the log.',
+      'A denied attempt is traceable too: if a role outside the confidentiality allow-list ever reaches for a restricted record, the refusal is logged beside the granted reads \u2014 defence in depth that records, not just blocks.',
+      'The discipline desk matures: search cases by employee, filter by type (warning, grievance, investigation), and a live counts line \u2014 \u201cN of M cases shown \u00b7 R restricted\u201d \u2014 so the surface summarizes itself before you scroll.',
+      'Expiring warnings wear their countdown: an OPEN warning inside 14 days shows an amber \u201cin Nd\u201d chip beside its date (past-due never shows \u2014 the sweep retires those before the list is built).',
+      'The case list exports honestly: the CSV door carries exactly the list\u2019s columns \u2014 id, employee, type, severity, status, confidentiality, dates \u2014 descriptions have no column and can never ride along.',
+    ],
+  },
+  {
     version: '2.114.0',
     title: 'The assets half of the alert opens its door',
     bullets: [

@@ -157,11 +157,41 @@ export async function getCaseDetail(caseId: string, session: Session): Promise<C
     record.confidentiality === 'RESTRICTED' &&
     !['HR_MANAGER', 'STORE_OWNER', 'SUPER_ADMIN'].includes(session.role)
   ) {
+    // v2.115.0: the denied attempt is traceable too (spec 4.7 acceptance 5 —
+    // "enforced" means the block leaves a record, not just a 403). Metadata
+    // carries the confidentiality flag only — never the description text.
+    // Today the guard admits exactly the allow-listed roles, so this path is
+    // defence-in-depth (same as the 403 it rides); if the guard's key ever
+    // widens, the trace exists the day the gap opens.
+    await hrAudit({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: 'DISCIPLINARY_RESTRICTED_DENIED',
+      resourceType: HrEntityType.DISCIPLINARY_CASE,
+      resourceId: caseId,
+      storeId: session.storeId,
+      metadata: { confidentiality: 'RESTRICTED', fieldNames: [] },
+    });
     throw new StageGError(
       'CONFIDENTIALITY_RESTRICTED',
       'This grievance is restricted; the record description is confidential.',
       403,
     );
+  }
+  if (record.confidentiality === 'RESTRICTED') {
+    // v2.115.0: a granted restricted read leaves a trace as well — who
+    // opened which record, when, from which store. The metadata names the
+    // confidentiality level and no case content: the audit trail proves the
+    // access happened without itself becoming a copy of the sensitive data.
+    await hrAudit({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: 'DISCIPLINARY_RESTRICTED_VIEWED',
+      resourceType: HrEntityType.DISCIPLINARY_CASE,
+      resourceId: caseId,
+      storeId: session.storeId,
+      metadata: { confidentiality: 'RESTRICTED', fieldNames: [] },
+    });
   }
   return {
     ...toListItem(record, await employeeNameFor(record.employeeId)),
