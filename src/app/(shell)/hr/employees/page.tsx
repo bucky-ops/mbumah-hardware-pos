@@ -22,12 +22,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CalendarClock, ExternalLink, RefreshCw, Search, Users } from 'lucide-react';
-import { apiGet, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import {
+  CalendarClock,
+  ExternalLink,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  UserCheck,
+  UserPlus,
+  Users,
+} from 'lucide-react';
+import { ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { describeOnboardConsent, ONBOARD_CONSENT_TONE_CLASSES } from '@/lib/hr/onboard-consent';
 
 interface EmployeeRow {
   id: string;
@@ -45,6 +63,11 @@ interface EmployeeRow {
 }
 
 const STATUS_OPTIONS = ['ALL', 'ACTIVE', 'ON_LEAVE', 'SUSPENDED', 'TERMINATED'] as const;
+
+// v2.120.0: the onboarding form's employment types — the schema vocabulary
+// (prisma Employee.employmentType), exactly as the API stores it. No client
+// invention: an invented type would silently render "undefined" badges.
+const EMPLOYMENT_TYPES = ['PERMANENT', 'CONTRACT', 'CASUAL', 'PROBATION', 'INTERN'] as const;
 
 function readParam(name: string): string {
   try {
@@ -111,8 +134,19 @@ export default function EmployeesPage() {
       if (status !== 'ALL') params.set('status', status);
       if (debouncedQ) params.set('q', debouncedQ);
       const qs = params.toString();
-      const data = await apiGet<EmployeeRow[]>(`/api/hr/employees${qs ? `?${qs}` : ''}`);
-      setRows(data);
+      // v2.120.0: raw fetch (apiGet unwraps `data` only) — the list response
+      // also carries canCreate, the server's answer to "may this role
+      // onboard?" (the same hr.employee.create key the POST guard pins).
+      const res = await fetch(`/api/hr/employees${qs ? `?${qs}` : ''}`, { credentials: 'include' });
+      const json = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        data?: EmployeeRow[];
+        canCreate?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !json.success) throw new Error(json.error || `Request failed (${res.status})`);
+      setRows(json.data ?? []);
+      setCanCreate(json.canCreate === true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The employees list is unreachable. Try refreshing.');
       setRows([]);
@@ -142,6 +176,92 @@ export default function EmployeesPage() {
 
   const activeFilters = (debouncedQ ? 1 : 0) + (status !== 'ALL' ? 1 : 0) + (expiringOnly ? 1 : 0);
 
+  // ── Onboarding (v2.120.0) ────────────────────────────────────────────────
+  // The server decides who sees this door (GET canCreate); the dialog files
+  // the hire and — when ticked — the payroll consent the new hire signed,
+  // through the same audited grant the Privacy tab uses.
+  const [canCreate, setCanCreate] = useState(false);
+  const [onboardOpen, setOnboardOpen] = useState(false);
+  const [obFirst, setObFirst] = useState('');
+  const [obLast, setObLast] = useState('');
+  const [obTitle, setObTitle] = useState('');
+  const [obType, setObType] = useState<string>('PERMANENT');
+  const [obHireDate, setObHireDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [obPhone, setObPhone] = useState('');
+  const [obSalary, setObSalary] = useState('');
+  const [obConsent, setObConsent] = useState(false);
+  const [obBusy, setObBusy] = useState(false);
+  const [obError, setObError] = useState('');
+  const [obResult, setObResult] = useState<{
+    id: string;
+    name: string;
+    code: string | null;
+    consent: unknown;
+  } | null>(null);
+
+  const resetOnboardForm = () => {
+    setObFirst('');
+    setObLast('');
+    setObTitle('');
+    setObType('PERMANENT');
+    setObHireDate(new Date().toISOString().slice(0, 10));
+    setObPhone('');
+    setObSalary('');
+    setObConsent(false);
+    setObError('');
+    setObResult(null);
+  };
+
+  const submitOnboard = async () => {
+    if (!obFirst.trim() || !obLast.trim()) {
+      setObError('First name and last name are required.');
+      return;
+    }
+    setObBusy(true);
+    setObError('');
+    try {
+      // Raw fetch: the POST response's consent + id live OUTSIDE data, and
+      // apiSend unwraps data only. Content-Type is declared explicitly (the
+      // proxy rejects a body-less content type, v2.24.0 contract).
+      const res = await fetch('/api/hr/employees', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: obFirst.trim(),
+          lastName: obLast.trim(),
+          jobTitle: obTitle.trim() || undefined,
+          employmentType: obType,
+          hireDate: obHireDate || undefined,
+          phone: obPhone.trim() || undefined,
+          basicSalary: obSalary.trim() === '' ? undefined : Number(obSalary),
+          consentPayrollProcessing: obConsent,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        data?: { firstName?: string; lastName?: string; employeeCode?: string | null };
+        id?: string;
+        consent?: unknown;
+        error?: string;
+      };
+      if (!res.ok || !json.success || !json.id) {
+        throw new Error(json.error || `Request failed (${res.status})`);
+      }
+      setObResult({
+        id: json.id,
+        name: `${json.data?.firstName ?? obFirst.trim()} ${json.data?.lastName ?? obLast.trim()}`.trim(),
+        code: json.data?.employeeCode ?? null,
+        consent: json.consent,
+      });
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      setObError(e instanceof Error ? e.message : 'Unable to onboard this employee. Try again.');
+    } finally {
+      setObBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4" data-testid="hr-employees-page">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -157,10 +277,31 @@ export default function EmployeesPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)} disabled={loading} aria-label="Refresh employees list">
-          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => {
+                resetOnboardForm();
+                setOnboardOpen(true);
+              }}
+              data-testid="hr-employees-onboard-open"
+            >
+              <UserPlus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              Onboard employee
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setReloadKey((k) => k + 1)}
+            disabled={loading}
+            aria-label="Refresh employees list"
+          >
+            <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -389,6 +530,233 @@ export default function EmployeesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Onboarding dialog (v2.120.0): the hire AND the consent they signed. */}
+      <Dialog
+        open={onboardOpen}
+        onOpenChange={(o) => {
+          setOnboardOpen(o);
+          if (!o) setObResult(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" data-testid="hr-employees-onboard-dialog">
+          {obResult ? (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
+                    <UserCheck className="h-4 w-4" aria-hidden="true" />
+                  </div>
+                  <DialogTitle className="text-base">New hire on file</DialogTitle>
+                </div>
+                <DialogDescription>
+                  {obResult.name}
+                  {obResult.code && (
+                    <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {obResult.code}
+                    </span>
+                  )}{' '}
+                  now sits in the branch roster.
+                </DialogDescription>
+              </DialogHeader>
+              {(() => {
+                const outcome = describeOnboardConsent(obResult.consent);
+                return (
+                  <div
+                    className={`rounded-xl border p-3 ${ONBOARD_CONSENT_TONE_CLASSES[outcome.tone]}`}
+                    data-testid="hr-employees-onboard-consent-outcome"
+                    role="status"
+                  >
+                    <p className="text-sm font-semibold">{outcome.headline}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed opacity-80">{outcome.detail}</p>
+                  </div>
+                );
+              })()}
+              <DialogFooter className="gap-2">
+                <a
+                  href={`/hr/employees/${obResult.id}`}
+                  className="inline-flex h-9 items-center rounded-md border border-slate-200 px-3 text-sm font-medium transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                >
+                  Open record
+                </a>
+                <Button variant="outline" size="sm" onClick={() => resetOnboardForm()}>
+                  Onboard another
+                </Button>
+                <Button size="sm" onClick={() => setOnboardOpen(false)}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Onboard an employee</DialogTitle>
+                <DialogDescription>
+                  A new hire joins this branch&rsquo;s roster. Only the name is required — everything else can
+                  mature on the record.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label htmlFor="ob-first" className="text-xs font-medium text-muted-foreground">
+                    First name *
+                  </label>
+                  <Input
+                    id="ob-first"
+                    value={obFirst}
+                    onChange={(e) => setObFirst(e.target.value)}
+                    className="h-8 text-sm"
+                    autoFocus
+                    data-testid="hr-employees-onboard-first"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="ob-last" className="text-xs font-medium text-muted-foreground">
+                    Last name *
+                  </label>
+                  <Input
+                    id="ob-last"
+                    value={obLast}
+                    onChange={(e) => setObLast(e.target.value)}
+                    className="h-8 text-sm"
+                    data-testid="hr-employees-onboard-last"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="ob-title" className="text-xs font-medium text-muted-foreground">
+                    Job title
+                  </label>
+                  <Input
+                    id="ob-title"
+                    value={obTitle}
+                    onChange={(e) => setObTitle(e.target.value)}
+                    className="h-8 text-sm"
+                    data-testid="hr-employees-onboard-title"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="ob-phone" className="text-xs font-medium text-muted-foreground">
+                    Phone
+                  </label>
+                  <Input
+                    id="ob-phone"
+                    value={obPhone}
+                    onChange={(e) => setObPhone(e.target.value)}
+                    className="h-8 text-sm"
+                    data-testid="hr-employees-onboard-phone"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="ob-hire" className="text-xs font-medium text-muted-foreground">
+                    Hire date
+                  </label>
+                  <Input
+                    id="ob-hire"
+                    type="date"
+                    value={obHireDate}
+                    onChange={(e) => setObHireDate(e.target.value)}
+                    className="h-8 text-sm"
+                    data-testid="hr-employees-onboard-hire-date"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="ob-salary" className="text-xs font-medium text-muted-foreground">
+                    Basic salary (KES)
+                  </label>
+                  <Input
+                    id="ob-salary"
+                    type="number"
+                    min={0}
+                    value={obSalary}
+                    onChange={(e) => setObSalary(e.target.value)}
+                    className="h-8 text-sm"
+                    data-testid="hr-employees-onboard-salary"
+                  />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Employment type</label>
+                  <Select value={obType} onValueChange={(v) => setObType(v)}>
+                    <SelectTrigger
+                      className="h-8 text-sm"
+                      aria-label="Employment type"
+                      data-testid="hr-employees-onboard-type"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EMPLOYMENT_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t.replace(/_/g, ' ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {/* The consent capture panel — this round's reason to exist. */}
+              <div
+                className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/40"
+                data-testid="hr-employees-onboard-consent-panel"
+              >
+                <div className="flex items-start gap-2.5">
+                  <ShieldCheck
+                    className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+                      Payroll-processing consent
+                    </p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+                      Purpose <span className="font-mono text-[10px]">PAYROLL_PROCESSING</span> · lawful basis
+                      CONSENT · policy{' '}
+                      <span className="rounded bg-emerald-100 px-1 font-mono text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">
+                        hr-policy-2026-01
+                      </span>
+                    </p>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs leading-relaxed text-emerald-900 dark:text-emerald-200">
+                      <input
+                        type="checkbox"
+                        checked={obConsent}
+                        onChange={(e) => setObConsent(e.target.checked)}
+                        data-testid="hr-employees-onboard-consent-checkbox"
+                        aria-label="File the employee's signed payroll-processing consent"
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-emerald-600"
+                      />
+                      <span>
+                        The employee signed the payroll consent form during hiring — file it now so their first
+                        run never blocks on MISSING_CONSENT.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              {obError && (
+                <p
+                  className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                  role="alert"
+                  data-testid="hr-employees-onboard-error"
+                >
+                  {obError}
+                </p>
+              )}
+              <DialogFooter className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => setOnboardOpen(false)} disabled={obBusy}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void submitOnboard()}
+                  disabled={obBusy}
+                  data-testid="hr-employees-onboard-submit"
+                >
+                  {obBusy ? 'Onboarding…' : 'Onboard employee'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

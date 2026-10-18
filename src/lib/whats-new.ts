@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.120.0',
+    title: 'The roster captures its consent',
+    bullets: [
+      'The Employees page can finally onboard: a guided form creates the record — name, job title, employment type, hire date, pay — no raw API calls required.',
+      'One honest checkbox files the new hire\u2019s payroll-processing consent (hr-policy-2026-01) through the same audited path the Privacy tab uses, so their first run never blocks on MISSING_CONSENT.',
+      'The outcome speaks plainly: \u201cConsent captured\u201d in emerald with the policy and date, or \u201cNo consent on file\u201d in amber \u2014 with the truth that the next run will flag MISSING_CONSENT until it\u2019s granted.',
+      'A consent glitch never loses the hire: the employee stays created, the outcome turns rose with the reason, and the pointer lands on the Privacy tab.',
+      'The onboard door only appears for roles the server has actually cleared to hire \u2014 the same permission key decides both the button and the API.',
+    ],
+  },
+  {
     version: '2.119.0',
     title: 'Consent works',
     bullets: [

@@ -231,6 +231,10 @@ describe('source contracts — the /hr/employees list page exists and is honest'
   it('rows are doors to the detail record, never fabricated', () => {
     const p = page();
     expect(p).toContain('href={`/hr/employees/${r.id}`}');
-    expect(p).toContain('apiGet<EmployeeRow[]>');
+    // v2.120.0 re-anchor: the list load reads the raw envelope — data AND
+    // canCreate ride OUTSIDE apiGet's data-only unwrap (the server decides
+    // who may onboard), so the honest-fetch pin moved with the affordance.
+    expect(p).toContain('setRows(json.data ?? [])');
+    expect(p).toContain('setCanCreate(json.canCreate === true)');
   });
 });
