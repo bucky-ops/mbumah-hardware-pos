@@ -203,12 +203,12 @@ check('tests: the bundle test pins the layered window and the pair', () => {
   assert(TEST.includes('payroll-account-picker-recent-clear'), 'clear affordance untested');
 });
 
-check('tests: the changelog counter re-anchored for the 2.108.0-fed feed', () => {
-  // v2.108.0 leads the feed, so one-behind is 2.107.0 (not 2.106.0) and the
-  // deep count moved 30 → 31. The pin mirrors the committed test exactly.
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.107.0')).toBe(1);"), 'one-behind count missing');
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.106.0')).toBe(2);"), 'two-behind count missing');
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.77.0')).toBe(31);"), '2.77.0 count missing');
+check('tests: the changelog counter re-anchored for the 2.114.0-fed feed', () => {
+  // v2.114.0 chore re-anchor (mechanical): the counter test now rides the
+  // 2.114.0-fed feed — these are the lines the committed test carries TODAY.
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.109.0')).toBe(4);"), 'three-behind count missing');
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.108.0')).toBe(5);"), 'four-behind count missing');
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.77.0')).toBe(36);"), '2.77.0 count missing');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

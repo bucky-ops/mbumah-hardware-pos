@@ -24,12 +24,19 @@ const assert = (cond, msg) => {
 };
 
 // ── version + release discipline ───────────────────────────────────────────
-check('version: package.json leads 2.113.0 (all three slots)', () => {
+check('version: package.json stays at-or-above 2.113.0 (all three slots)', () => {
+  // v2.114.0 chore re-anchor (the PR #235/#238 precedent): floor holds (never
+  // backward), slots must AGREE with each other (no half-bumped trees).
   const pkg = JSON.parse(read('package.json'));
-  assert(pkg.version === '2.113.0', `version=${pkg.version}`);
-  assert(pkg.mbumah.releaseVersion === '2.113.0', `release=${pkg.mbumah.releaseVersion}`);
-  assert(pkg.mbumah.baseVersion === '2.113.0', `base=${pkg.mbumah.baseVersion}`);
-  assert(pkg.scripts['verify:v2-113-0'], 'verify script entry missing');
+  const atLeast = (v, floor) => {
+    const p = v.split('.').map(Number);
+    const f = floor.split('.').map(Number);
+    return p[0] > f[0] || (p[0] === f[0] && (p[1] > f[1] || (p[1] === f[1] && p[2] >= f[2])));
+  };
+  assert(atLeast(pkg.version, '2.113.0'), `version=${pkg.version}`);
+  assert(atLeast(pkg.mbumah.releaseVersion, '2.113.0'), `release=${pkg.mbumah.releaseVersion}`);
+  assert(atLeast(pkg.mbumah.baseVersion, '2.113.0'), `base=${pkg.mbumah.baseVersion}`);
+  assert(pkg.version === pkg.mbumah.releaseVersion && pkg.mbumah.releaseVersion === pkg.mbumah.baseVersion, 'slots disagree');
 });
 
 check('whats-new: 2.113.0 leads the feed with the doors story', () => {
@@ -132,7 +139,9 @@ check('the panel: expiry cell is a role-gated door for documents, text for asset
   assert(p.includes('href={buildExpiringEmployeesHref(row.storeId)}'), 'expiry door href missing');
   assert(p.includes('data-testid="people-payroll-expiry-door"'), 'expiry door testid missing');
   assert(p.includes('EMPLOYEE_LIST_READ_ROLES.includes(role'), 'role gate missing (a door that 403s is a lie)');
-  assert(p.match(/if \(docs > 0 && canOpenExpiry\) \{/), 'door not gated on docs + role');
+  // v2.114.0 chore re-anchor: the gate renamed canOpenExpiry -> canOpenDocs
+  // when the assets half grew its own parallel door (canOpenAssets)
+  assert(p.match(/if \(docs > 0 && canOpenDocs\) \{/), 'door not gated on docs + role');
   assert(p.includes('Overdue asset assignments: ${assets} — see the Assets page'), 'assets honesty lost');
   // both surfaces share the cells
   assert(p.match(/<LatestRunCell run=\{row\.latestPayroll\} storeName=\{row\.storeName\} \/>/g)?.length === 2, 'table+card must both pass storeName');
