@@ -280,16 +280,35 @@ describe('the route — the chart files its month through the drill contract', (
     expect(ROUTE.includes('NO_MOVEMENT_DATA')).toBe(true);
   });
 
-  it('serves the period\'s OWN days, posted and never voided — the exact drill window', () => {
+  it('serves the window the drill serves, posted and never voided — the exact arithmetic', () => {
     expect(ROUTE.includes('monthEnd.setUTCDate(monthEnd.getUTCDate() + 1);')).toBe(true);
-    expect(ROUTE.includes('entryDate: { gte: period.startDate, lt: monthEnd },')).toBe(true);
+    expect(ROUTE.includes('entryDate: { gte: windowStart, lt: windowEnd },')).toBe(true);
     expect(ROUTE.includes('isPosted: true,')).toBe(true);
     expect(ROUTE.includes('isVoided: false,')).toBe(true);
   });
 
-  it('accepts NO window param — the file can never call itself something it is not', () => {
-    expect(ROUTE.includes("searchParams.get('window')")).toBe(false);
-    expect(ROUTE.includes("windowNoun: 'month',")).toBe(true);
+  // v2.108.0: the layered window — 'month' (default) keeps the v2.107.0
+  // bounds; 'year' files the calendar year the period's first day lives
+  // in, through the EXACT arithmetic the account route has served since
+  // v2.104.0; an unknown window is a 400, never a silent month.
+  it('grows the layered window: month default, year choice, unknown is a 400', () => {
+    expect(ROUTE.includes("searchParams.get('window')")).toBe(true);
+    expect(ROUTE.includes("windowParam !== 'month' && windowParam !== 'year'")).toBe(true);
+    expect(ROUTE.includes('window must be "month" or "year".')).toBe(true);
+    expect(ROUTE.includes("const window: 'month' | 'year' = windowParam === 'year' ? 'year' : 'month';")).toBe(true);
+  });
+
+  it('the year files the calendar year — the account route\'s exact bounds and words', () => {
+    expect(ROUTE.includes("const year = period.startDate.getUTCFullYear();")).toBe(true);
+    expect(ROUTE.includes("window === 'year' ? new Date(Date.UTC(year, 0, 1)) : period.startDate")).toBe(true);
+    expect(ROUTE.includes("window === 'year' ? new Date(Date.UTC(year + 1, 0, 1)) : monthEnd")).toBe(true);
+    expect(ROUTE.includes('`${year}-01-01 → ${year}-12-31`')).toBe(true);
+    expect(ROUTE.includes("const displayName = window === 'year' ? String(year) : period.name;")).toBe(true);
+  });
+
+  it('the member CSVs say the window\'s own word (windowNoun rides the choice)', () => {
+    expect(ROUTE.includes('windowNoun: window,')).toBe(true);
+    expect(ROUTE.includes('periodName: displayName,')).toBe(true);
   });
 
   it('builds from the SAME builders — the zip cannot disagree with the screen', () => {
@@ -305,6 +324,8 @@ describe('the route — the chart files its month through the drill contract', (
     expect(meta.includes('postedLines: bundle.totalLines')).toBe(true);
     expect(meta.includes('quietAccounts:')).toBe(true);
     expect(meta.includes('accountCode')).toBe(false);
+    expect(meta.includes('windowKind: window,')).toBe(true);
+    expect(meta.includes('period: displayName,')).toBe(true);
   });
 
   it('answers a zip attachment, never a page', () => {
@@ -332,6 +353,26 @@ describe('the page — the browse box gains its governed exit', () => {
     }
   });
 
+  it('the v2.108.0 pair: a place with its own heading, two doors, one grid', () => {
+    expect(PAGE.includes('data-testid="payroll-account-bundle-year-door"')).toBe(true);
+    expect(PAGE.includes('File the chart')).toBe(true);
+    expect(PAGE.includes('grid grid-cols-2 gap-1.5')).toBe(true);
+    expect(PAGE.includes("{bundleBusy ? 'Building…' : 'File the year'}")).toBe(true);
+    expect(PAGE.includes("{bundleYear ? `${bundleYear} window` : 'year window'}")).toBe(true);
+    // The year door shows NO count on purpose — no count beats a wrong
+    // count; the manifest inside says the real numbers.
+    expect(PAGE.includes("void exportAccountBundle('year')")).toBe(true);
+    expect(PAGE.includes("void exportAccountBundle('month')")).toBe(true);
+    expect(PAGE.includes('bundleYear = payload?.period?.startDate ? payload.period.startDate.slice(0, 4) : null')).toBe(true);
+  });
+
+  it('the memory can be let go — the clear affordance forgets this browser only', () => {
+    expect(PAGE.includes('data-testid="payroll-account-picker-recent-clear"')).toBe(true);
+    expect(PAGE.includes('aria-label="Clear recent accounts"')).toBe(true);
+    expect(PAGE.includes('window.localStorage.removeItem(ACCOUNT_PICKER_RECENTS_KEY)')).toBe(true);
+    expect(PAGE.includes('the chart itself is never touched')).toBe(true);
+  });
+
   it('the door files the accounts that POSTED — the index badges are the truth', () => {
     expect(PAGE.includes('pickerAccounts.filter((a) => a.periodLines > 0).length')).toBe(true);
     expect(PAGE.includes('bundleActiveCount > 0 && (')).toBe(true);
@@ -341,6 +382,7 @@ describe('the page — the browse box gains its governed exit', () => {
 
   it('the exit rides the governed route and the download discipline', () => {
     expect(PAGE.includes('/api/payroll/period-journal/accounts/export-bundle?periodId=')).toBe(true);
+    expect(PAGE.includes('&window=${bundleWindow}')).toBe(true);
     expect(PAGE.includes('encodeURIComponent(payload.period.id)')).toBe(true);
     expect(PAGE.includes('URL.createObjectURL(blob)')).toBe(true);
     expect(PAGE.includes('URL.revokeObjectURL(objUrl)')).toBe(true);
@@ -369,24 +411,24 @@ describe('the page — the browse box gains its governed exit', () => {
   });
 });
 
-describe('whats-new — the chart-files-its-month story leads the feed', () => {
+describe('whats-new — the chart-files-its-year story leads the feed', () => {
   const WN = readRepo('src/lib/whats-new.ts');
 
-  it('2.107.0 leads and 2.106.0 follows (newest first)', () => {
+  it('2.108.0 leads and 2.107.0 follows (newest first)', () => {
+    const i108 = WN.indexOf("version: '2.108.0'");
     const i107 = WN.indexOf("version: '2.107.0'");
-    const i106 = WN.indexOf("version: '2.106.0'");
-    expect(i107).toBeGreaterThanOrEqual(0);
-    expect(i106).toBeGreaterThan(i107);
+    expect(i108).toBeGreaterThanOrEqual(0);
+    expect(i107).toBeGreaterThan(i108);
   });
 
-  it('the entry tells the bundle story with its honesty', () => {
-    const slice = WN.slice(WN.indexOf("version: '2.107.0'"), WN.indexOf("version: '2.106.0'"));
-    expect(slice.includes("title: 'The chart files its month'")).toBe(true);
+  it('the entry tells the year story with its honesty', () => {
+    const slice = WN.slice(WN.indexOf("version: '2.108.0'"), WN.indexOf("version: '2.107.0'"));
+    expect(slice.includes("title: 'The chart files its year'")).toBe(true);
     for (const phrase of [
-      'governed exit',
-      'MANIFEST.txt',
-      'Quiet is a fact, not a file',
-      'byte-auditable',
+      'File the year',
+      'no count on purpose',
+      'Year totals',
+      'Clear button',
       'widens nothing',
     ]) {
       expect(slice.includes(phrase)).toBe(true);

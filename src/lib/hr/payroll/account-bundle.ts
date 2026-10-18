@@ -1,4 +1,9 @@
 // v2.107.0: the chart files its month — the per-account movement bundle.
+// v2.108.0: …and its year. The builder never knew which window it served
+// (the route's meta carries the period's own name and bounds), so the year
+// arrives as the same shape with different words: Period '2026', Window
+// '2026-01-01 → 2026-12-31', and every member CSV saying 'Year totals'.
+// The archive's shape, order and honesty are byte-identical doctrine.
 //
 // The filing family's next step: the picker (v2.105.0) made any account
 // askable, the browse door (v2.106.0) made the whole chart visible, and

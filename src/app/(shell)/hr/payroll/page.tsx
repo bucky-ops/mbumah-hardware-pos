@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, Wallet, X } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
@@ -769,10 +769,16 @@ function PeriodJournalDrawer({
   const [pickerBrowseOpen, setPickerBrowseOpen] = useState(false);
   const [pickerRecents, setPickerRecents] = useState<string[]>([]);
   // v2.107.0: the chart files its month — the browse box's governed exit.
-  // The zip is built SERVER-side through the same builders the single
-  // export serves; this side only asks, downloads and reports. Busy + note
-  // ride the drawer's stale-state hygiene (reset per period), like every
-  // filing door before them.
+  // v2.108.0: …and its year. TWO doors, one truth: the month door shows the
+  // count the index's own badges know (the same window the route
+  // re-derives); the year door shows NO count, because the client only
+  // knows the month's badges and a guessed number could disagree with the
+  // archive — the manifest inside says exactly how many were filed and how
+  // many were quiet. No count beats a wrong count. The zip is built
+  // SERVER-side through the same builders the single export serves; this
+  // side only asks, downloads and reports. Busy + note ride the drawer's
+  // stale-state hygiene (reset per period), like every filing door before
+  // them.
   const [bundleBusy, setBundleBusy] = useState(false);
   const [bundleNote, setBundleNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   useEffect(() => {
@@ -881,22 +887,28 @@ function PeriodJournalDrawer({
 
   // v2.107.0: the bundle files the accounts that POSTED — the index's own
   // badges are the truth (the same window the route re-derives), so the
-  // door's number can never disagree with the archive it fetches.
+  // month door's number can never disagree with the archive it fetches.
+  // v2.108.0: the YEAR door's calendar year — the period's own first day
+  // names it (the SAME definition the route and the account drill serve:
+  // the year the period's startDate lives in).
   const bundleActiveCount = useMemo(
     () => pickerAccounts.filter((a) => a.periodLines > 0).length,
     [pickerAccounts],
   );
+  const bundleYear = payload?.period?.startDate ? payload.period.startDate.slice(0, 4) : null;
 
   // v2.107.0: the bundle exit — same download discipline as the ledger CSV
   // and the movement CSV (blob → object URL → anchor click → revoke), the
   // envelope's error narrowed before any use, the note honest either way.
-  const exportAccountBundle = async () => {
+  // v2.108.0: the exit grew a window — the SAME governed route, one
+  // querystring word apart, and the note says which word was served.
+  const exportAccountBundle = async (bundleWindow: 'month' | 'year') => {
     if (bundleBusy || !payload?.period?.id) return;
     setBundleBusy(true);
     setBundleNote(null);
     try {
       const res = await fetch(
-        `/api/payroll/period-journal/accounts/export-bundle?periodId=${encodeURIComponent(payload.period.id)}`,
+        `/api/payroll/period-journal/accounts/export-bundle?periodId=${encodeURIComponent(payload.period.id)}&window=${bundleWindow}`,
         { credentials: 'include' },
       );
       if (!res.ok) {
@@ -916,7 +928,10 @@ function PeriodJournalDrawer({
       URL.revokeObjectURL(objUrl);
       setBundleNote({
         tone: 'ok',
-        text: `Bundle downloaded — ${filename}. One governed zip: a MANIFEST that says what was filed and what was not, then one CSV per account that posted this month — each file closing its own loop.`,
+        text:
+          bundleWindow === 'year'
+            ? `Bundle downloaded — ${filename}. One governed zip for the year: a MANIFEST that says what was filed and what was not, then one CSV per account that posted — each file closing its own loop.`
+            : `Bundle downloaded — ${filename}. One governed zip: a MANIFEST that says what was filed and what was not, then one CSV per account that posted this month — each file closing its own loop.`,
       });
     } catch (e) {
       setBundleNote({ tone: 'err', text: e instanceof Error ? e.message : 'Bundle export failed.' });
@@ -1335,6 +1350,30 @@ function PeriodJournalDrawer({
                     <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                       <Clock className="h-3 w-3 text-violet-500 dark:text-violet-400" aria-hidden />
                       Recent
+                      {/* v2.108.0: the memory can be let go — one quiet affordance
+                          that forgets THIS browser's remembered doors. The chart
+                          itself is never touched; the empty note returns, and the
+                          next pick starts the memory again. A private-mode denial
+                          still leaves the memory alive in state for the visit. */}
+                      <button
+                        type="button"
+                        data-testid="payroll-account-picker-recent-clear"
+                        aria-label="Clear recent accounts"
+                        title="Forget the remembered accounts in this browser — the chart itself is never touched"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setPickerRecents([]);
+                          try {
+                            window.localStorage.removeItem(ACCOUNT_PICKER_RECENTS_KEY);
+                          } catch {
+                            // private-mode denial: the memory still leaves state
+                          }
+                        }}
+                        className="ml-auto inline-flex items-center gap-1 rounded border border-transparent px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-muted-foreground outline-none transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:border-red-300 focus-visible:ring-2 focus-visible:ring-red-500/30 dark:hover:border-red-900 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                      >
+                        <X className="h-2.5 w-2.5" aria-hidden />
+                        Clear
+                      </button>
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {pickerRecents.map((code) => {
@@ -1429,19 +1468,47 @@ function PeriodJournalDrawer({
                     stale hygiene as every filing door before it. */}
                 {bundleActiveCount > 0 && (
                   <div className="border-t px-3 py-2" data-testid="payroll-account-bundle-row">
-                    <button
-                      type="button"
-                      data-testid="payroll-account-bundle-door"
-                      disabled={bundleBusy}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => void exportAccountBundle()}
-                      title={bundleBusy ? 'Building the bundle…' : `One zip: a MANIFEST plus one CSV per account that posted this month (${bundleActiveCount} files)`}
-                      className="flex w-full items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-left text-xs font-medium text-violet-800 outline-none transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-900/60"
-                    >
-                      <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      {bundleBusy ? 'Building…' : `File all ${bundleActiveCount} accounts`}
-                      <span className="ml-auto text-[10px] font-normal text-muted-foreground">one zip · month window</span>
-                    </button>
+                    {/* v2.108.0: the pair gets its own micro-heading — the exit
+                        is a place now, not a stray button. */}
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <FileDown className="h-3 w-3 text-violet-500 dark:text-violet-400" aria-hidden />
+                      File the chart
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        data-testid="payroll-account-bundle-door"
+                        disabled={bundleBusy}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => void exportAccountBundle('month')}
+                        title={bundleBusy ? 'Building the bundle…' : `One zip: a MANIFEST plus one CSV per account that posted this month (${bundleActiveCount} files)`}
+                        className="flex w-full flex-col items-start gap-0.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-left text-xs font-medium text-violet-800 outline-none transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-900/60"
+                      >
+                        <span className="flex w-full items-center gap-2">
+                          {bundleBusy ? 'Building…' : `File all ${bundleActiveCount} accounts`}
+                        </span>
+                        <span className="text-[10px] font-normal text-muted-foreground">one zip · month window</span>
+                      </button>
+                      {/* v2.108.0: the year door — no count on purpose (the client
+                          only knows the month's badges; no count beats a wrong
+                          count), the manifest inside says the real numbers. */}
+                      <button
+                        type="button"
+                        data-testid="payroll-account-bundle-year-door"
+                        disabled={bundleBusy}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => void exportAccountBundle('year')}
+                        title={bundleBusy ? 'Building the bundle…' : `One zip: a MANIFEST plus one CSV per account that posted in ${bundleYear ?? 'the year'} — the manifest says how many`}
+                        className="flex w-full flex-col items-start gap-0.5 rounded-md border border-violet-200 bg-white/60 px-3 py-2 text-left text-xs font-medium text-violet-800 outline-none transition-colors hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-violet-900 dark:bg-violet-950/25 dark:text-violet-200 dark:hover:bg-violet-950/50"
+                      >
+                        <span className="flex w-full items-center gap-2">
+                          {bundleBusy ? 'Building…' : 'File the year'}
+                        </span>
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          one zip · {bundleYear ? `${bundleYear} window` : 'year window'}
+                        </span>
+                      </button>
+                    </div>
                     {bundleNote && (
                       <p
                         className={`mt-1.5 text-[11px] ${
