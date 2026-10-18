@@ -22,6 +22,14 @@ import {
   parseExpiringDays,
   storeInOrganization,
 } from '@/lib/hr/employee-service';
+// Onboarding-time consent capture (v2.120.0): the route rides the SAME audited
+// grantConsent path the Privacy tab's decision routes use — vocabulary (purpose,
+// policy version, lawful basis) stays pinned in the lib, never re-declared here.
+// Deliberately NOT imported: withdrawConsent — withdrawal is a data-protection
+// DECISION reserved to hr.settings.manage; onboarding only ever FILES the
+// consent the new hire already signed (see the POST comment below).
+import { grantConsent } from '@/lib/hr/data-protection';
+import { StageGError } from '@/lib/hr/stage-g-shared';
 import { resolveReportScope } from '@/lib/hr/reports';
 import { hrGuard } from '@/lib/hr/guard';
 
@@ -114,10 +122,15 @@ async function listHandler(request: NextRequest, session: AuthSession) {
     ...(expiringDays ? { expiringWithinDays: expiringDays } : {}),
   });
 
+  // v2.120.0: the affordance rides the answer — canCreate resolves through the
+  // SAME permission key the POST guard pins below, so the page never shows an
+  // onboard door the server would refuse (the consent card's canDecide
+  // pattern, applied to hiring).
   return Response.json({
     success: true,
     data: employees,
     count: employees.length,
+    canCreate: hasHrPermission(session.role, 'hr.employee.create'),
     ...(expiringDays ? { expiringDays } : {}),
   });
 }
@@ -149,6 +162,24 @@ export const POST = hrGuard('hr.employee.create', WRITE_ROLES)(
       return Response.json({ success: false, error: 'No store context.' }, { status: 400 });
     }
 
+    // Onboarding-time consent capture (v2.120.0): `consentPayrollProcessing`
+    // records a FACT of the hiring paperwork — "the employee signed the
+    // payroll consent form" — through the same audited grantConsent path the
+    // Privacy tab uses. It is NOT the data-protection DECISION surface:
+    // grant/withdraw for existing employees stays with hr.settings.manage
+    // (403 DECISION_FORBIDDEN on the consent routes). Anyone who may create
+    // an employee (hr.employee.create) may file the consent their new hire
+    // signed; withdrawal is never reachable from onboarding.
+    const consentRequested = body.consentPayrollProcessing === true;
+    let consent: {
+      granted: boolean;
+      reason?: string;
+      consentId?: string;
+      purpose?: string;
+      policyVersion?: string;
+      grantedAt?: string;
+    } = { granted: false, reason: consentRequested ? 'CONSENT_GRANT_FAILED' : 'NOT_REQUESTED' };
+
     try {
       const result = await createEmployee({
         storeId,
@@ -179,7 +210,31 @@ export const POST = hrGuard('hr.employee.create', WRITE_ROLES)(
           notes: typeof body.notes === 'string' ? body.notes : undefined,
         },
       });
-      return Response.json({ success: true, data: result.employee, id: result.id }, { status: 201 });
+
+      if (consentRequested) {
+        // A consent glitch must never lose the hire: the employee is already
+        // created here, so a failed grant rides back as an honest outcome
+        // (reason code) inside a 201 — the dialog renders it rose and points
+        // at the Privacy tab. Only a total route failure would 5xx, and then
+        // the employee create would have failed with it.
+        try {
+          const grant = await grantConsent({ employeeId: result.id }, session);
+          consent = {
+            granted: true,
+            consentId: grant.consentId,
+            purpose: grant.purpose,
+            policyVersion: grant.policyVersion,
+            grantedAt: grant.grantedAt,
+          };
+        } catch (error) {
+          consent = {
+            granted: false,
+            reason: error instanceof StageGError ? error.code : 'CONSENT_GRANT_FAILED',
+          };
+        }
+      }
+
+      return Response.json({ success: true, data: result.employee, id: result.id, consent }, { status: 201 });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create employee.';
       const status = message.includes('not found') ? 404 : 500;

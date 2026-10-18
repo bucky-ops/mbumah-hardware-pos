@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.120.0] The roster captures its consent
+
+Onboarding-time consent capture (v2.119.0's option 1, fully realized): the discovery that shaped this round is that POST /api/hr/employees had NO UI surface at all — hiring happened only through raw API calls (another dead-surface pattern, same family as v2.119.0's consent records), and a fresh hire onboarded without a ConsentRecord would block the next payroll run on MISSING_CONSENT forever. This release gives hiring a face: an onboarding dialog on the Employees page that files the hire AND the consent they signed, through the same audited path the Privacy tab uses.
+
+### Added
+- **Onboarding dialog** (`src/app/(shell)/hr/employees/page.tsx`): an "Onboard employee" door on the roster — first/last name required, job title, phone, hire date (defaults today), basic salary, and the schema's exact employment-type vocabulary (PERMANENT/CONTRACT/CASUAL/PROBATION/INTERN — no client invention). The success state shows the new hire's code and the honest consent outcome; "Onboard another" resets, "Open record" lands on the detail page.
+- **Onboarding-time consent capture** (`POST /api/hr/employees` + `consentPayrollProcessing`): ticking the checkbox files the new hire's payroll-processing consent (purpose PAYROLL_PROCESSING, lawful basis CONSENT, policy hr-policy-2026-01) through the SAME audited `grantConsent` path the Privacy tab's decision routes use — one source of truth for the vocabulary, `PRIVACY_CONSENT_GRANTED` audit included. A consent glitch never loses the hire: the 201 keeps the employee and rides back an honest `{ granted: false, reason }` outcome.
+- **Pure outcome interpreter** (`src/lib/hr/onboard-consent.ts` `describeOnboardConsent`): folds the route's consent field into the three sentences the dialog can show — emerald "Consent captured" (policy + grant date), amber "No consent on file" (with the MISSING_CONSENT truth), rose "Consent not captured" (with the reason code). Garbage input degrades honestly to rose/UNKNOWN, never to a granted look-alike.
+
+### Changed
+- `GET /api/hr/employees` now surfaces `canCreate`, resolved through the SAME `hr.employee.create` permission key the POST guard pins — the server decides who sees the onboard door, the page renders what the answer says (the consent card's canDecide pattern, applied to hiring). The list load switched to a raw fetch because the affordance rides outside `data`.
+- The What's-New feed leads with the onboarding story; the unread-counter test re-anchored for the 2.120.0-fed feed (2.110.0→9, 2.109.0→10, 2.108.0→11, 2.77.0→42).
+
+### Security
+- The boundary is a written contract: onboarding capture records a FACT of the hiring paperwork ("the employee signed the consent form") and is available to anyone who may create an employee (`hr.employee.create`); the data-protection DECISIONS — grant/withdraw outside onboarding — stay reserved to `hr.settings.manage` (403 DECISION_FORBIDDEN on the consent routes), and `withdrawConsent` is deliberately not even imported by the employees route (pinned by test). The vocabulary is never re-declared in the route (pinned), a strict `=== true` gates the grant, and every onboarding grant lands in the audit trail with employee id, purpose, and policy version — never content.
+
 ## [2.119.0] Consent works
 
 Spec Phase 4.8 acceptance-6 release: "Consent records work." Until now the ConsentRecord table was write-only at intake (recruitment applicant consent) and read by exactly one gate — the payroll run's MISSING_CONSENT guardrail — with no product surface to grant, withdraw, or even see an employee's consent. This release closes the loop: a read-back consent ledger on the Privacy tab, plus grant/withdraw decisions, both audit-logged and scope-checked.

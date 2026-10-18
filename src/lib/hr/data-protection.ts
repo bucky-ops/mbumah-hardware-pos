@@ -483,6 +483,19 @@ async function consentTargetEmployee(
 }
 
 /**
+ * The grant's honest receipt (v2.120.0): callers type against this instead of
+ * Record<string, unknown> — the onboarding route copies these fields into its
+ * 201 response, and `unknown` assignments would darken tsc for everyone.
+ */
+export interface ConsentGrantResult {
+  employeeId: string;
+  consentId: string;
+  purpose: string;
+  policyVersion: string;
+  grantedAt: string;
+}
+
+/**
  * Grant the employee's data-processing consent: a NEW record (append-only —
  * a withdrawn consent keeps its row and its dates; the new grant supersedes
  * it). Refuses when an active record already stands.
@@ -490,7 +503,7 @@ async function consentTargetEmployee(
 export async function grantConsent(
   input: { employeeId?: unknown },
   session: Session,
-): Promise<Record<string, unknown>> {
+): Promise<ConsentGrantResult> {
   const employee = await consentTargetEmployee(input, session);
   const active = await db.consentRecord.findFirst({
     where: { employeeId: employee.id, withdrawnAt: null },
