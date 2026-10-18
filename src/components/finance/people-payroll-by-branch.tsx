@@ -24,8 +24,8 @@
 import { useState } from 'react';
 import { ChevronDown, ExternalLink, SlidersHorizontal, Users } from 'lucide-react';
 import type { OrgSummaryData } from '@/components/org/primitives';
-import { buildExpiringEmployeesHref, buildRunDeepLinkHref } from '@/lib/workspace/links';
-import { EMPLOYEE_LIST_READ_ROLES } from '@/lib/app-config';
+import { buildExpiringEmployeesHref, buildOverdueAssetsHref, buildRunDeepLinkHref } from '@/lib/workspace/links';
+import { ASSET_LIST_READ_ROLES, EMPLOYEE_LIST_READ_ROLES } from '@/lib/app-config';
 import { useAuthStore } from '@/lib/stores';
 
 export type HrPerStoreRow = NonNullable<OrgSummaryData['hrPerStore']>[number];
@@ -128,15 +128,22 @@ function ExpiryCell({ row }: { row: HrPerStoreRow }) {
   // into the employees list pre-filtered to expiring documents for that
   // branch — but ONLY for the roles the list actually answers (the spec
   // grants ACCOUNTANT payroll reads and reports, not the roster: a door that
-  // 403s is a lie). The ASSETS half stays text (the assets list is
-  // session-scoped — a cross-branch door would promise a view it cannot
-  // open). Zero halves never render as links.
+  // 403s is a lie). v2.114.0: the ASSETS half opens its own door too —
+  // /hr/assets?overdue=1&storeId=<id> — gated on exactly the roles the
+  // assets list answers (ASSET_LIST_READ_ROLES mirrors hr.asset.manage); for
+  // every other role it stays the same honest text as before. Zero halves
+  // never render as links.
   const role = useAuthStore((s) => s.user?.role);
-  const canOpenExpiry = EMPLOYEE_LIST_READ_ROLES.includes(role || '');
+  const canOpenDocs = EMPLOYEE_LIST_READ_ROLES.includes(role || '');
+  const canOpenAssets = ASSET_LIST_READ_ROLES.includes(role || '');
   const docs = row.expiryAlerts.documentsExpiring90Days;
   const assets = row.expiryAlerts.assetsOverdue;
   const docTitle = `Documents expiring within 90 days: ${docs} — open the branch's employees list pre-filtered`;
-  if (docs > 0 && canOpenExpiry) {
+  const docTitlePlain = `Documents expiring within 90 days: ${docs}`;
+  const assetsTitle = `Overdue asset assignments: ${assets} — open the branch's assets list pre-filtered`;
+  const doorClass =
+    'inline-flex items-center gap-1 rounded-md font-semibold text-amber-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400';
+  if (docs > 0 && canOpenDocs) {
     return (
       <span className="inline-flex items-center justify-end gap-1.5 tabular-nums">
         <a
@@ -144,12 +151,24 @@ function ExpiryCell({ row }: { row: HrPerStoreRow }) {
           data-testid="people-payroll-expiry-door"
           aria-label={`${docs} document${docs === 1 ? '' : 's'} expiring within 90 days at ${row.storeName} — open the pre-filtered employees list`}
           title={docTitle}
-          className="inline-flex items-center gap-1 rounded-md font-semibold text-amber-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400"
+          className={doorClass}
         >
           {docs}
           <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
         </a>
-        {assets > 0 && (
+        {assets > 0 && canOpenAssets && (
+          <a
+            href={buildOverdueAssetsHref(row.storeId)}
+            data-testid="people-payroll-assets-door"
+            aria-label={`${assets} overdue asset assignment${assets === 1 ? '' : 's'} at ${row.storeName} — open the pre-filtered assets list`}
+            title={assetsTitle}
+            className="inline-flex items-center gap-1 rounded-md text-xs font-semibold text-amber-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400"
+          >
+            +{assets}
+            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+          </a>
+        )}
+        {assets > 0 && !canOpenAssets && (
           <span
             className="text-xs text-slate-500 dark:text-slate-400"
             title={`Overdue asset assignments: ${assets} — see the Assets page`}
@@ -160,7 +179,35 @@ function ExpiryCell({ row }: { row: HrPerStoreRow }) {
       </span>
     );
   }
-  const title = `Expiring documents (90 days): 0 - overdue asset assignments: ${assets}`;
+  // No documents door (zero docs or a role the list would 403): the assets
+  // half can still be the door when the role may cross it.
+  if (assets > 0 && canOpenAssets) {
+    return (
+      <span className="inline-flex items-center justify-end gap-1.5 tabular-nums">
+        {docs > 0 && (
+          <span className="text-slate-700 dark:text-slate-300" title={docTitlePlain}>
+            {docs}
+          </span>
+        )}
+        {docs > 0 && (
+          <span className="text-slate-400 dark:text-slate-500" aria-hidden="true">
+            +
+          </span>
+        )}
+        <a
+          href={buildOverdueAssetsHref(row.storeId)}
+          data-testid="people-payroll-assets-door"
+          aria-label={`${assets} overdue asset assignment${assets === 1 ? '' : 's'} at ${row.storeName} — open the pre-filtered assets list`}
+          title={assetsTitle}
+          className={doorClass}
+        >
+          {assets}
+          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+        </a>
+      </span>
+    );
+  }
+  const title = `Expiring documents (90 days): ${docs} - overdue asset assignments: ${assets}`;
   return (
     <span
       className={`inline-flex items-center justify-end gap-1 tabular-nums ${

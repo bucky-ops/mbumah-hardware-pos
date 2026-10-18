@@ -20,6 +20,12 @@ export const ORG_SUMMARY_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'];
 // at payroll + reports, so the expiry door hides from accountants — a door
 // that 403s is a lie). Mirrors READ_KEY_BY_ROLE in /api/hr/employees.
 export const EMPLOYEE_LIST_READ_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'HR_MANAGER', 'BRANCH_MANAGER'];
+// v2.114.0: the roles the assets list actually answers (hr.asset.manage in
+// the HR permission map: HR manager + store owner; SUPER_ADMIN bypasses known
+// keys). ACCOUNTANT's grant stops at payroll + reports, so the overdue-assets
+// door hides from accountants — a door that 403s is a lie. Mirrors the
+// hrGuard key on /api/hr/assets.
+export const ASSET_LIST_READ_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'HR_MANAGER'];
 // v2.12.2 (PR B - RBAC): catalog-steward role - catalog/inventory + inbound
 // supply-chain tabs only (NO financial/sales/HR tabs). User.role is a string
 // column (no schema change); membership enforced via these role arrays.

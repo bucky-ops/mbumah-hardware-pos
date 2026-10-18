@@ -15,12 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Boxes, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Boxes, Link2, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 
 interface AssetDto {
   id: string;
   employeeName: string | null;
+  storeId: string | null;
   assetName: string;
   assetTag: string | null;
   serialNumber: string | null;
@@ -44,6 +45,35 @@ interface AuthorizerDto {
   role: string;
 }
 
+// v2.114.0: deep-link seeds — the People & Payroll panel's overdue-assets
+// door lands here with ?overdue=1&storeId=<id>. Lazy initializers (no
+// setState-in-effect); storeId is scope the SERVER decides (passed through
+// verbatim; the API honors it only for org-scope roles whose organization
+// owns the store — everyone else silently keeps their own store and the
+// notice below says so).
+function readParam(name: string): string {
+  try {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get(name)?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function mirrorFiltersToUrl(statusFilter: string, overdueOnly: boolean) {
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    if (overdueOnly) sp.set('overdue', '1');
+    else sp.delete('overdue');
+    if (!overdueOnly && statusFilter !== 'ALL') sp.set('status', statusFilter);
+    else sp.delete('status');
+    const qs = sp.toString();
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+  } catch {
+    // no URL surface — the filters still work, they just cannot be shared
+  }
+}
+
 export default function AssetsPage() {
   const [assets, setAssets] = useState<AssetDto[] | null>(null);
   const [people, setPeople] = useState<PersonDto[]>([]);
@@ -51,6 +81,12 @@ export default function AssetsPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState('ALL');
+  // v2.114.0: link seeds (lazy initializers) + the honest "(from link)" chip
+  // that retires on the user's first filter touch.
+  const [linkStoreId] = useState(() => readParam('storeId'));
+  const [linkOverdue] = useState(() => readParam('overdue') === '1');
+  const [overdueOnly, setOverdueOnly] = useState(linkOverdue);
+  const [userTouched, setUserTouched] = useState(false);
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [outcome, setOutcome] = useState<{ asset: AssetDto; kind: 'RETURNED' | 'LOST' | 'DAMAGED' } | null>(null);
@@ -71,8 +107,13 @@ export default function AssetsPage() {
   const load = useCallback(async () => {
     setError('');
     try {
+      const params = new URLSearchParams();
+      if (linkStoreId) params.set('storeId', linkStoreId);
+      if (overdueOnly) params.set('overdue', '1');
+      else if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      const qs = params.toString();
       const [a, p, au] = await Promise.all([
-        apiGet<AssetDto[]>(statusFilter === 'ALL' ? '/api/hr/assets' : `/api/hr/assets?status=${statusFilter}`),
+        apiGet<AssetDto[]>(`/api/hr/assets${qs ? `?${qs}` : ''}`),
         apiGet<PersonDto[]>('/api/hr/performance/people').catch(() => [] as PersonDto[]),
         apiGet<AuthorizerDto[]>('/api/hr/performance/authorizers').catch(() => [] as AuthorizerDto[]),
       ]);
@@ -83,11 +124,21 @@ export default function AssetsPage() {
       setError(e instanceof Error ? e.message : 'Failed to load assets.');
       setAssets((prev) => prev ?? []);
     }
-  }, [statusFilter]);
+  }, [linkStoreId, overdueOnly, statusFilter]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    mirrorFiltersToUrl(statusFilter, overdueOnly);
+  }, [statusFilter, overdueOnly]);
+
+  // The mismatch honesty mirrors the employees list: only claim the answer
+  // came from another store when a row actually names one.
+  const storeMismatch =
+    assets != null && assets.length > 0 && !!linkStoreId &&
+    assets.some((a) => a.storeId != null && a.storeId !== linkStoreId);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -105,7 +156,7 @@ export default function AssetsPage() {
   const overdueCount = (assets ?? []).filter((a) => a.overdue).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="hr-assets-page">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -116,7 +167,37 @@ export default function AssetsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <button
+            type="button"
+            onClick={() => {
+              setUserTouched(true);
+              setOverdueOnly((v) => !v);
+            }}
+            aria-pressed={overdueOnly}
+            data-testid="hr-assets-overdue-toggle"
+            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+              overdueOnly
+                ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+            }`}
+            title="Show only assigned assets past their expected return date"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+            Overdue only
+            {overdueOnly && linkOverdue && !userTouched && (
+              <span className="rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                from link
+              </span>
+            )}
+          </button>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => {
+              setUserTouched(true);
+              setStatusFilter(v);
+            }}
+            disabled={overdueOnly}
+          >
             <SelectTrigger className="w-36" aria-label="Filter by status"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All statuses</SelectItem>
@@ -141,12 +222,27 @@ export default function AssetsPage() {
           {overdueCount} asset{overdueCount > 1 ? 's are' : ' is'} past the expected return date.
         </div>
       ) : null}
+      {storeMismatch && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300" role="status" data-testid="hr-assets-store-notice">
+          <span className="inline-flex items-center gap-1.5">
+            <Link2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            You asked for a specific branch&rsquo;s assets; this session&rsquo;s scope resolved to a different store —
+            the server never widens scope on request alone. Switch your active branch to see the requested one.
+          </span>
+        </div>
+      )}
       {error ? <ErrorNote message={error} /> : null}
 
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Assignments</CardTitle>
           <CardDescription>Condition is recorded on the way out and on the way back.</CardDescription>
+          {assets && (
+            <span className="text-xs text-slate-400 dark:text-slate-500" data-testid="hr-assets-count">
+              {assets.length} {assets.length === 1 ? 'assignment' : 'assignments'}
+              {overdueOnly ? ' · overdue only' : ''}
+            </span>
+          )}
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {!assets ? (
