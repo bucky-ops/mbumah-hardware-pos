@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.117.0] The ledger reads the room
+
+Compliance-visibility release: v2.115.0 made restricted reads leave a trail, v2.116.0 read that trail back per record; v2.117.0 reads it back across ALL cases — a read-only Restricted access ledger on the discipline desk, over the same content-free audit events. Spec Phase 4.7's confidentiality story now has an org-level surface: who has been opening restricted records lately, who has been refused, and when.
+
+### Added
+- **Restricted access ledger** (`src/app/(shell)/hr/discipline/page.tsx`, `src/app/api/hr/discipline/restricted-access/route.ts`, `src/lib/hr/discipline-service.ts`): a second card on the desk listing every `DISCIPLINARY_RESTRICTED_VIEWED` / `_DENIED` event on the session's visible cases, newest first — when (relative time with the exact date on hover), what (violet "Open" / rose "Denied" chips), who (batch-resolved user name), and which case (a ghost door that opens the same detail dialog the list uses — an open from the ledger is itself a logged restricted read, and the ledger proves it on refresh).
+- **`listRestrictedAccess`** (`src/lib/hr/discipline-service.ts`): the SAME `employeeScopeWhere` as `listCases` answers the query (fail-closed — a branch manager sees their branch's events only); zero visible cases short-circuits before any audit query; the window is clamped by `clampLedgerWindow` (non-numeric/absent → 30 days, hard cap 90 — a stray `?days=9999` can never become an unbounded scan); the payload takes at most 200 rows and is content-free (who, when, which case's employee — never the description or resolution notes).
+- **Pure ledger helpers** (`src/lib/hr/discipline-ui.ts`): `clampLedgerWindow` (default fallback + cap), `foldAccessLedger` (name joins with honest null degradation, denied flag, unrelated-action filter), and `relativeTimeLabel` ("just now" / "Nm ago" / "Nh ago", then calendar-day "Nd ago" — future timestamps clamp to "just now", garbage is null and the UI falls back to the absolute date).
+
+### Changed
+- The What's-New feed leads with the ledger story; the unread-counter test re-anchored for the 2.117.0-fed feed (2.110.0→6, 2.109.0→7, 2.108.0→8, 2.77.0→39). The v2.116.0 single-case trail and the ledger now coexist as two read-backs over one trail (pinned by a source contract).
+
+### Security
+- The ledger adds no new exposure surface: it answers only to `hr.discipline.manage` (the guard key is pinned), scopes through the same employee scope as the list it sits under, its payload is pinned content-free by tests (serialized rows never contain the description), and the deny path of the trail is untouched — the ledger reports refusals without naming who was refused beyond what the audit log already holds for the same roles.
+
 ## [2.116.0] The trail reads back
 
 Loop-closing release: v2.115.0 made restricted reads *write* an audit trail; this release lets the discipline desk *read* it back, in the two places a decision actually happens — the record's own detail dialog and the case list. The trail stays content-free: it names who and when, never the description.

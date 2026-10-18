@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Download, Eye, EyeOff, Gavel, History, Lock, Plus, RefreshCw } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 import { buildDisciplineListCsv } from '@/lib/hr/discipline-list-csv';
-import { expiresSoonLabel } from '@/lib/hr/discipline-ui';
+import { clampLedgerWindow, expiresSoonLabel, relativeTimeLabel } from '@/lib/hr/discipline-ui';
 
 interface CaseListItemDto {
   id: string;
@@ -60,6 +60,30 @@ export default function DisciplinePage() {
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [search, setSearch] = useState('');
 
+  // v2.117.0: the restricted-access ledger — a read-only cross-case read-back
+  // of the same audit events the trail writes. Window is server-side (clamped
+  // 1..90), the action filter is client-side on the loaded rows.
+  interface LedgerRowDto {
+    caseId: string;
+    employeeName: string | null;
+    action: string;
+    denied: boolean;
+    userName: string | null;
+    timestamp: string;
+  }
+  const [ledger, setLedger] = useState<LedgerRowDto[] | null>(null);
+  const [ledgerDays, setLedgerDays] = useState('30');
+  const [ledgerAction, setLedgerAction] = useState('ALL');
+
+  const loadLedger = useCallback(async (days: string) => {
+    try {
+      const rows = await apiGet<LedgerRowDto[]>(`/api/hr/discipline/restricted-access?days=${days}`);
+      setLedger(rows);
+    } catch {
+      setLedger([]);
+    }
+  }, []);
+
   const [openOpen, setOpenOpen] = useState(false);
   const [detail, setDetail] = useState<CaseDetailDto | null>(null);
   const [resolving, setResolving] = useState<{ item: CaseListItemDto; action: 'RESOLVE' | 'DISMISS' } | null>(null);
@@ -93,6 +117,10 @@ export default function DisciplinePage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void loadLedger(ledgerDays);
+  }, [loadLedger, ledgerDays]);
+
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
@@ -114,6 +142,19 @@ export default function DisciplinePage() {
     return true;
   });
   const restrictedCount = all.filter((c) => c.confidentiality === 'RESTRICTED').length;
+
+  // v2.117.0: the ledger's client-side action filter + counts, and the shared
+  // deep link — opening a case FROM the ledger is itself a logged restricted
+  // read (the trail proves it: the open appears in the ledger on refresh).
+  const ledgerVisible = (ledger ?? []).filter((r) => {
+    if (ledgerAction === 'ALL') return true;
+    return ledgerAction === 'DENIED' ? r.denied : !r.denied;
+  });
+  const ledgerDenied = (ledger ?? []).filter((r) => r.denied).length;
+  const openDetail = async (id: string) => {
+    const d = await apiGet<CaseDetailDto>(`/api/hr/discipline/${id}`);
+    setDetail(d);
+  };
 
   // v2.115.0: the CSV door exports the FILTERED list — descriptions and
   // resolution notes have no column (the serializer's contract), so the
@@ -317,6 +358,112 @@ export default function DisciplinePage() {
                   </TableRow>
                   );
                 })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Restricted-access ledger (v2.117.0 — the cross-case read-back) ── */}
+      <Card data-testid="hr-discipline-ledger" className="border-violet-200/70 dark:border-violet-900/60">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <History className="h-4 w-4 text-violet-500" aria-hidden /> Restricted access
+          </CardTitle>
+          <CardDescription>
+            Every open of a restricted record — and every refused attempt — is on the audit trail. This ledger reads it back across cases: who and when, never the description.
+          </CardDescription>
+          <p data-testid="hr-discipline-ledger-counts" className="mt-1 text-xs tabular-nums text-muted-foreground">
+            {ledger === null
+              ? 'Loading…'
+              : `${ledgerVisible.length} of ${ledger.length} events · ${ledgerDenied} denied · last ${clampLedgerWindow(ledgerDays)} days`}
+          </p>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Select value={ledgerDays} onValueChange={setLedgerDays}>
+              <SelectTrigger className="w-36" aria-label="Ledger window"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 days</SelectItem>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={ledgerAction} onValueChange={setLedgerAction}>
+              <SelectTrigger className="w-36" aria-label="Filter ledger by action"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All events</SelectItem>
+                <SelectItem value="OPENED">Opens</SelectItem>
+                <SelectItem value="DENIED">Denied attempts</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void loadLedger(ledgerDays)}
+              aria-label="Refresh access ledger"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden /> Refresh
+            </Button>
+          </div>
+          {ledger === null ? (
+            <Skeleton className="h-32 w-full" />
+          ) : ledger.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No restricted access recorded in this window.
+            </p>
+          ) : ledgerVisible.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No events match the current filter.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Who</TableHead>
+                  <TableHead className="text-right">Case</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ledgerVisible.map((r, i) => (
+                  <TableRow key={`${r.caseId}-${r.timestamp}-${i}`} className="group">
+                    <TableCell className="tabular-nums text-muted-foreground">
+                      <span title={formatDate(r.timestamp)}>
+                        {relativeTimeLabel(r.timestamp) ?? formatDate(r.timestamp)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {r.denied ? (
+                        <span
+                          data-testid="hr-discipline-ledger-denied-chip"
+                          className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300"
+                        >
+                          Denied
+                        </span>
+                      ) : (
+                        <span
+                          data-testid="hr-discipline-ledger-open-chip"
+                          className="inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-300"
+                        >
+                          Open
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{r.userName ?? 'an unknown user'}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-violet-700 opacity-80 group-hover:opacity-100 dark:text-violet-300"
+                        aria-label={`Open case from ledger${r.employeeName ? ` — ${r.employeeName}` : ''}`}
+                        disabled={busy}
+                        onClick={() => void run(() => openDetail(r.caseId))}
+                      >
+                        {r.employeeName ?? 'View case'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           )}
