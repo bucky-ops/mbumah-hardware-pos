@@ -85,9 +85,10 @@ describe('console — the honest HR door', () => {
 
   it('the lock replaces the tabs entirely — never tabs + a lie', () => {
     // The ternary gates the whole Tabs block; the skeleton shows only
-    // while the role is still resolving.
+    // while the role is still resolving (v2.92 added the sign-in door
+    // ahead of the lock in the same chain).
     expect(page).toMatch(/viewerRole !== null && !canReview \? \(/);
-    expect(page).toMatch(/viewerRole === null && !cycles && !reviews && !goals \? \(/);
+    expect(page).toMatch(/viewerRole === null && !authRequired && !cycles && !reviews && !goals \? \(/);
   });
 
   it('write affordances hide without hr.performance.manage', () => {
@@ -107,7 +108,8 @@ describe('console — the goals take edits', () => {
     expect(page).toMatch(/data-testid=\{`goal-edit-\$\{g\.id\}`\}/);
     expect(page).toMatch(/aria-label=\{`Edit goal \$\{g\.title\}`\}/);
     expect(page).toMatch(/const openGoalEdit = \(g: GoalDto\)/);
-    expect((page.match(/\{canManage \? \(\n\s*<Button\n\s*size="sm"\n\s*variant="ghost"/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    // v2.92: Edit and Delete share one manage-gated row on the card
+    expect((page.match(/\{canManage \? \(\n\s*<div className="flex w-full gap-2">/g) ?? []).length).toBe(1);
   });
 
   it('the edit dialog prefills and PATCHes the audited route', () => {

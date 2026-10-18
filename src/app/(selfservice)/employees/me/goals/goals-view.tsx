@@ -30,6 +30,8 @@ export interface GoalDto {
   dueDate: string | null;
   isPosSourced: boolean;
   cycleName?: string | null;
+  // v2.92.0: CUSTOM goals say what their metric counts (from metricConfig).
+  metricLabel?: string | null;
   // v2.91.0: the details panel shows the honest recency of the goal —
   // when the manager last touched it (listMyGoals folds updatedAt through).
   updatedAt?: string;
@@ -175,6 +177,8 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
                       <>
                         <TrendingUp className="h-3 w-3 text-emerald-500" aria-hidden /> Computed from POS sales — not editable
                       </>
+                    ) : g.metricSource === 'CUSTOM' && g.metricLabel ? (
+                      <span className="text-amber-700 dark:text-amber-300">Custom metric · {g.metricLabel}</span>
                     ) : (
                       'Manual goal'
                     )}
@@ -211,7 +215,13 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="rounded-lg border p-2.5">
                       <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Metric source</p>
-                      <p className="text-sm">{g.isPosSourced ? 'POS sales (computed)' : 'Manual'}</p>
+                      <p className="text-sm">
+                        {g.isPosSourced
+                          ? 'POS sales (computed)'
+                          : g.metricSource === 'CUSTOM' && g.metricLabel
+                            ? `Custom · ${g.metricLabel}`
+                            : 'Manual'}
+                      </p>
                     </div>
                     <div className="rounded-lg border p-2.5">
                       <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Review cycle</p>
@@ -229,7 +239,9 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
                   <p className="text-xs text-muted-foreground">
                     {g.isPosSourced
                       ? 'This goal reads POS sales directly — the number moves when sales move, never by hand.'
-                      : 'A manual goal: your manager keeps the progress value current.'}
+                      : g.metricSource === 'CUSTOM'
+                        ? 'A custom goal: progress is kept current by hand, counting what the metric names.'
+                        : 'A manual goal: your manager keeps the progress value current.'}
                   </p>
                 </div>
               ) : null}

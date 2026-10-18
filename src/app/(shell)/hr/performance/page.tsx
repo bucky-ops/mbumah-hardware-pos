@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, LockKeyhole, Pencil, Plus, RefreshCw, Star, Target, X } from 'lucide-react';
+import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, LockKeyhole, LogIn, Pencil, Plus, RefreshCw, Star, Target, Trash2, X } from 'lucide-react';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import {
   apiGet,
@@ -76,6 +76,8 @@ interface GoalDto {
   cycleName: string | null;
   title: string;
   metricSource: string;
+  // v2.92.0: CUSTOM goals name their metric — shown under the source chip.
+  metricLabel: string | null;
   targetValue: string;
   currentValue: string;
   progressPct: number;
@@ -136,6 +138,10 @@ export default function PerformancePage() {
   // without hr.performance.review sees a lock panel, never interactive
   // tabs whose every action would 403. Null = still resolving.
   const [viewerRole, setViewerRole] = useState<string | null>(null);
+  // v2.92.0: signed-out visitors get the same honesty — the /me 401 means
+  // "nobody is home", so the tabs (whose every list would 401 into fake
+  // empty states) yield to a sign-in panel instead.
+  const [authRequired, setAuthRequired] = useState(false);
   const [goals, setGoals] = useState<GoalDto[] | null>(null);
   const [people, setPeople] = useState<PersonDto[]>([]);
   const [error, setError] = useState('');
@@ -183,6 +189,10 @@ export default function PerformancePage() {
   // v2.90.0: the goals meet their cycles — the New goal dialog offers the
   // review cycles the calibration story lives in; '' reads "No cycle".
   const [goalCycleId, setGoalCycleId] = useState('none');
+  // v2.92.0: CUSTOM goes end-to-end — the dialog offers the Custom source
+  // and asks what the metric counts (a custom goal without a name for its
+  // metric is just a MANUAL goal wearing a costume).
+  const [goalCustomLabel, setGoalCustomLabel] = useState('');
 
   // v2.91.0: the goals take edits — a dedicated edit dialog backed by
   // PATCH /api/hr/goals/[id] (service updateGoal: title / target / due /
@@ -205,15 +215,21 @@ export default function PerformancePage() {
     setEditGoalDue(g.dueDate ? g.dueDate.slice(0, 10) : '');
   };
 
+  // v2.92.0: the goals can leave — a destructive action gets a confirm
+  // dialog that says what a soft delete means (lists lose it, history
+  // keeps it), never a bare one-click vanish.
+  const [deleteTarget, setDeleteTarget] = useState<GoalDto | null>(null);
+
   useEffect(() => {
     let alive = true;
     apiGet<{ role?: string }>('/api/auth/me')
       .then((me) => {
         if (alive) setViewerRole(me.role ?? null);
       })
-      .catch(() => {
-        // /me failed (signed out, network) — leave null so the page keeps
-        // its existing error behaviour instead of claiming a role.
+      .catch((e) => {
+        // v2.92.0: a 401 means nobody is signed in — the honest door says
+        // so. Anything else (network blip) keeps the existing error path.
+        if (alive && (e as { status?: number })?.status === 401) setAuthRequired(true);
       });
     return () => {
       alive = false;
@@ -359,12 +375,31 @@ export default function PerformancePage() {
       {error && viewerRole === null ? <ErrorNote message={error} /> : null}
       {error && viewerRole !== null && canReview ? <ErrorNote message={error} /> : null}
 
-      {/* ── v2.91.0 the honest HR door ──
-          A viewer whose role holds no hr.performance.review gets a lock
-          panel that names the role and the keys it lacks — not a shell of
-          interactive tabs whose every action would 403, and never an empty
-          state lying that the list is empty when it never loaded. */}
-      {viewerRole !== null && !canReview ? (
+      {/* ── v2.92.0 the honest sign-in door ──
+          Nobody signed in: the tabs would render fake empty states over
+          lists that never loaded — a sign-in panel says what is true. */}
+      {authRequired ? (
+        <Card className="border-sky-300/70 dark:border-sky-900" data-testid="perf-auth">
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-950/50">
+              <LogIn className="h-6 w-6 text-sky-600 dark:text-sky-400" aria-hidden />
+            </span>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">Sign in to view this workspace</p>
+              <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                Review cycles, calibration, and team goals live behind a signed-in session with HR
+                performance access. Nothing here was loaded — the empty states you would have seen
+                would have been lies.
+              </p>
+              <Button asChild size="sm" className="mt-2">
+                <Link href="/" data-testid="perf-auth-signin">
+                  <LogIn className="h-4 w-4" aria-hidden /> Go to sign in
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : viewerRole !== null && !canReview ? (
         <Card className="border-amber-300/70 dark:border-amber-900" data-testid="perf-lock">
           <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50">
@@ -390,7 +425,7 @@ export default function PerformancePage() {
             </div>
           </CardContent>
         </Card>
-      ) : viewerRole === null && !cycles && !reviews && !goals ? (
+      ) : viewerRole === null && !authRequired && !cycles && !reviews && !goals ? (
         <Skeleton className="h-40 w-full" />
       ) : (
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
@@ -773,8 +808,9 @@ export default function PerformancePage() {
                                     <CalendarRange className="h-3 w-3" aria-hidden /> {g.cycleName}
                                   </Badge>
                                 ) : null}
-                                <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[g.metricSource] ?? ''}`}>
+                                <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[g.metricSource] ?? ''}`} title={g.metricLabel ?? undefined}>
                                   {SOURCE_LABELS[g.metricSource] ?? g.metricSource}
+                                  {g.metricSource === 'CUSTOM' && g.metricLabel ? <span className="ml-1 opacity-80">· {g.metricLabel}</span> : null}
                                 </Badge>
                               </div>
                             </div>
@@ -790,17 +826,30 @@ export default function PerformancePage() {
                               </Button>
                             ) : null}
                             {canManage ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="w-full"
-                                data-testid={`goal-edit-${g.id}`}
-                                aria-label={`Edit goal ${g.title}`}
-                                disabled={busy}
-                                onClick={() => openGoalEdit(g)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit goal
-                              </Button>
+                              <div className="flex w-full gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="flex-1"
+                                  data-testid={`goal-edit-${g.id}`}
+                                  aria-label={`Edit goal ${g.title}`}
+                                  disabled={busy}
+                                  onClick={() => openGoalEdit(g)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit goal
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="flex-1 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+                                  data-testid={`goal-delete-${g.id}`}
+                                  aria-label={`Delete goal ${g.title}`}
+                                  disabled={busy}
+                                  onClick={() => setDeleteTarget(g)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete
+                                </Button>
+                              </div>
                             ) : null}
                           </CardContent>
                         </Card>
@@ -950,6 +999,7 @@ export default function PerformancePage() {
                     <SelectItem value="MANUAL">Manual</SelectItem>
                     <SelectItem value="SALES_TOTAL">Sales value (POS)</SelectItem>
                     <SelectItem value="SALES_COUNT">Sales count (POS)</SelectItem>
+                    <SelectItem value="CUSTOM">Custom metric</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -958,6 +1008,22 @@ export default function PerformancePage() {
                 <Input id="goal-target" inputMode="decimal" value={goalTarget} onChange={(e) => setGoalTarget(e.target.value)} placeholder="e.g. 500000" />
               </div>
             </div>
+            {goalSource === 'CUSTOM' ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="goal-custom-label">What does the metric count?</Label>
+                <Input
+                  id="goal-custom-label"
+                  data-testid="goal-custom-label"
+                  value={goalCustomLabel}
+                  maxLength={120}
+                  onChange={(e) => setGoalCustomLabel(e.target.value)}
+                  placeholder="e.g. Load deliveries completed per week"
+                />
+                <p className="text-xs text-muted-foreground">
+                  A custom goal tracks progress by hand — name the metric so the team knows what counts.
+                </p>
+              </div>
+            ) : null}
             <div className="space-y-1.5">
               <Label>Review cycle (optional)</Label>
               <Select value={goalCycleId} onValueChange={setGoalCycleId}>
@@ -978,7 +1044,7 @@ export default function PerformancePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setGoalOpen(false)}>Cancel</Button>
             <Button
-              disabled={busy || !goalTitle || !goalEmployeeId || !goalTarget}
+              disabled={busy || !goalTitle || !goalEmployeeId || !goalTarget || (goalSource === 'CUSTOM' && goalCustomLabel.trim().length < 2)}
               onClick={() =>
                 void run(async () => {
                   await apiSend('/api/hr/goals', 'POST', {
@@ -986,12 +1052,14 @@ export default function PerformancePage() {
                     title: goalTitle,
                     metricSource: goalSource,
                     targetValue: goalTarget,
+                    ...(goalSource === 'CUSTOM' ? { metricConfig: { label: goalCustomLabel } } : {}),
                     ...(goalDue ? { dueDate: new Date(goalDue).toISOString() } : {}),
                     ...(goalCycleId !== 'none' ? { cycleId: goalCycleId } : {}),
                   });
                   setGoalOpen(false);
                   setGoalTitle('');
                   setGoalTarget('');
+                  setGoalCustomLabel('');
                   setGoalCycleId('none');
                 })
               }
@@ -1103,6 +1171,55 @@ export default function PerformancePage() {
                   }
                 >
                   <CheckCircle2 className="h-4 w-4" aria-hidden /> Save changes
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── v2.92.0 Delete goal confirm ── */}
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md" data-testid="goal-delete-dialog">
+          {deleteTarget ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Trash2 className="h-5 w-5 text-rose-500" aria-hidden /> Delete this goal?
+                </DialogTitle>
+                <DialogDescription>
+                  <span className="font-medium text-foreground">{deleteTarget.title}</span> will leave the
+                  team board and the employee&apos;s portal at once. The record and its audit history stay —
+                  this is a removal from the lists, never a hard delete.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300" data-testid="goal-delete-summary">
+                <p>
+                  {deleteTarget.employeeName ?? 'Employee'} ·{' '}
+                  {SOURCE_LABELS[deleteTarget.metricSource] ?? deleteTarget.metricSource} ·{' '}
+                  {deleteTarget.status.replace(/_/g, ' ').toLowerCase()} ·{' '}
+                  <span className="tabular-nums">
+                    {Number(deleteTarget.currentValue).toLocaleString()} / {Number(deleteTarget.targetValue).toLocaleString()}
+                  </span>{' '}
+                  progress recorded
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" data-testid="goal-delete-cancel" disabled={busy} onClick={() => setDeleteTarget(null)}>
+                  Keep goal
+                </Button>
+                <Button
+                  variant="destructive"
+                  data-testid="goal-delete-confirm"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(async () => {
+                      await apiSend(`/api/hr/goals/${deleteTarget.id}`, 'DELETE');
+                      setDeleteTarget(null);
+                    })
+                  }
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden /> Delete goal
                 </Button>
               </DialogFooter>
             </>
