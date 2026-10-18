@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.96.0',
+    title: 'The performance page files itself',
+    bullets: [
+      'The Reviews tab grows a CSV button: the exact filtered rows on screen download as the governed filing file \u2014 header block, formula-injection guard, honest filename \u2014 the same format every HR report files through.',
+      'The file only ever carries what a list may say: names, cycle, status, dates. Ratings and narratives stay behind the gated dialog, in the file too.',
+      'The bench remembers the cycle: recently deleted goals now show which review cycle they were filed under, so reconciling the bench against a cycle never means guessing.',
+      'Exports are audited with field names only \u2014 the audit row says a file was built and how big it is, never who is in it.',
+    ],
+  },
+  {
     version: '2.95.0',
     title: 'The drawer takes the wheel \u2014 lifecycle rides inside',
     bullets: [
