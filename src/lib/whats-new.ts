@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.113.0',
+    title: 'The dead columns open their doors; the HR roster finally exists',
+    bullets: [
+      'The People & Payroll panel\u2019s last two dead columns learned to move: the latest-run cell opens that run\u2019s detail dialog on /hr/payroll (?run=<id>), and the expiry-alerts count opens the branch\u2019s employees list pre-filtered to expiring documents. One glance, one click, one audit trail \u2014 no hunting.',
+      'The expiry count splits honestly: documents are the door; overdue assets stay text (the assets list is session-scoped \u2014 the panel never promises a cross-branch view it cannot open). Zero halves never render as links, and stale summaries without a run id degrade to the same text as before.',
+      'The HR workspace\u2019s Employees page now EXISTS \u2014 QA found the nav\u2019s oldest link landing on a 404; this release builds the list: search, status filter, an expiring-documents toggle, mobile cards, and rows that open the employee record.',
+      'Scope stays fail-closed: the list honors an explicit branch only for org-scope roles whose organization owns it; everyone else keeps their own store and an honest notice says when the answer came from somewhere else. Expiring counts ride the same window the panel counts \u2014 one definition, two homes.',
+      'The payroll page consumes ?run= as a lazy seed and strips it once on mount \u2014 a refresh never re-opens a stale dialog, and the dialog\u2019s own fetch fail-closes when a run is not yours to see.',
+    ],
+  },
+  {
     version: '2.112.0',
     title: 'The branch picker hands you the payroll ledger',
     bullets: [

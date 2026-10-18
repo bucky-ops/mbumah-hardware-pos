@@ -111,6 +111,30 @@ export function buildPeoplePayrollDeepLink(storeId: string): string {
 }
 
 /**
+ * v2.113.0: the People & Payroll panel's expiry-alerts door — the documents
+ * half of the alert count opens the HR employees list pre-filtered to people
+ * whose documents expire within `days` (default 90, mirroring the panel's
+ * own definition). Pure: URLSearchParams-encoded, relative, never throws.
+ */
+export function buildExpiringEmployeesHref(storeId: string, days = 90): string {
+  const params = new URLSearchParams();
+  params.set('expiring', String(days > 0 ? Math.floor(days) : 90));
+  params.set('storeId', storeId || '');
+  return `/hr/employees?${params.toString()}`;
+}
+
+/**
+ * v2.113.0: the People & Payroll panel's latest-run door — opens /hr/payroll
+ * with ?run=<id>; the page consumes the param and opens that run's detail
+ * dialog (the dialog fetches by id and fail-closes on its own). Pure.
+ */
+export function buildRunDeepLinkHref(runId: string): string {
+  const params = new URLSearchParams();
+  params.set('run', runId || '');
+  return `/hr/payroll?${params.toString()}`;
+}
+
+/**
  * The configured workspace mode as a safe hint string (v2.18.1). Pure and
  * env-derived: 'path' | 'subdomain' | 'auto' | 'off'. The actual per-request
  * decision (path fallback on localhost and raw IPs) always happens in the

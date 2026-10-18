@@ -77,7 +77,9 @@ describe('v2.109.0 — the shared panel (people-payroll-by-branch.tsx)', () => {
     expect(src.includes('row.headcountActive')).toBe(true);
     expect(src.includes('kesMoney(row.monthEmploymentCost)')).toBe(true);
     expect(src.includes('{row.monthAbsenceRatePct}%')).toBe(true);
-    expect(src.includes('<LatestRunCell run={row.latestPayroll} />')).toBe(true);
+    // v2.113.0 re-anchor: the cells gained the storeName prop (the doors'
+    // aria labels name the branch) — table AND mobile card both pass it.
+    expect(src.includes('<LatestRunCell run={row.latestPayroll} storeName={row.storeName} />')).toBe(true);
     expect(src.includes('<ExpiryCell row={row} />')).toBe(true);
   });
 

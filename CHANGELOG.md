@@ -2,6 +2,24 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.113.0] The dead columns open their doors; the HR roster finally exists
+
+Bug-fix-and-doors release: QA found the HR workspace nav's oldest link (`/hr/employees`) landing on a 404 — the page had never shipped. This release builds it, and the People & Payroll panel's last two dead columns (latest run, expiry alerts) become real doors that land somewhere useful.
+
+### Added
+- **The `/hr/employees` list page** (`src/app/(shell)/hr/employees/page.tsx` — NEW, fixes the 404): search (name/code/job title, debounced, server-side `?q=`), status filter, and an **expiring-documents toggle** backed by the new `expiringWithinDays` service filter — only employees holding documents whose expiry falls inside `[now, now+N days]`, each annotated with `expiringDocuments` + `nearestExpiry` (a count and a date; the PII contract holds). Desktop table + mobile cards; every row opens the employee record; precise empty states; `(from link)` chip on a link-seeded toggle until first touch; `Clear filters` counts what it clears.
+- **The latest-run door** (`src/components/finance/people-payroll-by-branch.tsx`, `src/lib/workspace/links.ts`): `hrPerStore.latestPayroll` now carries `runId` (additive server join in `src/lib/hr/reports.ts`), and the panel's latest-run cell renders as a link to `/hr/payroll?run=<id>` (built by the pure `buildRunDeepLinkHref`) with aria-label, title, hover manners and a visible focus ring. Stale summaries without a run id degrade to the same honest text — never a dead link.
+- **The expiry door**: the alerts count splits honestly — the documents half is a link to `/hr/employees?expiring=90&storeId=<id>` (`buildExpiringEmployeesHref`); the assets half stays text because the assets list is session-scoped and a cross-branch door would promise a view it cannot open. Zero halves never render as links. Mobile cards reuse the same cells — one implementation, two surfaces.
+- **`?run=` deep link on /hr/payroll**: a lazy initializer seeds the run dialog straight from the URL; a mount effect strips the param once, so a refresh never re-opens a stale dialog; the dialog's own fetch fail-closes when the run is not the session's to see.
+
+### Changed
+- **`GET /api/hr/employees` grew two honest query params**: `?expiring=<days>` (clamped 1..365 by `parseExpiringDays`; anything else ignored) and `?storeId=` honored **only** for ORG-scope roles (the same scope model `/api/org/summary` serves) and only when `storeInOrganization` proves the store belongs to the caller's organization — fail-closed 403 on any miss. Branch-scoped roles keep their session store exactly as before; client storeId stays ignored for them.
+- The What's-New feed leads with the doors story; the unread counter test re-anchored for the 2.113.0-fed feed (2.110.0→2, 2.109.0→3, 2.108.0→4, 2.77.0→35).
+- The shared `OrgSummaryData.hrPerStore` type carries `runId`; the org console and the SPA tab share the same panel, so both homes gained the doors in one move.
+
+### Security
+- Scope never widened by request: the employees list verifies organization ownership server-side before honoring any explicit branch (`storeInOrganization`, fail-closed); the expiring filter exposes counts and dates only — never document names, types, or contents; `/hr/payroll?run=` opens the dialog but the run detail endpoint still answers only what the session may see; the doors are display selectors over views the roles already hold.
+
 ## [2.112.0] The branch picker hands you the payroll ledger
 
 Reach-and-manners release: branch listings grow a "People & payroll" affordance — the v2.111.0 deep link's natural consumer, in BOTH homes (the Branch Selector's cards and the Organization Console's Workspace column) — and October's BONUS run completed the last leg of the payroll lifecycle (manual disbursement) as the round's live end-to-end proof.
