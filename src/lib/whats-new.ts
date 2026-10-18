@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.102.0',
+    title: 'The account opens its month',
+    bullets: [
+      'Every ledger line is a door now: click an account and its month movement opens beside the drawer \u2014 opening balance, each posted line in chronological replay, and a running balance that tells the story forward.',
+      'The opening is honest: it sums every posted line the account carries before the window \u2014 sales, payments, payroll, every source \u2014 or says plainly that the account starts the month at zero.',
+      'Balances read the way an accountant reads a T-account: Dr for debit-normal accounts, Cr for credit-normal, the side letter instead of a bare negative.',
+      'Voided entries stay closed doors and in-motion entries do not exist yet \u2014 the replay counts only what actually posted, the same honesty the ledger drawer taught.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) \u2014 reading what an account posted widens nothing.',
+    ],
+  },
+  {
     version: '2.101.0',
     title: 'The ledger files itself',
     bullets: [

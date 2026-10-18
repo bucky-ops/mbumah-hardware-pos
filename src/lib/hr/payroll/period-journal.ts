@@ -296,3 +296,132 @@ export function periodLedgerToCsv(
 
   return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
 }
+
+// ── v2.102.0: the account opens its month ────────────────────────────────────
+//
+// Click a ledger line and the account's month movement opens beside the
+// drawer: what the ledger posted BEFORE the window (the honest opening),
+// every posted line inside it in chronological replay, and a running
+// balance expressed on the account's NORMAL side (Dr for debit-normal,
+// Cr for credit-normal — the way an accountant reads a T-account).
+//
+// HONESTY CONTRACT (inherits the ledger's):
+//   • Only POSTED, never-voided entries reach this builder — the route
+//     filters them; a voided entry is a closed door, an in-motion entry
+//     does not exist yet. The replay therefore never prices an estimate.
+//   • The opening is the route's honest aggregate over ALL prior posted
+//     lines (any source — sales, payments, payroll), not a guess: with no
+//     prior lines the account starts the month at zero and says so.
+//   • The replay is CHRONOLOGICAL (oldest first, stable on equal stamps —
+//     the ledger's own convention), the opposite of the drawer's
+//     newest-first entries: a running balance is a story told forward.
+//   • Money is money2 everywhere: every running step re-rounds, so float
+//     drift can never compound down the column.
+//   • An unknown normalBalance is assumed DEBIT and FLAGGED
+//     (normalBalanceAssumed) — the drawer never silently picks a side.
+//
+// PURE module: no db, no network, no env — same constraint as the rest of
+// this file, so unit tests run without any mocking.
+
+/** One movement line as the route serves it: the entry resolved, money numeric. */
+export interface AccountMovementSource {
+  entryNumber: string;
+  entryDate: string;
+  entryDescription: string;
+  /** The most honest source the route could resolve: the run's type, else the entry's referenceType, else 'JOURNAL'. */
+  source: string;
+  debit: number;
+  credit: number;
+  lineDescription: string | null;
+}
+
+/** The account's identity — the route resolves it org-scoped before this builder runs. */
+export interface AccountMovementMeta {
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  /** DEBIT | CREDIT — the schema's default is DEBIT; anything else is assumed DEBIT and flagged. */
+  normalBalance: string;
+}
+
+/** One replay row: the line plus the running balance AFTER it. */
+export interface AccountMovementRow extends AccountMovementSource {
+  /** Running balance after this line, signed on the account's NORMAL side. */
+  running: number;
+}
+
+/** The account's month, proven one line at a time. */
+export interface AccountMovement {
+  account: { code: string; name: string; type: string; normalBalance: string };
+  /** What the ledger posted before the window — the route's honest aggregate. */
+  opening: { debit: number; credit: number; balance: number; priorLines: number };
+  /** Chronological replay — oldest first, stable; each row carries its running. */
+  movements: AccountMovementRow[];
+  /** The month's line sums at money precision (recomputed here, never trusted). */
+  totals: { debit: number; credit: number };
+  /** Opening + the month's signed movement — the last running step. */
+  closing: { balance: number };
+  /** True when normalBalance wasn't DEBIT/CREDIT and DEBIT was assumed. */
+  normalBalanceAssumed: boolean;
+}
+
+/**
+ * Balance expressed on the account's NORMAL side: debit-normal accounts
+ * grow with debits (Dr-positive), credit-normal with credits (Cr-positive).
+ * A negative result means the balance sits on the OTHER side — the reader
+ * sees the side letter, never a bare negative.
+ */
+export function signedBalance(debit: number, credit: number, normalBalance: string): number {
+  const d = money2(Number(debit || 0));
+  const c = money2(Number(credit || 0));
+  return normalBalance === 'CREDIT' ? money2(c - d) : money2(d - c);
+}
+
+/**
+ * Build the account's month movement. Takes the route's honest opening
+ * aggregate and the window's posted lines (already chronological from the
+ * query); returns the replay with running balances, recomputed totals and
+ * the closing balance — opening + replay, proven line by line.
+ */
+export function buildAccountMovement(
+  meta: AccountMovementMeta,
+  opening: { debit: number; credit: number; priorLines: number },
+  sources: readonly AccountMovementSource[],
+): AccountMovement {
+  const normalBalance = meta.normalBalance === 'CREDIT' ? 'CREDIT' : 'DEBIT';
+  const normalBalanceAssumed = meta.normalBalance !== 'CREDIT' && meta.normalBalance !== 'DEBIT';
+
+  const openBalance = signedBalance(opening.debit, opening.credit, normalBalance);
+
+  const movements: AccountMovementRow[] = [];
+  let running = openBalance;
+  let totalDebit = 0;
+  let totalCredit = 0;
+  for (const s of sources) {
+    const debit = money2(Number(s.debit || 0));
+    const credit = money2(Number(s.credit || 0));
+    running = money2(running + signedBalance(debit, credit, normalBalance));
+    totalDebit += debit;
+    totalCredit += credit;
+    movements.push({ ...s, debit, credit, running });
+  }
+
+  return {
+    account: {
+      code: meta.accountCode,
+      name: meta.accountName,
+      type: meta.accountType,
+      normalBalance,
+    },
+    opening: {
+      debit: money2(Number(opening.debit || 0)),
+      credit: money2(Number(opening.credit || 0)),
+      balance: openBalance,
+      priorLines: opening.priorLines,
+    },
+    movements,
+    totals: { debit: money2(totalDebit), credit: money2(totalCredit) },
+    closing: { balance: running },
+    normalBalanceAssumed,
+  };
+}
