@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, History, LockKeyhole, LogIn, Pencil, Plus, RefreshCw, Star, StickyNote, Target, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, History, LockKeyhole, LogIn, Pencil, Play, Plus, RefreshCw, Star, StickyNote, Target, Trash2, Undo2, X } from 'lucide-react';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import {
   apiGet,
@@ -69,10 +69,15 @@ interface ReviewDetailDto extends ReviewListItemDto {
 // v2.94.0: the cycle detail — meta + the cycle's own reviews (list-item
 // shape; ratings stay in the gated review dialog) + the honest affordance
 // flag the service computes (manage AND the cycle still has a future).
+// v2.95.0: the lifecycle rides inside — canManageLifecycle mirrors the
+// manage guard, lifecycleBlock carries the server's own EMPTY_CYCLE
+// explanation (null when the next move is unblocked).
 interface CycleDetailDto extends CycleDto {
   calibrationNotes: string | null;
   reviews: ReviewListItemDto[];
   canEditNotes: boolean;
+  canManageLifecycle: boolean;
+  lifecycleBlock: string | null;
 }
 
 const RATING_MAX = 5;
@@ -259,10 +264,17 @@ export default function PerformancePage() {
   const [cycleDetail, setCycleDetail] = useState<CycleDetailDto | 'loading' | null>(null);
   const [notesEditing, setNotesEditing] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
+  // v2.95.0: the lifecycle strip has its own memory — Close is one-way, so
+  // it arms before it fires; and action errors report INSIDE the drawer
+  // (the page-level error note sits behind the modal where nobody reads it).
+  const [closeArmed, setCloseArmed] = useState(false);
+  const [cycleActionError, setCycleActionError] = useState('');
   const openCycleDetail = (cycleId: string) => {
     setCycleDetail('loading');
     setNotesEditing(false);
     setNotesDraft('');
+    setCloseArmed(false);
+    setCycleActionError('');
     void apiGet<CycleDetailDto>(`/api/hr/performance/cycles/${cycleId}`)
       .then((d) => setCycleDetail(d))
       .catch(() => setCycleDetail(null));
@@ -270,6 +282,8 @@ export default function PerformancePage() {
   const closeCycleDetail = () => {
     setCycleDetail(null);
     setNotesEditing(false);
+    setCloseArmed(false);
+    setCycleActionError('');
   };
   // One drawer at a time: opening a review from the cycle drawer hands the
   // conversation to the gated review dialog (the same single-drawer rule
@@ -292,6 +306,29 @@ export default function PerformancePage() {
       setCycleDetail((prev) => (prev && prev !== 'loading' ? { ...prev, calibrationNotes: res.calibrationNotes } : prev));
       setNotesEditing(false);
     });
+  };
+  // v2.95.0: lifecycle from inside the drawer. The PATCH is manage-gated
+  // (canManageLifecycle gates the affordance); after a clean transition the
+  // drawer refetches its OWN detail so status, meter, notes and the strip
+  // all tell the new truth — run()'s load() refreshes the table behind it.
+  // Errors land in the drawer, not the page note hidden behind the modal.
+  const runCycleLifecycle = (action: 'ACTIVATE' | 'CLOSE') => {
+    if (!cycleDetail || cycleDetail === 'loading') return;
+    setCycleActionError('');
+    void (async () => {
+      setBusy(true);
+      try {
+        await apiSend(`/api/hr/performance/cycles/${cycleDetail.id}`, 'PATCH', { action });
+        const d = await apiGet<CycleDetailDto>(`/api/hr/performance/cycles/${cycleDetail.id}`);
+        setCycleDetail(d);
+        setCloseArmed(false);
+        await load();
+      } catch (e) {
+        setCycleActionError(e instanceof Error ? e.message : 'Lifecycle action failed.');
+      } finally {
+        setBusy(false);
+      }
+    })();
   };
 
   useEffect(() => {
@@ -605,27 +642,37 @@ export default function PerformancePage() {
                         </TableCell>
                         <TableCell><StatusBadge status={c.status} /></TableCell>
                         <TableCell className="space-x-2 text-right">
-                          {c.status === 'DRAFT' ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={busy || c.reviewCount === 0}
-                              title={c.reviewCount === 0 ? 'Add at least one review first' : undefined}
-                              onClick={() => void run(() => apiSend(`/api/hr/performance/cycles/${c.id}`, 'PATCH', { action: 'ACTIVATE' }))}
-                            >
-                              Activate
-                            </Button>
-                          ) : null}
-                          {c.status === 'ACTIVE' ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={busy}
-                              onClick={() => void run(() => apiSend(`/api/hr/performance/cycles/${c.id}`, 'PATCH', { action: 'CLOSE' }))}
-                            >
-                              Close
-                            </Button>
-                          ) : null}
+                          {/* v2.95.0: the table obeys the same rule as the
+                              drawer — never offer what the manage guard would
+                              refuse. Reviewers get an honest dash instead of a
+                              button that only answers 403. */}
+                          {canManage ? (
+                            <>
+                              {c.status === 'DRAFT' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={busy || c.reviewCount === 0}
+                                  title={c.reviewCount === 0 ? 'Add at least one review first' : undefined}
+                                  onClick={() => void run(() => apiSend(`/api/hr/performance/cycles/${c.id}`, 'PATCH', { action: 'ACTIVATE' }))}
+                                >
+                                  Activate
+                                </Button>
+                              ) : null}
+                              {c.status === 'ACTIVE' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={busy}
+                                  onClick={() => void run(() => apiSend(`/api/hr/performance/cycles/${c.id}`, 'PATCH', { action: 'CLOSE' }))}
+                                >
+                                  Close
+                                </Button>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground" data-testid={`cycle-row-actions-muted-${c.id}`}>—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1415,7 +1462,8 @@ export default function PerformancePage() {
           Meta, its own reviews, and its calibration notes in one honest
           panel. Reviews keep their list-item shape (ratings live only in
           the gated review dialog); notes take ink while the cycle has a
-          future and freeze with a CLOSED cycle. */}
+          future and freeze with a CLOSED cycle. v2.95.0: the lifecycle
+          rides inside — the drawer drives Activate and Close too. */}
       <Dialog open={cycleDetail !== null} onOpenChange={(open) => !open && closeCycleDetail()}>
         <DialogContent className="sm:max-w-xl" data-testid="cycle-detail-dialog">
           {cycleDetail === 'loading' ? (
@@ -1465,6 +1513,100 @@ export default function PerformancePage() {
                     No reviews in this cycle yet.
                   </p>
                 )}
+
+                {/* ── v2.95.0 the lifecycle rides inside — the drawer takes the wheel ──
+                    Managers drive the cycle from here: Activate explains the
+                    EMPTY_CYCLE guard BEFORE it can fire (the server's own reason,
+                    never a guess), Close arms a two-step confirm because a closed
+                    cycle cannot reopen, and a closed cycle says it is history.
+                    Reviewers see none of this — the status badge tells their story. */}
+                {cycleDetail.canManageLifecycle ? (
+                  <div
+                    className="space-y-2 rounded-md border border-slate-200/70 bg-slate-50/40 px-3 py-2.5 dark:border-slate-700/60 dark:bg-slate-800/30"
+                    data-testid="cycle-detail-lifecycle"
+                  >
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Lifecycle</p>
+                    {cycleDetail.status === 'DRAFT' ? (
+                      <div className="space-y-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-testid="cycle-detail-activate"
+                          disabled={busy || cycleDetail.lifecycleBlock !== null}
+                          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200"
+                          onClick={() => runCycleLifecycle('ACTIVATE')}
+                        >
+                          <Play className="h-3.5 w-3.5" aria-hidden /> Activate cycle
+                        </Button>
+                        {cycleDetail.lifecycleBlock ? (
+                          <p className="text-xs text-muted-foreground" data-testid="cycle-detail-lifecycle-block">
+                            {cycleDetail.lifecycleBlock}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground" data-testid="cycle-detail-lifecycle-hint">
+                            Activation opens calibration — reviews start their walk toward calibrated.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                    {cycleDetail.status === 'ACTIVE' ? (
+                      closeArmed ? (
+                        <div className="space-y-1.5" data-testid="cycle-detail-close-confirm-row">
+                          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                            Close this cycle? Calibration ends, the meter freezes, and the notes stop taking ink — a closed cycle is history and cannot reopen.
+                          </div>
+                          <div className="flex gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid="cycle-detail-close-confirm"
+                              disabled={busy}
+                              className="border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950/40 dark:hover:text-rose-200"
+                              onClick={() => runCycleLifecycle('CLOSE')}
+                            >
+                              Confirm close
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              data-testid="cycle-detail-close-cancel"
+                              disabled={busy}
+                              onClick={() => setCloseArmed(false)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid="cycle-detail-close-arm"
+                            disabled={busy}
+                            onClick={() => setCloseArmed(true)}
+                          >
+                            Close cycle
+                          </Button>
+                          <p className="text-xs text-muted-foreground" data-testid="cycle-detail-lifecycle-hint-close">
+                            Closing ends calibration — the walk is one-way, so the drawer asks twice.
+                          </p>
+                        </div>
+                      )
+                    ) : null}
+                    {cycleDetail.status === 'CLOSED' ? (
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="cycle-detail-history">
+                        <LockKeyhole className="h-3 w-3" aria-hidden />
+                        This cycle is closed — history. The meter keeps its final shape and the notes no longer take ink.
+                      </p>
+                    ) : null}
+                    {cycleActionError ? (
+                      <p className="text-xs font-medium text-rose-600 dark:text-rose-400" data-testid="cycle-detail-action-error">
+                        {cycleActionError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {/* ── the cycle's own reviews — list-item shape, no ratings ── */}
                 {cycleDetail.reviews.length > 0 ? (

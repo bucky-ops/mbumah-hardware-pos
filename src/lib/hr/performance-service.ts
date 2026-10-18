@@ -240,6 +240,19 @@ export interface CycleDetailDto extends CycleDto {
   reviews: ReviewListItemDto[];
   /** Notes are writable while the cycle has a future (DRAFT or ACTIVE). */
   canEditNotes: boolean;
+  /**
+   * v2.95.0: the lifecycle rides inside the drawer — this flag mirrors the
+   * manage guard EXACTLY (same three roles), so the drawer never offers an
+   * Activate or Close the PATCH route would refuse.
+   */
+  canManageLifecycle: boolean;
+  /**
+   * v2.95.0: the EMPTY_CYCLE guard explained BEFORE the attempt. Derived
+   * server-side from the same count the guard itself runs, so the disabled
+   * state can never drift from what the next PATCH would 409 on. Null when
+   * the next move is unblocked (or when there is no next move).
+   */
+  lifecycleBlock: string | null;
 }
 
 async function loadScopedCycle(cycleId: string, session: Session) {
@@ -252,12 +265,21 @@ async function loadScopedCycle(cycleId: string, session: Session) {
 
 export async function getCycleDetail(cycleId: string, session: Session): Promise<CycleDetailDto> {
   const cycle = await loadScopedCycle(cycleId, session);
-  const [countsByCycle, reviews] = await Promise.all([
+  // v2.95.0: the lifecycle block reads the SAME count the EMPTY_CYCLE guard
+  // runs (non-deleted reviews of the cycle, org-wide) — not the viewer's
+  // scoped reviews.length — so the inline explanation is the guard's own
+  // arithmetic and can never disagree with the next PATCH.
+  const [countsByCycle, reviews, guardCount] = await Promise.all([
     statusCountsFor([cycle.id]),
     listReviews(session, { cycleId: cycle.id }),
+    db.performanceReview.count({ where: { cycleId: cycle.id, deletedAt: null } }),
   ]);
   const canManage =
     session.role === 'HR_MANAGER' || session.role === 'STORE_OWNER' || session.role === 'SUPER_ADMIN';
+  const lifecycleBlock =
+    canManage && cycle.status === 'DRAFT' && guardCount === 0
+      ? 'Add at least one review before activating — reviews are created from the Reviews tab.'
+      : null;
   return {
     id: cycle.id,
     name: cycle.name,
@@ -270,6 +292,8 @@ export async function getCycleDetail(cycleId: string, session: Session): Promise
     createdAt: cycle.createdAt.toISOString(),
     reviews,
     canEditNotes: canManage && cycle.status !== 'CLOSED',
+    canManageLifecycle: canManage,
+    lifecycleBlock,
   };
 }
 
