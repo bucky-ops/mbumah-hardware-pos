@@ -204,9 +204,11 @@ check('tests: the bundle test pins the layered window and the pair', () => {
 });
 
 check('tests: the changelog counter re-anchored for the 2.108.0-fed feed', () => {
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.106.0')).toBe(1);"), 'one-behind count missing');
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.105.0')).toBe(2);"), 'two-behind count missing');
-  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.77.0')).toBe(30);"), '2.77.0 count missing');
+  // v2.108.0 leads the feed, so one-behind is 2.107.0 (not 2.106.0) and the
+  // deep count moved 30 → 31. The pin mirrors the committed test exactly.
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.107.0')).toBe(1);"), 'one-behind count missing');
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.106.0')).toBe(2);"), 'two-behind count missing');
+  assert(CHANGELOG.includes("expect(whatsNewUnreadCount('2.77.0')).toBe(31);"), '2.77.0 count missing');
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
