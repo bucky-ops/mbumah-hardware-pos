@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.124.0] The broom answers the desk
+
+Task 138 option 1: the dry run (v2.123.0) shows what the nightly sweep WOULD anonymise — but a settings manager who saw a backlog still had to wait for the cron. This release gives the decision a door: a manual "Sweep now" run that executes the exact same audited function the nightly cron runs, asks twice because anonymisation is destructive, and reports per scope where the action lives.
+
+### Added
+- **Sweep now door** (`src/app/(shell)/hr/reports/page.tsx`, retention card): a card-level "Sweep now…" button renders ONLY for settings managers (`canDecide` — everyone else's desk is unchanged). Arming shows a rose confirm row quoting the live backlog ("N rows would be anonymised immediately." with singular/plural, or the honest zero "Nothing is in scope — held scopes are skipped, in-window rows are untouched."), then Confirm sweep / Cancel. Arming one action disarms the other (release arm ↔ sweep arm).
+- **The manual run route** (`POST /api/hr/privacy/retention-sweep`): `hrGuard('hr.report.branch')` read guard + in-handler 403 `DECISION_FORBIDDEN` (the erasure / consent / legal-hold decision pattern verbatim), then `runHrRetentionSweep(session.organizationId, session.userId)` — the EXACT function the nightly cron executes, with actor attribution. A manual run can never diverge from the nightly one: legal holds skip, redacted rows stay invisible, every anonymised batch audits `RETENTION_*`. The envelope carries `results` plus `sweptAt`.
+- **The pure outcome humaniser** (`src/lib/hr/sweep-outcome.ts`): `describeSweepOutcome` turns the per-scope results into the card's own note — "Sweep ran — 2 rows anonymised (2 applicant records)." with held scopes named as skipped ("Held scopes were skipped (1)."), the honest "nothing to anonymise; every scope sits inside its window." on a zero run, and the ROSE truth when the answer is unreadable (never a fake success). Client-safe: no db import.
+
+### Changed
+- After a manual run the desk refetches, so the dry-run counts (v2.123.0) drop to the zero the sweep just made true — the preview and the door close each other's loop. The What's-New feed leads with the door; the unread-counter test re-anchored for the 2.124.0-fed feed (2.110.0→13, 2.109.0→14, 2.108.0→15, 2.77.0→46).
+
+### Security
+- The manual run is gated exactly like every other decision on the desk: the read is `hr.report.branch`, the run is `hr.settings.manage` only (403 `DECISION_FORBIDDEN` otherwise), the execution is the nightly function itself — same holds, same redaction guards, same `RETENTION_*` audits with the acting user attributed — and the outcome note names what was anonymised per scope without ever exposing record contents.
+
 ## [2.123.0] The sweep shows its hand
 
 Task 137 option 2: the retention desk could say the sweep runs nightly, but never WHAT it would sweep. This release adds the dry run — per-scope counts of what the next nightly run would anonymise, computed with the exact same criteria the sweeper executes, so the desk and the sweep can never disagree about what "in scope" means.

@@ -44,6 +44,7 @@ import {
   MailX,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate, formatKes } from '@/components/hr/self-service-ui';
+import { describeSweepOutcome } from '@/lib/hr/sweep-outcome';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { ReportSchedulesTab } from '@/components/hr/report-schedules-tab';
 
@@ -377,6 +378,9 @@ export default function HrReportsPage() {
   // v2.122.0: release is the destructive direction (the sweep resumes on its
   // next run) — it asks twice; releaseArm holds the scope currently armed.
   const [releaseArm, setReleaseArm] = useState<string | null>(null);
+  // v2.124.0: the manual sweep is the dry run's destructive sibling — it asks
+  // twice too; sweepArm is card-level (the run covers every scope at once).
+  const [sweepArm, setSweepArm] = useState(false);
   const [retentionNote, setRetentionNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [leaveUtil, setLeaveUtil] = useState<LeaveUtilDto | null>(null);
   const [leaveYear, setLeaveYear] = useState(String(new Date().getUTCFullYear()));
@@ -575,6 +579,29 @@ export default function HrReportsPage() {
   };
 
   const toggleCol = (key: string) => setHiddenCols((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // v2.124.0: the manual sweep — the dry run's destructive sibling. Running
+  // now (instead of waiting for the nightly cron) asks twice, reports in the
+  // card's own note per scope (the pure describeSweepOutcome), and refetches
+  // the desk so the counts drop to the honest zero.
+  const runSweepNow = async () => {
+    setBusy(true);
+    setRetentionNote(null);
+    try {
+      const res = await apiSend<{ results: Array<{ scope: string; held: boolean; anonymised: number }> }>(
+        '/api/hr/privacy/retention-sweep',
+        'POST',
+        {},
+      );
+      setSweepArm(false);
+      await loadRetention();
+      setRetentionNote(describeSweepOutcome(res.results));
+    } catch (e) {
+      setRetentionNote({ ok: false, text: e instanceof Error ? e.message : 'Sweep failed.' });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // v2.52.0: ad-hoc digest CSV export — the tab the user is LOOKING at, for
   // the period the user has APPLIED, in the exact governed format a scheduled
@@ -1771,6 +1798,29 @@ export default function HrReportsPage() {
                   <span>nothing to sweep tonight — every scope sits inside its window</span>
                 )}
               </p>
+              {retention !== null && retention.canDecide ? (
+                sweepArm ? (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5" data-testid="hr-retention-sweep-arm">
+                    <span className="text-xs text-rose-600 dark:text-rose-400">
+                      Run the sweep now? {retention.sweepableTotal > 0 ? `${retention.sweepableTotal} ${retention.sweepableTotal === 1 ? 'row' : 'rows'} would be anonymised immediately.` : 'Nothing is in scope — held scopes are skipped, in-window rows are untouched.'}
+                    </span>
+                    <Button size="sm" variant="destructive" disabled={busy} onClick={() => void runSweepNow()}>Confirm sweep</Button>
+                    <Button size="sm" variant="outline" disabled={busy} onClick={() => setSweepArm(false)}>Cancel</Button>
+                  </div>
+                ) : (
+                  <div className="mt-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      data-testid="hr-retention-sweep-now"
+                      onClick={() => { setSweepArm(true); setReleaseArm(null); setRetentionNote(null); }}
+                    >
+                      Sweep now…
+                    </Button>
+                  </div>
+                )
+              ) : null}
             </CardHeader>
             <CardContent>
               {!retention ? (
@@ -1835,7 +1885,7 @@ export default function HrReportsPage() {
                                   <Button size="sm" variant="outline" disabled={busy} onClick={() => setReleaseArm(null)}>Cancel</Button>
                                 </div>
                               ) : (
-                                <Button size="sm" variant="outline" disabled={busy} onClick={() => { setReleaseArm(p.scope); setRetentionNote(null); }}>Release…</Button>
+                                <Button size="sm" variant="outline" disabled={busy} onClick={() => { setReleaseArm(p.scope); setSweepArm(false); setRetentionNote(null); }}>Release…</Button>
                               )
                             ) : (
                               <Button size="sm" variant="outline" disabled={busy} onClick={() => void runHold(p.scope, true)}>Hold</Button>
