@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, LockKeyhole, LogIn, Pencil, Plus, RefreshCw, Star, Target, Trash2, X } from 'lucide-react';
+import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, History, LockKeyhole, LogIn, Pencil, Plus, RefreshCw, Star, Target, Trash2, Undo2, X } from 'lucide-react';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import {
   apiGet,
@@ -89,6 +89,12 @@ interface PersonDto {
   id: string;
   name: string;
   jobTitle: string | null;
+}
+// v2.93.0: the bench — a soft-deleted goal with the honest stamp of WHEN
+// it left. Same shape as the board DTOs (title, employee, source, the
+// progress it kept) so the restore rows speak the board's language.
+interface DeletedGoalDto extends GoalDto {
+  deletedAt: string;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -220,6 +226,20 @@ export default function PerformancePage() {
   // keeps it), never a bare one-click vanish.
   const [deleteTarget, setDeleteTarget] = useState<GoalDto | null>(null);
 
+  // v2.93.0: the bench remembers — soft-deleted goals stay restorable.
+  // The list loads with the page (reviewers 403 into an empty bench, the
+  // same honest catch the people picker uses) and refetches fresh whenever
+  // the dialog opens, so the count on the affordance never lies.
+  const [deletedGoals, setDeletedGoals] = useState<DeletedGoalDto[] | null>(null);
+  const [deletedOpen, setDeletedOpen] = useState(false);
+  const openDeletedBench = () => {
+    setDeletedOpen(true);
+    setDeletedGoals(null);
+    void apiGet<DeletedGoalDto[]>('/api/hr/goals/deleted')
+      .then((rows) => setDeletedGoals(rows))
+      .catch(() => setDeletedGoals([]));
+  };
+
   useEffect(() => {
     let alive = true;
     apiGet<{ role?: string }>('/api/auth/me')
@@ -245,16 +265,20 @@ export default function PerformancePage() {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [c, r, g, p] = await Promise.all([
+      const [c, r, g, p, d] = await Promise.all([
         apiGet<CycleDto[]>('/api/hr/performance/cycles'),
         apiGet<ReviewListItemDto[]>('/api/hr/performance/reviews'),
         apiGet<GoalDto[]>('/api/hr/goals'),
         apiGet<PersonDto[]>('/api/hr/performance/people').catch(() => [] as PersonDto[]),
+        // v2.93.0: the bench rides along — manage-guarded server-side, so
+        // a reviewer's 403 lands in an empty bench, never an error banner.
+        apiGet<DeletedGoalDto[]>('/api/hr/goals/deleted').catch(() => [] as DeletedGoalDto[]),
       ]);
       setCycles(c);
       setReviews(r);
       setGoals(g);
       setPeople(p);
+      setDeletedGoals(d);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load performance data.');
       setCycles((prev) => prev ?? []);
@@ -674,6 +698,30 @@ export default function PerformancePage() {
         {/* ── Goals ── */}
         <TabsContent value="goals" className="space-y-4">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* v2.93.0: the bench door — a soft-deleted goal is never gone
+                forever. The count rides the button so a manager sees there
+                is something to reconcile before ever opening the dialog. */}
+            {canManage ? (
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="goal-deleted-open"
+                aria-label={`Recently deleted goals${deletedGoals?.length ? ` (${deletedGoals.length})` : ''}`}
+                onClick={openDeletedBench}
+                className="border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-slate-200"
+              >
+                <History className="h-4 w-4" aria-hidden /> Recently deleted
+                {deletedGoals && deletedGoals.length > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className="ml-1 border-rose-300 text-[10px] text-rose-700 dark:border-rose-900 dark:text-rose-300"
+                    data-testid="goal-deleted-count"
+                  >
+                    {deletedGoals.length}
+                  </Badge>
+                ) : null}
+              </Button>
+            ) : null}
             {canManage && posGoalCount > 0 ? (
               <Button
                 size="sm"
@@ -1224,6 +1272,76 @@ export default function PerformancePage() {
               </DialogFooter>
             </>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── v2.93.0 the bench: recently deleted goals, restorable ── */}
+      <Dialog open={deletedOpen} onOpenChange={setDeletedOpen}>
+        <DialogContent className="sm:max-w-lg" data-testid="goal-deleted-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-slate-500 dark:text-slate-400" aria-hidden /> Recently deleted goals
+            </DialogTitle>
+            <DialogDescription>
+              Deleting removes a goal from the board and the portal but keeps its record and audit — nothing is ever
+              hard-deleted. Restoring puts one back exactly as it left: same target, same progress, same status.
+            </DialogDescription>
+          </DialogHeader>
+          {!deletedGoals ? (
+            <Skeleton className="h-24 w-full" />
+          ) : deletedGoals.length === 0 ? (
+            <div className="rounded-md border border-dashed py-6 text-center" data-testid="goal-deleted-empty">
+              <p className="text-sm font-medium">The bench is clear.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                No deleted goals right now — the board and the bench agree.
+              </p>
+            </div>
+          ) : (
+            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+              {deletedGoals.map((g) => (
+                <div
+                  key={g.id}
+                  className="flex items-center gap-3 rounded-md border border-rose-200/70 bg-rose-50/40 px-3 py-2.5 dark:border-rose-900/60 dark:bg-rose-950/20"
+                  data-testid={`goal-deleted-row-${g.id}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium" title={g.title}>{g.title}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>{g.employeeName ?? 'Employee'}</span>
+                      <span aria-hidden>·</span>
+                      <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[g.metricSource] ?? ''}`}>
+                        {SOURCE_LABELS[g.metricSource] ?? g.metricSource}
+                      </Badge>
+                      <span aria-hidden>·</span>
+                      <span>deleted {formatDate(g.deletedAt)}</span>
+                      <span aria-hidden>·</span>
+                      <span className="tabular-nums">
+                        {Number(g.currentValue).toLocaleString()} / {Number(g.targetValue).toLocaleString()} kept
+                      </span>
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid={`goal-restore-${g.id}`}
+                    aria-label={`Restore goal ${g.title}`}
+                    disabled={busy}
+                    className="shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200"
+                    onClick={() =>
+                      void run(() => apiSend(`/api/hr/goals/${g.id}/restore`, 'POST'))
+                    }
+                  >
+                    <Undo2 className="h-3.5 w-3.5" aria-hidden /> Restore
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" data-testid="goal-deleted-close" onClick={() => setDeletedOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

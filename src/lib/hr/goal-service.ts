@@ -550,6 +550,83 @@ export async function deleteGoal(goalId: string, session: Session): Promise<{ de
 }
 
 /**
+ * v2.93.0: the bench — soft-deleted goals in the session's scope, newest
+ * deletion first. Same shape as the board DTOs plus the honest `deletedAt`
+ * stamp, so the restore surface can say WHEN a goal left and with what
+ * progress. Manage-guarded at the route; scope-aware here like every read.
+ */
+export interface DeletedGoalDto extends GoalDto {
+  deletedAt: string;
+}
+
+export async function listDeletedGoals(session: Session): Promise<DeletedGoalDto[]> {
+  const goals = await db.goal.findMany({
+    where: {
+      deletedAt: { not: null },
+      employee: employeeScopeWhere(session),
+    },
+    orderBy: { deletedAt: 'desc' },
+    take: 50,
+    include: { employee: { select: { firstName: true, lastName: true } } },
+  });
+  // Type-honest narrowing: the where clause guarantees deletedAt at
+  // runtime; the filter makes the compiler believe it (never `!`).
+  const deleted = goals.filter((g): g is (typeof g) & { deletedAt: Date } => g.deletedAt !== null);
+  const cycleNames = await cycleNamesFor(deleted.map((g) => g.cycleId));
+  return deleted.map((g) => ({
+    ...toDto(g, `${g.employee.firstName} ${g.employee.lastName}`, cycleNames.get(g.cycleId ?? '') ?? null),
+    deletedAt: g.deletedAt.toISOString(),
+  }));
+}
+
+/**
+ * v2.93.0: the mistakes come back. Restoring clears deletedAt — the goal
+ * rejoins every list (console, portal, cycle meter, counts) with the
+ * values it left with; POS-sourced progress recomputes from sales on the
+ * next recompute, exactly like any live goal. Scope-aware through the
+ * employee relation (same include loadGoal uses), refuses goals that were
+ * never deleted, and audits GOAL_RESTORED with the facts that matter.
+ * A separate loader (loadGoal filters deletedAt: null by design) keeps
+ * the v2.92 read contracts untouched.
+ */
+async function loadGoalIncludingDeleted(goalId: string, session: Session) {
+  const goal = await db.goal.findFirst({
+    where: { id: goalId },
+    include: {
+      employee: {
+        select: { id: true, storeId: true, firstName: true, lastName: true, userId: true },
+      },
+    },
+  });
+  if (!goal || !employeeInScope(goal.employee, session)) {
+    throw new StageGError('GOAL_NOT_FOUND', 'Goal not found in your scope.', 404);
+  }
+  return goal;
+}
+
+export async function restoreGoal(goalId: string, session: Session): Promise<GoalDto> {
+  const goal = await loadGoalIncludingDeleted(goalId, session);
+  if (goal.deletedAt === null) {
+    throw new StageGError('GOAL_NOT_DELETED', 'This goal is not deleted — nothing to restore.', 409);
+  }
+  const updated = await db.goal.update({ where: { id: goal.id }, data: { deletedAt: null } });
+  await hrAudit({
+    actorId: session.userId,
+    actorRole: session.role,
+    action: 'GOAL_RESTORED',
+    resourceType: HrEntityType.GOAL,
+    resourceId: goal.id,
+    storeId: session.storeId,
+    metadata: { title: goal.title, status: goal.status, metricSource: goal.metricSource },
+  });
+  return toDto(
+    { ...goal, updatedAt: updated.updatedAt },
+    `${goal.employee.firstName} ${goal.employee.lastName}`,
+    (await cycleNamesFor([goal.cycleId])).get(goal.cycleId ?? '') ?? null,
+  );
+}
+
+/**
  * Self-service read: the employee's own goals with on-the-fly POS progress
  * (never persisted from the self-service path) plus manual values.
  */
