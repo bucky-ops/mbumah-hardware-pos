@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.95.0',
+    title: 'The drawer takes the wheel \u2014 lifecycle rides inside',
+    bullets: [
+      'The cycle drawer now drives the lifecycle: Activate and Close live right beside the calibration meter \u2014 no hunting for the table row.',
+      'The empty-cycle guard explains itself before it can fire: a draft with no reviews shows the reason inline (the server\u2019s own arithmetic, not a guess) and the Activate button rests until a review exists.',
+      'Close asks twice: a closed cycle cannot reopen, so the drawer arms a confirmation first \u2014 calibration ends, the meter freezes, and the notes stop taking ink.',
+      'A closed cycle wears its history honestly inside the drawer, and lifecycle errors report in the drawer where you can actually read them.',
+    ],
+  },
+  {
     version: '2.94.0',
     title: 'The cycle opens up \u2014 and calibration takes notes',
     bullets: [

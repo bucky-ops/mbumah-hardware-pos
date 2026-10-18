@@ -6,6 +6,10 @@
 //       (hr.performance.manage). CALIBRATION_NOTES (v2.94.0) writes the
 //       cycle's calibration notes while the cycle is DRAFT or ACTIVE — a
 //       CLOSED cycle is history and refuses new ink (CYCLE_FROZEN).
+//       v2.95.0: the drawer drives ACTIVATE/CLOSE too — the detail DTO
+//       carries canManageLifecycle and the EMPTY_CYCLE guard's own
+//       explanation (lifecycleBlock) so the console explains the 409
+//       before it can happen.
 
 import type { NextRequest } from 'next/server';
 import { hrGuard, type HrRouteContext } from '@/lib/hr/guard';
