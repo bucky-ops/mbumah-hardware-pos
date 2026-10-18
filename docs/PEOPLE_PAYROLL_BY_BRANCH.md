@@ -114,3 +114,36 @@ first manual change — the count reads "showing 1 of 5 (from link)".
 Nothing widens: the deep links only choose what to display; every server
 guard still fail-closes, and `?branch=` filters rows the session could
 already read.
+
+## Branch Selector hand-over (v2.112.0)
+
+The deep link's natural front doors (v2.112.0) — the affordance wears TWO
+homes, because branches are browsed in two places:
+
+1. **The Branch Selector** (`/branches/select`, the multi-store user's
+   landing): every branch card grows a **People & payroll** affordance that
+   opens `/?tab=people-payroll&branch=<id>` in a NEW TAB — the same
+   one-tab-per-view contract as "Open workspace" (spec Phase 8), so the
+   selector stays available.
+2. **The Organization Console** (`/org/dashboard`, the org-summary roles'
+   branch table): every row's Workspace column wears the same
+   **People & payroll** door beneath "Open branch workspace". This is where
+   owners and accountants actually browse branches, so this is where the
+   affordance earns its keep.
+
+- **Builder**: `buildPeoplePayrollDeepLink(storeId)` in
+  `src/lib/workspace/links.ts` — pure, `URLSearchParams`-encoded, relative.
+- **Honest gating**: the affordance renders only for `ORG_SUMMARY_ROLES`
+  (the exact roles `TAB_CONFIG` honors for the people-payroll tab). E2E
+  verified both ways: a multi-store WAREHOUSE_MANAGER sees the selector
+  cards with NO payroll door; a STORE_OWNER sees the door and the tab
+  honors it. Inactive stores never offer the door.
+- **Inheritance**: because the hand-over lands on the v2.111.0 boot path,
+  it inherits everything for free — tab applied after rehydrate, the
+  branch filter seeded and mirrored into the URL, the "(from link)" hint
+  retiring on first touch.
+- **Styling**: emerald outline variant (light and dark), quiet 200ms
+  hover lift on the selector card, the branch's branding color ringing its
+  dot on hover, and a `focus-within` border path for keyboard users.
+- **Pinned by** `src/tests/branch-selector-handover-v2112.test.ts` and
+  `scripts/verify-v2-112-0.mjs`.

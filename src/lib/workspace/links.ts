@@ -95,6 +95,22 @@ export function buildBranchSelectorUrl(): string {
 }
 
 /**
+ * People & Payroll deep link for a branch (v2.112.0) — the Branch Selector
+ * hand-over. Encodes the branch id (store ids are client-safe strings, but
+ * encoding keeps the contract airtight) and rides the v2.111.0 boot deep
+ * link: `/?tab=people-payroll&branch=<id>` opens the home shell on the
+ * People & Payroll tab, pre-filtered to the branch. The tab must exist in
+ * the shell's TAB_CONFIG and the role must hold it — callers gate on
+ * ORG_SUMMARY_ROLES so the affordance never renders as a dead door.
+ */
+export function buildPeoplePayrollDeepLink(storeId: string): string {
+  const params = new URLSearchParams();
+  params.set('tab', 'people-payroll');
+  params.set('branch', storeId || '');
+  return `/?${params.toString()}`;
+}
+
+/**
  * The configured workspace mode as a safe hint string (v2.18.1). Pure and
  * env-derived: 'path' | 'subdomain' | 'auto' | 'off'. The actual per-request
  * decision (path fallback on localhost and raw IPs) always happens in the

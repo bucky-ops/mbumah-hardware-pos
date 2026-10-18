@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.112.0] The branch picker hands you the payroll ledger
+
+Reach-and-manners release: branch listings grow a "People & payroll" affordance — the v2.111.0 deep link's natural consumer, in BOTH homes (the Branch Selector's cards and the Organization Console's Workspace column) — and October's BONUS run completed the last leg of the payroll lifecycle (manual disbursement) as the round's live end-to-end proof.
+
+### Added
+- **People & payroll hand-over, two homes** (`src/lib/workspace/links.ts`, `src/components/workspace/branch-selector.tsx`, `src/components/workspace/org-console.tsx`): every branch card in the Branch Selector and every row of the Organization Console's Branches table offers "People & payroll" — a new-tab link to `/?tab=people-payroll&branch=<storeId>` built by the pure `buildPeoplePayrollDeepLink`. The selector stays available (one-tab-per-view, spec Phase 8); the shell consumes the deep link exactly as designed: tab applied after rehydrate, branch seeds the panel filter, "(from link)" until first touch. The org console is the owner's real branch-browsing home — that is where the affordance earns its keep.
+- **Honest gating**: the affordance renders only for `ORG_SUMMARY_ROLES` — the exact roles the People & Payroll tab honors (`TAB_CONFIG`) — so it can never promise a view the role would be refused. E2E-verified both ways: warehouse@ (multi-store, not an org-summary role) sees the cards with NO payroll door; owner@ sees the door and the tab honors it. Inactive stores never offer the door.
+- **The payroll lifecycle's last leg walked in the open**: October's BONUS run (POSTED, five payslips PENDING, KES 197,772.60) was disbursed by hand through the run dialog — every payslip flipped PAID, `paidAt` stamped on the run, the payroll group heard about it (digest + per-employee paid notices), and the lifecycle UI moved to its settled state. Prepare → approve → post → disburse: every leg now has a live E2E on the books.
+
+### Changed
+- **Branch cards learned some manners** (styling): a quiet hover lift (`hover:shadow-md`), the branch's own branding color ringing its dot on hover (light and dark via `group-hover:ring-current`), a visible `focus-within` border path for keyboard users, and an emerald-tinted outline variant for the payroll affordance with dark variants — on both homes. All transitions 200ms, all tokens (no raw hex outside the existing branding-color fallback).
+- The What's-New feed leads with the hand-over story; the unread counter test re-anchored for the 2.112.0-fed feed (2.110.0→1, 2.109.0→2, 2.108.0→3, 2.77.0→34).
+
+### Security
+- The hand-over widens nothing: the link is a display selector over tabs the session can already see; the branch param remains a client-side filter over already-authorized rows; the server guards (`/api/org/summary` ORG_ROLES-only, HR report permission) still fail-closed. `target="_blank"` carries `rel="noopener noreferrer"` like every external-facing link in the selector.
+
 ## [2.111.0] The app speaks deep links; every settled run opens its door
 
 Reach-and-auditability release: deep links into the People & Payroll tab (`?tab=` + `?branch=`), run-detail doors on the ledger drawer's settled-run chips, and the October BONUS run walked the full maker-checker lifecycle (approved by a different actor, posted with its journal) as the round's live end-to-end proof.
