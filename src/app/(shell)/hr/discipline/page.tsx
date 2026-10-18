@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Download, Eye, EyeOff, Gavel, History, Lock, Plus, RefreshCw } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { buildAccessLedgerCsv } from '@/lib/hr/discipline-ledger-csv';
 import { buildDisciplineListCsv } from '@/lib/hr/discipline-list-csv';
 import { clampLedgerWindow, expiresSoonLabel, relativeTimeLabel } from '@/lib/hr/discipline-ui';
 
@@ -177,6 +178,28 @@ export default function DisciplinePage() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `discipline-cases-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // v2.118.0: the ledger's CSV door exports the FILTERED window — the same
+  // content-free columns the ledger renders (who, when, which case), so an
+  // export can never carry more than the screen it came from.
+  const exportLedgerCsv = () => {
+    const csv = buildAccessLedgerCsv(
+      ledgerVisible.map((r) => ({
+        timestamp: r.timestamp,
+        denied: r.denied,
+        userName: r.userName,
+        caseId: r.caseId,
+        employeeName: r.employeeName,
+      })),
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `access-ledger-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -376,7 +399,19 @@ export default function DisciplinePage() {
           <p data-testid="hr-discipline-ledger-counts" className="mt-1 text-xs tabular-nums text-muted-foreground">
             {ledger === null
               ? 'Loading…'
-              : `${ledgerVisible.length} of ${ledger.length} events · ${ledgerDenied} denied · last ${clampLedgerWindow(ledgerDays)} days`}
+              : `${ledgerVisible.length} of ${ledger.length} events · `}
+            {ledger === null ? null : ledgerDenied > 0 ? (
+              <span
+                data-testid="hr-discipline-ledger-denied-count"
+                className="font-medium text-rose-600 dark:text-rose-400"
+                title="Denied attempts in this window"
+              >
+                {ledgerDenied} denied
+              </span>
+            ) : (
+              <span>0 denied</span>
+            )}
+            {ledger === null ? null : ` · last ${clampLedgerWindow(ledgerDays)} days`}
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -404,6 +439,18 @@ export default function DisciplinePage() {
               aria-label="Refresh access ledger"
             >
               <RefreshCw className="h-4 w-4" aria-hidden /> Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportLedgerCsv}
+              disabled={ledgerVisible.length === 0}
+              aria-label="Export access ledger as CSV"
+              data-testid="hr-discipline-ledger-csv"
+              title="Only who, when, and which case are exported — never content"
+              className="border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+            >
+              <Download className="h-4 w-4" aria-hidden /> CSV
             </Button>
           </div>
           {ledger === null ? (

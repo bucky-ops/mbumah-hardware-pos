@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.118.0',
+    title: 'The ledger files its copy',
+    bullets: [
+      'The Restricted access ledger exports: a CSV door on the ledger card writes the filtered window to access-ledger-YYYY-MM-DD.csv \u2014 the same columns the screen shows (when, event, who, which case), in the same RFC 4180 file the case list has used since v2.115.0.',
+      'The export stays content-free by construction: case descriptions and resolution notes have no column and the row type has no field for one \u2014 an export can never carry more than the screen it came from.',
+      'The event column speaks the chips\u2019 language: OPEN for granted reads, DENIED for refused attempts \u2014 derived from the same boolean the chips wear, never from a free-text action string.',
+      'The counts line now emphasizes refused attempts: when a window holds denials, the \u201cN denied\u201d phrase wears a rose tint with its own tooltip \u2014 refusals are the part a reviewer scans for.',
+      'Export what you filtered: the CSV maps the FILTERED rows (event filter and window included), so the file always matches the counts line it was exported from.',
+    ],
+  },
+  {
     version: '2.117.0',
     title: 'The ledger reads the room',
     bullets: [
