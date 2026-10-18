@@ -16,7 +16,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { BadgeCheck, ChevronDown, ChevronUp, Star, Target, TrendingUp } from 'lucide-react';
+import { BadgeCheck, CalendarRange, ChevronDown, ChevronUp, Star, Target, TrendingUp } from 'lucide-react';
 import { apiGet, apiSend, EmptyState, ErrorNote, ProgressMeter, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 
 export interface GoalDto {
@@ -29,7 +29,19 @@ export interface GoalDto {
   progressPct: number;
   dueDate: string | null;
   isPosSourced: boolean;
+  cycleName?: string | null;
 }
+
+// v2.90.0: the portal reads the same shape — status chips wear the same
+// badge families the console's goal chips do, light and dark.
+const GOAL_CHIP_ACTIVE: Record<string, string> = {
+  OPEN: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900',
+  ACHIEVED: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900',
+  MISSED: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-900',
+  CLOSED: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600',
+  ALL: 'bg-primary text-primary-foreground border-primary',
+};
+const GOAL_CHIP_ORDER = ['ALL', 'OPEN', 'ACHIEVED', 'MISSED', 'CLOSED'] as const;
 export interface ReviewDto {
   id: string;
   cycleName: string;
@@ -54,6 +66,18 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
   const [openReviewId, setOpenReviewId] = useState<string | null>(null);
   const [reviewDetails, setReviewDetails] = useState<Record<string, ReviewDetail>>({});
   const [detailError, setDetailError] = useState('');
+
+  // v2.90.0: the goals half of the page speaks the same shape — status
+  // chips with live counts from the FULL list, an honest "Showing X of Y"
+  // line, and a filtered-empty state that offers the way back.
+  const [goalStatus, setGoalStatus] = useState('ALL');
+  const goalStatusCounts = initialGoals.reduce<Record<string, number>>((acc, g) => {
+    if (g.status === 'OPEN' || g.status === 'ACHIEVED' || g.status === 'MISSED' || g.status === 'CLOSED') {
+      acc[g.status] = (acc[g.status] ?? 0) + 1;
+    }
+    return acc;
+  }, {});
+  const visibleGoals = goalStatus === 'ALL' ? initialGoals : initialGoals.filter((g) => g.status === goalStatus);
 
   const toggleReview = async (id: string) => {
     setDetailError('');
@@ -92,15 +116,53 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
 
       {/* Goals */}
       {initialGoals.length === 0 ? (
-        <EmptyState icon={<Target className="h-8 w-8" aria-hidden />} title="No goals yet" hint="Goals your manager assigns will show progress here." />
+        <section aria-label="My goals" className="space-y-2">
+          <h2 className="px-1 text-sm font-semibold">My goals</h2>
+          <EmptyState icon={<Target className="h-8 w-8" aria-hidden />} title="No goals yet" hint="Goals your manager assigns will show progress here." />
+        </section>
       ) : (
         <section aria-label="My goals" className="space-y-3">
-          {initialGoals.map((g) => (
-            <div key={g.id} className="rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            <h2 className="text-sm font-semibold">My goals</h2>
+            {GOAL_CHIP_ORDER.map((s) => {
+              const active = goalStatus === s;
+              const count = s === 'ALL' ? initialGoals.length : goalStatusCounts[s] ?? 0;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={active}
+                  data-testid={`my-goal-filter-${s}`}
+                  onClick={() => setGoalStatus(s)}
+                  className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    active
+                      ? GOAL_CHIP_ACTIVE[s]
+                      : 'border-border bg-transparent text-muted-foreground hover:bg-muted/60'
+                  }`}
+                >
+                  {s === 'ALL' ? 'All' : s.replace(/_/g, ' ').toLowerCase()}
+                  <span className="tabular-nums opacity-70">{count}</span>
+                </button>
+              );
+            })}
+            <span className="ml-auto text-xs text-muted-foreground tabular-nums" data-testid="my-goal-count">
+              Showing {visibleGoals.length} of {initialGoals.length} goals
+            </span>
+          </div>
+          {visibleGoals.length === 0 ? (
+            <div className="rounded-xl border bg-card px-4 py-6 text-center">
+              <p className="text-sm text-muted-foreground">No goals match the current filter.</p>
+              <Button size="sm" variant="outline" className="mt-2" data-testid="my-goal-filter-clear" onClick={() => setGoalStatus('ALL')}>
+                Show all goals
+              </Button>
+            </div>
+          ) : (
+            visibleGoals.map((g) => (
+            <div key={g.id} className="rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md" data-testid={`my-goal-card-${g.id}`}>
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{g.title}</p>
-                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] text-muted-foreground">
                     {g.isPosSourced ? (
                       <>
                         <TrendingUp className="h-3 w-3 text-emerald-500" aria-hidden /> Computed from POS sales — not editable
@@ -109,6 +171,11 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
                       'Manual goal'
                     )}
                     {g.dueDate ? ` · due ${formatDate(g.dueDate)}` : ''}
+                    {g.cycleName ? (
+                      <span className="inline-flex items-center gap-0.5 text-amber-700 dark:text-amber-300">
+                        · <CalendarRange className="h-3 w-3" aria-hidden /> {g.cycleName}
+                      </span>
+                    ) : null}
                   </p>
                 </div>
                 <StatusBadge status={g.status} />
@@ -121,7 +188,8 @@ export function GoalsView({ initialGoals, initialReviews }: { initialGoals: Goal
                 </span>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </section>
       )}
 

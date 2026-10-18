@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.90.0',
+    title: 'The goals meet their cycles \u2014 and the portal reads the same shape',
+    bullets: [
+      'New goals can be filed under a review cycle: the New goal dialog gains an optional cycle picker (open or draft cycles \u2014 closed ones are history), and linked goal cards wear an amber cycle chip so calibration context travels with the goal.',
+      'Goal lists fold in the cycle\u2019s name through one query \u2014 a goal whose cycle was deleted reads uncycled, never a dangling id.',
+      'The self-service portal\u2019s My goals half finally speaks the same shape: a visible "My goals" heading, status chips with live counts (all / open / achieved / missed / closed), and an honest "Showing X of Y goals" line.',
+      'Filtering your own goals is one tap, and an empty filter result says so with a "Show all goals" way back \u2014 no silent hiding.',
+      'Same families everywhere: sky open, emerald achieved, rose missed, slate closed, amber cycles \u2014 console and portal, light and dark.',
+    ],
+  },
+  {
     version: '2.89.0',
     title: 'The goals speak the same shape \u2014 filters, live counts, and one recompute for all',
     bullets: [

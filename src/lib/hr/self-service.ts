@@ -638,6 +638,8 @@ export async function listMyGoalProgress(employee: SelfEmployee): Promise<Array<
     progressPct: g.progressPct,
     dueDate: g.dueDate,
     isPosSourced: g.metricSource === 'SALES_TOTAL' || g.metricSource === 'SALES_COUNT',
+    // v2.90.0: the portal goal card names its review cycle when linked.
+    cycleName: g.cycleName,
   }));
 }
 
