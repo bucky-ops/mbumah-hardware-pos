@@ -69,9 +69,10 @@ describe('filterBranchRows — the filter narrows, never reorders', () => {
     expect(src.includes('{visible.map((row) => (')).toBe(true);
     expect(src.includes('visible.map((row) => {')).toBe(true);
     // The tab and the console consume the shared component unchanged —
-    // neither grows its own filter copy.
+    // neither grows its own filter copy. (v2.111.0: the tab hands the panel
+    // a deep-linked defaultBranchId — still no select of its own.)
     const tab = read('src/app/(shell)/tabs/people-payroll-tab.tsx');
-    expect(tab.includes('PeoplePayrollByBranch rows={rows}')).toBe(true);
+    expect(tab.includes('<PeoplePayrollByBranch')).toBe(true);
     expect(tab.toLowerCase().includes('select')).toBe(false);
   });
 });

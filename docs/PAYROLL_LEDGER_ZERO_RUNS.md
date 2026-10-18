@@ -55,3 +55,22 @@ builder, so a float hair can never fake a zero (masking a real debt) nor fake a 
 7. The drawer renders the quiet block and keeps it separate from `role="alert"`.
 
 `scripts/verify-v2-110-0.mjs` re-checks the same contract from the sources of record.
+
+## Run doors (v2.111.0)
+
+Every settled-run chip in the drawer is now a **door**: the zero-run chips
+(slate, violet focus ring) and the missing-journal chips (rose) are real
+buttons. Clicking one closes the ledger drawer and opens that run's full
+detail dialog — one drawer closes, one opens, never two stacked. An audit
+starts from the line, not from a hunt.
+
+- Zero chip: `data-testid="payroll-ledger-zero-run-door"`, aria
+  "Open the <TYPE> run's detail — a zero-value settled run".
+- Missing chip: `data-testid="payroll-ledger-missing-run-door"`, aria
+  "Open the <TYPE> run's detail — a settled run missing its journal".
+- The quiet block stays quiet: its doors wear slate and a violet focus
+  ring; `role="alert"` remains the red alarm's alone.
+- Lifecycle proof this release: October's BONUS run (prepared by
+  SUPER_ADMIN) was approved by STORE_OWNER — a distinct actor, so the
+  maker-checker guard held — then posted with its journal; the drawer now
+  carries three posted entries plus the quiet zero run.

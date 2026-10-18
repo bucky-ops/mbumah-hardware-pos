@@ -94,3 +94,23 @@ implementation.
   already read.
 - **Pinned by** `src/tests/people-payroll-filter-v2110.test.ts` and
   `scripts/verify-v2-110-0.mjs`.
+
+## Deep links (v2.111.0)
+
+The tab speaks two URL parameters:
+
+- **`?tab=people-payroll`** — consumed ONCE at app boot (validated against
+  TAB_CONFIG, applied AFTER the persisted store's async rehydrate, then
+  stripped). A refresh returns to the persisted tab. Unknown ids are
+  ignored silently.
+- **`?branch=<storeId>`** — owned by the tab: read on mount to seed the
+  panel's filter, mirrored on every change via `history.replaceState`
+  (no navigation, no history entry), stripped on unmount so a stale filter
+  cannot haunt the next visit.
+
+While the filter still holds the link's value — and only until the user's
+first manual change — the count reads "showing 1 of 5 (from link)".
+
+Nothing widens: the deep links only choose what to display; every server
+guard still fail-closes, and `?branch=` filters rows the session could
+already read.

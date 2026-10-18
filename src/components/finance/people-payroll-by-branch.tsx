@@ -117,17 +117,33 @@ export function PeoplePayrollByBranch({
   rows,
   defaultOpen = false,
   testIdPrefix = 'people-payroll',
+  defaultBranchId = '',
+  onBranchFilterChange,
 }: {
   rows: HrPerStoreRow[];
   /** The console keeps its expert density (collapsed); the tab opens wide. */
   defaultOpen?: boolean;
   testIdPrefix?: string;
+  /** v2.111.0: a deep link (?branch=<storeId>) may open the panel pre-filtered. */
+  defaultBranchId?: string;
+  /** v2.111.0: the tab mirrors filter changes into the URL (replaceState). */
+  onBranchFilterChange?: (branchId: string) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   // v2.110.0: the branch filter lives INSIDE the shared panel, so both homes
   // (the Finance & Insights tab AND the Expert Console) get it from one
   // implementation. '' = every branch; a storeId narrows table AND cards.
-  const [branchId, setBranchId] = useState('');
+  // v2.111.0: a deep link can seed the filter (defaultBranchId); every user
+  // change reports through onBranchFilterChange so the URL stays the truth.
+  const [branchId, setBranchId] = useState(defaultBranchId);
+  // The "(from link)" hint is honest only while the user has not overridden
+  // the seeded value — the first manual change retires it for good.
+  const [userTouched, setUserTouched] = useState(false);
+  const changeBranch = (id: string) => {
+    setBranchId(id);
+    setUserTouched(true);
+    onBranchFilterChange?.(id);
+  };
   const visible = filterBranchRows(rows, branchId);
   const filtered = branchId !== '';
   return (
@@ -171,7 +187,7 @@ export function PeoplePayrollByBranch({
             <select
               id={`${testIdPrefix}-branch-filter`}
               value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
+              onChange={(e) => changeBranch(e.target.value)}
               data-testid={`${testIdPrefix}-branch-filter`}
               className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-sm outline-none transition-colors focus:border-orange-400 focus:ring-2 focus:ring-orange-400/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
             >
@@ -185,12 +201,13 @@ export function PeoplePayrollByBranch({
             {filtered && (
               <span className="text-[11px] text-slate-400 dark:text-slate-500" data-testid={`${testIdPrefix}-filter-count`}>
                 showing {visible.length} of {rows.length}
+                {defaultBranchId && branchId === defaultBranchId && !userTouched ? ' (from link)' : ''}
               </span>
             )}
             {filtered && (
               <button
                 type="button"
-                onClick={() => setBranchId('')}
+                onClick={() => changeBranch('')}
                 data-testid={`${testIdPrefix}-filter-reset`}
                 className="ml-auto rounded-md px-2 py-0.5 text-[11px] font-medium text-orange-600 underline-offset-2 transition-colors hover:bg-orange-50 hover:underline dark:text-orange-400 dark:hover:bg-orange-950/40"
               >

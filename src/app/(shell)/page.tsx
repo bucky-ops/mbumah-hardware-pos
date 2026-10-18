@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { useAuthStore, useAppStore, useCartStore } from '@/lib/stores';
+import { useAuthStore, useAppStore, useCartStore, type AppTab } from '@/lib/stores';
+import { TAB_CONFIG } from '@/lib/app-config';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LoginScreen } from '@/components/login-screen';
 import { ChangePasswordScreen } from '@/components/change-password-screen';
@@ -93,12 +94,38 @@ export default function HomePage() {
   // is removed or the store structure changes.
   useEffect(() => {
     hydrateFromStorage();
+    // v2.111.0 DEEP LINK: a URL may name the tab (?tab=<id>) and — for tabs
+    // that speak it — carry further context (?branch=<storeId>). The tab param
+    // is consumed ONCE here: it wins over the persisted tab for this boot,
+    // then the param is stripped so a refresh returns to the persisted tab.
+    // Unknown tab ids are ignored silently (the URL may belong to some other
+    // surface); ?branch is NOT consumed here — the People & Payroll tab owns
+    // that contract and strips it on its own unmount.
+    // ORDER MATTERS: rehydrate() resolves async and would overwrite a
+    // synchronous setActiveTab — the deep link is applied AFTER it settles.
+    const consumeDeepLink = () => {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const tabParam = sp.get('tab');
+        if (tabParam && TAB_CONFIG.some((t) => t.id === tabParam)) {
+          useAppStore.getState().setActiveTab(tabParam as AppTab);
+          sp.delete('tab');
+          const qs = sp.toString();
+          window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+        }
+      } catch {
+        // No URL surface — boot exactly as before.
+      }
+    };
     try {
       if (useAppStore?.persist?.rehydrate) {
-        useAppStore.persist.rehydrate();
+        void Promise.resolve(useAppStore.persist.rehydrate()).then(consumeDeepLink, consumeDeepLink);
+      } else {
+        consumeDeepLink();
       }
     } catch (err) {
       console.error('[MbumahBoot] Failed to rehydrate app store:', err);
+      consumeDeepLink();
     }
 
     // v2.6.0 CART RESTORATION: the cart store persists to IndexedDB with
