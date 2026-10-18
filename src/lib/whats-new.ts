@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.99.0',
+    title: 'The bench files itself',
+    bullets: [
+      'The filing family completes: the Recently deleted bench grows the same CSV button the reviews, cycles and goals lists carry — every performance surface a manager can look at now files too.',
+      'The file tells the whole exit story: goal, employee, cycle, source, values, progress — and the Deleted day stamp, so reconciling the bench against a cycle or an audit never means guessing when a goal left.',
+      'Honest window: the bench shows the 50 most recent deletions, and when that cap bites, the file\u2019s header says \u201cmost recent 50 deletions\u201d instead of silently posing as the whole bench.',
+      'The button rests with a reason: an empty bench disables the export (\u201cNothing to file — the bench is clear\u201d), and every download lands an audit row that says what was filed, never who is in it.',
+    ],
+  },
+  {
     version: '2.98.0',
     title: 'Payroll runs read as periods',
     bullets: [

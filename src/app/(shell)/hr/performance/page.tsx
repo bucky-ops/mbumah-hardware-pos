@@ -577,6 +577,44 @@ export default function PerformancePage() {
     }
   };
 
+  // v2.99.0: the bench files itself — the governed CSV of the exact rows
+  // this dialog shows, closing the performance family's last gap: every
+  // surface a manager can LOOK at now FILEs too.
+  const [benchCsvBusy, setBenchCsvBusy] = useState(false);
+  const [benchCsvNote, setBenchCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportBenchCsv = async () => {
+    if (benchCsvBusy) return;
+    setBenchCsvBusy(true);
+    setBenchCsvNote(null);
+    try {
+      const res = await fetch('/api/hr/goals/deleted/export', { credentials: 'include' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'mbumah-performance-bench.csv';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setBenchCsvNote({
+        tone: 'ok',
+        text: `Bench CSV downloaded — ${filename}. The governed filing format (header block, injection guard), exactly the rows on this bench.`,
+      });
+    } catch (e) {
+      setBenchCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setBenchCsvBusy(false);
+    }
+  };
+
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
@@ -1625,6 +1663,16 @@ export default function PerformancePage() {
               </p>
             </div>
           ) : (
+            <>
+            {deletedGoals.length >= 50 && (
+              <div
+                className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                data-testid="goal-deleted-window-note"
+              >
+                Showing the most recent 50 deletions — the bench files that window honestly; older exits
+                stay in the audit trail.
+              </div>
+            )}
             <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
               {deletedGoals.map((g) => (
                 <div
@@ -1683,8 +1731,41 @@ export default function PerformancePage() {
                 </div>
               ))}
             </div>
+            </>
           )}
-          <DialogFooter>
+          {/* v2.99.0: the bench's filing note — where the action lives, the
+              report lands in words you can actually read (the family rule). */}
+          {benchCsvNote && (
+            <div
+              role="status"
+              data-testid="goal-bench-csv-note"
+              className={`rounded-md border px-3 py-2 text-xs ${
+                benchCsvNote.tone === 'ok'
+                  ? 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300'
+                  : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+              }`}
+            >
+              {benchCsvNote.text}
+            </div>
+          )}
+          <DialogFooter className="flex items-center justify-between gap-2 sm:justify-between">
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="goal-bench-csv"
+              aria-label="Download the bench CSV — the governed filing file of the recently deleted goals"
+              title={
+                !deletedGoals || deletedGoals.length === 0
+                  ? 'Nothing to file — the bench is clear'
+                  : 'The governed filing format (header block, injection guard), the rows on this bench'
+              }
+              disabled={benchCsvBusy || !deletedGoals || deletedGoals.length === 0}
+              onClick={() => void exportBenchCsv()}
+              className="border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-slate-200"
+            >
+              <FileDown className={`h-4 w-4 ${benchCsvBusy ? 'animate-pulse' : ''}`} aria-hidden />
+              {benchCsvBusy ? 'Building…' : 'Bench CSV'}
+            </Button>
             <Button variant="outline" data-testid="goal-deleted-close" onClick={() => setDeletedOpen(false)}>
               Close
             </Button>
