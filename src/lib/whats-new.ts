@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.117.0',
+    title: 'The ledger reads the room',
+    bullets: [
+      'The discipline desk grows a Restricted access ledger: every open of a restricted record \u2014 and every refused attempt \u2014 across ALL your cases in one read-only view, newest first.',
+      'Ask narrower: the window selector (last 7 / 30 / 90 days) is server-clamped, and an event filter splits opens from denied attempts \u2014 the counts line always says exactly what you are looking at.',
+      'Rows are doors: opening a case from the ledger is itself a logged restricted read \u2014 the trail proves it, and the ledger shows it on refresh.',
+      'The ledger is content-free like the trail: who, when, and which case\u2019s employee \u2014 never the description; names that cannot resolve say \u201can unknown user\u201d instead of guessing.',
+      'Times read like a desk, not a server log: rows say \u201cjust now\u201d, \u201c4h ago\u201d or \u201c2d ago\u201d (calendar-day honest) with the exact date on hover.',
+    ],
+  },
+  {
     version: '2.116.0',
     title: 'The trail reads back',
     bullets: [

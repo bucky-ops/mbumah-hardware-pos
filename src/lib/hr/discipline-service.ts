@@ -10,7 +10,16 @@
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import { StageGError, employeeScopeWhere, employeeInScope, toDate } from './stage-g-shared';
-import { buildAccessTrail, RESTRICTED_TRAIL_ACTIONS, type AccessTrailDto } from './discipline-ui';
+import {
+  buildAccessTrail,
+  clampLedgerWindow,
+  foldAccessLedger,
+  RESTRICTED_TRAIL_ACTIONS,
+  ACCESS_LEDGER_LIMIT,
+  DAY_MS,
+  type AccessTrailDto,
+  type LedgerRow,
+} from './discipline-ui';
 import type { AuthSession } from '@/lib/auth';
 
 export const CASE_TYPES = ['WARNING', 'GRIEVANCE', 'INVESTIGATION'] as const;
@@ -161,6 +170,57 @@ export async function listCases(
     }
   }
   return dtos;
+}
+
+// ── Access ledger (v2.117.0 — the cross-case read-back) ───────────────────
+
+/**
+ * The restricted-access ledger: every VIEWED/DENIED event on the session's
+ * visible restricted cases inside a clamped window, newest first. The SAME
+ * employee scope as listCases answers the query (fail-closed — a branch
+ * manager sees their branch's events only), the payload is content-free
+ * (who, when, which case's employee — never the description), and the
+ * window is clamped so a stray ?days=9999 cannot become an unbounded scan.
+ */
+export async function listRestrictedAccess(
+  session: Session,
+  opts: { days?: unknown } = {},
+): Promise<LedgerRow[]> {
+  const days = clampLedgerWindow(opts.days);
+  const since = new Date(Date.now() - days * DAY_MS);
+  const cases = await db.disciplinaryCase.findMany({
+    where: {
+      deletedAt: null,
+      employee: employeeScopeWhere(session),
+    },
+    select: {
+      id: true,
+      employee: { select: { firstName: true, lastName: true } },
+    },
+  });
+  if (cases.length === 0) return [];
+  const caseNames: Record<string, string | null> = {};
+  for (const c of cases) {
+    caseNames[c.id] = `${c.employee.firstName} ${c.employee.lastName}`;
+  }
+  const events = await db.auditLog.findMany({
+    where: {
+      entityType: 'DisciplinaryCase',
+      entityId: { in: cases.map((c) => c.id) },
+      action: { in: [...RESTRICTED_TRAIL_ACTIONS] },
+      timestamp: { gte: since },
+    },
+    select: { entityId: true, action: true, userId: true, timestamp: true },
+    orderBy: { timestamp: 'desc' },
+    take: ACCESS_LEDGER_LIMIT,
+  });
+  const userIds = [...new Set(events.map((e) => e.userId).filter((u): u is string => u != null))];
+  const users = userIds.length
+    ? await db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+    : [];
+  const userNames: Record<string, string | null> = {};
+  for (const u of users) userNames[u.id] = u.name;
+  return foldAccessLedger(events, caseNames, userNames);
 }
 
 async function loadCase(caseId: string, session: Session) {

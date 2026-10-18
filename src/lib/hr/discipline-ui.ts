@@ -97,3 +97,96 @@ export function buildAccessTrail(
     lastDeniedAt: lastDenied ? new Date(lastDenied.timestamp).toISOString() : null,
   };
 }
+
+// ── Access-ledger read-back (v2.117.0) ──────────────────────────────────────
+//
+// The single-case trail (buildAccessTrail) answers "who opened THIS record";
+// the ledger answers "who has been opening restricted records LATELY" — a
+// cross-case, read-only view over the same audit events. Same content-free
+// contract: who, when, which case's employee — never the description.
+
+/** Default report window (days). */
+export const ACCESS_LEDGER_WINDOW_DAYS = 30;
+/** Hard cap — an unbounded window is an unbounded scan. */
+export const ACCESS_LEDGER_MAX_DAYS = 90;
+/** Row cap for the report payload. */
+export const ACCESS_LEDGER_LIMIT = 200;
+
+/**
+ * Clamp the requested window: non-positive / non-numeric falls back to the
+ * default, anything above the cap is capped. The floor keeps the param honest
+ * instead of silently returning "everything".
+ */
+export function clampLedgerWindow(days: unknown): number {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n <= 0) return ACCESS_LEDGER_WINDOW_DAYS;
+  return Math.min(Math.floor(n), ACCESS_LEDGER_MAX_DAYS);
+}
+
+export interface LedgerEvent {
+  entityId: string;
+  action: string;
+  userId: string | null;
+  timestamp: Date | string;
+}
+
+export interface LedgerRow {
+  caseId: string;
+  employeeName: string | null;
+  action: string;
+  denied: boolean;
+  userId: string | null;
+  userName: string | null;
+  timestamp: string;
+}
+
+/**
+ * Join audit events to the case/user names the service resolved in batch.
+ * Unrelated actions are filtered again here (defence in depth on the fold),
+ * order is preserved (the query owns the sort — newest first), and a name
+ * that cannot resolve degrades to null, never a fabricated label.
+ */
+export function foldAccessLedger(
+  events: readonly LedgerEvent[],
+  caseNames: Record<string, string | null>,
+  userNames: Record<string, string | null>,
+): LedgerRow[] {
+  return events
+    .filter((e) => (RESTRICTED_TRAIL_ACTIONS as readonly string[]).includes(e.action))
+    .map((e) => ({
+      caseId: e.entityId,
+      employeeName: caseNames[e.entityId] ?? null,
+      action: e.action,
+      denied: e.action === 'DISCIPLINARY_RESTRICTED_DENIED',
+      userId: e.userId,
+      userName: (e.userId != null && userNames[e.userId] !== undefined ? userNames[e.userId] : null) ?? null,
+      timestamp: new Date(e.timestamp).toISOString(),
+    }));
+}
+
+/**
+ * Relative time for ledger rows: "just now" / "Nm ago" / "Nh ago", then
+ * CALENDAR days ("2d ago") — the same calendar-day honesty as the countdown
+ * chips, not ms ceilings. A future timestamp (clock skew) clamps to
+ * "just now"; garbage is honestly null and the UI falls back to the absolute.
+ */
+export function relativeTimeLabel(
+  iso: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const diff = now.getTime() - d.getTime();
+  if (diff <= 0) return 'just now';
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const startOfThen = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const startOfNow = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const days = Math.round((startOfNow - startOfThen) / DAY_MS);
+  return `${Math.max(days, 1)}d ago`;
+}
