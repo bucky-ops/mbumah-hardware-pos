@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.100.0',
+    title: 'The period opens its ledger',
+    bullets: [
+      'Every payroll period header carries a Ledger button now — the month\u2019s journal entries open right beside the runs, no navigation to the accounting module, no losing your place.',
+      'Each entry shows its lines: account code, account name, debit, credit — and a Balanced chip proves the arithmetic at money precision before you trust it.',
+      'Runs still in motion stay honest in the drawer: counted as waiting, never priced — the entry posts when the run posts.',
+      'Same read roles as the runs table itself (HR, branch managers, owners, accountants) — reading what a period posted widens nothing.',
+      'Light and dark, printable: the drawer never joins a printed page, the way every panel in the console already behaves.',
+    ],
+  },
+  {
     version: '2.99.0',
     title: 'The bench files itself',
     bullets: [
