@@ -513,7 +513,10 @@ describe('deskReportToCsv - the report files itself', () => {
     expect(head[1]).toBe('Organization,MBUMAH Hardware');
     expect(head[2]).toBe('Scope,Branch: MBUMAH HARDWARE - Juja Main');
     expect(head[3]).toBe(`Window,${report.window.label} (7 EAT days)`);
-    expect(head[4]).toMatch(/^Generated \(UTC\),2026-10-17T/);
+    // The stamp is the moment of generation — pin it to the CURRENT UTC
+    // date (never the date this test was written; a calendar rollover must
+    // not break the pin), and keep the ISO shape strict.
+    expect(head[4]).toMatch(new RegExp(`^Generated \\(UTC\\),${new Date().toISOString().slice(0, 10)}T\\d{2}:\\d{2}:\\d{2}`));
   });
 
   it('carries a Summary block with the four totals', () => {

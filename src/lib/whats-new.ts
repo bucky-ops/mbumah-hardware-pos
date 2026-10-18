@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.89.0',
+    title: 'The goals speak the same shape \u2014 filters, live counts, and one recompute for all',
+    bullets: [
+      'The Goals tab grows real handles: filter by employee, by metric source (manual / sales value / sales count / custom), and by status chips (open / achieved / missed / closed) \u2014 each chip carrying its live count so you know what a click will show.',
+      'A "Showing X of Y goals" line and a one-tap "Clear filters" keep the picture honest \u2014 an empty filter result says so instead of silently hiding the grid.',
+      'One button refreshes every sales-sourced goal at once: "Recompute all POS goals" appears whenever at least one POS-sourced goal exists \u2014 no more tapping each card in turn.',
+      'The recompute stays honest per goal: values fold from POS sales only (never typed), statuses flip by the same rule (achieved at target, missed past due), and closed goals keep their status.',
+      'Same families, light and dark: sky for open and sales-sourced, emerald for achieved, rose for missed, slate for closed \u2014 chips, source badges, and recompute buttons speak one language.',
+    ],
+  },
+  {
     version: '2.88.0',
     title: 'The cycle shows its shape \u2014 a calibration meter and reviews you can filter',
     bullets: [

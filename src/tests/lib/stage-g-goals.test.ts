@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Prisma } from '@prisma/client';
-import { computePosGoalValue, createGoal, listGoals, recomputeGoal, updateGoal } from '@/lib/hr/goal-service';
+import { computePosGoalValue, createGoal, listGoals, recomputeAllGoals, recomputeGoal, updateGoal } from '@/lib/hr/goal-service';
 
 /**
  * Phase 4.7 contracts (v2.19.0): POS-sourced goals are COMPUTED from
@@ -205,6 +205,11 @@ describe('goal mutations', () => {
       session,
     );
     expect(db.goal.update).toHaveBeenCalled();
+    // v2.89.0 fix: the create response reflects the first computation —
+    // it used to hard-code 0/OPEN even after the compute persisted.
+    expect(dto.currentValue).toBe('60000.00');
+    expect(dto.status).toBe('ACHIEVED');
+    expect(dto.progressPct).toBe(100);
     expect(dto.id).toBe('goal-3');
   });
 
@@ -223,5 +228,79 @@ describe('goal mutations', () => {
     const where = db.goal.findMany.mock.calls[0][0].where;
     expect(where.status).toBe('OPEN');
     expect(JSON.stringify(where.employee)).toContain('store-1');
+  });
+});
+
+describe('recomputeAllGoals (v2.89.0) — one call, every POS goal', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 'goal-x',
+    employeeId: 'emp-1',
+    cycleId: null,
+    title: 'Bulk sales',
+    metricSource: 'SALES_TOTAL',
+    metricConfig: null,
+    targetValue: new Prisma.Decimal(1000),
+    currentValue: new Prisma.Decimal(0),
+    status: 'OPEN',
+    createdAt: new Date('2026-06-01T00:00:00Z'),
+    dueDate: null,
+    updatedAt: new Date(),
+    deletedAt: null,
+    employee: { userId: 'user-emp', storeId: 'store-1' },
+    ...over,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.goal.update.mockResolvedValue({});
+  });
+
+  it('recomputes only POS-sourced goals, scoped to the session branch', async () => {
+    db.goal.findMany.mockResolvedValue([]);
+    await recomputeAllGoals(session);
+    const where = db.goal.findMany.mock.calls[0][0].where;
+    expect(where.deletedAt).toBe(null);
+    expect(where.metricSource).toEqual({ in: ['SALES_TOTAL', 'SALES_COUNT'] });
+    expect(JSON.stringify(where.employee)).toContain('store-1');
+  });
+
+  it('folds an honest summary across statuses (achieved / missed / open)', async () => {
+    db.goal.findMany.mockResolvedValue([
+      row({ id: 'g-ach', targetValue: new Prisma.Decimal(1000) }),
+      row({ id: 'g-miss', metricSource: 'SALES_COUNT', targetValue: new Prisma.Decimal(10), dueDate: new Date(Date.now() - 86400000) }),
+      row({ id: 'g-open', targetValue: new Prisma.Decimal(1000), dueDate: null, employee: { userId: null, storeId: 'store-1' } }),
+    ]);
+    db.salesTransaction.aggregate.mockResolvedValue({ _sum: { totalAmount: new Prisma.Decimal(2000) } });
+    db.salesTransaction.count.mockResolvedValue(0);
+
+    const summary = await recomputeAllGoals(session);
+    expect(summary.recomputed).toBe(3);
+    expect(summary.achieved).toBe(1);
+    expect(summary.missed).toBe(1);
+    expect(summary.open).toBe(1);
+    expect(summary.closed).toBe(0);
+    expect(db.goal.update).toHaveBeenCalledTimes(3);
+    expect(hrAudit).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(hrAudit.mock.calls[0][0].metadata)).toContain('bulk');
+  });
+
+  it('CLOSED goals keep their status (value still refreshes, audit still walks)', async () => {
+    db.goal.findMany.mockResolvedValue([row({ id: 'g-closed', status: 'CLOSED', targetValue: new Prisma.Decimal(1000) })]);
+    db.salesTransaction.aggregate.mockResolvedValue({ _sum: { totalAmount: new Prisma.Decimal(5000) } });
+
+    const summary = await recomputeAllGoals(session);
+    expect(summary.recomputed).toBe(1);
+    expect(summary.closed).toBe(1);
+    expect(summary.achieved).toBe(0);
+    const data = db.goal.update.mock.calls[0][0].data;
+    expect(data.status).toBe('CLOSED');
+    expect(data.currentValue.toNumber()).toBe(5000);
+  });
+
+  it('an empty scope folds an all-zero summary — never undefined', async () => {
+    db.goal.findMany.mockResolvedValue([]);
+    const summary = await recomputeAllGoals(session);
+    expect(summary).toEqual({ recomputed: 0, achieved: 0, missed: 0, open: 0, closed: 0 });
+    expect(db.goal.update).not.toHaveBeenCalled();
   });
 });

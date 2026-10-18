@@ -225,6 +225,67 @@ export async function recomputeGoal(goalId: string, session: Session): Promise<G
 
 // ── Mutations ───────────────────────────────────────────────────────────────
 
+/**
+ * v2.89.0: the goals speak the same shape — one call recomputes every
+ * POS-sourced goal in the session's scope. The rules are the single
+ * recompute's rules exactly: values fold from SalesTransaction (never
+ * typed), statuses flip ACHIEVED at target / MISSED past due / OPEN
+ * otherwise, and CLOSED goals keep their status (their value still
+ * refreshes, so the archive stays accurate). One hrAudit per goal keeps
+ * the per-goal trace the single recompute established.
+ */
+export interface GoalRecomputeAllSummary {
+  recomputed: number;
+  achieved: number;
+  missed: number;
+  open: number;
+  closed: number;
+}
+
+export async function recomputeAllGoals(session: Session): Promise<GoalRecomputeAllSummary> {
+  const goals = await db.goal.findMany({
+    where: {
+      deletedAt: null,
+      metricSource: { in: ['SALES_TOTAL', 'SALES_COUNT'] },
+      employee: employeeScopeWhere(session),
+    },
+    include: { employee: { select: { userId: true, storeId: true } } },
+  });
+
+  const summary: GoalRecomputeAllSummary = { recomputed: 0, achieved: 0, missed: 0, open: 0, closed: 0 };
+
+  for (const goal of goals) {
+    const value = await computePosGoalValue(goal);
+    const target = goal.targetValue ?? new Prisma.Decimal(0);
+    let status = goal.status;
+    if (goal.status !== 'CLOSED') {
+      if (target.gt(0) && value.gte(target)) status = 'ACHIEVED';
+      else if (goal.dueDate && goal.dueDate.getTime() < Date.now()) status = 'MISSED';
+      else status = 'OPEN';
+    }
+
+    await db.goal.update({ where: { id: goal.id }, data: { currentValue: value, status } });
+
+    await hrAudit({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: 'GOAL_RECOMPUTED',
+      resourceType: HrEntityType.GOAL,
+      resourceId: goal.id,
+      storeId: session.storeId,
+      metadata: { metricSource: goal.metricSource, status, bulk: true },
+    });
+
+    summary.recomputed += 1;
+    if (status === 'ACHIEVED') summary.achieved += 1;
+    else if (status === 'MISSED') summary.missed += 1;
+    else if (status === 'OPEN') summary.open += 1;
+    else summary.closed += 1;
+  }
+
+  return summary;
+}
+
 export async function createGoal(
   input: {
     employeeId?: unknown;
@@ -298,7 +359,11 @@ export async function createGoal(
     },
   });
 
-  // POS-sourced goals get their first computation immediately.
+  // POS-sourced goals get their first computation immediately. v2.89.0
+  // fix: the response used to hard-code currentValue 0 / status OPEN —
+  // the compute persisted honestly but the DTO lied about it. Capture the
+  // updated row so the create response reflects the first computation.
+  let firstCompute: { currentValue: Prisma.Decimal; status: string } | null = null;
   if (metricSource === 'SALES_TOTAL' || metricSource === 'SALES_COUNT') {
     const value = await computePosGoalValue({
       metricSource,
@@ -308,7 +373,8 @@ export async function createGoal(
       employee: { userId: employee.userId, storeId: employee.storeId },
     });
     const status = target.gt(0) && value.gte(target) ? 'ACHIEVED' : 'OPEN';
-    await db.goal.update({ where: { id: goal.id }, data: { currentValue: value, status } });
+    const updated = await db.goal.update({ where: { id: goal.id }, data: { currentValue: value, status } });
+    firstCompute = { currentValue: updated.currentValue ?? new Prisma.Decimal(0), status: updated.status };
   }
 
   await hrAudit({
@@ -321,7 +387,14 @@ export async function createGoal(
     metadata: { metricSource, fields: ['title', 'targetValue', 'dueDate'] },
   });
 
-  return toDto({ ...goal, currentValue: new Prisma.Decimal(0) }, await employeeNameFor(employee.id));
+  return toDto(
+    {
+      ...goal,
+      currentValue: firstCompute?.currentValue ?? new Prisma.Decimal(0),
+      status: firstCompute?.status ?? goal.status,
+    },
+    await employeeNameFor(employee.id),
+  );
 }
 
 export interface GoalUpdateInput {

@@ -68,6 +68,7 @@ const RATING_MAX = 5;
 const NARRATIVE_MAX = 4000;
 interface GoalDto {
   id: string;
+  employeeId: string;
   employeeName: string | null;
   title: string;
   metricSource: string;
@@ -88,6 +89,26 @@ const SOURCE_LABELS: Record<string, string> = {
   SALES_TOTAL: 'Sales value (POS)',
   SALES_COUNT: 'Sales count (POS)',
   CUSTOM: 'Custom',
+};
+
+// v2.89.0: goal-status filter chips — the same language the review chips
+// speak (v2.88.0), each status wearing its own badge family when active:
+// sky for open, emerald for achieved, rose for missed, slate for closed.
+const GOAL_STATUSES = ['OPEN', 'ACHIEVED', 'MISSED', 'CLOSED'] as const;
+const GOAL_CHIP_ACTIVE: Record<string, string> = {
+  OPEN: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900',
+  ACHIEVED: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900',
+  MISSED: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-900',
+  CLOSED: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600',
+  ALL: 'bg-primary text-primary-foreground border-primary',
+};
+// v2.89.0: a goal card's source badge is tinted by family — sky for the
+// POS-computed sources, amber for custom, quiet slate for manual.
+const SOURCE_CHIP: Record<string, string> = {
+  MANUAL: 'border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300',
+  SALES_TOTAL: 'border-sky-300 text-sky-700 dark:border-sky-900 dark:text-sky-300',
+  SALES_COUNT: 'border-sky-300 text-sky-700 dark:border-sky-900 dark:text-sky-300',
+  CUSTOM: 'border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-300',
 };
 
 // v2.88.0: review-status filter chips. Each status wears its own badge
@@ -117,6 +138,12 @@ export default function PerformancePage() {
   const [tab, setTab] = useState('cycles');
   const [filterCycleId, setFilterCycleId] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+
+  // v2.89.0: the Goals tab speaks the same shape — employee + source picks,
+  // status chips with live counts, an honest "Showing X of Y" line.
+  const [filterGoalEmployee, setFilterGoalEmployee] = useState('ALL');
+  const [filterGoalSource, setFilterGoalSource] = useState('ALL');
+  const [filterGoalStatus, setFilterGoalStatus] = useState('ALL');
 
   // dialogs
   const [cycleOpen, setCycleOpen] = useState(false);
@@ -195,6 +222,43 @@ export default function PerformancePage() {
     setFilterCycleId('ALL');
     setFilterStatus('ALL');
   };
+
+  // v2.89.0: goal counts stay honest to the FULL loaded list (never the
+  // filtered subset) — chips say how many goals exist overall.
+  const goalStatusCounts = useMemo(() => {
+    const counts: Record<string, number> = { OPEN: 0, ACHIEVED: 0, MISSED: 0, CLOSED: 0 };
+    for (const g of goals ?? []) {
+      if (g.status === 'OPEN' || g.status === 'ACHIEVED' || g.status === 'MISSED' || g.status === 'CLOSED') {
+        counts[g.status] += 1;
+      }
+    }
+    return counts;
+  }, [goals]);
+
+  const filteredGoals = useMemo(
+    () =>
+      (goals ?? []).filter(
+        (g) =>
+          (filterGoalEmployee === 'ALL' || g.employeeId === filterGoalEmployee) &&
+          (filterGoalSource === 'ALL' || g.metricSource === filterGoalSource) &&
+          (filterGoalStatus === 'ALL' || g.status === filterGoalStatus),
+      ),
+    [goals, filterGoalEmployee, filterGoalSource, filterGoalStatus],
+  );
+  const goalFiltersActive =
+    filterGoalEmployee !== 'ALL' || filterGoalSource !== 'ALL' || filterGoalStatus !== 'ALL';
+  const clearGoalFilters = () => {
+    setFilterGoalEmployee('ALL');
+    setFilterGoalSource('ALL');
+    setFilterGoalStatus('ALL');
+  };
+  // v2.89.0: the one-call refresh appears only when something can use it —
+  // at least one POS-sourced goal exists in the loaded list.
+  const posGoalCount = useMemo(
+    () => (goals ?? []).filter((g) => g.metricSource === 'SALES_TOTAL' || g.metricSource === 'SALES_COUNT').length,
+    [goals],
+  );
+  const recomputeAll = () => apiSend<{ recomputed: number }>('/api/hr/goals/recompute-all', 'POST');
 
   const viewCycleReviews = (cycleId: string) => {
     setFilterCycleId(cycleId);
@@ -479,58 +543,153 @@ export default function PerformancePage() {
 
         {/* ── Goals ── */}
         <TabsContent value="goals" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {posGoalCount > 0 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                data-testid="goal-recompute-all"
+                title={`Recompute ${posGoalCount} POS-sourced ${posGoalCount === 1 ? 'goal' : 'goals'} from sales`}
+                onClick={() => void run(recomputeAll)}
+                className="border-sky-300 text-sky-700 hover:bg-sky-50 hover:text-sky-800 dark:border-sky-900 dark:text-sky-300 dark:hover:bg-sky-950/40 dark:hover:text-sky-200"
+              >
+                <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden /> Recompute all POS goals
+              </Button>
+            ) : null}
             <Button size="sm" onClick={() => setGoalOpen(true)}>
               <Plus className="h-4 w-4" aria-hidden /> New goal
             </Button>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {!goals ? (
-              <Skeleton className="h-40 w-full" />
-            ) : goals.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">No goals yet.</p>
-            ) : (
-              goals.map((g) => (
-                <Card key={g.id} className="flex flex-col">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-sm font-medium leading-snug">{g.title}</CardTitle>
-                      <StatusBadge status={g.status} />
-                    </div>
-                    <CardDescription className="flex items-center gap-1.5">
-                      <Target className="h-3.5 w-3.5" aria-hidden />
-                      {g.employeeName ?? 'Employee'} · due {formatDate(g.dueDate)}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="mt-auto space-y-3">
-                    <ProgressMeter
-                      pct={g.progressPct}
-                      tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'}
-                    />
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        {Number(g.currentValue).toLocaleString()} / {Number(g.targetValue).toLocaleString()}
-                      </span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {SOURCE_LABELS[g.metricSource] ?? g.metricSource}
-                      </Badge>
-                    </div>
-                    {g.metricSource === 'SALES_TOTAL' || g.metricSource === 'SALES_COUNT' ? (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Team goals</CardTitle>
+              <CardDescription>
+                OPEN → ACHIEVED or MISSED. Sales goals recompute from POS — the value is never typed by hand.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!goals ? (
+                <Skeleton className="h-40 w-full" />
+              ) : goals.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No goals yet. Create the first one.</p>
+              ) : (
+                <div className="space-y-3">
+                  {/* ── v2.89.0 filters: employee + source picks, status chips ── */}
+                  <div className="flex flex-wrap items-center gap-2" data-testid="goal-filters">
+                    <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                    <Select value={filterGoalEmployee} onValueChange={setFilterGoalEmployee}>
+                      <SelectTrigger className="h-8 w-44" aria-label="Filter goals by employee" data-testid="goal-filter-employee">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All employees</SelectItem>
+                        {people.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filterGoalSource} onValueChange={setFilterGoalSource}>
+                      <SelectTrigger className="h-8 w-44" aria-label="Filter goals by metric source" data-testid="goal-filter-source">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All sources</SelectItem>
+                        {Object.keys(SOURCE_LABELS).map((s) => (
+                          <SelectItem key={s} value={s}>{SOURCE_LABELS[s]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {['ALL', ...GOAL_STATUSES].map((s) => {
+                      const active = filterGoalStatus === s;
+                      const count = s === 'ALL' ? (goals ?? []).length : goalStatusCounts[s] ?? 0;
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          aria-pressed={active}
+                          data-testid={`goal-filter-status-${s}`}
+                          onClick={() => setFilterGoalStatus(s)}
+                          className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                            active
+                              ? GOAL_CHIP_ACTIVE[s]
+                              : 'border-border bg-transparent text-muted-foreground hover:bg-muted/60'
+                          }`}
+                        >
+                          {s === 'ALL' ? 'All' : s.replace(/_/g, ' ').toLowerCase()}
+                          <span className="tabular-nums opacity-70">{count}</span>
+                        </button>
+                      );
+                    })}
+                    {goalFiltersActive ? (
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="w-full"
-                        disabled={busy}
-                        onClick={() => void run(() => apiSend(`/api/hr/goals/${g.id}/recompute`, 'POST'))}
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        data-testid="goal-filter-clear"
+                        onClick={clearGoalFilters}
                       >
-                        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Recompute from POS sales
+                        <X className="h-3 w-3" aria-hidden /> Clear filters
                       </Button>
                     ) : null}
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
+                    <span className="ml-auto text-xs text-muted-foreground tabular-nums" data-testid="goal-filter-count">
+                      Showing {filteredGoals.length} of {(goals ?? []).length} goals
+                    </span>
+                  </div>
+                  {filteredGoals.length === 0 ? (
+                    <div className="py-6 text-center">
+                      <p className="text-sm text-muted-foreground">No goals match the current filters.</p>
+                      <Button size="sm" variant="outline" className="mt-2" onClick={clearGoalFilters}>
+                        Clear filters
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {filteredGoals.map((g) => (
+                        <Card key={g.id} className="flex flex-col" data-testid={`goal-card-${g.id}`}>
+                          <CardHeader className="pb-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <CardTitle className="text-sm font-medium leading-snug">{g.title}</CardTitle>
+                              <StatusBadge status={g.status} />
+                            </div>
+                            <CardDescription className="flex items-center gap-1.5">
+                              <Target className="h-3.5 w-3.5" aria-hidden />
+                              {g.employeeName ?? 'Employee'} · due {formatDate(g.dueDate)}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="mt-auto space-y-3">
+                            <ProgressMeter
+                              pct={g.progressPct}
+                              tone={g.status === 'ACHIEVED' ? 'good' : g.status === 'MISSED' ? 'bad' : 'info'}
+                            />
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span className="tabular-nums">
+                                {Number(g.currentValue).toLocaleString()} / {Number(g.targetValue).toLocaleString()}
+                              </span>
+                              <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[g.metricSource] ?? ''}`}>
+                                {SOURCE_LABELS[g.metricSource] ?? g.metricSource}
+                              </Badge>
+                            </div>
+                            {g.metricSource === 'SALES_TOTAL' || g.metricSource === 'SALES_COUNT' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full border-sky-300 text-sky-700 hover:bg-sky-50 hover:text-sky-800 dark:border-sky-900 dark:text-sky-300 dark:hover:bg-sky-950/40 dark:hover:text-sky-200"
+                                disabled={busy}
+                                onClick={() => void run(() => apiSend(`/api/hr/goals/${g.id}/recompute`, 'POST'))}
+                              >
+                                <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} aria-hidden /> Recompute from POS sales
+                              </Button>
+                            ) : null}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
