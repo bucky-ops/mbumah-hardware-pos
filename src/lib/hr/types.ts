@@ -23,6 +23,10 @@ export interface HrEmployeeSummary {
   storeId: string;
   storeName?: string;
   reportingToId?: string | null;
+  /** v2.113.0: present only when the list was queried with expiringWithinDays —
+   * a count + a date, never document contents (spec: PII minimized). */
+  expiringDocuments?: number;
+  nearestExpiry?: string | null;
 }
 
 export interface HrEmployeeDetail extends HrEmployeeSummary {

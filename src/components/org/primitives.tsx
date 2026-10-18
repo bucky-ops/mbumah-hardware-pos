@@ -47,7 +47,7 @@ export interface OrgSummaryData {
     headcountActive: number;
     monthEmploymentCost: number;
     monthAbsenceRatePct: number;
-    latestPayroll: { periodName: string; status: string; createdAt: string } | null;
+    latestPayroll: { runId: string; periodName: string; status: string; createdAt: string } | null;
     expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
   }>;
   recentAudit: Array<{

@@ -644,7 +644,9 @@ export async function hrPerStoreForOrgConsole(
         db.payrollRun.findFirst({
           where: { storeId: store.id },
           orderBy: { createdAt: 'desc' },
-          select: { status: true, createdAt: true, payrollPeriod: { select: { name: true } } },
+          // v2.113.0: id joins the payload so the panel's latest-run cell can
+          // open the run detail dialog (a door, not dead text).
+          select: { id: true, status: true, createdAt: true, payrollPeriod: { select: { name: true } } },
         }),
       ]);
       return {
@@ -654,7 +656,12 @@ export async function hrPerStoreForOrgConsole(
         monthEmploymentCost: costMap.get(store.id) ?? 0,
         monthAbsenceRatePct: recorded ? Math.round((absent / recorded) * 1000) / 10 : 0,
         latestPayroll: latestRun
-          ? { periodName: latestRun.payrollPeriod.name, status: latestRun.status, createdAt: latestRun.createdAt.toISOString() }
+          ? {
+              runId: latestRun.id,
+              periodName: latestRun.payrollPeriod.name,
+              status: latestRun.status,
+              createdAt: latestRun.createdAt.toISOString(),
+            }
           : null,
         expiryAlerts: { documentsExpiring90Days: expiringDocs, assetsOverdue: overdueAssets },
       };

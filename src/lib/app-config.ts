@@ -15,6 +15,11 @@ export const ADMIN_ROLES = ['SUPER_ADMIN', 'STORE_OWNER'];
 // the People & Payroll tab reads that endpoint, so it is visible to exactly
 // whom the server would answer (the server still re-validates per request).
 export const ORG_SUMMARY_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'];
+// v2.113.0: the roles the employees list actually answers (spec role map:
+// owner = all, HR/branch manager = employee read; ACCOUNTANT's grant stops
+// at payroll + reports, so the expiry door hides from accountants — a door
+// that 403s is a lie). Mirrors READ_KEY_BY_ROLE in /api/hr/employees.
+export const EMPLOYEE_LIST_READ_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'HR_MANAGER', 'BRANCH_MANAGER'];
 // v2.12.2 (PR B - RBAC): catalog-steward role - catalog/inventory + inbound
 // supply-chain tabs only (NO financial/sales/HR tabs). User.role is a string
 // column (no schema change); membership enforced via these role arrays.

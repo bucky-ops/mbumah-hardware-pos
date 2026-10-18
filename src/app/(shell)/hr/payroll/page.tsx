@@ -170,7 +170,32 @@ export default function HrPayrollPage() {
   const [periods, setPeriods] = useState<PayrollPeriodDto[] | null>(null);
   const [runs, setRuns] = useState<PayrollRunDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openRunId, setOpenRunId] = useState<string | null>(null);
+  // v2.113.0: the page speaks deep links. /hr/payroll?run=<id> — the People &
+  // Payroll panel's latest-run door — opens straight onto that run's detail
+  // dialog (the dialog fetches by id and fail-closes on its own). The seed is
+  // a LAZY initializer (no setState-in-effect); the param is stripped once on
+  // mount so a refresh or a re-mount never re-opens a stale dialog.
+  const [openRunId, setOpenRunId] = useState<string | null>(() => {
+    try {
+      if (typeof window === 'undefined') return null;
+      const raw = new URLSearchParams(window.location.search).get('run');
+      return raw && raw.trim() ? raw.trim() : null;
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (sp.has('run')) {
+        sp.delete('run');
+        const qs = sp.toString();
+        window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      }
+    } catch {
+      // no URL surface — the dialog still opens, it just cannot be shared
+    }
+  }, []);
   const [createRunOpen, setCreateRunOpen] = useState(false);
   const [createPeriodOpen, setCreatePeriodOpen] = useState(false);
   const [gateIssues, setGateIssues] = useState<ApiIssue[] | null>(null);

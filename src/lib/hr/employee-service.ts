@@ -66,13 +66,66 @@ export interface ListEmployeesParams {
   includeArchived?: boolean;
   status?: string;
   search?: string;
+  /**
+   * v2.113.0: when set (a day window, e.g. 90), only employees with at least
+   * one document expiring within [now, now+N days] are returned, and each
+   * summary carries expiringDocuments + nearestExpiry (metadata only — never
+   * document contents or statutory identifiers). Mirrors the org panel's
+   * expiry definition exactly (same window, deletedAt excluded).
+   */
+  expiringWithinDays?: number;
+}
+
+/**
+ * v2.113.0: parse the ?expiring= query param. A positive integer clamps to
+ * 1..365; anything else (missing, NaN, non-positive) is ignored (null) —
+ * the filter is additive, never a surprise.
+ */
+export function parseExpiringDays(raw: string | null | undefined): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(365, Math.max(1, Math.floor(n)));
+}
+
+/** Per-employee expiring-document aggregates (grouped, metadata only). */
+async function expiringDocMap(
+  storeId: string,
+  days: number,
+): Promise<Map<string, { count: number; nearest: Date | null }>> {
+  const now = new Date();
+  const horizon = new Date(now.getTime() + days * 24 * 3600 * 1000);
+  const grouped = await db.employeeDocument.groupBy({
+    by: ['employeeId'],
+    where: {
+      storeId,
+      deletedAt: null,
+      expiryDate: { gte: now, lte: horizon },
+    },
+    _count: { _all: true },
+    _min: { expiryDate: true },
+  });
+  return new Map(
+    grouped.map((g) => [
+      g.employeeId,
+      { count: g._count._all, nearest: g._min.expiryDate ?? null },
+    ]),
+  );
 }
 
 export async function listEmployees(params: ListEmployeesParams): Promise<HrEmployeeSummary[]> {
+  // v2.113.0: the expiry window narrows the list to employees holding at
+  // least one document inside [now, now+N] and annotates each row with the
+  // count + nearest expiry (the badge the list page renders).
+  const expiring =
+    params.expiringWithinDays && params.expiringWithinDays > 0
+      ? await expiringDocMap(params.storeId, params.expiringWithinDays)
+      : null;
   const where: Record<string, unknown> = {
     storeId: params.storeId,
     ...(params.includeArchived ? {} : { deletedAt: null }),
     ...(params.status ? { status: params.status } : {}),
+    ...(expiring ? { id: { in: [...expiring.keys()] } } : {}),
   };
   if (params.search) {
     where.OR = [
@@ -87,7 +140,31 @@ export async function listEmployees(params: ListEmployeesParams): Promise<HrEmpl
     orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     include: { store: { select: { name: true } } },
   });
-  return rows.map(summarize); // summaries never carry PII fields
+  // summaries never carry PII fields (the expiry annotations are counts and
+  // dates only — no document names, types, or contents)
+  return rows.map((e) => {
+    const hit = expiring?.get(e.id);
+    return {
+      ...summarize(e),
+      ...(hit
+        ? { expiringDocuments: hit.count, nearestExpiry: toIso(hit.nearest) }
+        : {}),
+    };
+  });
+}
+
+/**
+ * v2.113.0: does this store belong to this organization? The employees list
+ * route honors an explicit storeId for ORG-scope roles only when the store
+ * is inside the caller's organization — fail-closed (false on any miss).
+ */
+export async function storeInOrganization(storeId: string, organizationId: string): Promise<boolean> {
+  if (!storeId || !organizationId) return false;
+  const store = await db.store.findFirst({
+    where: { id: storeId, organizationId },
+    select: { id: true },
+  });
+  return store != null;
 }
 
 export async function getEmployeeDetail(

@@ -147,3 +147,34 @@ homes, because branches are browsed in two places:
   dot on hover, and a `focus-within` border path for keyboard users.
 - **Pinned by** `src/tests/branch-selector-handover-v2112.test.ts` and
   `scripts/verify-v2-112-0.mjs`.
+
+## The dead columns become doors (v2.113.0)
+
+The per-branch table's last two read-only columns learned to move:
+
+- **Latest payroll → the run detail**: `hrPerStore.latestPayroll` now carries
+  `runId` (an additive server join in `src/lib/hr/reports.ts`). The panel's
+  latest-run cell renders as a link to `/hr/payroll?run=<id>` — the payroll
+  page consumes the param as a lazy seed, opens the run detail dialog, and
+  strips the param once on mount (a refresh never re-opens a stale dialog;
+  the dialog's own fetch fail-closes when the run is not the session's to
+  see). Stale summaries without a run id degrade to the same honest text —
+  never a dead link.
+- **Expiry alerts → the pre-filtered roster**: the alert count splits
+  honestly. The DOCUMENTS half is a door to
+  `/hr/employees?expiring=90&storeId=<id>` — the HR employees list (which
+  this release also builds; the nav link had pointed at a 404 since v2.18.x)
+  pre-filtered to people whose documents expire inside the same window the
+  panel counts. The ASSETS half stays text: the assets list is
+  session-scoped, and a cross-branch door would promise a view it cannot
+  open. Zero halves never render as links.
+- **Builders**: `buildExpiringEmployeesHref(storeId, days)` and
+  `buildRunDeepLinkHref(runId)` in `src/lib/workspace/links.ts` — pure,
+  encoded, relative.
+- **Scope stays fail-closed**: `/api/hr/employees` honors an explicit
+  `storeId` only for ORG-scope roles whose organization owns the store
+  (`storeInOrganization` verification, 403 otherwise); every other role
+  keeps the session's own store and the page says so honestly when the
+  answer came from somewhere else.
+- **Pinned by** `src/tests/panel-doors-v2113.test.ts` and
+  `scripts/verify-v2-113-0.mjs`.

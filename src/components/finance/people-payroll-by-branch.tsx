@@ -22,8 +22,11 @@
 // the machine-readable code in the title and the human words in the cell.
 
 import { useState } from 'react';
-import { ChevronDown, SlidersHorizontal, Users } from 'lucide-react';
+import { ChevronDown, ExternalLink, SlidersHorizontal, Users } from 'lucide-react';
 import type { OrgSummaryData } from '@/components/org/primitives';
+import { buildExpiringEmployeesHref, buildRunDeepLinkHref } from '@/lib/workspace/links';
+import { EMPLOYEE_LIST_READ_ROLES } from '@/lib/app-config';
+import { useAuthStore } from '@/lib/stores';
 
 export type HrPerStoreRow = NonNullable<OrgSummaryData['hrPerStore']>[number];
 
@@ -70,7 +73,7 @@ export function PeoplePayrollUnavailable({ code, detail }: { code: string; detai
   );
 }
 
-function LatestRunCell({ run }: { run: HrPerStoreRow['latestPayroll'] }) {
+function LatestRunCell({ run, storeName }: { run: HrPerStoreRow['latestPayroll']; storeName: string }) {
   if (!run) {
     return (
       <span className="text-xs text-slate-400 dark:text-slate-500" title="PAYROLL_RUN_NOT_AVAILABLE">
@@ -78,37 +81,94 @@ function LatestRunCell({ run }: { run: HrPerStoreRow['latestPayroll'] }) {
       </span>
     );
   }
+  // v2.113.0: a run WITH an id is a door — one click opens /hr/payroll with
+  // ?run=<id> and the run detail dialog (the dialog fetches by id and
+  // fail-closes on its own). Stale summaries without an id degrade to the
+  // same honest text as before — never a dead link.
+  const statusBadge = (
+    <span
+      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+        run.status === 'LOCKED' || run.status === 'POSTED'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+          : run.status === 'VOIDED'
+            ? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
+            : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+      }`}
+    >
+      {run.status.toLowerCase()}
+    </span>
+  );
+  if (run.runId) {
+    return (
+      <a
+        href={buildRunDeepLinkHref(run.runId)}
+        data-testid="people-payroll-run-door"
+        aria-label={`Open the payroll run detail for ${run.periodName} — ${storeName}`}
+        title={`Open the ${run.periodName} run detail (recorded ${new Date(run.createdAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })})`}
+        className="inline-flex flex-wrap items-center gap-1.5 rounded-md text-xs text-slate-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-slate-300 dark:hover:text-orange-400"
+      >
+        <span>{run.periodName}</span>
+        {statusBadge}
+        <ExternalLink className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+      </a>
+    );
+  }
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <span className="text-xs text-slate-500 dark:text-slate-400" title={`Run recorded ${new Date(run.createdAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })}`}>
         {run.periodName}
       </span>
-      <span
-        className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
-          run.status === 'LOCKED' || run.status === 'POSTED'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-            : run.status === 'VOIDED'
-              ? 'border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
-              : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
-        }`}
-      >
-        {run.status.toLowerCase()}
-      </span>
+      {statusBadge}
     </span>
   );
 }
 
 function ExpiryCell({ row }: { row: HrPerStoreRow }) {
-  const alerts = row.expiryAlerts.documentsExpiring90Days + row.expiryAlerts.assetsOverdue;
-  const title = `Expiring documents (90 days): ${row.expiryAlerts.documentsExpiring90Days} - overdue asset assignments: ${row.expiryAlerts.assetsOverdue}`;
+  // v2.113.0: the alert count splits honestly. The DOCUMENTS half is a door
+  // into the employees list pre-filtered to expiring documents for that
+  // branch — but ONLY for the roles the list actually answers (the spec
+  // grants ACCOUNTANT payroll reads and reports, not the roster: a door that
+  // 403s is a lie). The ASSETS half stays text (the assets list is
+  // session-scoped — a cross-branch door would promise a view it cannot
+  // open). Zero halves never render as links.
+  const role = useAuthStore((s) => s.user?.role);
+  const canOpenExpiry = EMPLOYEE_LIST_READ_ROLES.includes(role || '');
+  const docs = row.expiryAlerts.documentsExpiring90Days;
+  const assets = row.expiryAlerts.assetsOverdue;
+  const docTitle = `Documents expiring within 90 days: ${docs} — open the branch's employees list pre-filtered`;
+  if (docs > 0 && canOpenExpiry) {
+    return (
+      <span className="inline-flex items-center justify-end gap-1.5 tabular-nums">
+        <a
+          href={buildExpiringEmployeesHref(row.storeId)}
+          data-testid="people-payroll-expiry-door"
+          aria-label={`${docs} document${docs === 1 ? '' : 's'} expiring within 90 days at ${row.storeName} — open the pre-filtered employees list`}
+          title={docTitle}
+          className="inline-flex items-center gap-1 rounded-md font-semibold text-amber-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400"
+        >
+          {docs}
+          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+        </a>
+        {assets > 0 && (
+          <span
+            className="text-xs text-slate-500 dark:text-slate-400"
+            title={`Overdue asset assignments: ${assets} — see the Assets page`}
+          >
+            +{assets}
+          </span>
+        )}
+      </span>
+    );
+  }
+  const title = `Expiring documents (90 days): 0 - overdue asset assignments: ${assets}`;
   return (
     <span
       className={`inline-flex items-center justify-end gap-1 tabular-nums ${
-        alerts > 0 ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
+        assets > 0 ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
       }`}
       title={title}
     >
-      {alerts}
+      {docs + assets}
     </span>
   );
 }
@@ -256,7 +316,7 @@ export function PeoplePayrollByBranch({
                       {row.monthAbsenceRatePct}%
                     </td>
                     <td className="px-3 py-2">
-                      <LatestRunCell run={row.latestPayroll} />
+                      <LatestRunCell run={row.latestPayroll} storeName={row.storeName} />
                     </td>
                     <td className="px-4 py-2 text-right">
                       <ExpiryCell row={row} />
@@ -274,11 +334,10 @@ export function PeoplePayrollByBranch({
               </p>
             ) : (
               visible.map((row) => {
-              const alerts = row.expiryAlerts.documentsExpiring90Days + row.expiryAlerts.assetsOverdue;
               return (
                 <div
                   key={row.storeId}
-                  className="rounded-lg border border-slate-100 p-3 dark:border-slate-800"
+                  className="rounded-lg border border-slate-100 p-3 transition-shadow hover:shadow-sm dark:border-slate-800"
                   data-testid={`${testIdPrefix}-card`}
                 >
                   <a
@@ -304,14 +363,14 @@ export function PeoplePayrollByBranch({
                     </div>
                     <div>
                       <dt className="text-[10px] uppercase tracking-wide text-slate-400">Expiry alerts</dt>
-                      <dd className={`tabular-nums ${alerts > 0 ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {alerts}
+                      <dd className="mt-0.5 text-right">
+                        <ExpiryCell row={row} />
                       </dd>
                     </div>
                     <div className="col-span-2">
                       <dt className="text-[10px] uppercase tracking-wide text-slate-400">Latest payroll</dt>
                       <dd className="mt-0.5">
-                        <LatestRunCell run={row.latestPayroll} />
+                        <LatestRunCell run={row.latestPayroll} storeName={row.storeName} />
                       </dd>
                     </div>
                   </dl>
