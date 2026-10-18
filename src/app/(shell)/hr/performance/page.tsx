@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, History, LockKeyhole, LogIn, Pencil, Play, Plus, RefreshCw, Star, StickyNote, Target, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowRight, Award, CalendarRange, CheckCircle2, FileDown, Filter, Flag, History, LockKeyhole, LogIn, Pencil, Play, Plus, RefreshCw, Star, StickyNote, Target, Trash2, Undo2, X } from 'lucide-react';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import {
   apiGet,
@@ -455,6 +455,48 @@ export default function PerformancePage() {
   const calibrationTone = (pct: number): 'good' | 'info' | 'warn' =>
     pct >= 100 ? 'good' : pct > 0 ? 'info' : 'warn';
 
+  // v2.96.0: the Reviews tab files itself — the governed CSV of the EXACT
+  // filtered subset on screen, built by the same server family the report
+  // tabs (v2.58) and the desk report (v2.70) file through. The note reports
+  // where the action lives (the v2.95 lesson: never behind a modal).
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvNote, setCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const exportReviewsCsv = async () => {
+    if (csvBusy) return;
+    setCsvBusy(true);
+    setCsvNote(null);
+    try {
+      const qs = new URLSearchParams();
+      if (filterCycleId !== 'ALL') qs.set('cycleId', filterCycleId);
+      if (filterStatus !== 'ALL') qs.set('status', filterStatus);
+      const res = await fetch(`/api/hr/performance/reviews/export?${qs.toString()}`, { credentials: 'include' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'mbumah-performance-reviews.csv';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setCsvNote({
+        tone: 'ok',
+        text: `Reviews CSV downloaded — ${filename}. The governed filing format (header block, injection guard), exactly the filtered rows on screen.`,
+      });
+    } catch (e) {
+      setCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
@@ -685,11 +727,42 @@ export default function PerformancePage() {
 
         {/* ── Reviews ── */}
         <TabsContent value="reviews" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* v2.96.0: the filing door — a governed CSV of the filtered
+                subset, the same server builder the report tabs and the desk
+                report file through. Honest idle state: with a filter that
+                matches nothing there is nothing to file, and the button says
+                so instead of downloading an empty sheet. */}
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="reviews-csv"
+              aria-label="Download the reviews CSV of the current filtered list"
+              disabled={csvBusy || (!!reviews && filteredReviews.length === 0)}
+              title={
+                reviews && filteredReviews.length === 0
+                  ? 'Nothing to file — no reviews match the current filters'
+                  : 'The governed filing format (header block, injection guard), the filtered rows on screen'
+              }
+              onClick={() => void exportReviewsCsv()}
+              className="border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-slate-200"
+            >
+              <FileDown className={`h-4 w-4 ${csvBusy ? 'animate-pulse' : ''}`} aria-hidden />
+              {csvBusy ? 'Building…' : 'CSV'}
+            </Button>
             <Button size="sm" onClick={() => setReviewOpen(true)} disabled={cycles?.length === 0}>
               <Plus className="h-4 w-4" aria-hidden /> New review
             </Button>
           </div>
+          {csvNote ? (
+            <p
+              data-testid="reviews-csv-note"
+              className={`text-xs ${csvNote.tone === 'ok' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}
+              role="status"
+            >
+              {csvNote.text}
+            </p>
+          ) : null}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Performance reviews</CardTitle>
@@ -1397,7 +1470,8 @@ export default function PerformancePage() {
             </DialogTitle>
             <DialogDescription>
               Deleting removes a goal from the board and the portal but keeps its record and audit — nothing is ever
-              hard-deleted. Restoring puts one back exactly as it left: same target, same progress, same status.
+              hard-deleted. Restoring puts one back exactly as it left: same target, same progress, same status, and
+              the same cycle it was filed under.
             </DialogDescription>
           </DialogHeader>
           {!deletedGoals ? (
@@ -1425,6 +1499,25 @@ export default function PerformancePage() {
                       <Badge variant="outline" className={`text-[10px] ${SOURCE_CHIP[g.metricSource] ?? ''}`}>
                         {SOURCE_LABELS[g.metricSource] ?? g.metricSource}
                       </Badge>
+                      <span aria-hidden>·</span>
+                      {/* v2.96.0: the bench remembers the cycle — goals have
+                          carried cycleId since 2.90, and the restore rows now
+                          say WHERE a goal was filed, so a manager reconciling
+                          the bench against a cycle's roster never has to
+                          guess. No cycle is stated just as honestly. */}
+                      {g.cycleName ? (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-amber-300 text-amber-700 dark:border-amber-900 dark:text-amber-300"
+                          data-testid={`goal-deleted-cycle-${g.id}`}
+                        >
+                          {g.cycleName}
+                        </Badge>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/70" data-testid={`goal-deleted-cycle-${g.id}`}>
+                          No cycle
+                        </span>
+                      )}
                       <span aria-hidden>·</span>
                       <span>deleted {formatDate(g.deletedAt)}</span>
                       <span aria-hidden>·</span>
