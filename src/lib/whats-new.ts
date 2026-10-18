@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.98.0',
+    title: 'Payroll runs read as periods',
+    bullets: [
+      'The runs table regroups itself: every payroll period is one header row with its runs folded underneath — “October 2026” says its name once, and four runs read as one month’s story instead of four repeated lines.',
+      'The header does the arithmetic: settled net, payslips issued, and a status rollup (settled · waiting · need attention · voided) land where the eye does — no mental math across rows.',
+      'Honest money: only posted and locked runs count toward the header’s totals — a draft or a pending approval is an estimate and never sneaks into the settled number.',
+      'Periods fold: collapse the months you are not working on, expand the one you are — collapsed headers keep their counts, so a folded month never goes silent.',
+      'One click anywhere on the header row opens or closes the month, and a Collapse all / Expand all affordance tidies the whole ledger at once.',
+    ],
+  },
+  {
     version: '2.97.0',
     title: 'Every performance list files itself',
     bullets: [
