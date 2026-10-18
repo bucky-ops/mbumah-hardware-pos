@@ -365,16 +365,16 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.122.0 (latest — counted separately), then 2.121.0,
-    // 2.120.0, 2.119.0, 2.118.0, 2.117.0, 2.116.0, 2.115.0, 2.114.0 — a
-    // 2.110.0 flag means 2.111.0 … 2.121.0 sit strictly between (the head
-    // 2.122.0 reads "latest", NOT 'new'), so the honest count is 11; a
-    // 2.77.0 flag counts 2.78.0 … 2.121.0 (the head never joins this count).
-    // Re-anchored for 2.122.0 "the hold takes the desk" joining the feed.
-    expect(whatsNewUnreadCount('2.110.0')).toBe(11);
-    expect(whatsNewUnreadCount('2.109.0')).toBe(12);
-    expect(whatsNewUnreadCount('2.108.0')).toBe(13);
-    expect(whatsNewUnreadCount('2.77.0')).toBe(44);
+    // The feed leads 2.123.0 (latest — counted separately), then 2.122.0,
+    // 2.121.0, 2.120.0, 2.119.0, 2.118.0, 2.117.0, 2.116.0, 2.115.0, 2.114.0 — a
+    // 2.110.0 flag means 2.111.0 … 2.122.0 sit strictly between (the head
+    // 2.123.0 reads "latest", NOT 'new'), so the honest count is 12; a
+    // 2.77.0 flag counts 2.78.0 … 2.122.0 (the head never joins this count).
+    // Re-anchored for 2.123.0 "the sweep shows its hand" joining the feed.
+    expect(whatsNewUnreadCount('2.110.0')).toBe(12);
+    expect(whatsNewUnreadCount('2.109.0')).toBe(13);
+    expect(whatsNewUnreadCount('2.108.0')).toBe(14);
+    expect(whatsNewUnreadCount('2.77.0')).toBe(45);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(10);
   });
 

@@ -21,6 +21,7 @@ export const GET = hrGuard('hr.report.branch', VIEW_ROLES)(async (request: NextR
       data: {
         policies: desk.policies,
         heldCount: desk.heldCount,
+        sweepableTotal: desk.sweepableTotal,
         canDecide: canDecideErasure(session.role),
       },
     });

@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.123.0',
+    title: 'The sweep shows its hand',
+    bullets: [
+      'The retention desk grows a Next sweep column — a dry run that counts what the next nightly run would anonymise per scope, changing nothing.',
+      'One source of truth: the preview counts with the exact same criteria the sweeper executes, so the desk and the sweep can never disagree about what is in scope.',
+      'A second counts strip line answers the backlog plainly — "N rows would be anonymised on the next nightly run", with an honest "nothing to sweep tonight" when every scope sits inside its window.',
+      'Rows waiting behind a legal hold stay visible ("N waiting behind the hold", amber) — the hold freezes the sweep, not the truth about what releasing would unblock.',
+      'Backlogs over 500 say so: the sweep takes up to 500 rows per night, and the strip admits the pacing instead of letting a big number imply a one-night finish.',
+    ],
+  },
+  {
     version: '2.122.0',
     title: 'The hold takes the desk',
     bullets: [

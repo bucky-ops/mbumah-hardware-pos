@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.123.0] The sweep shows its hand
+
+Task 137 option 2: the retention desk could say the sweep runs nightly, but never WHAT it would sweep. This release adds the dry run — per-scope counts of what the next nightly run would anonymise, computed with the exact same criteria the sweeper executes, so the desk and the sweep can never disagree about what "in scope" means.
+
+### Added
+- **Next sweep column** (`src/app/(shell)/hr/reports/page.tsx`, retention card): each scope row now carries a dry-run label — "N in scope", "N waiting behind the hold" (amber, matching the hold vocabulary), "nothing to sweep", or "nothing waiting" — computed server-side and carried on the DTO (the page still never imports the service module). The column header's tooltip discloses the dry run; a held row's tooltip says what releasing would unblock.
+- **Backlog counts strip** (`hr-privacy-retention-sweep-count`): a second line under the holds strip answers "N rows would be anonymised on the next nightly run", with an honest zero state ("nothing to sweep tonight — every scope sits inside its window") and a pacing disclosure when the backlog exceeds one night ("the sweep takes up to 500 per night").
+- **The dry run** (`previewRetentionSweep`, `src/lib/hr/data-protection.ts`): three `count()` queries — one per scope, changing nothing. A held scope still reports its backlog with `held: true`: the hold freezes the sweep, not the truth about what releasing would unblock. `sweepableTotal` sums over non-held scopes only — what the next run actually targets.
+
+### Changed
+- **Single source of truth for "in scope"** (`src/lib/hr/data-protection.ts`): the sweep's three inline WHERE clauses are now three pure, exported where-builders (`applicantSweepWhere` / `disciplinarySweepWhere` / `attendanceSweepWhere`) consumed by BOTH the executing sweep and the preview counts; the `REDACTED (retention)` marker rides every clause as a shared constant, so an already-anonymised row is invisible to both. No behaviour change — the refactor was verified clause-for-clause.
+- The What's-New feed leads with the dry-run story; the unread-counter test re-anchored for the 2.123.0-fed feed (2.110.0→12, 2.109.0→13, 2.108.0→14, 2.77.0→45).
+
+### Security
+- The preview is read-only by construction: it rides the desk's existing read guard (`hr.report.branch` + the VIEW_ROLES trio), counts instead of selects (no personal data crosses the wire — a number and a label per scope), and its WHERE clauses are the sweep's own by shared code rather than by promise. Rows already carrying the redaction marker are excluded from every count, so the desk can never inflate the backlog with data that is no longer personal.
+
 ## [2.122.0] The hold takes the desk
 
 The retention mechanism gets a surface (Task 136 option 7): the nightly sweep has anonymised expired personal data scope by scope since v2.20.0 and legal holds have always been able to block it — but a hold could only be set by a raw HrSetting write. This release puts the desk on the Privacy tab: the reviewable policies, their live hold state, and the decisions that pause or resume a scope.

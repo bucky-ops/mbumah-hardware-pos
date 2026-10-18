@@ -30,6 +30,11 @@ import { join } from 'node:path';
 
 const db = vi.hoisted(() => ({
   hrSetting: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
+  // v2.123.0: the desk fold now also runs the dry run (previewRetentionSweep)
+  store: { findMany: vi.fn() },
+  applicant: { count: vi.fn() },
+  disciplinaryCase: { count: vi.fn() },
+  attendanceRecord: { count: vi.fn() },
 }));
 
 const hrAudit = vi.hoisted(() => vi.fn());
@@ -79,6 +84,11 @@ async function expectReject(p: Promise<unknown>): Promise<{ code: string; status
 beforeEach(() => {
   vi.clearAllMocks();
   db.hrSetting.findMany.mockResolvedValue([]);
+  // the dry run rides the fold since v2.123.0 — zero backlog by default
+  db.store.findMany.mockResolvedValue([{ id: 'store-1' }]);
+  db.applicant.count.mockResolvedValue(0);
+  db.disciplinaryCase.count.mockResolvedValue(0);
+  db.attendanceRecord.count.mockResolvedValue(0);
 });
 
 afterEach(() => {

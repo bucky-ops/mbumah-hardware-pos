@@ -229,11 +229,13 @@ interface ConsentDto {
 // v2.122.0: the retention desk (spec Phase 4.8) — the reviewable retention
 // policies folded with their live legal-hold state (what the nightly sweep
 // will and will not touch); hold/release decisions mirror the erasure +
-// consent decision gate (hr.settings.manage). windowLabel is computed
-// server-side so this page never imports the service module.
+// consent decision gate (hr.settings.manage). windowLabel and the v2.123.0
+// dry-run sweepLabel are computed server-side so this page never imports the
+// service module.
 interface RetentionDto {
   canDecide: boolean;
   heldCount: number;
+  sweepableTotal: number;
   policies: Array<{
     scope: string;
     description: string;
@@ -241,6 +243,8 @@ interface RetentionDto {
     basis: string;
     held: boolean;
     heldAt: string | null;
+    sweepable: number;
+    sweepLabel: string;
   }>;
 }
 
@@ -1741,7 +1745,7 @@ export default function HrReportsPage() {
                 <Landmark className="h-4 w-4 text-amber-600" aria-hidden /> Retention &amp; legal holds (Data Protection Act posture)
               </CardTitle>
               <CardDescription>
-                The nightly sweep anonymises expired personal data scope by scope — reviewable windows, never legal advice. A legal hold pauses one scope until a settings manager releases it; setting and releasing are both audit-logged.
+                The nightly sweep anonymises expired personal data scope by scope — reviewable windows, never legal advice. A legal hold pauses one scope until a settings manager releases it; setting and releasing are both audit-logged. The Next sweep column is a dry run: it counts what each run would anonymise, changing nothing.
               </CardDescription>
               <p data-testid="hr-privacy-retention-hold-count" className="mt-1 text-xs tabular-nums text-muted-foreground">
                 {retention === null ? (
@@ -1755,6 +1759,18 @@ export default function HrReportsPage() {
                   <span>0 of {retention.policies.length} scopes on hold — the sweep runs nightly</span>
                 )}
               </p>
+              <p data-testid="hr-privacy-retention-sweep-count" className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                {retention === null ? (
+                  'Counting the sweep backlog…'
+                ) : retention.sweepableTotal > 0 ? (
+                  <>
+                    <span className="font-medium">{retention.sweepableTotal} {retention.sweepableTotal === 1 ? 'row' : 'rows'}</span> would be anonymised on the next nightly run
+                    {retention.sweepableTotal > 500 ? ' — the sweep takes up to 500 per night' : ''}
+                  </>
+                ) : (
+                  <span>nothing to sweep tonight — every scope sits inside its window</span>
+                )}
+              </p>
             </CardHeader>
             <CardContent>
               {!retention ? (
@@ -1762,7 +1778,15 @@ export default function HrReportsPage() {
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Scope</TableHead><TableHead>Window</TableHead><TableHead>Hold</TableHead>
+                    <TableHead>Scope</TableHead><TableHead>Window</TableHead>
+                    <TableHead
+                      data-testid="hr-retention-preview-col"
+                      className="whitespace-nowrap"
+                      title="Dry run — counts rows matching the sweep's own criteria; nothing is changed."
+                    >
+                      Next sweep
+                    </TableHead>
+                    <TableHead>Hold</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
@@ -1773,6 +1797,15 @@ export default function HrReportsPage() {
                           <div className="truncate text-[11px] text-muted-foreground" title={p.basis}>{p.basis}</div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground">{p.windowLabel}</TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          <span
+                            data-testid={`hr-retention-sweep-${p.scope}`}
+                            className={p.held && p.sweepable > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}
+                            title={p.held && p.sweepable > 0 ? 'A hold stands — these rows wait until a settings manager releases the scope.' : 'Dry-run count — what the next nightly run would anonymise; nothing is changed.'}
+                          >
+                            {p.sweepLabel}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           {p.held ? (
                             <span
