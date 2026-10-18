@@ -9,7 +9,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Building2, Boxes, MapPin } from 'lucide-react';
+import { ArrowUpRight, Building2, Boxes, MapPin, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,7 +17,8 @@ import { LoginScreen } from '@/components/login-screen';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
-import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
+import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
+import { buildPeoplePayrollDeepLink, buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 import { useWorkspaceAuthBoot } from '@/lib/workspace/workspace-store';
 import { useWorkspaceStore, type WorkspaceStoreRef } from '@/lib/workspace/workspace-store';
 import { useRouter } from 'next/navigation';
@@ -43,6 +44,11 @@ export function BranchSelector() {
   const user = useAuthStore((s) => s.user);
   const setOrganizationMode = useWorkspaceStore((s) => s.setWorkspace);
   const router = useRouter();
+  // v2.112.0: the People & Payroll hand-over renders only for the roles the
+  // People & Payroll tab itself honors (ORG_SUMMARY_ROLES) — the affordance
+  // is the v2.111.0 deep link's natural consumer and must never be a dead
+  // door for a role the tab would reject.
+  const canSeePeoplePayroll = ORG_SUMMARY_ROLES.includes(user?.role || '');
   const [stores, setStores] = useState<StoreRow[] | null>(null);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
   const redirectAttempted = useRef(false);
@@ -178,15 +184,30 @@ export function BranchSelector() {
         </div>
       </header>
       <main className="max-w-3xl mx-auto px-4 py-6">
+        {/* v2.112.0: org-summary roles (owner/admin/accountant) can also jump
+            straight from a branch card to its People & Payroll view — the
+            v2.111.0 deep link's natural consumer. The affordance is gated on
+            the same roles the People & Payroll tab honors, so it can never
+            render as a dead door. */}
+        {canSeePeoplePayroll && (
+          <p className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <UserCog className="h-3.5 w-3.5" aria-hidden="true" />
+            People &amp; payroll opens on the home workspace, pre-filtered to the branch.
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           {stores.map((store) => {
             const href = buildStoreWorkspaceUrl(store);
+            const payrollHref = buildPeoplePayrollDeepLink(store.id);
             return (
-              <div key={store.id} className="border rounded-lg bg-card p-4 flex flex-col gap-3">
+              <div
+                key={store.id}
+                className="group border rounded-lg bg-card p-4 flex flex-col gap-3 transition-all duration-200 hover:shadow-md hover:border-primary/30 focus-within:border-primary/40"
+              >
                 <div className="flex items-start gap-3">
                   <span
-                    className="mt-1 h-3 w-3 rounded-full shrink-0"
-                    style={{ backgroundColor: store.brandingColor || '#B45309' }}
+                    className="mt-1 h-3 w-3 rounded-full shrink-0 ring-2 ring-transparent group-hover:ring-current transition-all duration-200"
+                    style={{ backgroundColor: store.brandingColor || '#B45309', color: store.brandingColor || '#B45309' }}
                     aria-hidden="true"
                   />
                   <div className="min-w-0">
@@ -200,13 +221,27 @@ export function BranchSelector() {
                     {store.code || 'BRANCH'}
                   </Badge>
                 </div>
-                <Button asChild size="sm" className="mt-auto">
-                  <a href={href} target="_blank" rel="noopener noreferrer">
-                    <Building2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                    Open workspace
-                    <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
-                  </a>
-                </Button>
+                <div className={`mt-auto grid gap-2 ${canSeePeoplePayroll ? 'sm:grid-cols-[1fr_auto]' : ''}`}>
+                  <Button asChild size="sm">
+                    <a href={href} target="_blank" rel="noopener noreferrer">
+                      <Building2 className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                      Open workspace
+                      <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
+                    </a>
+                  </Button>
+                  {canSeePeoplePayroll && (
+                    <Button asChild size="sm" variant="outline"
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200"
+                      title={`Open the People & Payroll tab pre-filtered to ${store.name}`}
+                    >
+                      <a href={payrollHref} target="_blank" rel="noopener noreferrer"
+                        aria-label={`People and payroll for ${store.name}`}>
+                        <UserCog className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                        People &amp; payroll
+                      </a>
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}

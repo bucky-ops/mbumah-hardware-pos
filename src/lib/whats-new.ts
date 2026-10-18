@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.112.0',
+    title: 'The branch picker hands you the payroll ledger',
+    bullets: [
+      'Branch listings grow a People & payroll affordance — on the Branch Selector\u2019s cards AND the Organization Console\u2019s Branches table: one click opens the home workspace on the People & Payroll tab, already narrowed to that branch. The deep link finally has its natural front doors, where branches are actually browsed.',
+      'The affordance is honest by construction: it renders only for the roles the People & Payroll tab itself honors (owner, admin, accountant), so it can never promise a view the role would be refused.',
+      'Each link opens in its own tab, exactly like Open workspace \u2014 the selector stays available, and the spec\u2019s one-tab-per-view pattern holds.',
+      'The cards learned some manners: a quiet hover lift, the branch\u2019s own color ringing its dot, and a visible focus path for keyboard users \u2014 the same respect in light and dark.',
+      'October\u2019s BONUS run completed the last leg of the lifecycle this release: disbursed by hand, every payslip marked PAID, the payroll group notified \u2014 prepare, approve, post, disburse, all walked in the open.',
+    ],
+  },
+  {
     version: '2.111.0',
     title: 'The app speaks deep links; every settled run opens its door',
     bullets: [

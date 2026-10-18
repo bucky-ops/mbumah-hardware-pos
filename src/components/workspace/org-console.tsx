@@ -24,6 +24,7 @@ import {
   PackageOpen,
   ReceiptText,
   ShieldAlert,
+  UserCog,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -42,6 +43,8 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { UnifiedConsoleShell } from '@/components/console/unified-console';
 import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
+import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
+import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
 // Type-only import: erased at compile time, so the server-only diagnostics
 // data layer never enters the client bundle.
 import type { BranchDiagnostic } from '@/lib/org/diagnostics';
@@ -224,6 +227,11 @@ export function OrgConsole() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
   const setOrganizationMode = useWorkspaceStore((s) => s.setWorkspace);
+  // v2.112.0: the People & Payroll hand-over rides the same rule everywhere —
+  // render the affordance only for the roles the people-payroll tab honors
+  // (ORG_SUMMARY_ROLES), never as a dead door. The org console is already
+  // org-roles-only, but the gate keeps the two homes honest by construction.
+  const canSeePeoplePayroll = ORG_SUMMARY_ROLES.includes(user?.role || '');
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
@@ -667,6 +675,28 @@ export function OrgConsole() {
                                   <ArrowUpRight className="h-3 w-3 ml-1" aria-hidden="true" />
                                 </a>
                               </Button>
+                              {/* v2.112.0: the hand-over — same deep link the
+                                  Branch Selector wears, same honest gate. */}
+                              {canSeePeoplePayroll && (
+                                <Button
+                                  asChild
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={inactive}
+                                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-200"
+                                  title={`Open the People & Payroll tab pre-filtered to ${store.name}`}
+                                >
+                                  <a
+                                    href={buildPeoplePayrollDeepLink(store.id)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={`People and payroll for ${store.name}`}
+                                  >
+                                    <UserCog className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                                    People &amp; payroll
+                                  </a>
+                                </Button>
+                              )}
                               {showPathChip ? (
                                 <Badge
                                   variant="outline"
