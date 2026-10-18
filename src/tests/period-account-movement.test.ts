@@ -217,10 +217,10 @@ describe('route — the read contract widens nothing', () => {
     expect(ROUTE.match(/isVoided: false/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('the window is the period\u2019s own days inclusive (gte start, lt end + 1 day)', () => {
-    expect(ROUTE).toContain('windowEnd.setUTCDate(windowEnd.getUTCDate() + 1);');
-    expect(ROUTE).toContain('entryDate: { lt: period.startDate }');
-    expect(ROUTE).toContain('entryDate: { gte: period.startDate, lt: windowEnd }');
+  it('the window is inclusive of its days (v2.104: windowStart/windowEnd; month end + 1 day)', () => {
+    expect(ROUTE).toContain('monthEnd.setUTCDate(monthEnd.getUTCDate() + 1);');
+    expect(ROUTE).toContain('entryDate: { lt: windowStart },');
+    expect(ROUTE).toContain('entryDate: { gte: windowStart, lt: windowEnd },');
   });
 
   it('rides the pure builder and resolves the source honestly', () => {

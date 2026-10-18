@@ -22,6 +22,7 @@ import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
+import { yearMonthRollups, movementSideCellCompact } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
   id: string;
@@ -98,6 +99,10 @@ export interface PeriodJournalPayload {
 export interface AccountMovementPayload {
   account: { code: string; name: string; type: string; normalBalance: string };
   period: { name: string; windowLabel: string };
+  // v2.104.0: the window the payload SERVED — 'month' (the v2.102 drill)
+  // or 'year' (the full-year view). The UI reads the window from HERE, not
+  // from its own request state, so the screen cannot call a year a month.
+  window: 'month' | 'year';
   opening: { debit: number; credit: number; balance: number; priorLines: number };
   movements: Array<{
     entryNumber: string;
@@ -735,6 +740,11 @@ function PeriodJournalDrawer({
   const [drill, setDrill] = useState<AccountMovementPayload | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillError, setDrillError] = useState<string | null>(null);
+  // v2.104.0: the window the drill ASKED for — 'month' on every fresh open
+  // (a door opens on the month it was clicked in), switched by the toggle,
+  // reset per close and per period. The SERVED window rides drill.window;
+  // after a load the two always agree.
+  const [drillWindow, setDrillWindow] = useState<'month' | 'year'>('month');
   // v2.103.0: the drill's own filing door — busy flag + note, reset per open
   // and per period (the same stale-state hygiene the ledger CSV note taught).
   const [movementCsvBusy, setMovementCsvBusy] = useState(false);
@@ -748,6 +758,9 @@ function PeriodJournalDrawer({
     setDrill(null);
     setDrillError(null);
     setDrillLoading(false);
+    // v2.104.0: a new period opens on the month — the year is a choice,
+    // never a leftover.
+    setDrillWindow('month');
     // v2.103.0: the movement CSV's note rides the same hygiene.
     setMovementCsvBusy(false);
     setMovementCsvNote(null);
@@ -791,15 +804,19 @@ function PeriodJournalDrawer({
   // Same envelope-narrowing discipline the ledger drawer taught (v2.100):
   // unwrap body.data with honest guards BEFORE any cast, so a wrapped or
   // failed response can never masquerade as a movement.
-  const openAccountMovement = async (code: string) => {
+  // v2.104.0: the window rides the fetch — the payload's echoed window is
+  // narrowed too, so a response that cannot say which window it served is
+  // refused, never guessed.
+  const openAccountMovement = async (code: string, window: 'month' | 'year' = 'month') => {
     if (!payload?.period?.id) return;
     setDrillCode(code);
+    setDrillWindow(window);
     setDrillLoading(true);
     setDrillError(null);
     setDrill(null);
     try {
       const res = await fetch(
-        `/api/payroll/period-journal/account?periodId=${encodeURIComponent(payload.period.id)}&accountCode=${encodeURIComponent(code)}`,
+        `/api/payroll/period-journal/account?periodId=${encodeURIComponent(payload.period.id)}&accountCode=${encodeURIComponent(code)}&window=${window}`,
         { credentials: 'include' },
       );
       const body = (await res.json().catch(() => ({}))) as {
@@ -807,6 +824,7 @@ function PeriodJournalDrawer({
         data?: Partial<AccountMovementPayload>;
         error?: string;
       };
+      const servedWindow = body.data?.window;
       if (
         !res.ok ||
         !body.success ||
@@ -814,7 +832,8 @@ function PeriodJournalDrawer({
         typeof body.data.account?.code !== 'string' ||
         !Array.isArray(body.data.movements) ||
         !body.data.opening ||
-        !body.data.closing
+        !body.data.closing ||
+        (servedWindow !== 'month' && servedWindow !== 'year')
       ) {
         throw new Error(body.error || `Movement API unreachable (${res.status}).`);
       }
@@ -830,13 +849,16 @@ function PeriodJournalDrawer({
   // the ledger CSV's download pattern (blob → anchor → revoke) pointed at
   // the account route's export sibling. Same envelope honesty: a failed
   // response names its reason, never a silent nothing.
+  // v2.104.0: the window RIDES THE EXPORT — filing the year fetches
+  // window=year, because the file cannot disagree with the screen (found
+  // live in E2E: the dialog said year and the file said month).
   const exportMovementCsv = async () => {
     if (movementCsvBusy || !payload?.period?.id || !drillCode) return;
     setMovementCsvBusy(true);
     setMovementCsvNote(null);
     try {
       const res = await fetch(
-        `/api/payroll/period-journal/account/export?periodId=${encodeURIComponent(payload.period.id)}&accountCode=${encodeURIComponent(drillCode)}`,
+        `/api/payroll/period-journal/account/export?periodId=${encodeURIComponent(payload.period.id)}&accountCode=${encodeURIComponent(drillCode)}&window=${drillWindow}`,
         { credentials: 'include' },
       );
       if (!res.ok) {
@@ -856,7 +878,7 @@ function PeriodJournalDrawer({
       URL.revokeObjectURL(objUrl);
       setMovementCsvNote({
         tone: 'ok',
-        text: `Movement CSV downloaded — ${filename}. The governed filing format (header block, injection guard), and the Closing line that equals the last replay row — the file closes its own loop, exactly the month on this dialog.`,
+        text: `Movement CSV downloaded — ${filename}. The governed filing format (header block, injection guard), and the Closing line that equals the last replay row — the file closes its own loop, exactly the ${drillWindow === 'year' ? 'year' : 'month'} on this dialog.`,
       });
     } catch (e) {
       setMovementCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
@@ -871,10 +893,33 @@ function PeriodJournalDrawer({
     setDrill(null);
     setDrillError(null);
     setDrillLoading(false);
+    // v2.104.0: the window resets too — the next door opens on its month.
+    setDrillWindow('month');
     // v2.103.0: the note belongs to THIS drill — the next account opens clean.
     setMovementCsvBusy(false);
     setMovementCsvNote(null);
   };
+
+  // v2.104.0: the year at a glance — the strip's twelve cells, computed from
+  // THE SAME replay the dialog shows (the pure builder; no second truth).
+  // Only the year view carries a strip; a year the window label refuses to
+  // name, or a replay the builder refuses to roll up (impossible by
+  // construction — the route guarantees the window and the order), renders
+  // no strip rather than a wrong one.
+  let drillYearStrip: { year: number; months: ReturnType<typeof yearMonthRollups> } | null = null;
+  if (drill && drill.window === 'year') {
+    const y = Number(drill.period.windowLabel.slice(0, 4));
+    if (Number.isInteger(y)) {
+      try {
+        drillYearStrip = {
+          year: y,
+          months: yearMonthRollups(drill.opening.balance, drill.movements, drill.account.normalBalance, y),
+        };
+      } catch {
+        drillYearStrip = null;
+      }
+    }
+  }
 
   return (
     <>
@@ -1081,10 +1126,50 @@ function PeriodJournalDrawer({
           </DialogTitle>
           <DialogDescription>
             {drill
-              ? `${drill.period.name} · ${drill.period.windowLabel} — the account's month, replayed line by line.`
+              ? `${drill.period.name} · ${drill.period.windowLabel} — the account's ${drill.window === 'year' ? 'year' : 'month'}, replayed line by line.`
               : ''}
           </DialogDescription>
         </DialogHeader>
+
+        {/* v2.104.0: the window switch — the month the door was clicked in,
+            or the account's full year. The active side rides the SERVED
+            payload's window (via drillWindow, which the fetch set and the
+            payload echoed), so the screen cannot call a year a month. */}
+        <div className="flex flex-wrap items-center gap-1.5" data-testid="payroll-account-window">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Window</span>
+          <button
+            type="button"
+            onClick={() => { if (drillCode && drillWindow !== 'month') void openAccountMovement(drillCode, 'month'); }}
+            disabled={drillLoading || drillWindow === 'month'}
+            aria-pressed={drillWindow === 'month'}
+            aria-label="Show the period's own month — the drill you opened"
+            title="Back to the period's own month"
+            data-testid="payroll-account-window-month"
+            className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 disabled:cursor-default ${
+              drillWindow === 'month'
+                ? 'border-violet-300 bg-violet-100 text-violet-900 dark:border-violet-700 dark:bg-violet-900/60 dark:text-violet-200'
+                : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-violet-300 hover:text-violet-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-violet-700 dark:hover:text-violet-300'
+            }`}
+          >
+            This month
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (drillCode && drillWindow !== 'year') void openAccountMovement(drillCode, 'year'); }}
+            disabled={drillLoading || drillWindow === 'year'}
+            aria-pressed={drillWindow === 'year'}
+            aria-label="Show the account's full year — every posted line from January to December, any source, with the year at a glance"
+            title="The account's full year — every posted line from January to December, any source, with the year at a glance"
+            data-testid="payroll-account-window-year"
+            className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 disabled:cursor-default ${
+              drillWindow === 'year'
+                ? 'border-violet-300 bg-violet-100 text-violet-900 dark:border-violet-700 dark:bg-violet-900/60 dark:text-violet-200'
+                : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-violet-300 hover:text-violet-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-violet-700 dark:hover:text-violet-300'
+            }`}
+          >
+            Full year
+          </button>
+        </div>
 
         {drillLoading && (
           <div className="space-y-2" data-testid="payroll-account-loading">
@@ -1104,7 +1189,7 @@ function PeriodJournalDrawer({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => drillCode && void openAccountMovement(drillCode)}
+              onClick={() => drillCode && void openAccountMovement(drillCode, drillWindow)}
               data-testid="payroll-account-retry"
             >
               Retry
@@ -1133,10 +1218,56 @@ function PeriodJournalDrawer({
               </div>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 {drill.opening.priorLines === 0
-                  ? 'No posted lines before this window — the account starts the month at zero.'
+                  ? `No posted lines before this window — the account starts the ${drill.window === 'year' ? 'year' : 'month'} at zero.`
                   : `Summed from ${drill.opening.priorLines} posted ${drill.opening.priorLines === 1 ? 'line' : 'lines'} before this window — every source, not just payroll.`}
               </p>
             </div>
+
+            {/* v2.104.0: the year at a glance — twelve calendar cells computed
+                from THE SAME replay the table below shows (no second truth).
+                Activity months wear the violet ring; quiet months carry the
+                balance forward and say so; a closing on the other side keeps
+                the amber eyebrow. A glance is not a filing: the compact cell
+                reads '516.0K Dr', the exact value rides the title. */}
+            {drillYearStrip && (
+              <div className="space-y-1" data-testid="payroll-account-year">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {drillYearStrip.year} at a glance — the running balance at each month&apos;s end:
+                </p>
+                <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-12" data-testid="payroll-account-year-strip">
+                  {drillYearStrip.months.map((mo) => {
+                    const otherSide = mo.closing < 0 && Math.round(Math.abs(mo.closing) * 100) !== 0;
+                    return (
+                      <div
+                        key={mo.label}
+                        data-testid="payroll-account-year-cell"
+                        data-month={mo.label}
+                        title={mo.activity
+                          ? `${mo.label} ${drillYearStrip?.year} — ${mo.lines} ${mo.lines === 1 ? 'line' : 'lines'} posted · debits ${kes(mo.debit)} · credits ${kes(mo.credit)} · closing ${sideLabel(mo.closing, drill.account.normalBalance)}`
+                          : `${mo.label} ${drillYearStrip?.year} — no activity, balance carried forward · closing ${sideLabel(mo.closing, drill.account.normalBalance)}`}
+                        className={`rounded-md border px-1 py-1.5 text-center ${
+                          mo.activity
+                            ? 'border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30'
+                            : 'border-zinc-200/70 dark:border-zinc-800/70'
+                        }`}
+                      >
+                        <div className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{mo.label}</div>
+                        <div
+                          className={`text-[10px] font-semibold tabular-nums ${
+                            otherSide ? 'text-amber-700 dark:text-amber-400' : ''
+                          }`}
+                        >
+                          {movementSideCellCompact(mo.closing, drill.account.normalBalance)}
+                        </div>
+                        <div className="text-[9px] text-muted-foreground">
+                          {mo.activity ? `${mo.lines} ${mo.lines === 1 ? 'line' : 'lines'}` : 'quiet'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* table-fixed keeps the 5-column replay INSIDE the dialog:
                 a plain auto table's max-content blows the grid track past
@@ -1191,7 +1322,9 @@ function PeriodJournalDrawer({
                     </TableRow>
                   ))}
                   <TableRow className="border-t-2">
-                    <TableCell className="py-1.5 text-xs font-semibold" colSpan={2}>Month totals</TableCell>
+                    <TableCell className="py-1.5 text-xs font-semibold" colSpan={2}>
+                      {drill.window === 'year' ? 'Year totals' : 'Month totals'}
+                    </TableCell>
                     <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">{kes(drill.totals.debit)}</TableCell>
                     <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">{kes(drill.totals.credit)}</TableCell>
                     <TableCell />
@@ -1237,8 +1370,8 @@ function PeriodJournalDrawer({
               size="sm"
               className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
               disabled={movementCsvBusy || !drill || drill.movements.length === 0}
-              aria-label="Download the account movement CSV — the governed filing file of this account's month replay"
-              title={drill && drill.movements.length === 0 ? 'Nothing to file — nothing posted on this account inside the window.' : 'The governed filing file: one row per replay line, and a Closing line that equals the last one'}
+              aria-label={`Download the account movement CSV — the governed filing file of this account's ${drillWindow === 'year' ? 'year' : 'month'} replay`}
+              title={drill && drill.movements.length === 0 ? 'Nothing to file — nothing posted on this account inside the window.' : `The governed filing file: one row per replay line, and a Closing line that equals the last one — exactly the ${drillWindow === 'year' ? 'year' : 'month'} on this dialog`}
               data-testid="payroll-account-csv"
               onClick={() => void exportMovementCsv()}
             >

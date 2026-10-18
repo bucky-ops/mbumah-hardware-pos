@@ -476,6 +476,11 @@ export interface AccountMovementCsvMeta {
   periodName: string;
   /** The period's honest date range, dayKey form: '2026-10-01 → 2026-10-31'. */
   windowLabel: string;
+  /** v2.104.0 — the window's own noun: 'month' (default) or 'year'. The
+   *  file's opening basis and totals label say the window's word, never a
+   *  hardcoded month: a full-year filing reads "starts the year at zero"
+   *  and "Year totals". Month filings keep their exact v2.103 bytes. */
+  windowNoun?: 'month' | 'year';
 }
 
 /**
@@ -512,6 +517,11 @@ export function accountMovementToCsv(
 ): PeriodLedgerCsvFile | null {
   if (movement.movements.length === 0) return null;
 
+  // The window's noun: 'month' unless the caller filed a year. Everything
+  // the label says about the window uses THIS word — the file cannot call
+  // a year a month.
+  const noun = meta.windowNoun === 'year' ? 'year' : 'month';
+
   const lines: string[] = [];
   const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
 
@@ -533,7 +543,7 @@ export function accountMovementToCsv(
   row([
     'Opening Basis',
     movement.opening.priorLines === 0
-      ? 'No posted lines before the window — the account starts the month at zero'
+      ? `No posted lines before the window — the account starts the ${noun} at zero`
       : `Summed from ${movement.opening.priorLines} posted ${movement.opening.priorLines === 1 ? 'line' : 'lines'} before the window — every source, not just payroll`,
   ]);
 
@@ -589,7 +599,7 @@ export function accountMovementToCsv(
     movementSideCell(movement.opening.balance, movement.account.normalBalance),
   ]);
   row([
-    'Month totals',
+    noun === 'year' ? 'Year totals' : 'Month totals',
     '',
     '',
     '',
@@ -620,4 +630,132 @@ export function accountMovementToCsv(
   const filename = `mbumah-account-movement-${accountSlug}-${periodPart}.csv`;
 
   return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
+}
+
+// ── v2.104.0: the account opens its year ─────────────────────────────────
+//
+// The drill was period-scoped: one month, replayed. But an account is a
+// story told across months — "what did 5200 Salaries Expense do all year?"
+// deserved a door, not twelve clicks. The movement dialog grows a window
+// switch (This month / Full year); the year fetches the SAME endpoint with
+// window=year and the SAME honesty: the route aggregates the opening over
+// every posted never-voided line before January 1st (any source), replays
+// the year's lines chronologically, and the builder proves the closing.
+//
+// THE YEAR AT A GLANCE: a replay that spans twelve months reads badly as
+// one flat table, so the year view grows a rollup strip — twelve cells,
+// one per calendar month, each carrying the month's activity (lines, debit,
+// credit) and the running balance at the month's END. Quiet months don't
+// vanish: their closing is the balance CARRIED FORWARD (no activity — the
+// account didn't move), which is the honest way to say "nothing happened
+// here". The strip is a view OF the replay (computed from the same rows),
+// never a second truth.
+//
+// HONESTY CONTRACT (inherits the movement's):
+//   • The rollups assume the CHRONOLOGICAL input the route guarantees —
+//     a replay that arrives out of order would close months against the
+//     wrong running balance, so the builder throws rather than lie.
+//   • A movement dated OUTSIDE the requested year is impossible by
+//     construction (the route's gte/lt window) — impossible inputs throw,
+//     they are never silently bucketed into the nearest month.
+//   • Money is money2 everywhere: sums round once per month, the running
+//     re-rounds at every step, float drift never compounds.
+//   • The compact side cell is a GLANCE dialect ('516.0K Dr'), not a
+//     filing: the exact values ride the replay table and the cell's title.
+//
+// PURE module: no db, no network, no env — same constraint as the rest of
+// this file, so unit tests run without any mocking.
+
+/** One calendar month of the year strip. */
+export interface AccountYearMonth {
+  /** 1–12. */
+  month: number;
+  /** 'Jan' … 'Dec' — the strip's label. */
+  label: string;
+  /** The month's own posted sums at money precision (zero when quiet). */
+  debit: number;
+  credit: number;
+  /** Replay lines that landed in this month. */
+  lines: number;
+  /** True when at least one replay line landed here. */
+  activity: boolean;
+  /** The running balance at the month's END — carried forward through
+   *  quiet months, because a still account still HAS a balance. */
+  closing: number;
+}
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+
+/**
+ * Build the year-at-a-glance rollups: twelve fixed calendar cells for
+ * `year`, seeded by the window's opening balance, fed by the replay rows
+ * (assumed chronological — the route's order). Quiet months carry the
+ * balance forward with zero activity; a movement dated outside the year,
+ * an unreadable date, or a non-chronological replay throws — the strip
+ * would otherwise lie about which month moved what.
+ */
+export function yearMonthRollups(
+  openingBalance: number,
+  movements: readonly AccountMovementRow[],
+  normalBalance: string,
+  year: number,
+): AccountYearMonth[] {
+  const rollups: AccountYearMonth[] = MONTH_LABELS.map((label, i) => ({
+    month: i + 1,
+    label,
+    debit: 0,
+    credit: 0,
+    lines: 0,
+    activity: false,
+    closing: 0,
+  }));
+
+  let running = money2(Number(openingBalance || 0));
+  let cursor = 0; // the month index the replay has reached
+  for (const m of movements) {
+    const d = new Date(m.entryDate);
+    if (Number.isNaN(d.getTime())) {
+      throw new Error(`Movement ${m.entryNumber} carries an unreadable date — the year rollup refuses to guess.`);
+    }
+    const mi = d.getUTCMonth();
+    if (d.getUTCFullYear() !== year) {
+      throw new Error(`Movement ${m.entryNumber} is dated outside ${year} — the year window and the replay disagree.`);
+    }
+    if (mi < cursor) {
+      throw new Error(`Movement ${m.entryNumber} arrives out of order — the year rollup would close months against the wrong balance.`);
+    }
+    while (cursor < mi) {
+      rollups[cursor].closing = running; // quiet months: carried forward
+      cursor += 1;
+    }
+    const debit = money2(Number(m.debit || 0));
+    const credit = money2(Number(m.credit || 0));
+    rollups[mi].debit = money2(rollups[mi].debit + debit);
+    rollups[mi].credit = money2(rollups[mi].credit + credit);
+    rollups[mi].lines += 1;
+    rollups[mi].activity = true;
+    running = money2(running + signedBalance(debit, credit, normalBalance));
+  }
+  for (let i = cursor; i < 12; i += 1) {
+    rollups[i].closing = running;
+  }
+  return rollups;
+}
+
+/**
+ * The year strip's compact dialect of the side cell: '516.0K Dr',
+ * '70.4K Cr', zero as '0 —'. A glance is not a filing — magnitudes past
+ * 999.99 read in thousands to keep a twelve-cell grid readable, and the
+ * exact values ride the replay table and each cell's title.
+ */
+export function movementSideCellCompact(signed: number, normalBalance: string): string {
+  const magnitude = money2(Math.abs(Number(signed || 0)));
+  if (magnitude === 0) return '0 —';
+  const normal = normalBalance === 'CREDIT' ? 'Cr' : 'Dr';
+  const opposite = normal === 'Dr' ? 'Cr' : 'Dr';
+  const mag =
+    magnitude >= 1000
+      ? `${(Math.round((magnitude / 1000) * 10) / 10).toFixed(1)}K`
+      : magnitude.toFixed(2);
+  return `${mag} ${Number(signed) > 0 ? normal : opposite}`;
 }
