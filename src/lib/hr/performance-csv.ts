@@ -284,3 +284,87 @@ export function goalsToCsv(
 
   return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
 }
+
+/**
+ * v2.99.0: the filing row for one bench goal — the DeletedGoalDto's visible
+ * facts plus the bench's own honest stamp (deletedAt, the WHEN a goal
+ * left). The bench is manage-only content (the list route is
+ * hr.performance.manage-guarded and reviewers read the live board only),
+ * so this row can carry the deletion stamp the board never shows: the
+ * whole point of the filing is reconciling what left, with what values,
+ * under which cycle, and when.
+ */
+export interface BenchCsvRow {
+  title: string;
+  employeeName: string | null;
+  cycleName: string | null;
+  metricSource: string;
+  metricLabel: string | null;
+  status: string;
+  currentValue: string;
+  targetValue: string;
+  progressPct: number;
+  dueDate: string | null;
+  deletedAt: string;
+}
+
+export interface BenchCsvMeta {
+  organizationName: string;
+  scopeLabel: string;
+  /**
+   * Honesty about the bench's own window: the service returns the 50 most
+   * recent deletions (take: 50). When the underlying bench is larger, the
+   * header block says so instead of letting the file silently pose as the
+   * whole bench. 'all' when nothing was cut.
+   */
+  windowLabel: string;
+}
+
+/**
+ * Build the governed CSV for the goal bench (v2.99.0) — the exact rows the
+ * bench dialog shows, newest deletion first (the service's order). The
+ * family completes: reviews (v2.96), cycles + goals (v2.97), and now the
+ * bench (v2.99) all file through the same header-block contract, the same
+ * escaper, the same filename honesty. The Deleted column is the day key of
+ * deletedAt — the same day precision every other date column uses.
+ */
+export function benchToCsv(
+  goals: readonly BenchCsvRow[],
+  meta: BenchCsvMeta,
+  generatedAt: Date = new Date(),
+): ReviewCsvFile | null {
+  if (goals.length === 0) return null;
+
+  const lines: string[] = [];
+  const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
+
+  row(['Report', 'Goal bench (recently deleted)']);
+  row(['Organization', meta.organizationName]);
+  row(['Scope', meta.scopeLabel]);
+  row(['Window', meta.windowLabel]);
+  row(['Generated (UTC)', generatedAt.toISOString()]);
+
+  lines.push('');
+  lines.push('Bench');
+  row(['Goal', 'Employee', 'Cycle', 'Source', 'Metric', 'Status', 'Current', 'Target', 'Progress %', 'Due', 'Deleted']);
+  for (const g of goals) {
+    row([
+      g.title,
+      g.employeeName ?? '',
+      g.cycleName ?? '',
+      g.metricSource,
+      g.metricLabel ?? '',
+      g.status,
+      g.currentValue,
+      g.targetValue,
+      g.progressPct,
+      dayKey(g.dueDate),
+      dayKey(g.deletedAt),
+    ]);
+  }
+
+  const csv = lines.join('\r\n') + '\r\n';
+  const filename = 'mbumah-performance-bench.csv';
+
+  return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
+}
