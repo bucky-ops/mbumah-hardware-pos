@@ -24,11 +24,12 @@ const assert = (cond, msg) => {
 };
 
 // ── version + release discipline ───────────────────────────────────────────
-check('version: package.json leads 2.110.0 (all three slots)', () => {
+check('version: package.json led 2.110.0 at this release (superseded by 2.111.0+)', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert(pkg.version === '2.110.0', `version=${pkg.version}`);
-  assert(pkg.mbumah.releaseVersion === '2.110.0', `release=${pkg.mbumah.releaseVersion}`);
-  assert(pkg.mbumah.baseVersion === '2.110.0', `base=${pkg.mbumah.baseVersion}`);
+  const cmp = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); return x[0] > y[0] || (x[0] === y[0] && (x[1] > y[1] || (x[1] === y[1] && x[2] >= y[2]))); };
+  assert(cmp(pkg.version, '2.110.0'), `version=${pkg.version} (must be at least 2.110.0)`);
+  assert(pkg.mbumah.releaseVersion === pkg.version, 'release tracks version');
+  assert(pkg.mbumah.baseVersion === pkg.version, 'base tracks version');
 });
 
 check('whats-new: 2.110.0 leads the feed with the zero-run story', () => {
@@ -117,7 +118,10 @@ check('panel: an honest empty state when nothing matches', () => {
 
 check('panel: both homes consume the shared component (no filter copies)', () => {
   const tab = read('src/app/(shell)/tabs/people-payroll-tab.tsx');
-  assert(tab.includes('<PeoplePayrollByBranch rows={rows} defaultOpen'), 'tab uses shared panel');
+  // v2.111.0: the tab's panel JSX grew the deep-link props (multi-line) —
+  // re-pinned to the source bytes with the version-slot floor relaxed (atLeast).
+  assert(tab.includes('<PeoplePayrollByBranch'), 'tab uses shared panel');
+  assert(tab.includes('defaultBranchId={linkBranchId}'), 'deep-link seed rides');
   assert(!tab.toLowerCase().includes('select'), 'tab grows no own select');
   const consolePage = read('src/app/(shell)/console/page.tsx');
   assert(consolePage.includes('PeoplePayrollByBranch'), 'console uses shared panel');
