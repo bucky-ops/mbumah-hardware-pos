@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.118.0] The ledger files its copy
+
+Export-honesty release: the Restricted access ledger (v2.117.0) grows the same CSV door the case list has worn since v2.115.0 — the filtered ledger window exports content-free as `access-ledger-YYYY-MM-DD.csv`, with exactly the columns the screen shows. The compliance trail can now leave the desk on paper without the confidentiality contract leaving with it.
+
+### Added
+- **Ledger CSV export** (`src/lib/hr/discipline-ledger-csv.ts`, `src/app/(shell)/hr/discipline/page.tsx`): a violet CSV button on the ledger toolbar writes `access-ledger-YYYY-MM-DD.csv` from the FILTERED rows (event filter and window included) — columns `when_iso, event, who, case_id, case_employee`, RFC 4180 escaping, CRLF line endings, header row first, nulls as empty cells. The button disables on an empty filtered set and its tooltip says the contract aloud: only who, when, and which case are exported.
+- **Pure serializer** (`buildAccessLedgerCsv`, `escapeLedgerCsvCell`, `ledgerEventLabel`): same shape as the v2.115.0 list serializer — kept out of the page so the escaping rules are unit-testable, with the column set pinned by tests as the one line that must change (and fail its guard test) if a content column is ever proposed.
+
+### Changed
+- The ledger counts line emphasizes refused attempts: when a window holds denials, the "N denied" phrase wears a rose tint (`hr-discipline-ledger-denied-count`) with its own tooltip — refusals are the part a reviewer scans for; zero stays honest and quiet.
+- The What's-New feed leads with the export story; the unread-counter test re-anchored for the 2.118.0-fed feed (2.110.0→7, 2.109.0→8, 2.108.0→9, 2.77.0→40).
+
+### Security
+- The export cannot outgrow the screen: the CSV maps `ledgerVisible` (the filtered rows) through a row type with no description/resolution-notes field, and the header set is pinned content-free by tests; the serializer reuses the RFC 4180 discipline (quote-on-need, doubled embedded quotes, CRLF) so names with commas or quotes cannot corrupt the file or smuggle cells. No new route, no new guard key, no new query — the door reads client-side state the session already fetched under `hr.discipline.manage`.
+
 ## [2.117.0] The ledger reads the room
 
 Compliance-visibility release: v2.115.0 made restricted reads leave a trail, v2.116.0 read that trail back per record; v2.117.0 reads it back across ALL cases — a read-only Restricted access ledger on the discipline desk, over the same content-free audit events. Spec Phase 4.7's confidentiality story now has an org-level surface: who has been opening restricted records lately, who has been refused, and when.
