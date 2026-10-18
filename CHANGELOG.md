@@ -2,6 +2,27 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.109.0] People and payroll joins Finance and Insights; console navigation and icons unified
+
+Information-architecture release directed by product feedback: the per-branch people and payroll drill-down moves under Finance and Insights, the two consoles share one implementation, the Expert Console gains a Home action back to POS, and the navigation order and icons are made deterministic.
+
+### Added
+- **People and Payroll tab (Finance and Insights)**: the "People and payroll by branch" panel now has its own tab in the main SPA's Finance and Insights group (id `people-payroll`, UserCog icon, offered to exactly the roles /api/org/summary's guard serves: SUPER_ADMIN, STORE_OWNER, ACCOUNTANT; locked in the sidebar for everyone else). The tab reads the same additive hrPerStore block the consoles read; per branch it shows headcount, employment cost (KES, thousands separators), absence rate, latest payroll run, and expiry alerts.
+- **Shared panel component** (`src/components/finance/people-payroll-by-branch.tsx`): one implementation, two homes (Expert Console collapsed by default, the new tab expanded by default). Missing data shows precise reason codes (PAYROLL_RUN_NOT_AVAILABLE, PERMISSION_DENIED, HR_DATA_SOURCE_UNAVAILABLE, API_ERROR_SAFE), never blank, undefined, NaN, or fabricated numbers. Desktop renders a dense table with a sticky header, mobile renders cards, neither scrolls horizontally.
+- **Expert Console Home action**: a Home button (Home icon, accessible name "Back to POS", testid `console-home-pos`) in the /console header, placed first in the actions row so it cannot overlap badges or menus. It returns to the POS workspace through ONE internal helper (`goHomeToPos`: sets the pos tab in the app store, assigns "/"), so it cannot become an open redirect.
+- **Unified console shell** (`src/components/console/unified-console.tsx`): Organization Console and Expert Console render through one shared shell (mode "organization" / mode="expert") that unifies the mode contract, the skip-to-content landmark, and the main landmark, while each console keeps its own header design and every existing capability (see docs/CONSOLE_MERGE_PARITY_MATRIX.md).
+- **Documentation**: docs/NAVIGATION_INFORMATION_ARCHITECTURE.md, docs/ICON_SYSTEM.md, docs/CONSOLE_MERGE_PARITY_MATRIX.md, docs/FINANCE_INSIGHTS_NAVIGATION.md, docs/EXPERT_CONSOLE_HOME.md, docs/PEOPLE_PAYROLL_BY_BRANCH.md.
+
+### Changed
+- **Navigation order**: the workspace links (Branch Selector, Organization Console, Expert Console, Global Chat) moved below the navigation rail so their visible order now follows the Admin module exactly: Admin, Branch Selector, Organization Console, Expert Console, Global Chat.
+- **Icons**: Admin wears ShieldCheck; Branch Selector wears Building2; Organization Console wears Network; Expert Console keeps Gauge; Global Chat keeps MessagesSquare (clearly a chat icon, consistent with the app's existing chat surfaces). Every TAB_CONFIG entry carries a required icon (type-enforced), with no duplicate ids or labels.
+- **The Expert Console page consumes the shared panel**; the old inline per-branch table was removed (its logic lives only in the shared component now).
+
+### Security
+- The people-payroll tab is offered to exactly the roles the org-summary endpoint's guard serves; the server re-validates every request and fail-closes (no HR module or no HR report permission means no hrPerStore block).
+- The Home action navigates through one internal helper that accepts no external URL, so it cannot become an open redirect.
+- One shared database and storeId tenant isolation are unchanged; no destructive database operations were performed.
+
 ## [2.30.0] Payroll tab leave/attendance contract fix + manager approval UX completion
 
 QA-caught crash fix with a feature completion pass. Browser QA on v2.29.1 reproduced "Unable to load Payroll" (`SectionErrorBoundary:Payroll`, `TypeError: Cannot read properties of undefined (reading 'firstName')`) the moment the Payroll tab was opened with the seeded PENDING leave request in the database — the first leave request in any store crashed the whole tab. Root cause: the Leave sub-tab rendered `l.employee.firstName` / `l.leaveType.name`, but `GET /api/leaves` returns FLAT DTOs (`employeeName`, `employeeJobTitle`, `leaveTypeName`… — no nested objects); the interface in the tab described a shape the API never shipped. The Attendance sub-tab carried the identical latent bug (`r.employee.firstName` vs the flat `/api/attendance` DTO) and would have crashed on the first attendance record. A second latent bug hid underneath: the approve/reject buttons sent lowercase `action: 'approve' | 'reject'` while `PUT /api/leaves` requires UPPERCASE `'APPROVE' | 'REJECT'` — every decision click would have 400'd even without the crash. The seeded PENDING request from v2.29.1 is what finally exposed both.
