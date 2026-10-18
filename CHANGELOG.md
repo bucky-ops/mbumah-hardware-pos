@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.119.0] Consent works
+
+Spec Phase 4.8 acceptance-6 release: "Consent records work." Until now the ConsentRecord table was write-only at intake (recruitment applicant consent) and read by exactly one gate — the payroll run's MISSING_CONSENT guardrail — with no product surface to grant, withdraw, or even see an employee's consent. This release closes the loop: a read-back consent ledger on the Privacy tab, plus grant/withdraw decisions, both audit-logged and scope-checked.
+
+### Added
+- **Consent ledger** (`src/lib/hr/data-protection.ts` `listConsentRecords`, `GET /api/hr/privacy/consent`, Privacy tab card on `/hr/reports`): every in-scope employee's data-processing consent state — Active (emerald) / Withdrawn (amber) / None on file (slate) — with the latest record's policy version, granted and withdrawn dates, in one batched query (scope rides `employeeScopeWhere`, take 200). The status folds ALL records (the payroll gate does not filter by purpose), so the chip on screen is the answer the run check will compute.
+- **Consent decisions** (`grantConsent`, `withdrawConsent`, `POST /api/hr/privacy/consent/grant|withdraw`): Grant writes a NEW ConsentRecord (append-only — a withdrawn consent keeps its row and its dates; the new grant carries the current policy version) and refuses 409 when an active one stands; Withdraw stamps `withdrawnAt` on every active record and refuses 409 when nothing active stands. Both are reserved to settings managers (`canDecideErasure` → `hr.settings.manage`, 403 DECISION_FORBIDDEN otherwise) and write `PRIVACY_CONSENT_GRANTED` / `PRIVACY_CONSENT_WITHDRAWN` audit events with employee + policy metadata — never content.
+
+### Changed
+- The Privacy tab's counts line reads "N active · W withdrawn · M without consent", with the without-consent phrase rose-tinted when nonzero — those are the employees the next payroll run will report MISSING_CONSENT for; zero stays honest and quiet. The erasure card is untouched and coexists beneath the consent card.
+- The What's-New feed leads with the consent story; the unread-counter test re-anchored for the 2.119.0-fed feed (2.110.0→8, 2.109.0→9, 2.108.0→10, 2.77.0→41).
+
+### Security
+- The ledger reads only what the session's employee scope already admits (same `employeeScopeWhere` as the erasure list, `hr.report.branch` + VIEW_ROLES guard); decisions re-check `hr.settings.manage` in-handler (the erasure decision pattern), fail closed on out-of-scope employees (404), and the audit metadata carries the employee id, purpose, policy version, and count — never the scope text or any personal content. The payroll gate's read (`withdrawnAt: null`) is untouched and pinned by a source contract; withdrawal is now reachable, so the gate is finally enforceable through the product instead of a dev-only seed script.
+
 ## [2.118.0] The ledger files its copy
 
 Export-honesty release: the Restricted access ledger (v2.117.0) grows the same CSV door the case list has worn since v2.115.0 — the filtered ledger window exports content-free as `access-ledger-YYYY-MM-DD.csv`, with exactly the columns the screen shows. The compliance trail can now leave the desk on paper without the confidentiality contract leaving with it.

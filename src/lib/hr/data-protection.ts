@@ -385,3 +385,172 @@ export async function createErasureRequest(
 export function canDecideErasure(role: string): boolean {
   return hasHrPermission(role, 'hr.settings.manage');
 }
+
+// ── Consent records (v2.119.0, spec Phase 4.8 acceptance 6) ─────────────────
+//
+// "Consent records work" — until now the ConsentRecord table was write-only
+// at intake (recruitment applicant consent) and read by exactly one gate: the
+// payroll run's MISSING_CONSENT guardrail, which requires an ACTIVE record
+// (`withdrawnAt: null`) per employee. No product surface could GRANT an
+// employee's consent, WITHDRAW one, or even SEE the state — the honest gap.
+// This block closes it: a read-back ledger on the Privacy tab plus grant /
+// withdraw decisions, both audit-logged, both scope-checked.
+
+/** The purpose the payroll gate reads; grant/withdraw pin this vocabulary. */
+export const PAYROLL_CONSENT_PURPOSE = 'PAYROLL_PROCESSING';
+export const PAYROLL_CONSENT_SCOPE = 'Compute salary, statutory deductions, and payslips';
+export const PAYROLL_CONSENT_POLICY_VERSION = 'hr-policy-2026-01';
+
+export interface ConsentRow {
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  /** ACTIVE (an un-withdrawn record exists) / WITHDRAWN (records exist, all withdrawn) / NONE (no record — payroll blocks). */
+  status: 'ACTIVE' | 'WITHDRAWN' | 'NONE';
+  /** The latest record's purpose (the status folds ALL records — the payroll gate does not filter by purpose). */
+  latestPurpose: string | null;
+  latestPolicyVersion: string | null;
+  grantedAt: string | null;
+  withdrawnAt: string | null;
+}
+
+export interface ConsentLedger {
+  records: ConsentRow[];
+  summary: { active: number; withdrawn: number; none: number };
+}
+
+/** Read-back: every in-scope employee's consent state, one batched query. */
+export async function listConsentRecords(session: Session): Promise<ConsentLedger> {
+  const employees = await db.employee.findMany({
+    where: { deletedAt: null, AND: [employeeScopeWhere(session)] },
+    select: {
+      id: true,
+      employeeCode: true,
+      firstName: true,
+      lastName: true,
+      consentRecords: {
+        orderBy: { grantedAt: 'desc' },
+        select: {
+          purpose: true,
+          policyVersion: true,
+          grantedAt: true,
+          withdrawnAt: true,
+        },
+      },
+    },
+    take: 200,
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+  });
+
+  const records: ConsentRow[] = employees.map((e) => {
+    const crs = e.consentRecords;
+    const latest = crs[0] ?? null;
+    const active = crs.find((c) => c.withdrawnAt === null) ?? null;
+    // Status folds ALL records — the payroll gate reads any active record.
+    const status: ConsentRow['status'] = active ? 'ACTIVE' : crs.length > 0 ? 'WITHDRAWN' : 'NONE';
+    return {
+      employeeId: e.id,
+      employeeCode: e.employeeCode ?? '—',
+      employeeName: `${e.firstName} ${e.lastName}`.trim(),
+      status,
+      latestPurpose: (active ?? latest)?.purpose ?? null,
+      latestPolicyVersion: (active ?? latest)?.policyVersion ?? null,
+      grantedAt: (active ?? latest)?.grantedAt.toISOString() ?? null,
+      withdrawnAt: active ? null : (latest?.withdrawnAt?.toISOString() ?? null),
+    };
+  });
+
+  return {
+    records,
+    summary: {
+      active: records.filter((r) => r.status === 'ACTIVE').length,
+      withdrawn: records.filter((r) => r.status === 'WITHDRAWN').length,
+      none: records.filter((r) => r.status === 'NONE').length,
+    },
+  };
+}
+
+async function consentTargetEmployee(
+  input: { employeeId?: unknown },
+  session: Session,
+): Promise<{ id: string; storeId: string }> {
+  const employee = await db.employee.findFirst({
+    where: { id: String(input.employeeId ?? ''), deletedAt: null, AND: [employeeScopeWhere(session)] },
+    select: { id: true, storeId: true },
+  });
+  if (!employee) throw new StageGError('EMPLOYEE_NOT_FOUND', 'Employee not found in your scope.', 404);
+  return employee;
+}
+
+/**
+ * Grant the employee's data-processing consent: a NEW record (append-only —
+ * a withdrawn consent keeps its row and its dates; the new grant supersedes
+ * it). Refuses when an active record already stands.
+ */
+export async function grantConsent(
+  input: { employeeId?: unknown },
+  session: Session,
+): Promise<Record<string, unknown>> {
+  const employee = await consentTargetEmployee(input, session);
+  const active = await db.consentRecord.findFirst({
+    where: { employeeId: employee.id, withdrawnAt: null },
+    select: { id: true, purpose: true },
+  });
+  if (active) {
+    throw new StageGError('CONSENT_ACTIVE', `An active consent already stands (${active.purpose}).`, 409);
+  }
+  const record = await db.consentRecord.create({
+    data: {
+      employeeId: employee.id,
+      purpose: PAYROLL_CONSENT_PURPOSE,
+      scope: PAYROLL_CONSENT_SCOPE,
+      policyVersion: PAYROLL_CONSENT_POLICY_VERSION,
+      lawfulBasis: 'CONSENT',
+    },
+  });
+  await hrAudit({
+    actorId: session.userId,
+    actorRole: session.role,
+    action: 'PRIVACY_CONSENT_GRANTED',
+    resourceType: HrEntityType.EMPLOYEE,
+    resourceId: employee.id,
+    storeId: session.storeId,
+    metadata: { employeeId: employee.id, purpose: PAYROLL_CONSENT_PURPOSE, policyVersion: PAYROLL_CONSENT_POLICY_VERSION },
+  });
+  return {
+    employeeId: employee.id,
+    consentId: record.id,
+    purpose: record.purpose,
+    policyVersion: record.policyVersion,
+    grantedAt: record.grantedAt.toISOString(),
+  };
+}
+
+/**
+ * Withdraw the employee's active consent(s): sets withdrawnAt on every
+ * un-withdraw record. The payroll gate reads `withdrawnAt: null`, so the
+ * NEXT run honestly reports MISSING_CONSENT for this employee.
+ */
+export async function withdrawConsent(
+  input: { employeeId?: unknown },
+  session: Session,
+): Promise<Record<string, unknown>> {
+  const employee = await consentTargetEmployee(input, session);
+  const withdrawn = await db.consentRecord.updateMany({
+    where: { employeeId: employee.id, withdrawnAt: null },
+    data: { withdrawnAt: new Date() },
+  });
+  if (withdrawn.count === 0) {
+    throw new StageGError('NO_ACTIVE_CONSENT', 'No active consent stands for this employee.', 409);
+  }
+  await hrAudit({
+    actorId: session.userId,
+    actorRole: session.role,
+    action: 'PRIVACY_CONSENT_WITHDRAWN',
+    resourceType: HrEntityType.EMPLOYEE,
+    resourceId: employee.id,
+    storeId: session.storeId,
+    metadata: { employeeId: employee.id, withdrawn: withdrawn.count },
+  });
+  return { employeeId: employee.id, withdrawn: withdrawn.count, withdrawnAt: new Date().toISOString() };
+}
