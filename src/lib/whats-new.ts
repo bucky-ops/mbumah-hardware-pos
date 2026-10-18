@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.106.0',
+    title: 'The picker remembers and browses',
+    bullets: [
+      'The account picker now opens on focus, not only on typing: the accounts you asked for last time come back as violet chips \u2014 remembered in this browser only, one click from the drill.',
+      'Browse the whole chart: one door lists every account in the organization, grouped by type, each wearing its truth \u2014 in this month with the posted-line count, or quiet.',
+      'Memory follows the chart: only codes the index knows are remembered, a chart that fails to load stays honest by absence, and typing a code still asks the ledger.',
+      'Keyboard first, layered Esc: \u2191\u2193 to move, Enter to open, and Esc steps back \u2014 browse, then box, then drawer.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) \u2014 remembering what you may read widens nothing.',
+    ],
+  },
+  {
     version: '2.105.0',
     title: 'The ledger answers for any account',
     bullets: [
