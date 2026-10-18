@@ -35,6 +35,9 @@ export interface PayrollPeriodDto {
 
 export interface PayrollRunDto {
   id: string;
+  // v2.100.0: rides the list payload (additive) — the period ledger's door
+  // needs the period's id to fetch its journals.
+  payrollPeriodId: string;
   runType: string;
   status: string;
   totalGross: string;
@@ -50,6 +53,40 @@ export interface PayrollRunDto {
   journalEntryId: string | null;
   createdAt: string;
   payrollPeriod: { name: string; payDate: string | null; startDate: string; endDate: string };
+}
+
+// v2.100.0: the period ledger's payload — served by GET /api/payroll/period-journal,
+// shaped by the pure builder (src/lib/hr/payroll/period-journal.ts).
+export interface PeriodLedgerLineDto {
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  debit: number;
+  credit: number;
+  description: string | null;
+}
+
+export interface PeriodLedgerEntryDto {
+  runId: string;
+  runType: string;
+  entryNumber: string;
+  entryDate: string;
+  description: string;
+  totalDebit: number;
+  totalCredit: number;
+  /** Recomputed line sums — the drawer never trusts the payload's own totals. */
+  debitSum: number;
+  creditSum: number;
+  /** Proven at 2dp money precision on BOTH the line sums and the header totals. */
+  balanced: boolean;
+  lines: PeriodLedgerLineDto[];
+}
+
+export interface PeriodJournalPayload {
+  period: { id: string; name: string; startDate: string; endDate: string; payDate: string | null };
+  entries: PeriodLedgerEntryDto[];
+  unsettled: Array<{ runId: string; runType: string; status: string }>;
+  missingJournal: Array<{ runId: string; runType: string; status: string }>;
 }
 
 export const RUN_STATUS_STYLES: Record<string, string> = {
@@ -112,6 +149,44 @@ export default function HrPayrollPage() {
       return next;
     });
   }, []);
+
+  // v2.100.0: the period opens its ledger — one fetch per open (money must
+  // be current), dialog-scoped state, no global churn.
+  const [ledgerPeriodId, setLedgerPeriodId] = useState<string | null>(null);
+  const [ledgerPeriodName, setLedgerPeriodName] = useState<string | null>(null);
+  const [ledger, setLedger] = useState<PeriodJournalPayload | null>(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+
+  const openPeriodJournal = useCallback(
+    async (periodId: string, periodName?: string) => {
+      if (!periodId || ledgerLoading) return;
+      if (periodName) setLedgerPeriodName(periodName);
+      setLedgerPeriodId(periodId);
+      setLedgerLoading(true);
+      setLedgerError(null);
+      setLedger(null);
+      try {
+        const res = await fetch(`/api/payroll/period-journal?periodId=${encodeURIComponent(periodId)}`, {
+          credentials: 'include',
+        });
+        // House envelope: { success, data } — the ledger lives in .data.
+        const body = (await res.json().catch(() => null)) as
+          | { success?: boolean; error?: string; data?: Partial<PeriodJournalPayload> }
+          | null;
+        if (!res.ok || !body?.success || !body.data?.period || !body.data.entries) {
+          setLedgerError(body?.error || `Ledger API unreachable (${res.status}).`);
+        } else {
+          setLedger(body.data as PeriodJournalPayload);
+        }
+      } catch {
+        setLedgerError('Ledger is unreachable. Check your connection and try again.');
+      } finally {
+        setLedgerLoading(false);
+      }
+    },
+    [ledgerLoading],
+  );
 
   const exportRunDigest = useCallback(
     async (runId: string) => {
@@ -401,14 +476,19 @@ export default function HrPayrollPage() {
                               className="border-y bg-muted/50 transition-colors hover:bg-muted/70"
                             >
                               <TableCell colSpan={7} className="p-0">
-                                <button
-                                  type="button"
-                                  onClick={() => togglePeriod(group.periodName)}
-                                  aria-expanded={open}
-                                  aria-label={`${open ? 'Collapse' : 'Expand'} the ${group.periodName} payroll period`}
-                                  data-testid="payroll-period-toggle"
-                                  className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left"
-                                >
+                                {/* v2.100.0: the header splits — the fold stays the
+                                    fold, and the ledger gets its own door on the right
+                                    rail (a real button BESIDE the toggle, never nested
+                                    inside it). */}
+                                <div className="flex w-full items-stretch">
+                                  <button
+                                    type="button"
+                                    onClick={() => togglePeriod(group.periodName)}
+                                    aria-expanded={open}
+                                    aria-label={`${open ? 'Collapse' : 'Expand'} the ${group.periodName} payroll period`}
+                                    data-testid="payroll-period-toggle"
+                                    className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left"
+                                  >
                                   {open ? (
                                     <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                                   ) : (
@@ -444,7 +524,22 @@ export default function HrPayrollPage() {
                                       </span>
                                     </span>
                                   </span>
-                                </button>
+                                  </button>
+                                  <div className="flex items-center border-l border-border/70 pr-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border"
+                                      aria-label={`Open the ${group.periodName} journal ledger`}
+                                      title="The month's posted journals — every entry, every line, balance proven"
+                                      data-testid="payroll-period-journal"
+                                      onClick={() => void openPeriodJournal(group.runs[0]?.payrollPeriodId ?? '', group.periodName)}
+                                    >
+                                      <Landmark className="h-3.5 w-3.5" aria-hidden />
+                                      <span className="hidden sm:inline">Ledger</span>
+                                    </Button>
+                                  </div>
+                                </div>
                               </TableCell>
                             </TableRow>
                             {open &&
@@ -538,6 +633,20 @@ export default function HrPayrollPage() {
         onChanged={() => void load()}
       />
 
+      <PeriodJournalDrawer
+        periodName={ledgerPeriodName}
+        payload={ledger}
+        loading={ledgerLoading}
+        error={ledgerError}
+        onClose={() => {
+          setLedgerPeriodId(null);
+          setLedgerPeriodName(null);
+        }}
+        onRetry={() => {
+          if (ledgerPeriodId) void openPeriodJournal(ledgerPeriodId);
+        }}
+      />
+
       <CreateRunDialog
         open={createRunOpen}
         periods={periods ?? []}
@@ -559,6 +668,169 @@ export default function HrPayrollPage() {
         }}
       />
     </div>
+  );
+}
+
+// ── Period ledger drawer (v2.100.0) ──────────────────────────────────────────
+
+function PeriodJournalDrawer({
+  periodName,
+  payload,
+  loading,
+  error,
+  onClose,
+  onRetry,
+}: {
+  periodName: string | null;
+  payload: PeriodJournalPayload | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  const p = payload?.period;
+  return (
+    <Dialog open={periodName !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="print:hidden max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Landmark className="h-4 w-4 text-violet-600 dark:text-violet-400" aria-hidden />
+            Period ledger — {p?.name ?? periodName}
+          </DialogTitle>
+          <DialogDescription>
+            {p
+              ? `${formatEatStamp(new Date(p.startDate))} → ${formatEatStamp(new Date(p.endDate))}${p.payDate ? ` · pays ${formatEatStamp(new Date(p.payDate))}` : ''} — `
+              : ''}
+            the month&apos;s posted journals, lines and all. The header&apos;s settled net, checkable to the account.
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading && (
+          <div className="space-y-2" data-testid="payroll-ledger-loading">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="space-y-2">
+            <div
+              role="alert"
+              data-testid="payroll-ledger-error"
+              className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+            >
+              {error}
+            </div>
+            <Button variant="outline" size="sm" onClick={onRetry} data-testid="payroll-ledger-retry">
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {!loading && !error && payload && (
+          <div className="space-y-4">
+            {payload.entries.length === 0 && payload.unsettled.length === 0 && payload.missingJournal.length === 0 && (
+              <p className="px-1 py-6 text-center text-sm text-muted-foreground" data-testid="payroll-ledger-empty">
+                Nothing posted in this period yet.
+              </p>
+            )}
+
+            {payload.entries.map((entry) => (
+              <div key={entry.runId} className="rounded-lg border bg-muted/30 p-3" data-testid="payroll-ledger-entry">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="text-[11px]">{entry.runType}</Badge>
+                  <span className="font-mono text-[11px] text-muted-foreground">{entry.entryNumber}</span>
+                  <span className="text-[11px] text-muted-foreground">· {formatEatStamp(new Date(entry.entryDate))}</span>
+                  <span className="ml-auto" data-testid="payroll-ledger-balanced">
+                    {entry.balanced ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300">
+                        <CheckCircle2 className="h-3 w-3" aria-hidden />
+                        Balanced · {kes(entry.debitSum)}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300">
+                        <AlertTriangle className="h-3 w-3" aria-hidden />
+                        Unbalanced · off by {kes(Math.abs(entry.debitSum - entry.creditSum))}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">{entry.description}</p>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="h-8 text-[11px]">Account</TableHead>
+                      <TableHead className="h-8 text-right text-[11px]">Debit</TableHead>
+                      <TableHead className="h-8 text-right text-[11px]">Credit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {entry.lines.map((line, i) => (
+                      <TableRow key={`${entry.runId}-${i}`} className="odd:bg-muted/40" data-testid="payroll-ledger-line">
+                        <TableCell className="py-1.5">
+                          <span className="font-mono text-[11px] text-muted-foreground">{line.accountCode}</span>{' '}
+                          <span className="text-xs">{line.accountName}</span>
+                          <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+                            {line.accountType.replaceAll('_', ' ')}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-1.5 text-right text-xs tabular-nums">{line.debit ? kes(line.debit) : '—'}</TableCell>
+                        <TableCell className="py-1.5 text-right text-xs tabular-nums">{line.credit ? kes(line.credit) : '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="border-t-2">
+                      <TableCell className="py-1.5 text-xs font-semibold">Totals</TableCell>
+                      <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">{kes(entry.debitSum)}</TableCell>
+                      <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums">{kes(entry.creditSum)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            ))}
+
+            {payload.unsettled.length > 0 && (
+              <div
+                className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                data-testid="payroll-ledger-unsettled"
+              >
+                <p className="font-medium">
+                  {payload.unsettled.length} {payload.unsettled.length === 1 ? 'run' : 'runs'} in motion — no journal yet.
+                </p>
+                <p className="mt-0.5 text-[11px]">The entry posts when the run posts; until then it stays a count, never money.</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {payload.unsettled.map((r) => (
+                    <span
+                      key={r.runId}
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100/70 px-2 py-0.5 text-[10px] dark:border-amber-800 dark:bg-amber-900/40"
+                    >
+                      {r.runType} · {r.status.replaceAll('_', ' ')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {payload.missingJournal.length > 0 && (
+              <div
+                role="alert"
+                className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                data-testid="payroll-ledger-missing"
+              >
+                <p className="font-medium">
+                  {payload.missingJournal.length} settled {payload.missingJournal.length === 1 ? 'run has' : 'runs have'} no journal — this must never happen.
+                </p>
+                <p className="mt-0.5 text-[11px]">The header counts their money, but no entry carries it. Re-post or investigate before trusting this period.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
