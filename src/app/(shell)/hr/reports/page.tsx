@@ -35,6 +35,7 @@ import {
   FileSpreadsheet,
   Printer,
   ShieldCheck,
+  FileCheck2,
   Columns3,
   X,
   Bell,
@@ -207,6 +208,24 @@ interface ErasureDto {
   }>;
 }
 
+// v2.119.0: the consent ledger (spec Phase 4.8 acceptance 6) — every
+// in-scope employee's data-processing consent state; grant/withdraw decisions
+// mirror the erasure decision gate (hr.settings.manage).
+interface ConsentDto {
+  canDecide: boolean;
+  summary: { active: number; withdrawn: number; none: number };
+  records: Array<{
+    employeeId: string;
+    employeeCode: string;
+    employeeName: string;
+    status: 'ACTIVE' | 'WITHDRAWN' | 'NONE';
+    latestPurpose: string | null;
+    latestPolicyVersion: string | null;
+    grantedAt: string | null;
+    withdrawnAt: string | null;
+  }>;
+}
+
 const YEARS = [new Date().getUTCFullYear(), new Date().getUTCFullYear() - 1, new Date().getUTCFullYear() - 2];
 
 
@@ -331,6 +350,7 @@ export default function HrReportsPage() {
   const [statutory, setStatutory] = useState<StatutoryDto | null>(null);
   const [p10, setP10] = useState<P10Dto | null>(null);
   const [erasure, setErasure] = useState<ErasureDto | null>(null);
+  const [consent, setConsent] = useState<ConsentDto | null>(null);
   const [leaveUtil, setLeaveUtil] = useState<LeaveUtilDto | null>(null);
   const [leaveYear, setLeaveYear] = useState(String(new Date().getUTCFullYear()));
   // v2.36.0: drill-down correction surface (balance + history + adjust form).
@@ -394,6 +414,15 @@ export default function HrReportsPage() {
     }
   }, []);
 
+  // v2.119.0: the consent ledger loads with the Privacy tab.
+  const loadConsent = useCallback(async () => {
+    try {
+      setConsent(await apiGet<ConsentDto>('/api/hr/privacy/consent'));
+    } catch {
+      setConsent(null);
+    }
+  }, []);
+
   // v2.35.0: leave balances follow the leave YEAR (calendar year), not the
   // global reporting period — loaded independently so the year picker only
   // refetches this report.
@@ -417,6 +446,9 @@ export default function HrReportsPage() {
   useEffect(() => {
     void loadErasure();
   }, [loadErasure]);
+  useEffect(() => {
+    void loadConsent();
+  }, [loadConsent]);
   // v2.36.0: resolve one report row into the governed correction surface.
   const openDrill = useCallback(async (employeeCode: string, typeCode: string) => {
     setDrill({ open: true, loading: true, data: null });
@@ -1489,8 +1521,108 @@ export default function HrReportsPage() {
           )}
         </TabsContent>
 
-        {/* ── Privacy / erasure ── */}
+        {/* ── Privacy / consent (v2.119.0) + erasure ── */}
         <TabsContent value="privacy" className="space-y-4">
+          <Card data-testid="hr-privacy-consent">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <FileCheck2 className="h-4 w-4 text-emerald-600" aria-hidden /> Consent records (Data Protection Act posture)
+              </CardTitle>
+              <CardDescription>
+                Payroll runs on consent: an employee without an active data-processing consent is reported MISSING_CONSENT by the run check. Grant and withdraw are decisions reserved to settings managers, and both are audit-logged.
+              </CardDescription>
+              <p data-testid="hr-privacy-consent-counts" className="mt-1 text-xs tabular-nums text-muted-foreground">
+                {consent === null ? (
+                  'Loading…'
+                ) : (
+                  <>
+                    {`${consent.summary.active} active · ${consent.summary.withdrawn} withdrawn · `}
+                    {consent.summary.none > 0 ? (
+                      <span
+                        data-testid="hr-privacy-consent-none-count"
+                        className="font-medium text-rose-600 dark:text-rose-400"
+                        title="These employees will be reported MISSING_CONSENT by the next payroll run"
+                      >
+                        {consent.summary.none} without consent
+                      </span>
+                    ) : (
+                      <span>0 without consent</span>
+                    )}
+                  </>
+                )}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-3 flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => void loadConsent()} aria-label="Refresh consent records">
+                  <History className="h-4 w-4" aria-hidden /> Refresh
+                </Button>
+              </div>
+              {!consent ? (
+                <Skeleton className="h-28 w-full" />
+              ) : consent.records.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No employees in scope.</p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Employee</TableHead><TableHead>Status</TableHead>
+                    <TableHead>Policy</TableHead><TableHead>Granted</TableHead><TableHead>Withdrawn</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {consent.records.map((r) => (
+                      <TableRow key={r.employeeId}>
+                        <TableCell>
+                          <div className="font-medium">{r.employeeCode}</div>
+                          <div className="text-xs text-muted-foreground">{r.employeeName}</div>
+                        </TableCell>
+                        <TableCell>
+                          {r.status === 'ACTIVE' ? (
+                            <span data-testid="hr-privacy-consent-chip-active" className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Active</span>
+                          ) : r.status === 'WITHDRAWN' ? (
+                            <span data-testid="hr-privacy-consent-chip-withdrawn" className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300" title={r.withdrawnAt ? `Withdrawn ${formatDate(r.withdrawnAt)}` : undefined}>Withdrawn</span>
+                          ) : (
+                            <span data-testid="hr-privacy-consent-chip-none" className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">None on file</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.latestPolicyVersion ?? '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{r.grantedAt ? formatDate(r.grantedAt) : '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{r.withdrawnAt ? formatDate(r.withdrawnAt) : '—'}</TableCell>
+                        <TableCell className="text-right">
+                          {consent.canDecide ? (
+                            r.status === 'ACTIVE' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busy}
+                                data-testid="hr-privacy-consent-withdraw"
+                                aria-label={`Withdraw data-processing consent — ${r.employeeName}`}
+                                onClick={() => void run(() => apiSend('/api/hr/privacy/consent/withdraw', 'POST', { employeeId: r.employeeId }).then(() => loadConsent()))}
+                              >
+                                Withdraw
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                disabled={busy}
+                                data-testid="hr-privacy-consent-grant"
+                                aria-label={`Grant data-processing consent — ${r.employeeName}`}
+                                onClick={() => void run(() => apiSend('/api/hr/privacy/consent/grant', 'POST', { employeeId: r.employeeId }).then(() => loadConsent()))}
+                              >
+                                Grant
+                              </Button>
+                            )
+                          ) : (
+                            <span className="text-xs text-muted-foreground">settings managers decide</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm">

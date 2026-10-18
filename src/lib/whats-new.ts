@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.119.0',
+    title: 'Consent works',
+    bullets: [
+      'The Privacy tab grows a Consent records ledger: every in-scope employee\u2019s data-processing consent state \u2014 Active, Withdrawn, or None on file \u2014 with the policy version and the dates, in one batched read.',
+      'Consent finally has decisions: Grant writes a NEW record (append-only \u2014 a withdrawn consent keeps its row and its dates) and Withdraw stamps withdrawnAt on the active ones; both are reserved to settings managers and both are audit-logged.',
+      'The payroll gate is finally served by the product: the run check reads an active consent per employee and reports MISSING_CONSENT when none stands \u2014 the counts line tints the \u201cN without consent\u201d rose so the next run\u2019s blockers are visible before you run payroll.',
+      'Status folds ALL consent records, not just payroll\u2019s: any active record passes the gate, so the chip you see is the answer the run check will compute.',
+      'Grant after withdraw is honest history: the superseded record stays put, the new grant carries the current policy version \u2014 consent is a trail, not a toggle.',
+    ],
+  },
+  {
     version: '2.118.0',
     title: 'The ledger files its copy',
     bullets: [
