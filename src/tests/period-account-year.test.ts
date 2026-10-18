@@ -248,11 +248,20 @@ describe('accountMovementToCsv — the file says the window\u2019s own word', ()
 
   it('the month path keeps its exact v2.103 bytes — the default noun changes nothing', () => {
     const movement = buildAccountMovement(DEBIT_META, { debit: 0, credit: 0, priorLines: 0 }, [SRC({})]);
-    const withoutNoun = accountMovementToCsv(movement, META);
-    const explicitMonth = accountMovementToCsv(movement, { ...META, windowNoun: 'month' });
+    // v2.109.0.1 FIX (the CI flake): the CSV embeds 'Generated (UTC)' from a
+    // per-call `new Date()` default (the THIRD positional parameter) — two
+    // bare calls compare byte-equal ONLY when they land in the same
+    // millisecond, so this test raced the clock and failed ~once per burst
+    // (locally AND in CI on PR #232). A fixed stamp pins determinism: the
+    // ONLY difference between the two CSVs is the windowNoun's own words,
+    // which is what this test means.
+    const STAMP = new Date('2026-10-18T12:00:00.000Z');
+    const withoutNoun = accountMovementToCsv(movement, META, STAMP);
+    const explicitMonth = accountMovementToCsv(movement, { ...META, windowNoun: 'month' }, STAMP);
     expect(withoutNoun?.csv).toBe(explicitMonth?.csv);
     expect(withoutNoun?.csv.includes('Opening Basis,No posted lines before the window — the account starts the month at zero')).toBe(true);
     expect(withoutNoun?.csv.includes('Month totals,,,,,,258000.00,0.00,')).toBe(true);
+    expect(withoutNoun?.csv.includes('Generated (UTC),2026-10-18T12:00:00.000Z')).toBe(true);
   });
 
   it('the year file still closes its own loop: Closing equals the last replay row, byte for byte', () => {
