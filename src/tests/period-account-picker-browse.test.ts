@@ -207,6 +207,22 @@ describe('the page — the picker speaks on focus, remembers, and browses', () =
     expect(focus).toContain('setPickerOpen(true)');
   });
 
+  // v2.108.0: the memory can be let go — one quiet affordance on the
+  // Recent row that forgets THIS browser's remembered doors. The chart
+  // itself is never touched; the empty note returns; a private-mode
+  // denial still leaves the memory alive in state for the visit.
+  it('the Clear affordance forgets the browser memory without touching the chart', () => {
+    expect(PAGE.includes('data-testid="payroll-account-picker-recent-clear"')).toBe(true);
+    // The whole button lives between its testid and its own closing tag —
+    // the first `</button>` after the testid is the clear button's own.
+    const button = PAGE.split('data-testid="payroll-account-picker-recent-clear"')[1]?.split('</button>')[0] ?? '';
+    expect(button).toContain('aria-label="Clear recent accounts"');
+    expect(button).toContain('onClick={() => {');
+    expect(button).toContain('setPickerRecents([])');
+    expect(button).toContain('window.localStorage.removeItem(ACCOUNT_PICKER_RECENTS_KEY)');
+    expect(button).toContain('the chart itself is never touched');
+  });
+
   it('typing leaves the browse chart — the two voices never mix', () => {
     expect(PAGE.includes('if (e.target.value.trim()) setPickerBrowseOpen(false);')).toBe(true);
   });

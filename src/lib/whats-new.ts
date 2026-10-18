@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.108.0',
+    title: 'The chart files its year',
+    bullets: [
+      'The bundle exit grows a second door: File the year \u2014 one zip files EVERY account that posted in the calendar year as its own movement CSV, and year-end stops being twelve downloads.',
+      'The year door shows no count on purpose: the client only knows the month\u2019s badges, and a guessed number could disagree with the archive \u2014 the MANIFEST inside says exactly how many were filed and how many were quiet.',
+      'Every member CSV says its own word: \u2018starts the year at zero\u2019, \u2018Year totals\u2019, a filename carrying the year \u2014 the same loop-closing honesty the month files serve.',
+      'The remembered accounts can now be let go: a quiet Clear button on the Recent row forgets this browser\u2019s chips \u2014 the chart itself is never touched.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) \u2014 filing a year of what you may read widens nothing.',
+    ],
+  },
+  {
     version: '2.107.0',
     title: 'The chart files its month',
     bullets: [
