@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { LoginScreen } from '@/components/login-screen';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { UnifiedConsoleShell } from '@/components/console/unified-console';
 import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
 // Type-only import: erased at compile time, so the server-only diagnostics
@@ -409,8 +410,12 @@ export function OrgConsole() {
   const financialOnly = role === 'ACCOUNTANT';
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="border-b bg-background">
+    <UnifiedConsoleShell
+      mode="organization"
+      bodyClassName="bg-muted/30"
+      mainClassName="max-w-7xl mx-auto px-4 py-6 space-y-6"
+      header={
+        <header className="border-b bg-background">
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center gap-3 justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
@@ -439,8 +444,8 @@ export function OrgConsole() {
           </div>
         </div>
       </header>
-
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      }
+    >
         {/* Combined organization metrics */}
         <section aria-label="Combined organization metrics">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -712,7 +717,6 @@ export function OrgConsole() {
             </ul>
           )}
         </section>
-      </main>
 
       {/* v2.18.4 per-branch Expert diagnostics dialog. Radix provides the
           Escape-to-close and focus management; no manual focus trap. */}
@@ -815,6 +819,6 @@ export function OrgConsole() {
           ) : null}
         </DialogContent>
       </Dialog>
-    </div>
+    </UnifiedConsoleShell>
   );
 }

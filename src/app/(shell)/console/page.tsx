@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronDown, History, Landmark, LayoutDashboard, Menu, PackageSearch, PieChart, Radio, ScrollText, Users, Wallet } from 'lucide-react';
+import { History, Landmark, LayoutDashboard, Menu, PackageSearch, PieChart, Radio, ScrollText, Users, Wallet } from 'lucide-react';
 import { ActivityTimeline, ChatDrawer, DecisionSupport, DeskActivity, LiveFeed } from '@/components/org/panels';
 import { StoreMatrix } from '@/components/org/store-matrix';
 import { ExpertModules } from '@/components/org/experts';
@@ -27,6 +27,8 @@ import { SectionErrorBoundary } from '@/components/error-boundary';
 import { KenyaMap, kes, num, timeAgo, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
 import { authorizedFetchJson } from '@/lib/api';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
+import { PeoplePayrollByBranch, PeoplePayrollUnavailable } from '@/components/finance/people-payroll-by-branch';
+import { UnifiedConsoleShell } from '@/components/console/unified-console';
 
 const SECTIONS = [
   { id: 'kpi-row', label: 'Overview', icon: LayoutDashboard },
@@ -43,95 +45,14 @@ const storeHref = (s: StoreRow) =>
   buildStoreWorkspaceUrl({ id: s.id, slug: s.slug, subdomain: s.subdomain }, { page: 'dashboard', forcePath: true });
 
 /**
- * v2.23.0: "People & payroll by branch" drill-down (org console). Reads the
- * additive hrPerStore block of /api/org/summary — the same aggregates as the
- * HR tiles, one row per branch, deep-linked into the per-branch report view.
+ * v2.23.0: "People & payroll by branch" drill-down. v2.109.0: the panel is
+ * now the SHARED component (src/components/finance/people-payroll-by-branch.tsx)
+ * also served inside the Finance & Insights tab of the main SPA — one
+ * implementation, one /api/org/summary truth, zero duplicated table logic.
  * Collapsed by default so the console keeps its expert-system density.
  */
-function HrPerStorePanel({ rows }: { rows: NonNullable<OrgSummaryData['hrPerStore']> }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
-      >
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <Users className="h-4 w-4 text-orange-500" aria-hidden="true" />
-          People &amp; payroll by branch ({rows.length})
-          <span className="hidden text-xs font-normal text-slate-400 sm:inline">
-            — headcount, cost, absence, latest run, expiry alerts per branch
-          </span>
-        </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="max-h-96 overflow-y-auto border-t border-slate-100">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white">
-              <tr className="border-b text-left text-[11px] uppercase tracking-wide text-slate-400">
-                <th className="px-4 py-2 font-medium">Branch</th>
-                <th className="px-3 py-2 text-right font-medium">Headcount</th>
-                <th className="px-3 py-2 text-right font-medium">Cost (month)</th>
-                <th className="px-3 py-2 text-right font-medium">Absence</th>
-                <th className="px-3 py-2 font-medium">Latest payroll</th>
-                <th className="px-4 py-2 text-right font-medium">Expiry alerts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const alerts = row.expiryAlerts.documentsExpiring90Days + row.expiryAlerts.assetsOverdue;
-                return (
-                  <tr key={row.storeId} className="border-b border-slate-50 transition-colors last:border-0 hover:bg-orange-50/40">
-                    <td className="px-4 py-2">
-                      <a
-                        href={`/hr/reports?tab=headcount&storeId=${row.storeId}`}
-                        title={`Open the headcount report narrowed to ${row.storeName}`}
-                        className="font-medium text-slate-700 underline-offset-2 hover:text-orange-600 hover:underline"
-                      >
-                        {row.storeName}
-                      </a>
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{row.headcountActive}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{kes(row.monthEmploymentCost)}</td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-semibold text-amber-600' : 'text-slate-700'}`}>
-                      {row.monthAbsenceRatePct}%
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.latestPayroll ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="text-xs text-slate-500">{row.latestPayroll.periodName}</span>
-                          <span
-                            className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
-                              row.latestPayroll.status === 'LOCKED' || row.latestPayroll.status === 'POSTED'
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : row.latestPayroll.status === 'VOIDED'
-                                  ? 'border-slate-200 bg-slate-50 text-slate-500'
-                                  : 'border-amber-200 bg-amber-50 text-amber-700'
-                            }`}
-                          >
-                            {row.latestPayroll.status.toLowerCase()}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">no runs yet</span>
-                      )}
-                    </td>
-                    <td className={`px-4 py-2 text-right tabular-nums ${alerts > 0 ? 'font-semibold text-amber-600' : 'text-slate-700'}`}>
-                      {alerts}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-    </section>
-  );
-}
+const HrPerStorePanel = PeoplePayrollByBranch;
+const HrPerStoreUnavailable = PeoplePayrollUnavailable;
 
 export default function OrgConsolePage() {
   const [summary, setSummary] = useState<OrgSummaryData | null>(null);
@@ -312,13 +233,19 @@ export default function OrgConsolePage() {
   };
 
   return (
-    <div className="mbumah-console flex min-h-screen flex-col bg-slate-100">
-      <ConsoleHeader
-        kpi={kpi} stores={stores} online={online} session={session} signedIn={signedIn} onToast={onToast}
-        onOpenPalette={() => setPaletteOpen(true)} onOpenChat={() => setChatOpen(true)}
-        onOpenShortcuts={() => setShortcutsOpen(true)} onOpenLogin={() => setLoginOpen(true)}
-        onOpenNotifications={() => onToast(`${kpi?.system.notificationsUnread ?? 0} unread notifications - read them in the workspace notification center`)}
-      />
+    <UnifiedConsoleShell
+      mode="expert"
+      bodyClassName="mbumah-console bg-slate-100"
+      header={
+        <ConsoleHeader
+          kpi={kpi} stores={stores} online={online} session={session} signedIn={signedIn} onToast={onToast}
+          onOpenPalette={() => setPaletteOpen(true)} onOpenChat={() => setChatOpen(true)}
+          onOpenShortcuts={() => setShortcutsOpen(true)} onOpenLogin={() => setLoginOpen(true)}
+          onOpenNotifications={() => onToast(`${kpi?.system.notificationsUnread ?? 0} unread notifications - read them in the workspace notification center`)}
+          showHome
+        />
+      }
+    >
 
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 py-4 lg:px-5">
         {/* Autohide nav rail */}
@@ -345,7 +272,7 @@ export default function OrgConsolePage() {
         </nav>
 
         {/* Main column */}
-        <main className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
           {/* Sign-in banner for guests */}
           {needsAuth && !signedIn && (
             <section aria-label="Sign in prompt" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4">
@@ -433,6 +360,16 @@ export default function OrgConsolePage() {
             <SectionErrorBoundary sectionName="People & payroll by branch">
               {summary?.hrPerStore && summary.hrPerStore.length > 0 ? (
                 <HrPerStorePanel rows={summary.hrPerStore} />
+              ) : summary && !summaryError ? (
+                /* v2.109.0: the summary answered WITHOUT the per-branch block —
+                    a precise reason, never a silent hole. The server omits
+                    hrPerStore when the HR module is off or the caller lacks
+                    the report permission (it fail-closes; the panel never
+                    widens it). */
+                <HrPerStoreUnavailable
+                  code="HR_DATA_SOURCE_UNAVAILABLE"
+                  detail="The summary answered without the per-branch HR block — the HR module is off for this organization or this role lacks the HR report permission."
+                />
               ) : null}
             </SectionErrorBoundary>
           </div>
@@ -461,7 +398,7 @@ export default function OrgConsolePage() {
               <LiveFeed refreshKey={refreshKey} signedIn={signedIn} onRequireSignIn={() => setLoginOpen(true)} />
             </SectionErrorBoundary>
           </div>
-        </main>
+        </div>
       </div>
 
       <ConsoleFooter kpi={kpi} stores={stores} online={online} lastSync={lastSync} onOpenShortcuts={() => setShortcutsOpen(true)} onOpenChangelog={() => setChangelogOpen(true)} />
@@ -490,7 +427,7 @@ export default function OrgConsolePage() {
           ? 'Mbumah Organization Console is loading.'
           : `Mbumah Organization Console. Health ${kpi?.health.score ?? 'unknown'} of 100. Revenue today ${kes(kpi?.kpis.revenue.today ?? 0)}. Debt ${kes(kpi?.kpis.debt.total ?? 0)}. Last sync ${lastSync === '-' ? 'pending' : timeAgo(new Date().toISOString())}.`}
       </span>
-    </div>
+    </UnifiedConsoleShell>
   );
 }
 

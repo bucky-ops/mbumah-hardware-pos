@@ -365,15 +365,15 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.108.0 (latest — counted separately), then 2.107.0,
-    // 2.106.0, 2.105.0 — a 2.106.0 flag means 2.107.0 sits strictly
-    // between (the head 2.108.0 reads "latest", NOT 'new'), so the honest
-    // count is 1; a 2.77.0 flag counts 2.78.0 … 2.107.0 (the head 2.108.0
-    // never joins this count). Re-anchored for the v2.108.0-fed feed
+    // The feed leads 2.109.0 (latest — counted separately), then 2.108.0,
+    // 2.107.0, 2.106.0 — a 2.107.0 flag means 2.108.0 sits strictly
+    // between (the head 2.109.0 reads "latest", NOT 'new'), so the honest
+    // count is 1; a 2.77.0 flag counts 2.78.0 … 2.108.0 (the head 2.109.0
+    // never joins this count). Re-anchored for the v2.109.0-fed feed
     // (flag exactly ONE release behind the head).
-    expect(whatsNewUnreadCount('2.106.0')).toBe(1);
-    expect(whatsNewUnreadCount('2.105.0')).toBe(2);
-    expect(whatsNewUnreadCount('2.77.0')).toBe(30);
+    expect(whatsNewUnreadCount('2.107.0')).toBe(1);
+    expect(whatsNewUnreadCount('2.106.0')).toBe(2);
+    expect(whatsNewUnreadCount('2.77.0')).toBe(31);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(10);
   });
 
@@ -649,7 +649,9 @@ describe('release metadata - v2.77.0', () => {
     const CHROME = readRepo('src/components/org/chrome.tsx');
     expect(CHROME).toContain('data-testid="palette-mark-all-read"');
     expect(CHROME).toContain('{seenState.read && unreadCount > 0 && whatsNewMarkAllTarget() ? (');
-    expect(CHROME).toContain("import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, FileText, History, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';");
+    // v2.109.0: the import line grew the Home icon (the Expert Console's
+    // Home action) — the pin follows the source, not the memory.
+    expect(CHROME).toContain("import { CheckCheck, ChevronDown, ChevronUp, CloudOff, ExternalLink, FileText, History, Home, Keyboard, LogIn, Package, ScrollText, Sparkles, Terminal, Store } from 'lucide-react';");
     const VIEW = readRepo('src/components/org/desk-report-view.tsx');
     expect(VIEW).toContain('data-testid="desk-report-walk-announcer"');
     expect(VIEW).toContain('data-testid="desk-report-kbd-hint"');
