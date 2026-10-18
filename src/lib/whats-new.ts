@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.121.0',
+    title: 'The roster reads the room',
+    bullets: [
+      'The Employees page now answers the payroll run\u2019s consent question at a glance: every roster row wears its consent chip \u2014 Active, Withdrawn, or None on file \u2014 without a detour to the Privacy tab.',
+      'The chips speak the Privacy tab\u2019s exact vocabulary (emerald / amber / slate), so a color never means two things \u2014 and every chip\u2019s tooltip says its MISSING_CONSENT truth aloud.',
+      'A counts strip joins the filter bar: \u201cN active \u00b7 W withdrawn \u00b7 M without consent\u201d, with the without-consent phrase rose-tinted when nonzero \u2014 those are the next run\u2019s blockers.',
+      'The overlay degrades honestly: if your role can\u2019t read the consent ledger, the column and counts hide entirely \u2014 absence of the view is never rendered as absence of consent.',
+      'Refresh the list and the consent view refreshes with it \u2014 one source of truth, read in two places.',
+    ],
+  },
+  {
     version: '2.120.0',
     title: 'The roster captures its consent',
     bullets: [
