@@ -768,6 +768,13 @@ function PeriodJournalDrawer({
   // chart each time the index lands.
   const [pickerBrowseOpen, setPickerBrowseOpen] = useState(false);
   const [pickerRecents, setPickerRecents] = useState<string[]>([]);
+  // v2.107.0: the chart files its month — the browse box's governed exit.
+  // The zip is built SERVER-side through the same builders the single
+  // export serves; this side only asks, downloads and reports. Busy + note
+  // ride the drawer's stale-state hygiene (reset per period), like every
+  // filing door before them.
+  const [bundleBusy, setBundleBusy] = useState(false);
+  const [bundleNote, setBundleNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   useEffect(() => {
     setCsvNote(null);
     setCsvBusy(false);
@@ -791,6 +798,9 @@ function PeriodJournalDrawer({
     // v2.106.0: the browse door belongs to THIS open too — the next period
     // greets with the idle panel, never an unfolded chart.
     setPickerBrowseOpen(false);
+    // v2.107.0: the bundle's note rides the same hygiene.
+    setBundleBusy(false);
+    setBundleNote(null);
   }, [periodName]);
 
   // v2.105.0: the picker's index — the org's chart of accounts, lite, with
@@ -868,6 +878,52 @@ function PeriodJournalDrawer({
     () => pickerGroups.flatMap((g) => g.accounts),
     [pickerGroups],
   );
+
+  // v2.107.0: the bundle files the accounts that POSTED — the index's own
+  // badges are the truth (the same window the route re-derives), so the
+  // door's number can never disagree with the archive it fetches.
+  const bundleActiveCount = useMemo(
+    () => pickerAccounts.filter((a) => a.periodLines > 0).length,
+    [pickerAccounts],
+  );
+
+  // v2.107.0: the bundle exit — same download discipline as the ledger CSV
+  // and the movement CSV (blob → object URL → anchor click → revoke), the
+  // envelope's error narrowed before any use, the note honest either way.
+  const exportAccountBundle = async () => {
+    if (bundleBusy || !payload?.period?.id) return;
+    setBundleBusy(true);
+    setBundleNote(null);
+    try {
+      const res = await fetch(
+        `/api/payroll/period-journal/accounts/export-bundle?periodId=${encodeURIComponent(payload.period.id)}`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Bundle export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'mbumah-account-movements.zip';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setBundleNote({
+        tone: 'ok',
+        text: `Bundle downloaded — ${filename}. One governed zip: a MANIFEST that says what was filed and what was not, then one CSV per account that posted this month — each file closing its own loop.`,
+      });
+    } catch (e) {
+      setBundleNote({ tone: 'err', text: e instanceof Error ? e.message : 'Bundle export failed.' });
+    } finally {
+      setBundleBusy(false);
+    }
+  };
 
   const pickAccount = (code: string) => {
     setPickerQuery('');
@@ -1367,6 +1423,40 @@ function PeriodJournalDrawer({
                     {g.accounts.map((a) => renderPickerRow(a, pickerBrowseRows.indexOf(a), 'browse'))}
                   </Fragment>
                 ))}
+                {/* v2.107.0: the chart files its month — the browse box's
+                    governed exit. Only when the chart has something to say
+                    (at least one account posted); the note rides the same
+                    stale hygiene as every filing door before it. */}
+                {bundleActiveCount > 0 && (
+                  <div className="border-t px-3 py-2" data-testid="payroll-account-bundle-row">
+                    <button
+                      type="button"
+                      data-testid="payroll-account-bundle-door"
+                      disabled={bundleBusy}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => void exportAccountBundle()}
+                      title={bundleBusy ? 'Building the bundle…' : `One zip: a MANIFEST plus one CSV per account that posted this month (${bundleActiveCount} files)`}
+                      className="flex w-full items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-left text-xs font-medium text-violet-800 outline-none transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-900/60"
+                    >
+                      <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {bundleBusy ? 'Building…' : `File all ${bundleActiveCount} accounts`}
+                      <span className="ml-auto text-[10px] font-normal text-muted-foreground">one zip · month window</span>
+                    </button>
+                    {bundleNote && (
+                      <p
+                        className={`mt-1.5 text-[11px] ${
+                          bundleNote.tone === 'ok'
+                            ? 'text-violet-700 dark:text-violet-300'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}
+                        data-testid="payroll-account-bundle-note"
+                        role="status"
+                      >
+                        {bundleNote.text}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div
                   className="flex items-center gap-3 border-t px-3 py-1.5 text-[10px] text-muted-foreground"
                   data-testid="payroll-account-picker-browse-hint"

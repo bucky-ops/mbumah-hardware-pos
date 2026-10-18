@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.107.0',
+    title: 'The chart files its month',
+    bullets: [
+      'The browse door gains a governed exit: one zip files EVERY account that posted this month as its own movement CSV \u2014 month-end stops being thirty-seven downloads.',
+      'MANIFEST.txt rides first: what was filed, how many lines each account posted, and how many quiet accounts were left out and why \u2014 the archive says what it did, without the console.',
+      'Quiet is a fact, not a file: an account with no posted lines produces no CSV (the single route already says no), and the manifest carries the count instead of pretending.',
+      'The zip is written in-house, store-only and byte-auditable: CRC-32 per entry, UTF-8 names, and each CSV still closes its own loop \u2014 its Closing line equals its last replay row.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) \u2014 filing what you may read, all at once, widens nothing.',
+    ],
+  },
+  {
     version: '2.106.0',
     title: 'The picker remembers and browses',
     bullets: [
