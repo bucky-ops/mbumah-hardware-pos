@@ -48,7 +48,8 @@ const entry = (over: Partial<LedgerEntrySource>): LedgerEntrySource => ({
   ...over,
 });
 
-const run = (id: string, runType: string, status: string): LedgerRunSource => ({ id, runType, status });
+/** v2.110.0: runs carry their payable truth — default net 100 keeps the alarm tests alarming. */
+const run = (id: string, runType: string, status: string, totalNet = 100): LedgerRunSource => ({ id, runType, status, totalNet });
 
 describe('builder — the ledger is proven, not trusted', () => {
   it('recomputes line sums and marks a balanced entry', () => {
@@ -127,6 +128,71 @@ describe('builder — the honesty contract inherits run-groups', () => {
     expect(ledger.entries).toHaveLength(0);
     expect(ledger.unsettled).toHaveLength(0);
     expect(ledger.missingJournal).toHaveLength(0);
+    expect(ledger.zeroRuns).toHaveLength(0);
+  });
+});
+
+describe('builder — v2.110.0: the drawer knows a zero when it sees one', () => {
+  it('a settled zero-value run rides zeroRuns, never the alarm', () => {
+    const ledger = buildPeriodLedger(
+      [entry({ runId: 'posted-1' })],
+      [run('posted-1', 'REGULAR', 'POSTED', 197772.6), run('zero-1', 'REGULAR', 'LOCKED', 0)],
+    );
+    expect(ledger.zeroRuns).toEqual([{ runId: 'zero-1', runType: 'REGULAR', status: 'LOCKED' }]);
+    expect(ledger.missingJournal).toHaveLength(0);
+  });
+
+  it('the alarm keeps its teeth: money owed with no journal still fires', () => {
+    const ledger = buildPeriodLedger(
+      [],
+      [run('ghost-1', 'REGULAR', 'LOCKED', 197772.6)],
+    );
+    expect(ledger.missingJournal).toEqual([{ runId: 'ghost-1', runType: 'REGULAR', status: 'LOCKED' }]);
+    expect(ledger.zeroRuns).toHaveLength(0);
+  });
+
+  it('the zero split rounds at 2dp — a float hair (0.004) is still a zero run', () => {
+    const ledger = buildPeriodLedger([], [run('dust-1', 'BONUS', 'LOCKED', 0.004)]);
+    expect(ledger.zeroRuns).toHaveLength(1);
+    expect(ledger.missingJournal).toHaveLength(0);
+  });
+
+  it('a VOIDED zero run stays nowhere (a closed door is a closed door)', () => {
+    const ledger = buildPeriodLedger([], [run('void-1', 'REGULAR', 'VOIDED', 0)]);
+    expect(JSON.stringify(ledger)).not.toContain('void-1');
+    expect(ledger.zeroRuns).toHaveLength(0);
+  });
+
+  it('mixed period: every bucket tells its own truth at once', () => {
+    const ledger = buildPeriodLedger(
+      [entry({ runId: 'posted-1' })],
+      [
+        run('posted-1', 'SUPPLEMENTARY', 'POSTED', 197772.6),
+        run('ghost-1', 'OFF_CYCLE', 'LOCKED', 258000),
+        run('zero-1', 'REGULAR', 'LOCKED', 0),
+        run('wait-1', 'BONUS', 'PENDING_APPROVAL', 258000),
+      ],
+    );
+    expect(ledger.entries).toHaveLength(1);
+    expect(ledger.missingJournal.map((r) => r.runId)).toEqual(['ghost-1']);
+    expect(ledger.zeroRuns.map((r) => r.runId)).toEqual(['zero-1']);
+    expect(ledger.unsettled.map((r) => r.runId)).toEqual(['wait-1']);
+  });
+
+  it('the route feeds the payable truth (totalNet rides the select and the builder call)', () => {
+    const ROUTE = readRepo('src/app/api/payroll/period-journal/route.ts');
+    expect(ROUTE.includes('totalNet: true')).toBe(true);
+    expect(ROUTE.includes('totalNet: Number(r.totalNet)')).toBe(true);
+  });
+
+  it('the drawer renders the quiet zero block and keeps the alarm separate', () => {
+    const PAGE = readRepo('src/app/(shell)/hr/payroll/page.tsx');
+    expect(PAGE.includes('data-testid="payroll-ledger-zero-runs"')).toBe(true);
+    expect(PAGE.includes('Correct by design')).toBe(true);
+    // The quiet block is NOT an alert — the red alarm keeps role="alert".
+    const zeroBlock = PAGE.split('data-testid="payroll-ledger-zero-runs"')[0].slice(-200);
+    expect(zeroBlock).not.toContain('role="alert"');
+    expect(PAGE.includes('data-testid="payroll-ledger-missing"')).toBe(true);
   });
 });
 

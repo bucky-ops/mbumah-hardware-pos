@@ -72,3 +72,25 @@ the panel title, the human explanation, and the code in a mono line.
 - Mobile (below md): a card list, no horizontal scroll, readable metrics.
 - Branch names link into the per-branch headcount report
   (/hr/reports?tab=headcount&storeId=...) where the session permits it.
+
+## Per-branch filter (v2.110.0)
+
+The panel owns a **branch filter** — inside the shared component, so the
+Finance & Insights tab and the Expert Console both get it from one
+implementation.
+
+- **The one truth**: `filterBranchRows(rows, branchId)` (exported, pure). Both
+  the desktop table and the mobile cards render exactly what it returns —
+  the filter narrows, it never reorders.
+- **'' (empty) = every branch**, in the server's original order. A known
+  `storeId` narrows to that branch. An **unknown id is an honest empty**
+  ("No branches match this filter."), never a silent fallback to all.
+- **UI**: a native `<select>` (keyboard- and mobile-friendly) labelled
+  Branch, an "All branches" option, a "showing X of Y" count while filtered,
+  and a Reset affordance returning the whole org. Styled to the panel's
+  design system: orange focus ring, slate borders, dark variants.
+- **Privacy unchanged**: the filter is client-side over already-authorized
+  rows; selecting a branch cannot fetch anything the caller could not
+  already read.
+- **Pinned by** `src/tests/people-payroll-filter-v2110.test.ts` and
+  `scripts/verify-v2-110-0.mjs`.

@@ -88,6 +88,8 @@ export interface PeriodJournalPayload {
   entries: PeriodLedgerEntryDto[];
   unsettled: Array<{ runId: string; runType: string; status: string }>;
   missingJournal: Array<{ runId: string; runType: string; status: string }>;
+  /** v2.110.0: settled runs with nothing payable — no journal is CORRECT by design. */
+  zeroRuns: Array<{ runId: string; runType: string; status: string }>;
 }
 
 // v2.102.0: the account movement's payload — served by
@@ -1561,7 +1563,7 @@ function PeriodJournalDrawer({
 
         {!loading && !error && payload && (
           <div className="space-y-4">
-            {payload.entries.length === 0 && payload.unsettled.length === 0 && payload.missingJournal.length === 0 && (
+            {payload.entries.length === 0 && payload.unsettled.length === 0 && payload.missingJournal.length === 0 && payload.zeroRuns.length === 0 && (
               <p className="px-1 py-6 text-center text-sm text-muted-foreground" data-testid="payroll-ledger-empty">
                 Nothing posted in this period yet.
               </p>
@@ -1656,6 +1658,31 @@ function PeriodJournalDrawer({
                       className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100/70 px-2 py-0.5 text-[10px] dark:border-amber-800 dark:bg-amber-900/40"
                     >
                       {r.runType} · {r.status.replaceAll('_', ' ')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* v2.110.0: zero runs ride their OWN quiet block — a run with nothing
+                payable posts no journal by design. Surfaced, never alarming: the
+                red alarm keeps its teeth for money that truly went missing. */}
+            {payload.zeroRuns.length > 0 && (
+              <div
+                className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300"
+                data-testid="payroll-ledger-zero-runs"
+              >
+                <p className="font-medium">
+                  {payload.zeroRuns.length} zero-value {payload.zeroRuns.length === 1 ? 'run' : 'runs'} settled — nothing was payable, so no journal posts.
+                </p>
+                <p className="mt-0.5 text-[11px]">Correct by design: a run owing KES 0.00 has no entry to carry. This is not the missing-journal alarm.</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {payload.zeroRuns.map((r) => (
+                    <span
+                      key={r.runId}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] dark:border-slate-700 dark:bg-slate-800"
+                    >
+                      {r.runType} · {r.status.replaceAll('_', ' ')} · KES 0.00
                     </span>
                   ))}
                 </div>

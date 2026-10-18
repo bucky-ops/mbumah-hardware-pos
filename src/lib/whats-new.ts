@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.110.0',
+    title: 'The drawer knows a zero when it sees one',
+    bullets: [
+      'The payroll ledger drawer stops crying wolf: a settled run with nothing payable (KES 0.00) rides its own quiet block \u2014 \u201cnothing was payable, so no journal posts\u201d \u2014 instead of firing the red missing-journal alarm every open.',
+      'The alarm keeps its teeth: a settled run that owed MONEY without an entry is still flagged \u201cthis must never happen\u201d \u2014 the split is value-aware at 2dp precision, so float dust can never fake a zero or fake a debt.',
+      'The People & Payroll panel grows a branch filter: pick one branch from the select, see \u201cshowing 1 of 5\u201d, hit Reset for the whole org \u2014 it lives inside the shared panel, so the Finance & Insights tab and the Expert Console both get it.',
+      'Filtering narrows, never reorders: the desktop table and the mobile cards render exactly the same filtered truth, with an honest empty state when nothing matches.',
+      'The period-journal API now carries each run\u2019s payable truth (totalNet) \u2014 the drawer\u2019s classification reads the server\u2019s numbers, never a guess.',
+    ],
+  },
+  {
     version: '2.109.0',
     title: 'People & payroll joins Finance & Insights',
     bullets: [

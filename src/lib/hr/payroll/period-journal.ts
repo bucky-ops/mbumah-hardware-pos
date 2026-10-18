@@ -49,11 +49,17 @@ export interface LedgerEntrySource {
   lines: LedgerLineSource[];
 }
 
-/** The runs of the period — the builder reads only id/type/status. */
+/**
+ * The runs of the period. v2.110.0: the builder now also reads the run's
+ * PAYABLE TRUTH (totalNet at KES 2dp) — a settled run that owed nothing
+ * cannot be "missing" its journal, because there was nothing to post.
+ */
 export interface LedgerRunSource {
   id: string;
   runType: string;
   status: string;
+  /** Sum of the run's payslip nets (KES). 0 ⇒ a zero run: no journal by design. */
+  totalNet: number;
 }
 
 /** A settled run's entry, verified: sums recomputed, balance proven. */
@@ -81,14 +87,22 @@ export interface UnsettledLedgerRun {
 }
 
 /** The period's ledger: posted entries, honest waiting counts, and the
- *  missing-journal alarm that must stay empty but is never assumed to be. */
+ *  missing-journal alarm that must stay empty but is never assumed to be.
+ *  v2.110.0: zero-value settled runs get their OWN honest bucket — they
+ *  stopped masquerading as the alarm. */
 export interface PeriodLedger {
   /** Posted entries, newest entryDate first — stable (equal dates never reorder). */
   entries: PeriodLedgerEntry[];
   /** DRAFT / PENDING_APPROVAL / APPROVED runs — no journal yet. */
   unsettled: UnsettledLedgerRun[];
-  /** Settled runs with NO journal — must always be empty; surfaced, not skipped. */
+  /** Settled runs owing MONEY with no journal — must always be empty; surfaced, not skipped. */
   missingJournal: UnsettledLedgerRun[];
+  /**
+   * Settled runs with NOTHING payable (totalNet 0 at 2dp) and no journal —
+   * correct by design (nothing to post), surfaced quietly so the drawer can
+   * say where the run went instead of alarming or hiding it. Never an alarm.
+   */
+  zeroRuns: UnsettledLedgerRun[];
 }
 
 const money2 = (v: number): number => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
@@ -114,7 +128,10 @@ export function sumLedgerLines(
  *   • entries — newest entryDate first, stable, each with recomputed sums
  *     and a proven balanced flag;
  *   • unsettled — runs in motion, counted honestly, never priced;
- *   • missingJournal — settled runs with no journal (alarm; must stay empty).
+ *   • missingJournal — settled runs OWING MONEY with no journal (alarm;
+ *     must stay empty).
+ *   • zeroRuns (v2.110.0) — settled runs with nothing payable and no
+ *     journal: correct by design, surfaced quietly, never an alarm.
  * VOIDED runs appear nowhere: a voided run is a closed door.
  */
 export function buildPeriodLedger(
@@ -148,18 +165,27 @@ export function buildPeriodLedger(
 
   const unsettled: UnsettledLedgerRun[] = [];
   const missingJournal: UnsettledLedgerRun[] = [];
+  const zeroRuns: UnsettledLedgerRun[] = [];
   for (const run of runs) {
     if (run.status === 'VOIDED') continue; // a closed door appears nowhere
     if ((SETTLED_RUN_STATUSES as readonly string[]).includes(run.status)) {
       if (!entries.some((e) => e.runId === run.id)) {
-        missingJournal.push({ runId: run.id, runType: run.runType, status: run.status });
+        // v2.110.0 the value-aware split: a settled run with nothing payable
+        // (totalNet 0 at 2dp) posts no journal BY DESIGN — nothing owed,
+        // nothing to carry. It rides the quiet zeroRuns bucket. Only a run
+        // that owed MONEY without an entry trips the alarm.
+        if (money2(Number(run.totalNet || 0)) > 0) {
+          missingJournal.push({ runId: run.id, runType: run.runType, status: run.status });
+        } else {
+          zeroRuns.push({ runId: run.id, runType: run.runType, status: run.status });
+        }
       }
       continue;
     }
     unsettled.push({ runId: run.id, runType: run.runType, status: run.status });
   }
 
-  return { entries: posted, unsettled, missingJournal };
+  return { entries: posted, unsettled, missingJournal, zeroRuns };
 }
 
 // ── v2.101.0: the ledger files itself ────────────────────────────────────────
