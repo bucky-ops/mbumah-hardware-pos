@@ -5,7 +5,7 @@
 // with maker-checker aware actions, per-payslip drill-down (trace + PDF),
 // and the corrections (reverse & replace) queue.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,11 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, Banknote, CheckCircle2, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Wallet } from 'lucide-react';
+import { AlertTriangle, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Wallet } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
+import { groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
 
 export interface PayrollPeriodDto {
   id: string;
@@ -99,6 +100,18 @@ export default function HrPayrollPage() {
   const [digestRowId, setDigestRowId] = useState<string | null>(null);
   // Toast-free page: notes render inline next to the table (honest, printable).
   const [digestNote, setDigestNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  // v2.98.0: periods fold — a collapsed period keeps its header story
+  // (counts, settled net) while its run rows stand down.
+  const [collapsedPeriods, setCollapsedPeriods] = useState<ReadonlySet<string>>(new Set());
+
+  const togglePeriod = useCallback((name: string) => {
+    setCollapsedPeriods((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
 
   const exportRunDigest = useCallback(
     async (runId: string) => {
@@ -192,6 +205,15 @@ export default function HrPayrollPage() {
     ];
   }, [runs, periods]);
 
+  // v2.98.0: runs read as periods — the pure builder folds the flat list
+  // and does the honest settled-money arithmetic (posted/locked only).
+  const periodGroups = useMemo(() => groupRunsByPeriod(runs ?? []), [runs]);
+  const allPeriodsOpen =
+    periodGroups.length > 1 && periodGroups.every((g) => !collapsedPeriods.has(g.periodName));
+  const toggleAllPeriods = useCallback(() => {
+    setCollapsedPeriods(allPeriodsOpen ? new Set(periodGroups.map((g) => g.periodName)) : new Set());
+  }, [allPeriodsOpen, periodGroups]);
+
   return (
     <div className="space-y-6" data-testid="payroll-page">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -279,8 +301,31 @@ export default function HrPayrollPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">All runs</CardTitle>
-              <CardDescription>Newest first. Open a run to work its lifecycle.</CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base">Runs by period</CardTitle>
+                  <CardDescription>
+                    Runs read as periods, newest first — settled net counts posted and locked runs
+                    only; waiting runs are estimates until they post.
+                  </CardDescription>
+                </div>
+                {periodGroups.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                    onClick={toggleAllPeriods}
+                    data-testid="payroll-periods-toggle-all"
+                  >
+                    {allPeriodsOpen ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )}
+                    {allPeriodsOpen ? 'Collapse all' : 'Expand all'}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {!runs ? (
@@ -304,8 +349,7 @@ export default function HrPayrollPage() {
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur">
                       <TableRow className="hover:bg-transparent">
-                        <TableHead>Period</TableHead>
-                        <TableHead>Type</TableHead>
+                        <TableHead>Run</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Gross</TableHead>
                         <TableHead className="text-right">Deductions</TableHead>
@@ -315,58 +359,149 @@ export default function HrPayrollPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {runs.map((run) => (
-                        <TableRow key={run.id} className="group transition-colors hover:bg-muted/40">
-                          <TableCell className="font-medium">{run.payrollPeriod.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="text-[11px]">{run.runType}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge status={run.status} styles={RUN_STATUS_STYLES} />
-                            {/* v2.86.0: the waiting run wears its handover's age —
-                                the same EAT clock every filing surface uses. */}
-                            {run.status === 'PENDING_APPROVAL' && run.submittedAt && (
-                              <p
-                                className="mt-0.5 text-[10px] tabular-nums text-muted-foreground"
-                                data-testid="payroll-run-waiting-since"
-                              >
-                                waiting since {formatEatStamp(new Date(run.submittedAt))}
-                              </p>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">{kes(run.totalGross)}</TableCell>
-                          <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
-                            {kes(run.totalDeductions)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold tabular-nums">{kes(run.totalNet)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{run.employeeCount}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {['APPROVED', 'POSTED', 'LOCKED'].includes(run.status) && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 gap-1 px-2 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
-                                  disabled={digestRowId !== null}
-                                  aria-label={`Download the digest CSV for the ${run.payrollPeriod.name} ${run.runType} run`}
-                                  title="The run's filing file — same per-employee summary the digest emails carry"
-                                  onClick={() => void exportRunDigest(run.id)}
+                      {periodGroups.map((group) => {
+                        const open = !collapsedPeriods.has(group.periodName);
+                        const chips: Array<{ key: string; label: string; cls: string; dot: string }> = [];
+                        if (group.settledCount > 0)
+                          chips.push({
+                            key: 'settled',
+                            label: `${group.settledCount} settled`,
+                            cls: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300',
+                            dot: 'bg-emerald-500',
+                          });
+                        if (group.inMotionCount > 0)
+                          chips.push({
+                            key: 'waiting',
+                            label: `${group.inMotionCount} waiting`,
+                            cls: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300',
+                            dot: 'bg-amber-500',
+                          });
+                        if (group.attentionCount > 0)
+                          chips.push({
+                            key: 'attention',
+                            label: `${group.attentionCount} need attention`,
+                            cls: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300',
+                            dot: 'bg-rose-500',
+                          });
+                        if (group.voidedCount > 0)
+                          chips.push({
+                            key: 'voided',
+                            label: `${group.voidedCount} voided`,
+                            cls: 'border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400',
+                            dot: 'bg-zinc-400',
+                          });
+                        return (
+                          <Fragment key={group.periodName}>
+                            {/* v2.98.0: the period IS the row — one header per month,
+                                runs folded beneath, settled money (posted + locked
+                                only) summed where the eye lands first. The header is
+                                the story even collapsed: counts never stand down. */}
+                            <TableRow
+                              data-testid="payroll-period-group"
+                              className="border-y bg-muted/50 transition-colors hover:bg-muted/70"
+                            >
+                              <TableCell colSpan={7} className="p-0">
+                                <button
+                                  type="button"
+                                  onClick={() => togglePeriod(group.periodName)}
+                                  aria-expanded={open}
+                                  aria-label={`${open ? 'Collapse' : 'Expand'} the ${group.periodName} payroll period`}
+                                  data-testid="payroll-period-toggle"
+                                  className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left"
                                 >
-                                  {digestRowId === run.id ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  {open ? (
+                                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                                   ) : (
-                                    <FileDown className="h-3.5 w-3.5" />
+                                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                                   )}
-                                  <span className="hidden text-xs lg:inline">{digestRowId === run.id ? 'Exporting…' : 'Digest CSV'}</span>
-                                </Button>
-                              )}
-                              <Button variant="outline" size="sm" onClick={() => setOpenRunId(run.id)}>
-                                Open
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                  <span className="text-sm font-semibold tracking-tight">{group.periodName}</span>
+                                  {group.payDate && (
+                                    <span className="text-[11px] text-muted-foreground">
+                                      pays {formatEatStamp(new Date(group.payDate))}
+                                    </span>
+                                  )}
+                                  <span className="flex flex-wrap items-center gap-1.5" data-testid="payroll-period-rollup">
+                                    {chips.map((c) => (
+                                      <span
+                                        key={c.key}
+                                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${c.cls}`}
+                                      >
+                                        <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} aria-hidden />
+                                        {c.label}
+                                      </span>
+                                    ))}
+                                  </span>
+                                  <span className="ml-auto flex items-center gap-3 pl-2">
+                                    <span className="hidden text-right text-[11px] leading-tight text-muted-foreground sm:block">
+                                      {group.runCount} {group.runCount === 1 ? 'run' : 'runs'}
+                                      {' · '}
+                                      {group.settledPayslips} {group.settledPayslips === 1 ? 'payslip' : 'payslips'} issued
+                                    </span>
+                                    <span className="text-right">
+                                      <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">Settled net</span>
+                                      <span className="block text-sm font-semibold tabular-nums" data-testid="payroll-period-net">
+                                        {kes(group.settledNet)}
+                                      </span>
+                                    </span>
+                                  </span>
+                                </button>
+                              </TableCell>
+                            </TableRow>
+                            {open &&
+                              group.runs.map((run) => (
+                                <TableRow key={run.id} className="group transition-colors hover:bg-muted/40">
+                                  <TableCell>
+                                    <Badge variant="secondary" className="text-[11px]">{run.runType}</Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <StatusBadge status={run.status} styles={RUN_STATUS_STYLES} />
+                                    {/* v2.86.0: the waiting run wears its handover's age —
+                                        the same EAT clock every filing surface uses. */}
+                                    {run.status === 'PENDING_APPROVAL' && run.submittedAt && (
+                                      <p
+                                        className="mt-0.5 text-[10px] tabular-nums text-muted-foreground"
+                                        data-testid="payroll-run-waiting-since"
+                                      >
+                                        waiting since {formatEatStamp(new Date(run.submittedAt))}
+                                      </p>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right tabular-nums">{kes(run.totalGross)}</TableCell>
+                                  <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
+                                    {kes(run.totalDeductions)}
+                                  </TableCell>
+                                  <TableCell className="text-right font-semibold tabular-nums">{kes(run.totalNet)}</TableCell>
+                                  <TableCell className="text-right tabular-nums">{run.employeeCount}</TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {['APPROVED', 'POSTED', 'LOCKED'].includes(run.status) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 gap-1 px-2 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+                                          disabled={digestRowId !== null}
+                                          aria-label={`Download the digest CSV for the ${run.payrollPeriod.name} ${run.runType} run`}
+                                          title="The run's filing file — same per-employee summary the digest emails carry"
+                                          onClick={() => void exportRunDigest(run.id)}
+                                        >
+                                          {digestRowId === run.id ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          ) : (
+                                            <FileDown className="h-3.5 w-3.5" />
+                                          )}
+                                          <span className="hidden text-xs lg:inline">{digestRowId === run.id ? 'Exporting…' : 'Digest CSV'}</span>
+                                        </Button>
+                                      )}
+                                      <Button variant="outline" size="sm" onClick={() => setOpenRunId(run.id)}>
+                                        Open
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                          </Fragment>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
