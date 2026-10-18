@@ -5,7 +5,7 @@
 // List payloads never render ratings (sensitive-data rule); ratings and
 // narratives appear only in the permission-gated review detail dialog.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Award, CalendarRange, CheckCircle2, Flag, Pencil, Plus, RefreshCw, Star, Target, X } from 'lucide-react';
+import { ArrowRight, Award, CalendarRange, CheckCircle2, Filter, Flag, Pencil, Plus, RefreshCw, Star, Target, X } from 'lucide-react';
 import {
   apiGet,
   apiSend,
@@ -27,6 +27,12 @@ import {
   formatDate,
 } from '@/components/hr/self-service-ui';
 
+interface CycleStatusCounts {
+  DRAFT: number;
+  SUBMITTED: number;
+  ACKNOWLEDGED: number;
+  CALIBRATED: number;
+}
 interface CycleDto {
   id: string;
   name: string;
@@ -34,6 +40,9 @@ interface CycleDto {
   periodEnd: string;
   status: string;
   reviewCount: number;
+  // v2.88.0: the cycle shows its shape — per-status counts feed the
+  // calibration meter (counts only; ratings stay out of lists).
+  statusCounts: CycleStatusCounts;
 }
 interface ReviewListItemDto {
   id: string;
@@ -81,6 +90,18 @@ const SOURCE_LABELS: Record<string, string> = {
   CUSTOM: 'Custom',
 };
 
+// v2.88.0: review-status filter chips. Each status wears its own badge
+// family when active (same tones StatusBadge renders), so the filter row
+// and the table speak the same color language, light and dark.
+const REVIEW_STATUSES = ['DRAFT', 'SUBMITTED', 'ACKNOWLEDGED', 'CALIBRATED'] as const;
+const STATUS_CHIP_ACTIVE: Record<string, string> = {
+  DRAFT: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600',
+  SUBMITTED: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900',
+  ACKNOWLEDGED: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-900',
+  CALIBRATED: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900',
+  ALL: 'bg-primary text-primary-foreground border-primary',
+};
+
 export default function PerformancePage() {
   const [cycles, setCycles] = useState<CycleDto[] | null>(null);
   const [reviews, setReviews] = useState<ReviewListItemDto[] | null>(null);
@@ -88,6 +109,14 @@ export default function PerformancePage() {
   const [people, setPeople] = useState<PersonDto[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // v2.88.0: the tabs are controlled so a cycle row can walk you into its
+  // reviews (the meter's "View reviews" cross-link), and the reviews tab
+  // gains cycle + status filters — the API already spoke ?cycleId=&status=,
+  // the console just never offered the handles.
+  const [tab, setTab] = useState('cycles');
+  const [filterCycleId, setFilterCycleId] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
 
   // dialogs
   const [cycleOpen, setCycleOpen] = useState(false);
@@ -140,6 +169,42 @@ export default function PerformancePage() {
     void load();
   }, [load]);
 
+  // v2.88.0: status counts stay honest to the FULL loaded list (never the
+  // filtered subset), so chips keep saying how many reviews exist overall.
+  const reviewStatusCounts = useMemo(() => {
+    const counts: CycleStatusCounts = { DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 };
+    for (const r of reviews ?? []) {
+      if (r.status === 'DRAFT' || r.status === 'SUBMITTED' || r.status === 'ACKNOWLEDGED' || r.status === 'CALIBRATED') {
+        counts[r.status] += 1;
+      }
+    }
+    return counts;
+  }, [reviews]);
+
+  const filteredReviews = useMemo(
+    () =>
+      (reviews ?? []).filter(
+        (r) =>
+          (filterCycleId === 'ALL' || r.cycleId === filterCycleId) &&
+          (filterStatus === 'ALL' || r.status === filterStatus),
+      ),
+    [reviews, filterCycleId, filterStatus],
+  );
+  const filtersActive = filterCycleId !== 'ALL' || filterStatus !== 'ALL';
+  const clearFilters = () => {
+    setFilterCycleId('ALL');
+    setFilterStatus('ALL');
+  };
+
+  const viewCycleReviews = (cycleId: string) => {
+    setFilterCycleId(cycleId);
+    setFilterStatus('ALL');
+    setTab('reviews');
+  };
+
+  const calibrationTone = (pct: number): 'good' | 'info' | 'warn' =>
+    pct >= 100 ? 'good' : pct > 0 ? 'info' : 'warn';
+
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
@@ -171,7 +236,7 @@ export default function PerformancePage() {
 
       {error ? <ErrorNote message={error} /> : null}
 
-      <Tabs defaultValue="cycles" className="space-y-4">
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="cycles">Cycles</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
@@ -188,7 +253,9 @@ export default function PerformancePage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Review cycles</CardTitle>
-              <CardDescription>DRAFT → ACTIVE → CLOSED. Calibration happens while a cycle is active.</CardDescription>
+              <CardDescription>
+                DRAFT → ACTIVE → CLOSED. Calibration happens while a cycle is active — the meter tracks how far each cycle has walked.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {!cycles ? (
@@ -202,6 +269,7 @@ export default function PerformancePage() {
                       <TableHead>Cycle</TableHead>
                       <TableHead>Period</TableHead>
                       <TableHead className="text-center">Reviews</TableHead>
+                      <TableHead className="min-w-52">Calibration</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -213,7 +281,44 @@ export default function PerformancePage() {
                         <TableCell className="text-muted-foreground">
                           {formatDate(c.periodStart)} → {formatDate(c.periodEnd)}
                         </TableCell>
-                        <TableCell className="text-center">{c.reviewCount}</TableCell>
+                        <TableCell className="text-center tabular-nums">{c.reviewCount}</TableCell>
+                        <TableCell>
+                          {c.reviewCount === 0 ? (
+                            <span className="text-xs text-muted-foreground">No reviews yet</span>
+                          ) : (
+                            <div className="space-y-1.5" data-testid={`cycle-meter-${c.id}`}>
+                              <ProgressMeter
+                                pct={Math.round((c.statusCounts.CALIBRATED / c.reviewCount) * 100)}
+                                tone={calibrationTone(Math.round((c.statusCounts.CALIBRATED / c.reviewCount) * 100))}
+                                label={`Calibration progress for ${c.name}: ${c.statusCounts.CALIBRATED} of ${c.reviewCount} reviews calibrated`}
+                              />
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                                <span className="font-medium tabular-nums" data-testid={`cycle-meter-text-${c.id}`}>
+                                  {c.statusCounts.CALIBRATED} of {c.reviewCount} calibrated
+                                </span>
+                                {c.statusCounts.DRAFT + c.statusCounts.SUBMITTED + c.statusCounts.ACKNOWLEDGED > 0 ? (
+                                  <span className="text-muted-foreground tabular-nums">
+                                    {[
+                                      c.statusCounts.DRAFT > 0 ? `${c.statusCounts.DRAFT} draft` : null,
+                                      c.statusCounts.SUBMITTED > 0 ? `${c.statusCounts.SUBMITTED} submitted` : null,
+                                      c.statusCounts.ACKNOWLEDGED > 0 ? `${c.statusCounts.ACKNOWLEDGED} acknowledged` : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  data-testid={`cycle-view-reviews-${c.id}`}
+                                  className="ml-auto inline-flex items-center gap-0.5 text-xs font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-400"
+                                  onClick={() => viewCycleReviews(c.id)}
+                                >
+                                  View reviews <ArrowRight className="h-3 w-3" aria-hidden />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell><StatusBadge status={c.status} /></TableCell>
                         <TableCell className="space-x-2 text-right">
                           {c.status === 'DRAFT' ? (
@@ -267,6 +372,65 @@ export default function PerformancePage() {
               ) : reviews.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">No reviews yet.</p>
               ) : (
+                <div className="space-y-3">
+                  {/* ── v2.88.0 filters: cycle select + status chips ── */}
+                  <div className="flex flex-wrap items-center gap-2" data-testid="review-filters">
+                    <Filter className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                    <Select value={filterCycleId} onValueChange={setFilterCycleId}>
+                      <SelectTrigger className="h-8 w-52" aria-label="Filter by cycle" data-testid="review-filter-cycle">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All cycles</SelectItem>
+                        {(cycles ?? []).map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {['ALL', ...REVIEW_STATUSES].map((s) => {
+                      const active = filterStatus === s;
+                      const count = s === 'ALL' ? (reviews ?? []).length : reviewStatusCounts[s as keyof CycleStatusCounts];
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          aria-pressed={active}
+                          data-testid={`review-filter-status-${s}`}
+                          onClick={() => setFilterStatus(s)}
+                          className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                            active
+                              ? STATUS_CHIP_ACTIVE[s]
+                              : 'border-border bg-transparent text-muted-foreground hover:bg-muted/60'
+                          }`}
+                        >
+                          {s === 'ALL' ? 'All' : s.replace(/_/g, ' ').toLowerCase()}
+                          <span className="tabular-nums opacity-70">{count}</span>
+                        </button>
+                      );
+                    })}
+                    {filtersActive ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        data-testid="review-filter-clear"
+                        onClick={clearFilters}
+                      >
+                        <X className="h-3 w-3" aria-hidden /> Clear filters
+                      </Button>
+                    ) : null}
+                    <span className="ml-auto text-xs text-muted-foreground tabular-nums" data-testid="review-filter-count">
+                      Showing {filteredReviews.length} of {(reviews ?? []).length} reviews
+                    </span>
+                  </div>
+                  {filteredReviews.length === 0 ? (
+                    <div className="py-6 text-center">
+                      <p className="text-sm text-muted-foreground">No reviews match the current filters.</p>
+                      <Button size="sm" variant="outline" className="mt-2" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
+                    </div>
+                  ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -278,7 +442,7 @@ export default function PerformancePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {reviews.map((r) => (
+                    {filteredReviews.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell>
                           <div className="font-medium">{r.employeeName}</div>
@@ -306,6 +470,8 @@ export default function PerformancePage() {
                     ))}
                   </TableBody>
                 </Table>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

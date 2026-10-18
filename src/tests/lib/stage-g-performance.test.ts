@@ -22,6 +22,9 @@ const db = vi.hoisted(() => {
     findFirst: vi.fn(),
     findUnique: vi.fn(),
     findMany: vi.fn(),
+    // v2.88.0: listCycles folds a groupBy into per-cycle status counts.
+    // Default [] keeps every existing listCycles test green untouched.
+    groupBy: vi.fn().mockResolvedValue([]),
     create: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -320,6 +323,50 @@ describe('sensitive-data list masking (spec rule 7)', () => {
     const cycles = await listCycles(session);
     expect(cycles[0].reviewCount).toBe(7);
     expect(cycles[0].name).toBe('H2 2026');
+  });
+
+  // v2.88.0: the cycle shows its shape — per-status counts feed the
+  // calibration meter. Additive only; the sensitive-data rule holds.
+  it('cycles carry per-status counts folded from one grouped query', async () => {
+    db.reviewCycle.findMany.mockResolvedValue([
+      {
+        id: 'cycle-1',
+        name: 'H2 2026',
+        organizationId: 'org-1',
+        periodStart: new Date('2026-07-01'),
+        periodEnd: new Date('2026-12-31'),
+        status: 'ACTIVE',
+        calibrationNotes: null,
+        createdAt: new Date(),
+        _count: { reviews: 3 },
+      },
+      {
+        id: 'cycle-2',
+        name: 'H1 2026',
+        organizationId: 'org-1',
+        periodStart: new Date('2026-01-01'),
+        periodEnd: new Date('2026-06-30'),
+        status: 'CLOSED',
+        calibrationNotes: null,
+        createdAt: new Date(),
+        _count: { reviews: 0 },
+      },
+    ]);
+    db.performanceReview.groupBy.mockResolvedValue([
+      { cycleId: 'cycle-1', status: 'DRAFT', _count: { _all: 1 } },
+      { cycleId: 'cycle-1', status: 'CALIBRATED', _count: { _all: 2 } },
+      { cycleId: 'cycle-1', status: 'MYSTERY', _count: { _all: 5 } },
+    ]);
+    const cycles = await listCycles(session);
+    expect(cycles[0].statusCounts).toEqual({ DRAFT: 1, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 2 });
+    // An empty cycle reads all zeros — never undefined.
+    expect(cycles[1].statusCounts).toEqual({ DRAFT: 0, SUBMITTED: 0, ACKNOWLEDGED: 0, CALIBRATED: 0 });
+    // The grouped query is scoped to the listed cycles and non-deleted rows.
+    const where = db.performanceReview.groupBy.mock.calls[0][0].where;
+    expect(where).toEqual({ deletedAt: null, cycleId: { in: ['cycle-1', 'cycle-2'] } });
+    // Counts only — the sensitive-data rule survives the new shape.
+    expect(JSON.stringify(cycles)).not.toContain('overallRating');
+    expect(JSON.stringify(cycles)).not.toContain('strengths');
   });
 
   it('returns a safe 404 for cross-organization review reads', async () => {
