@@ -811,3 +811,113 @@ export function filterAccountSuggestions(
     .slice(0, cap)
     .map((x) => x.e);
 }
+
+// ── v2.106.0: the picker remembers and browses ──────────────────────────────
+
+/**
+ * Where the picker's memory lives (v2.106.0): a client-local key, scoped to
+ * THIS browser on purpose. It never travels to the server, never lands in
+ * an audit row, and is re-validated against the fetched chart on every read
+ * (parseRecentAccountCodes) — so a stale or foreign code simply never
+ * renders a chip.
+ */
+export const ACCOUNT_PICKER_RECENTS_KEY = 'mbumah.payroll.account-picker.recent';
+
+/**
+ * How many doors the picker remembers (v2.106.0). Three is a glance, not
+ * an archive — the browse door exists for everything else.
+ */
+export const ACCOUNT_PICKER_RECENTS_CAP = 3;
+
+/**
+ * The picker's memory write, PURE (v2.106.0): the picked code moves to the
+ * front, duplicates collapse (case-insensitive — codes are asked in any
+ * case, remembered canonically as typed last), the cap clamps to at least
+ * 1 (NaN/Infinity degrade to 1 — never unbounded), and junk input degrades
+ * to a filtered copy, never throws. An empty/whitespace code changes
+ * nothing (a blank door is not a door).
+ */
+export function rememberAccountCode(
+  recents: readonly unknown[],
+  code: unknown,
+  cap = ACCOUNT_PICKER_RECENTS_CAP,
+): string[] {
+  const limit = Number.isFinite(cap) && cap >= 1 ? Math.floor(cap) : 1;
+  const base = (Array.isArray(recents) ? recents : [])
+    .map((r) => String(r ?? '').trim())
+    .filter(Boolean);
+  const picked = String(code ?? '').trim();
+  if (!picked) return base;
+  const lower = picked.toLowerCase();
+  return [picked, ...base.filter((r) => r.toLowerCase() !== lower)].slice(0, limit);
+}
+
+/**
+ * The picker's memory read, PURE (v2.106.0): the stored JSON string is
+ * narrowed BEFORE any use — a non-string, unparsable or non-array payload
+ * degrades to [] (a corrupted memory is an empty memory, never a crash);
+ * every surviving code must match one of the chart's codes case-
+ * insensitively and is rewritten to the CANONICAL chart code, so the chip
+ * a click opens is always the account the ledger knows. Duplicates
+ * collapse on first occurrence (newest-first, as stored). Never throws.
+ */
+export function parseRecentAccountCodes(
+  raw: unknown,
+  knownCodes: readonly string[],
+): string[] {
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const canonical = new Map<string, string>();
+  for (const k of knownCodes) {
+    const code = String(k ?? '').trim();
+    if (code) canonical.set(code.toLowerCase(), code);
+  }
+  const out: string[] = [];
+  for (const item of parsed) {
+    const code = String(item ?? '').trim();
+    if (!code) continue;
+    const hit = canonical.get(code.toLowerCase());
+    if (hit && !out.includes(hit)) out.push(hit);
+  }
+  return out;
+}
+
+/**
+ * The browse door's shape, PURE (v2.106.0): the full chart grouped by
+ * account type — groups sorted alphabetically, accounts within by code
+ * ascending, a missing/blank type degrading to its own 'UNCLASSIFIED'
+ * bucket (an untyped account is still askable, never dropped). The group
+ * count rides along so the header can say how many it holds without a
+ * second pass. Empty input groups to [].
+ */
+export interface AccountTypeGroup {
+  type: string;
+  accounts: AccountPickerEntry[];
+}
+
+export function groupAccountsByType(
+  entries: AccountPickerEntry[],
+): AccountTypeGroup[] {
+  const buckets = new Map<string, AccountPickerEntry[]>();
+  for (const e of Array.isArray(entries) ? entries : []) {
+    if (!e) continue; // a null row is not an account — degrade, never crash
+    const type = String(e?.type ?? '').trim() || 'UNCLASSIFIED';
+    const list = buckets.get(type);
+    if (list) list.push(e);
+    else buckets.set(type, [e]);
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([type, accounts]) => ({
+      type,
+      accounts: accounts.sort((a, b) =>
+        String(a?.code ?? '').localeCompare(String(b?.code ?? '')),
+      ),
+    }));
+}

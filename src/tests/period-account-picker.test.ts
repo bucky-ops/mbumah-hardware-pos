@@ -172,11 +172,12 @@ describe('page — the picker, the keyboard, the honesty', () => {
   const PAGE = readRepo('src/app/(shell)/hr/payroll/page.tsx');
 
   it('the picker carries its anchors', () => {
+    // v2.106.0: the suggestion/browse option testids moved into the shared
+    // row renderer's ternary — one markup, two namespaces.
     for (const tid of [
       'payroll-account-picker',
       'payroll-account-picker-input',
       'payroll-account-picker-suggestions',
-      'payroll-account-picker-option',
       'payroll-account-picker-empty',
       'payroll-account-picker-activity',
       'payroll-account-picker-quiet',
@@ -184,6 +185,7 @@ describe('page — the picker, the keyboard, the honesty', () => {
     ]) {
       expect(PAGE.includes(`data-testid="${tid}"`)).toBe(true);
     }
+    expect(PAGE.includes("'payroll-account-picker-option'")).toBe(true);
   });
 
   it('the index fetch rides the period anchor and narrows the envelope before any cast', () => {
@@ -208,8 +210,12 @@ describe('page — the picker, the keyboard, the honesty', () => {
     // closes the drawer the Radix way.
     expect(PAGE.includes("e.key === 'Escape'")).toBe(true);
     expect(PAGE.includes('onEscapeKeyDown=')).toBe(true);
-    expect(PAGE.includes('if (pickerOpen && pickerQuery.trim().length > 0) e.preventDefault();')).toBe(true);
-    expect(PAGE.includes('if (pickerOpen) setPickerOpen(false);')).toBe(true);
+    // v2.106.0: the box opens on focus (idle panel, recents, browse door) —
+    // the veto is the BOX itself, not the query; the input's handler steps
+    // the layers back (browse → box → drawer) and the next Esc closes the
+    // drawer the Radix way.
+    expect(PAGE.includes('if (pickerOpen) e.preventDefault();')).toBe(true);
+    expect(PAGE.includes('else if (pickerOpen) setPickerOpen(false);')).toBe(true);
   });
 
   it('the listbox is wired for assistive tech (role, aria-selected, aria-activedescendant)', () => {

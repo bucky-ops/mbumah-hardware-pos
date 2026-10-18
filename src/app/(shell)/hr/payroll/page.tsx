@@ -22,7 +22,7 @@ import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
-import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
+import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
   id: string;
@@ -759,6 +759,15 @@ function PeriodJournalDrawer({
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerHighlight, setPickerHighlight] = useState(0);
+  // v2.106.0: the picker remembers and browses. The browse door shows the
+  // whole chart grouped by type (focus + empty query, then the door); the
+  // recents are the doors THIS browser opened, re-validated against the
+  // fetched chart on every read — a stale or foreign code never renders.
+  // Both reset with the picker's per-period hygiene; the memory itself
+  // persists (it is a memory, not a period state) but re-answers to the
+  // chart each time the index lands.
+  const [pickerBrowseOpen, setPickerBrowseOpen] = useState(false);
+  const [pickerRecents, setPickerRecents] = useState<string[]>([]);
   useEffect(() => {
     setCsvNote(null);
     setCsvBusy(false);
@@ -779,6 +788,9 @@ function PeriodJournalDrawer({
     setPickerQuery('');
     setPickerOpen(false);
     setPickerHighlight(0);
+    // v2.106.0: the browse door belongs to THIS open too — the next period
+    // greets with the idle panel, never an unfolded chart.
+    setPickerBrowseOpen(false);
   }, [periodName]);
 
   // v2.105.0: the picker's index — the org's chart of accounts, lite, with
@@ -822,19 +834,117 @@ function PeriodJournalDrawer({
     };
   }, [pickerPeriodId]);
 
+  // v2.106.0: the memory read — the stored recents answer to THIS chart.
+  // One re-validation per index landing: only codes the fetched index knows
+  // survive (canonicalized to the chart's own spelling), so a stale,
+  // foreign or corrupted memory degrades to fewer chips or none, never to
+  // a door that 404s. The read is client-local (window.localStorage) and
+  // wrapped — a privacy-mode denial is an empty memory, not a crash.
+  useEffect(() => {
+    if (!pickerAccounts.length) {
+      setPickerRecents([]);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(ACCOUNT_PICKER_RECENTS_KEY);
+      setPickerRecents(parseRecentAccountCodes(raw, pickerAccounts.map((a) => a.code)));
+    } catch {
+      setPickerRecents([]);
+    }
+  }, [pickerAccounts]);
+
   // The suggestions are PURE — the same rank every test pins: exact code
   // hit, then code prefix, then name substring; a fresh query starts the
   // highlight at the top match.
   const pickerSuggestions = filterAccountSuggestions(pickerAccounts, pickerQuery);
 
+  // v2.106.0: the browse door's shape — the SAME pure builder every test
+  // pins; the flattened row order is what the keyboard walks.
+  const pickerGroups = useMemo(
+    () => groupAccountsByType(pickerAccounts),
+    [pickerAccounts],
+  );
+  const pickerBrowseRows = useMemo(
+    () => pickerGroups.flatMap((g) => g.accounts),
+    [pickerGroups],
+  );
+
   const pickAccount = (code: string) => {
     setPickerQuery('');
     setPickerOpen(false);
     setPickerHighlight(0);
+    setPickerBrowseOpen(false);
+    // v2.106.0: the door remembers — but only what the chart knows. An
+    // unknown code (the honest-no path) is a question, not a door, and a
+    // question is not remembered; a known one is canonicalized to the
+    // chart's own spelling before it lands in the memory.
+    const known = pickerAccounts.find(
+      (a) => String(a.code).toLowerCase() === code.trim().toLowerCase(),
+    );
+    if (known) {
+      setPickerRecents((prev) => {
+        const next = rememberAccountCode(prev, known.code);
+        try {
+          window.localStorage.setItem(ACCOUNT_PICKER_RECENTS_KEY, JSON.stringify(next));
+        } catch {
+          // private-mode denial: the memory lives in state for this visit
+        }
+        return next;
+      });
+    }
     // A picker door opens on the month — the same doctrine every line door
     // follows; the year is one click away on the dialog's window switch.
     void openAccountMovement(code, 'month');
   };
+
+  // v2.106.0: one row renderer for BOTH voices of the picker — suggestions
+  // (ranked matches) and browse (the grouped chart). Same badges, same
+  // violet highlight family, same month-door doctrine; only the testid/id
+  // namespace differs so tests and assistive tech can tell them apart.
+  const renderPickerRow = (a: AccountPickerEntry, i: number, variant: 'suggestion' | 'browse') => (
+    <button
+      type="button"
+      key={a.code}
+      role="option"
+      id={variant === 'suggestion' ? `payroll-account-picker-opt-${i}` : `payroll-account-picker-browse-opt-${i}`}
+      aria-selected={i === pickerHighlight}
+      data-testid={variant === 'suggestion' ? 'payroll-account-picker-option' : 'payroll-account-picker-browse-option'}
+      data-code={a.code}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => pickAccount(a.code)}
+      onMouseEnter={() => setPickerHighlight(i)}
+      className={`flex w-full items-center gap-2 px-3 py-2 text-left outline-none transition-colors ${
+        i === pickerHighlight
+          ? 'bg-violet-50 dark:bg-violet-950/40'
+          : 'bg-transparent'
+      }`}
+    >
+      <span className="font-mono text-[11px] text-muted-foreground">{a.code}</span>
+      <span className="min-w-0 truncate text-xs">{a.name}</span>
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        <span className="rounded-full border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+          {String(a.type ?? '').replaceAll('_', ' ')}
+        </span>
+        {a.periodLines > 0 ? (
+          <span
+            data-testid="payroll-account-picker-activity"
+            title={`${a.periodLines} posted ${a.periodLines === 1 ? 'line' : 'lines'} in this period — the drill opens on the month`}
+            className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-300"
+          >
+            in this month · {a.periodLines}
+          </span>
+        ) : (
+          <span
+            data-testid="payroll-account-picker-quiet"
+            title="No posted lines in this period — the account is still askable, the drill will say what it finds"
+            className="rounded-full border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[9px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+          >
+            quiet
+          </span>
+        )}
+      </span>
+    </button>
+  );
 
   const exportLedgerCsv = async () => {
     if (csvBusy || !payload?.period?.id) return;
@@ -1002,7 +1112,11 @@ function PeriodJournalDrawer({
           // Radix's own escape event vetoes the dismiss; the picker's input
           // handler has already closed the box. The next Esc (box closed)
           // passes through and the drawer closes the normal way.
-          if (pickerOpen && pickerQuery.trim().length > 0) e.preventDefault();
+          // v2.106.0: the box now opens on focus (idle panel, browse door,
+          // recents) — so the veto is the box itself, not the query: ANY
+          // open box keeps the drawer shut for one Esc, and the input's
+          // handler steps the layers back (browse → box → drawer).
+          if (pickerOpen) e.preventDefault();
         }}
       >
         <DialogHeader>
@@ -1042,22 +1156,44 @@ function PeriodJournalDrawer({
                   setPickerQuery(e.target.value);
                   setPickerOpen(true);
                   setPickerHighlight(0);
+                  // v2.106.0: typing leaves the browse chart — the query
+                  // speaks for itself, and the two never mix.
+                  if (e.target.value.trim()) setPickerBrowseOpen(false);
                 }}
                 onFocus={() => {
-                  if (pickerQuery.trim()) setPickerOpen(true);
+                  // v2.106.0: focus opens the box even with an empty query —
+                  // the idle panel greets with the remembered doors and the
+                  // browse chart, so an account needs no spelling at all.
+                  setPickerOpen(true);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'ArrowDown') {
                     e.preventDefault();
+                    // v2.106.0: in browse mode the keyboard walks the chart.
+                    if (pickerBrowseOpen && !pickerQuery.trim()) {
+                      if (!pickerBrowseRows.length) return;
+                      setPickerHighlight((h) => Math.min(h + 1, pickerBrowseRows.length - 1));
+                      return;
+                    }
                     if (!pickerSuggestions.length) return;
                     setPickerOpen(true);
                     setPickerHighlight((h) => Math.min(h + 1, pickerSuggestions.length - 1));
                   } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
+                    if (pickerBrowseOpen && !pickerQuery.trim()) {
+                      if (!pickerBrowseRows.length) return;
+                      setPickerHighlight((h) => Math.max(h - 1, 0));
+                      return;
+                    }
                     if (!pickerSuggestions.length) return;
                     setPickerHighlight((h) => Math.max(h - 1, 0));
                   } else if (e.key === 'Enter') {
                     e.preventDefault();
+                    if (pickerBrowseOpen && !pickerQuery.trim()) {
+                      const row = pickerBrowseRows[pickerHighlight];
+                      if (row) pickAccount(row.code);
+                      return;
+                    }
                     const pick = pickerSuggestions[pickerHighlight] ?? pickerSuggestions[0];
                     if (pick) {
                       pickAccount(pick.code);
@@ -1073,24 +1209,27 @@ function PeriodJournalDrawer({
                     // Radix's dismissable layer hears the key above React's
                     // synthetic reach (a stopPropagation here was proven
                     // NOT to stop it live). So the local handler only
-                    // closes the box; the drawer's own onEscapeKeyDown
-                    // guard below decides whether the drawer may close:
-                    // the FIRST Esc (box open) belongs to the suggestions,
-                    // the SECOND (box closed) closes the drawer the Radix
-                    // way.
-                    if (pickerOpen) setPickerOpen(false);
+                    // steps the layers back; the drawer's own
+                    // onEscapeKeyDown guard below decides whether the
+                    // drawer may close: the FIRST Esc belongs to the box
+                    // (browse, then box), the NEXT closes the drawer the
+                    // Radix way.
+                    if (pickerBrowseOpen) setPickerBrowseOpen(false);
+                    else if (pickerOpen) setPickerOpen(false);
                   }
                 }}
                 placeholder="Type a code or name — e.g. 5200 or Salaries"
                 autoComplete="off"
                 role="combobox"
-                aria-controls="payroll-account-picker-suggestions"
-                aria-expanded={pickerOpen && pickerQuery.trim().length > 0}
+                aria-controls="payroll-account-picker-suggestions payroll-account-picker-browse"
+                aria-expanded={pickerOpen && (pickerQuery.trim().length > 0 || pickerBrowseOpen)}
                 aria-autocomplete="list"
                 aria-activedescendant={
-                  pickerOpen && pickerSuggestions[pickerHighlight]
-                    ? `payroll-account-picker-opt-${pickerHighlight}`
-                    : undefined
+                  pickerOpen && pickerBrowseOpen && !pickerQuery.trim() && pickerBrowseRows[pickerHighlight]
+                    ? `payroll-account-picker-browse-opt-${pickerHighlight}`
+                    : pickerOpen && pickerSuggestions[pickerHighlight]
+                      ? `payroll-account-picker-opt-${pickerHighlight}`
+                      : undefined
                 }
                 className="w-full rounded-md border bg-background py-1.5 pl-8 pr-3 text-xs outline-none transition-colors placeholder:text-muted-foreground/50 focus-visible:border-violet-400 focus-visible:ring-2 focus-visible:ring-violet-500/30 dark:focus-visible:border-violet-600"
               />
@@ -1111,50 +1250,7 @@ function PeriodJournalDrawer({
                     Nothing in the chart matches &ldquo;{pickerQuery.trim()}&rdquo; — pressing Enter still asks the ledger, and an unknown code gets an honest no.
                   </p>
                 ) : (
-                  pickerSuggestions.map((a, i) => (
-                    <button
-                      type="button"
-                      key={a.code}
-                      role="option"
-                      id={`payroll-account-picker-opt-${i}`}
-                      aria-selected={i === pickerHighlight}
-                      data-testid="payroll-account-picker-option"
-                      data-code={a.code}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => pickAccount(a.code)}
-                      onMouseEnter={() => setPickerHighlight(i)}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left outline-none transition-colors ${
-                        i === pickerHighlight
-                          ? 'bg-violet-50 dark:bg-violet-950/40'
-                          : 'bg-transparent'
-                      }`}
-                    >
-                      <span className="font-mono text-[11px] text-muted-foreground">{a.code}</span>
-                      <span className="min-w-0 truncate text-xs">{a.name}</span>
-                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                        <span className="rounded-full border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                          {String(a.type ?? '').replaceAll('_', ' ')}
-                        </span>
-                        {a.periodLines > 0 ? (
-                          <span
-                            data-testid="payroll-account-picker-activity"
-                            title={`${a.periodLines} posted ${a.periodLines === 1 ? 'line' : 'lines'} in this period — the drill opens on the month`}
-                            className="rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-medium text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-300"
-                          >
-                            in this month · {a.periodLines}
-                          </span>
-                        ) : (
-                          <span
-                            data-testid="payroll-account-picker-quiet"
-                            title="No posted lines in this period — the account is still askable, the drill will say what it finds"
-                            className="rounded-full border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[9px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
-                          >
-                            quiet
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  ))
+                  pickerSuggestions.map((a, i) => renderPickerRow(a, i, 'suggestion'))
                 )}
                 <div
                   className="flex items-center gap-3 border-t px-3 py-1.5 text-[10px] text-muted-foreground"
@@ -1164,6 +1260,121 @@ function PeriodJournalDrawer({
                   <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">Enter</kbd> open</span>
                   <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">Esc</kbd> dismiss</span>
                   <span className="ml-auto">{pickerAccounts.length} accounts in the chart</span>
+                </div>
+              </div>
+            )}
+            {/* v2.106.0: the idle panel — the box speaks on focus, even with
+                an empty query. The remembered doors come back as chips
+                (validated against THIS chart), and the browse door lists
+                the whole chart so an account needs no spelling at all. A
+                failed index stays honest by absence: no chips, no door,
+                and typing still asks the ledger. */}
+            {pickerOpen && pickerQuery.trim().length === 0 && !pickerBrowseOpen && (
+              <div
+                data-testid="payroll-account-picker-idle"
+                className="absolute left-0 right-0 z-20 mt-1 rounded-md border bg-popover shadow-lg"
+              >
+                {pickerRecents.length > 0 ? (
+                  <div className="border-b px-3 py-2" data-testid="payroll-account-picker-recent">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <Clock className="h-3 w-3 text-violet-500 dark:text-violet-400" aria-hidden />
+                      Recent
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {pickerRecents.map((code) => {
+                        const known = pickerAccounts.find((a) => a.code === code);
+                        return (
+                          <button
+                            type="button"
+                            key={code}
+                            data-testid="payroll-account-picker-recent-chip"
+                            data-code={code}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => pickAccount(code)}
+                            title="Recent — a door you opened, remembered in this browser only"
+                            className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] text-violet-900 transition-colors hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-900/60"
+                          >
+                            <Clock className="h-3 w-3 shrink-0 text-violet-500 dark:text-violet-400" aria-hidden />
+                            <span className="font-mono text-[10px] text-violet-700 dark:text-violet-300">{code}</span>
+                            <span className="min-w-0 truncate">{known?.name ?? code}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  pickerAccounts.length > 0 && (
+                    <p className="border-b px-3 py-2 text-[11px] text-muted-foreground" data-testid="payroll-account-picker-recent-empty">
+                      Pick an account and it will be remembered here — in this browser only.
+                    </p>
+                  )
+                )}
+                {pickerAccounts.length > 0 ? (
+                  <button
+                    type="button"
+                    data-testid="payroll-account-picker-browse-door"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setPickerBrowseOpen(true);
+                      setPickerHighlight(0);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-violet-700 outline-none transition-colors hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Browse all {pickerAccounts.length} accounts
+                    <span className="ml-auto text-[10px] text-muted-foreground">grouped by type</span>
+                  </button>
+                ) : (
+                  <p className="px-3 py-2.5 text-xs text-muted-foreground" data-testid="payroll-account-picker-idle-absent">
+                    The chart index did not load — typing a code still asks the ledger, and an unknown code gets an honest no.
+                  </p>
+                )}
+              </div>
+            )}
+            {/* v2.106.0: the browse door, open — the whole chart, grouped by
+                type through the SAME pure builder the tests pin, walked by
+                the SAME keyboard contract, wearing the SAME truth badges. */}
+            {pickerOpen && pickerQuery.trim().length === 0 && pickerBrowseOpen && (
+              <div
+                role="listbox"
+                id="payroll-account-picker-browse"
+                aria-label="The chart of accounts, grouped by type"
+                data-testid="payroll-account-picker-browse"
+                className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover shadow-lg"
+              >
+                <div className="sticky top-0 z-10 flex items-center gap-2 border-b bg-violet-50/95 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-violet-800 backdrop-blur dark:bg-violet-950/85 dark:text-violet-300" data-testid="payroll-account-picker-browse-head">
+                  <span>The chart — {pickerAccounts.length} accounts</span>
+                  <button
+                    type="button"
+                    data-testid="payroll-account-picker-browse-close"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setPickerBrowseOpen(false)}
+                    className="ml-auto rounded border border-violet-200 bg-white/70 px-1.5 py-0.5 text-[9px] normal-case text-violet-700 transition-colors hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-300 dark:hover:bg-violet-900/60"
+                  >
+                    collapse
+                  </button>
+                </div>
+                {pickerGroups.map((g) => (
+                  <Fragment key={g.type}>
+                    <div
+                      className="sticky top-[30px] z-[5] flex items-center gap-2 border-b bg-zinc-50/95 px-3 py-1 text-[9px] font-medium uppercase tracking-wider text-zinc-500 backdrop-blur dark:bg-zinc-900/90 dark:text-zinc-400"
+                      data-testid="payroll-account-picker-group"
+                      data-type={g.type}
+                    >
+                      <span>{String(g.type).replaceAll('_', ' ')}</span>
+                      <span className="ml-auto rounded-full border border-zinc-200 bg-white/70 px-1.5 text-[9px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-400">{g.accounts.length}</span>
+                    </div>
+                    {g.accounts.map((a) => renderPickerRow(a, pickerBrowseRows.indexOf(a), 'browse'))}
+                  </Fragment>
+                ))}
+                <div
+                  className="flex items-center gap-3 border-t px-3 py-1.5 text-[10px] text-muted-foreground"
+                  data-testid="payroll-account-picker-browse-hint"
+                >
+                  <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">↑↓</kbd> move</span>
+                  <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">Enter</kbd> open</span>
+                  <span><kbd className="rounded border bg-muted px-1 font-mono text-[9px]">Esc</kbd> collapse</span>
+                  <span className="ml-auto">{pickerGroups.length} types</span>
                 </div>
               </div>
             )}
