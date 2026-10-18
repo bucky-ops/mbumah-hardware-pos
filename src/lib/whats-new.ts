@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.105.0',
+    title: 'The ledger answers for any account',
+    bullets: [
+      'The ledger drawer grows an account picker: type any code or name \u2014 not just the lines this period posted \u2014 and the same movement drill opens, month first, year one click away.',
+      'The chart rides the picker: every account in the organization lists as you type, ranked exact code first, then prefix, then name \u2014 and each suggestion wears its badge: in this month with the posted-line count, or quiet.',
+      'Quiet is a fact, not an error: an account with no lines in the period is still askable, and the drill will say what it finds \u2014 starting at zero, honestly.',
+      'Keyboard first: \u2191\u2193 to move, Enter to open, Esc to dismiss \u2014 and an unknown code pushed into Enter still asks the ledger and gets an honest no.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) \u2014 listing who may be asked widens nothing.',
+    ],
+  },
+  {
     version: '2.104.0',
     title: 'The account opens its year',
     bullets: [

@@ -759,3 +759,55 @@ export function movementSideCellCompact(signed: number, normalBalance: string): 
       : magnitude.toFixed(2);
   return `${mag} ${Number(signed) > 0 ? normal : opposite}`;
 }
+
+// ── v2.105.0: the ledger answers for any account ────────────────────────────
+
+/**
+ * One row of the account picker's index: the org's chart of accounts, lite,
+ * each carrying the count of posted, never-voided lines it owns inside the
+ * anchored period window (0 = quiet in this month — the badge says so, the
+ * account is still askable). The index is display data: the drill's own
+ * route remains the one truth about what an account posted.
+ */
+export interface AccountPickerEntry {
+  code: string;
+  name: string;
+  type: string;
+  normalBalance: string;
+  periodLines: number;
+}
+
+/**
+ * The picker's pure rank: exact code hit first, then code-prefix, then a
+ * name substring — case-insensitive, whitespace-trimmed, stable on equal
+ * rank by code ascending. An empty (or whitespace-only) query asks for
+ * nothing and gets nothing — no 40-account wall of noise on focus. The
+ * cap clamps to at least 1 (a cap of zero would make typing pointless);
+ * missing name/type degrade to '' and rank by code alone, never throw.
+ * RANKING IS MATCH QUALITY ONLY — a quiet account that matches better
+ * outranks an active one that matches worse, because the picker is a
+ * finder, not a popularity contest (the activity badge says the rest).
+ */
+export function filterAccountSuggestions(
+  entries: AccountPickerEntry[],
+  query: string,
+  limit = 8,
+): AccountPickerEntry[] {
+  const q = String(query ?? '').trim().toLowerCase();
+  if (!q) return [];
+  const cap = Number.isFinite(limit) && limit >= 1 ? Math.floor(limit) : 1;
+  const rank = (e: AccountPickerEntry): number => {
+    const code = String(e?.code ?? '').toLowerCase();
+    const name = String(e?.name ?? '').toLowerCase();
+    if (code === q) return 0;
+    if (code.startsWith(q)) return 1;
+    if (name.includes(q)) return 2;
+    return 3;
+  };
+  return entries
+    .map((e) => ({ e, r: rank(e) }))
+    .filter((x) => x.r < 3)
+    .sort((a, b) => a.r - b.r || String(a.e.code).localeCompare(String(b.e.code)))
+    .slice(0, cap)
+    .map((x) => x.e);
+}
