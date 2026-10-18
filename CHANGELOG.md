@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.115.0] The restricted read leaves a trace
+
+Confidentiality-hardening release: grievance confidentiality (EMS spec Phase 4.7 acceptance 5) was enforced at the detail level since v2.19.0 — descriptions stayed out of lists and behind an explicit allow-list. This release makes the enforcement *traceable*: a restricted read (granted or denied) now leaves an audit record, and the discipline desk grows the search, filters, countdown chips and honest CSV export a working caseload needs.
+
+### Added
+- **Restricted-read audit trail** (`src/lib/hr/discipline-service.ts`): `getCaseDetail` writes `DISCIPLINARY_RESTRICTED_VIEWED` when a permitted role opens a RESTRICTED record (actor, role, case id, store — the metadata carries the confidentiality flag, never the description text), and `DISCIPLINARY_RESTRICTED_DENIED` on the allow-list's 403 path, so the refusal is as traceable as the grant. Today the route guard admits exactly the allow-listed roles, so the denied path is defence in depth — the trace exists the day the guard's key ever widens.
+- **The discipline desk matures** (`src/app/(shell)/hr/discipline/page.tsx`): employee search (client-side on the already-loaded list), a type filter (warning / grievance / investigation), a live counts line ("N of M cases shown · R restricted"), a filtered-empty state distinct from the true zero, and amber "in Nd" countdown chips on OPEN warnings inside 14 days (past-due never renders — the sweep retires those before the list is built).
+- **The case list exports honestly** (`src/lib/hr/discipline-list-csv.ts`): a pure RFC 4180 serializer behind the toolbar's CSV door — columns are exactly the list payload's (case id, employee, type, severity, status, confidentiality, issued, expires); descriptions and resolution notes have no column, so the export can never become a back door around the detail view's gate.
+- **The detail dialog says what the audit does**: restricted records wear a violet "Viewing this restricted record is logged to the audit trail." note — the logging is visible to the person it concerns, not a silent background behavior.
+
+### Changed
+- The restricted rows in the list carry a violet "Restricted" chip beside the lock icon (the lock alone was easy to scroll past).
+- The What's-New feed leads with the traceability story; the unread counter test re-anchored for the 2.115.0-fed feed (2.110.0→4, 2.109.0→5, 2.108.0→6, 2.77.0→37).
+
+### Security
+- The audit trail stores no case content: metadata names `confidentiality: 'RESTRICTED'` and nothing else — the trail proves access happened without itself becoming a copy of the sensitive data. The CSV serializer's column set is pinned by tests, so a future column proposal that carries the description fails the build, not a breach review.
+
 ## [2.114.0] The assets half of the alert opens its door
 
 Door-completion release: v2.113.0 made the People & Payroll panel's expiry count split honestly — documents became a door, overdue assets stayed text because the assets list was session-scoped. This release teaches the assets list org-scoped, windowed reads, so the second half of the alert opens its own door too.

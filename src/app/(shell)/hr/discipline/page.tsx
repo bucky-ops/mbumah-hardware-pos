@@ -15,8 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Eye, EyeOff, Gavel, Lock, Plus, RefreshCw } from 'lucide-react';
+import { Download, Eye, EyeOff, Gavel, Lock, Plus, RefreshCw } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
+import { buildDisciplineListCsv } from '@/lib/hr/discipline-list-csv';
+import { expiresSoonLabel } from '@/lib/hr/discipline-ui';
 
 interface CaseListItemDto {
   id: string;
@@ -44,6 +46,10 @@ export default function DisciplinePage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [statusFilter, setStatusFilter] = useState('ALL');
+  // v2.115.0: type filter + employee search narrow the ALREADY-LOADED list
+  // client-side (one fetch, take 200) — no new server surface, same guard.
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
 
   const [openOpen, setOpenOpen] = useState(false);
   const [detail, setDetail] = useState<CaseDetailDto | null>(null);
@@ -91,6 +97,40 @@ export default function DisciplinePage() {
     }
   };
 
+  const all = cases ?? [];
+  const visible = all.filter((c) => {
+    if (typeFilter !== 'ALL' && c.type !== typeFilter) return false;
+    const q = search.trim().toLowerCase();
+    if (q && !(c.employeeName ?? '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const restrictedCount = all.filter((c) => c.confidentiality === 'RESTRICTED').length;
+
+  // v2.115.0: the CSV door exports the FILTERED list — descriptions and
+  // resolution notes have no column (the serializer's contract), so the
+  // export can never become a back door around the detail view's gate.
+  const exportCsv = () => {
+    const csv = buildDisciplineListCsv(
+      visible.map((c) => ({
+        id: c.id,
+        employeeName: c.employeeName,
+        type: c.type,
+        severity: c.severity,
+        status: c.status,
+        confidentiality: c.confidentiality,
+        issuedOn: c.issuedOn,
+        expiresOn: c.expiresOn,
+      })),
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `discipline-cases-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -99,10 +139,26 @@ export default function DisciplinePage() {
             <Gavel className="h-6 w-6 text-rose-500" aria-hidden /> Discipline &amp; Grievances
           </h1>
           <p className="text-sm text-muted-foreground">
-            Warnings expire automatically on their date. Grievances default to restricted: descriptions stay out of lists and are readable only by HR.
+            Warnings expire automatically on their date. Grievances default to restricted: descriptions stay out of lists and are readable only by HR. Restricted reads are audit-logged.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search employee…"
+            aria-label="Search cases by employee"
+            className="h-9 w-40"
+          />
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-36" aria-label="Filter by type"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All types</SelectItem>
+              <SelectItem value="WARNING">Warning</SelectItem>
+              <SelectItem value="GRIEVANCE">Grievance</SelectItem>
+              <SelectItem value="INVESTIGATION">Investigation</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-36" aria-label="Filter by status"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -113,6 +169,16 @@ export default function DisciplinePage() {
               <SelectItem value="EXPIRED">Expired</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={visible.length === 0}
+            aria-label="Export case list as CSV"
+            title="Descriptions are never exported"
+          >
+            <Download className="h-4 w-4" aria-hidden /> CSV
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void load()} aria-label="Refresh cases">
             <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden /> Refresh
           </Button>
@@ -127,13 +193,22 @@ export default function DisciplinePage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Cases</CardTitle>
-          <CardDescription>Listing never shows descriptions — open a case to read the record you are allowed to see.</CardDescription>
+          <CardDescription>
+            Listing never shows descriptions — open a case to read the record you are allowed to see. Restricted reads are audit-logged.
+          </CardDescription>
+          <p data-testid="hr-discipline-counts" className="mt-1 text-xs tabular-nums text-muted-foreground">
+            {cases === null
+              ? 'Loading…'
+              : `${visible.length} of ${cases.length} case${cases.length === 1 ? '' : 's'} shown · ${restrictedCount} restricted`}
+          </p>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {!cases ? (
             <Skeleton className="h-40 w-full" />
           ) : cases.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No disciplinary cases recorded.</p>
+          ) : visible.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No cases match the current filters.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -148,7 +223,9 @@ export default function DisciplinePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cases.map((c) => (
+                {visible.map((c) => {
+                  const soon = expiresSoonLabel(c.expiresOn, c.status);
+                  return (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.employeeName ?? '—'}</TableCell>
                     <TableCell>
@@ -157,11 +234,29 @@ export default function DisciplinePage() {
                           <Lock className="h-3.5 w-3.5 text-violet-500" aria-label="Restricted confidentiality" />
                         ) : null}
                         {c.type}
+                        {c.confidentiality === 'RESTRICTED' ? (
+                          <span
+                            data-testid="hr-discipline-restricted-chip"
+                            className="ml-1 inline-flex items-center rounded-full border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-800 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-300"
+                          >
+                            Restricted
+                          </span>
+                        ) : null}
                       </span>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{c.severity ?? '—'}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(c.issuedOn)}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDate(c.expiresOn)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(c.expiresOn)}
+                      {soon ? (
+                        <span
+                          data-testid="hr-discipline-expires-soon"
+                          className="ml-1.5 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                        >
+                          {soon}
+                        </span>
+                      ) : null}
+                    </TableCell>
                     <TableCell><StatusBadge status={c.status} /></TableCell>
                     <TableCell className="text-right">
                       {c.status === 'OPEN' ? (
@@ -202,7 +297,8 @@ export default function DisciplinePage() {
                       )}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -310,6 +406,14 @@ export default function DisciplinePage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3">
+                {detail.confidentiality === 'RESTRICTED' ? (
+                  <p
+                    data-testid="hr-discipline-audit-note"
+                    className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-300"
+                  >
+                    <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden /> Viewing this restricted record is logged to the audit trail.
+                  </p>
+                ) : null}
                 <div className="rounded-lg border p-3">
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Description</p>
                   <p className="whitespace-pre-wrap text-sm">{detail.description}</p>
