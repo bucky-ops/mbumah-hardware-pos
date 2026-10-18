@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.93.0',
+    title: 'The bench remembers \u2014 deleted goals come home',
+    bullets: [
+      'Deleted goals are no longer a one-way door: the Goals tab grows a "Recently deleted" bench (with a live count) where every soft-deleted goal waits, stamped with when it left and the progress it kept.',
+      'One Restore click undoes the removal \u2014 the goal rejoins the board, the portal, and the counts exactly as it left: same target, same progress, same status. POS-sourced progress recomputes from sales like any live goal.',
+      'The bench speaks the same honesty as the delete: nothing is ever hard-deleted, every restore is audited (who restored, which goal), and an empty bench says so plainly.',
+      'Managers only, by design \u2014 the bench is manage-gated like the delete itself; reviewers keep reading the live board.',
+    ],
+  },
+  {
     version: '2.92.0',
     title: 'The goals can leave \u2014 and the custom metric has a name',
     bullets: [
