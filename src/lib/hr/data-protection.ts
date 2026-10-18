@@ -8,6 +8,7 @@
 //      the decision and legal basis are recorded on the request row.
 //   4. Decisions and executions are audit logged (field-name-only metadata).
 
+import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import { hasHrPermission } from './permissions';
@@ -85,6 +86,79 @@ export interface RetentionSweepResult {
 
 const LEGAL_HOLD_KEY_PREFIX = 'legalHold:';
 
+/** The anonymised marker the sweep writes — a row already carrying it is not
+ * personal data anymore, so neither the sweep nor its preview counts it. */
+const RETENTION_REDACTED = 'REDACTED (retention)';
+
+// ── v2.123.0: the dry run (the sweep shows its hand) ───────────────────────
+//
+// The desk could say the sweep runs nightly, but never WHAT it would sweep.
+// These pure where-builders are the single source of truth for "in scope":
+// the sweep executes them and the preview counts them, so the two can never
+// disagree. Redaction guards ride every clause — a row already carrying the
+// marker is no longer personal data and is invisible to both.
+
+export function applicantSweepWhere(now: Date, orgStoreIds: string[]): Prisma.ApplicantWhereInput {
+  return {
+    status: { in: ['REJECTED', 'WITHDRAWN'] },
+    dataRetentionUntil: { lt: now },
+    storeId: { in: orgStoreIds },
+    fullName: { not: RETENTION_REDACTED },
+  };
+}
+
+export function disciplinarySweepWhere(now: Date, organizationId: string): Prisma.DisciplinaryCaseWhereInput {
+  return {
+    status: { in: ['RESOLVED', 'DISMISSED', 'EXPIRED'] },
+    updatedAt: { lt: new Date(now.getTime() - 3 * 365 * 24 * 3600 * 1000) },
+    employee: { store: { organizationId } },
+    description: { not: RETENTION_REDACTED },
+  };
+}
+
+export function attendanceSweepWhere(now: Date, organizationId: string): Prisma.AttendanceRecordWhereInput {
+  return {
+    date: { lt: new Date(now.getTime() - 2 * 365 * 24 * 3600 * 1000) },
+    employee: { store: { organizationId } },
+    sourceDevice: { not: null },
+  };
+}
+
+/** Human dry-run text for a scope's sweepable count. Pure. */
+export function describeSweepPreview(sweepable: number, held: boolean): string {
+  if (sweepable === 0) return held ? 'nothing waiting' : 'nothing to sweep';
+  return held ? `${sweepable} waiting behind the hold` : `${sweepable} in scope`;
+}
+
+export interface RetentionSweepPreview {
+  scope: string;
+  /** Rows matching the sweep's own criteria (still carrying personal data). */
+  sweepable: number;
+  held: boolean;
+}
+
+/**
+ * The dry run: count what each scope's sweep would anonymise, changing
+ * nothing. Counts use the SAME where-builders the sweep executes; a held
+ * scope still reports its backlog (what releasing would unblock) with
+ * held: true — the hold freezes the sweep, not the truth.
+ */
+export async function previewRetentionSweep(organizationId: string): Promise<RetentionSweepPreview[]> {
+  const holds = new Set(await getLegalHolds(organizationId));
+  const now = new Date();
+  const orgStoreIds = (await db.store.findMany({ where: { organizationId }, select: { id: true } })).map((s) => s.id);
+  const [applicants, disciplinary, attendance] = await Promise.all([
+    db.applicant.count({ where: applicantSweepWhere(now, orgStoreIds) }),
+    db.disciplinaryCase.count({ where: disciplinarySweepWhere(now, organizationId) }),
+    db.attendanceRecord.count({ where: attendanceSweepWhere(now, organizationId) }),
+  ]);
+  return [
+    { scope: 'hr_applicant_rejection_data', sweepable: applicants, held: holds.has('hr_applicant_rejection_data') },
+    { scope: 'hr_disciplinary_closed', sweepable: disciplinary, held: holds.has('hr_disciplinary_closed') },
+    { scope: 'hr_attendance_daily', sweepable: attendance, held: holds.has('hr_attendance_daily') },
+  ];
+}
+
 export interface RetentionPolicyView {
   scope: string;
   description: string;
@@ -96,11 +170,17 @@ export interface RetentionPolicyView {
   windowLabel: string;
   held: boolean;
   heldAt: string | null;
+  /** Rows the next sweep would anonymise (dry-run count, v2.123.0). */
+  sweepable: number;
+  /** Human dry-run text from describeSweepPreview — computed server-side. */
+  sweepLabel: string;
 }
 
 export interface RetentionDeskDto {
   policies: RetentionPolicyView[];
   heldCount: number;
+  /** Sum of sweepable over NON-held scopes — what the next run targets. */
+  sweepableTotal: number;
   canDecide: boolean;
 }
 
@@ -118,22 +198,27 @@ export function describeRetentionWindow(
   return `${span} after ${policy.measuredFrom}`;
 }
 
-/** The retention desk: every reviewable policy folded with its live hold state. */
+/** The retention desk: every reviewable policy folded with its live hold state
+ * and its dry-run sweep count. */
 export async function listRetentionPolicies(session: Session): Promise<RetentionDeskDto> {
-  const [rows, policies] = await Promise.all([
+  const [rows, preview] = await Promise.all([
     db.hrSetting.findMany({
       where: { organizationId: session.organizationId, key: { startsWith: LEGAL_HOLD_KEY_PREFIX } },
       select: { key: true, value: true, updatedAt: true },
     }),
-    Promise.resolve(HR_RETENTION_POLICIES),
+    previewRetentionSweep(session.organizationId),
   ]);
   const heldRows = new Map(
     rows
       .filter((r) => r.value === 'true')
       .map((r) => [r.key.replace(LEGAL_HOLD_KEY_PREFIX, ''), r] as const),
   );
-  const views: RetentionPolicyView[] = policies.map((p) => {
+  const previewByScope = new Map(preview.map((p) => [p.scope, p] as const));
+  const views: RetentionPolicyView[] = HR_RETENTION_POLICIES.map((p) => {
     const row = heldRows.get(p.scope);
+    const swept = previewByScope.get(p.scope);
+    const sweepable = swept ? swept.sweepable : 0;
+    const held = row !== undefined;
     return {
       scope: p.scope,
       description: p.description,
@@ -141,13 +226,16 @@ export async function listRetentionPolicies(session: Session): Promise<Retention
       measuredFrom: p.measuredFrom,
       basis: p.basis,
       windowLabel: describeRetentionWindow(p),
-      held: row !== undefined,
+      held,
       heldAt: row ? row.updatedAt.toISOString() : null,
+      sweepable,
+      sweepLabel: describeSweepPreview(sweepable, held),
     };
   });
   return {
     policies: views,
     heldCount: views.filter((v) => v.held).length,
+    sweepableTotal: views.filter((v) => !v.held).reduce((a, v) => a + v.sweepable, 0),
     canDecide: canDecideErasure(session.role),
   };
 }
@@ -235,16 +323,12 @@ export async function runHrRetentionSweep(organizationId: string, actorId: strin
   const results: RetentionSweepResult[] = [];
   // Applicants scope by store id (no store relation on the model).
   const orgStoreIds = (await db.store.findMany({ where: { organizationId }, select: { id: true } })).map((s) => s.id);
+  const now = new Date();
 
   // 1. Applicant rejection data (anonymise contact fields past retention).
   if (!holds.has('hr_applicant_rejection_data')) {
     const stale = await db.applicant.findMany({
-      where: {
-        status: { in: ['REJECTED', 'WITHDRAWN'] },
-        dataRetentionUntil: { lt: new Date() },
-        storeId: { in: orgStoreIds },
-        fullName: { not: 'REDACTED (retention)' },
-      },
+      where: applicantSweepWhere(now, orgStoreIds),
       select: { id: true },
       take: 500,
     });
@@ -268,14 +352,8 @@ export async function runHrRetentionSweep(organizationId: string, actorId: strin
 
   // 2. Closed disciplinary cases past 3 years (anonymise the description).
   if (!holds.has('hr_disciplinary_closed')) {
-    const cutoff = new Date(Date.now() - 3 * 365 * 24 * 3600 * 1000);
     const stale = await db.disciplinaryCase.findMany({
-      where: {
-        status: { in: ['RESOLVED', 'DISMISSED', 'EXPIRED'] },
-        updatedAt: { lt: cutoff },
-        employee: { store: { organizationId } },
-        description: { not: 'REDACTED (retention)' },
-      },
+      where: disciplinarySweepWhere(now, organizationId),
       select: { id: true },
       take: 500,
     });
@@ -300,9 +378,8 @@ export async function runHrRetentionSweep(organizationId: string, actorId: strin
   // 3. Attendance daily records past 2 years (anonymise device + punch detail
   //    rows stay for aggregate reconciliation; sensitive fields cleared).
   if (!holds.has('hr_attendance_daily')) {
-    const cutoff = new Date(Date.now() - 2 * 365 * 24 * 3600 * 1000);
     const stale = await db.attendanceRecord.findMany({
-      where: { date: { lt: cutoff }, employee: { store: { organizationId } }, sourceDevice: { not: null } },
+      where: attendanceSweepWhere(now, organizationId),
       select: { id: true },
       take: 500,
     });
