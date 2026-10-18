@@ -80,6 +80,18 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.103.0',
+    title: 'The account files its month',
+    bullets: [
+      'The account movement dialog grows the governed Movement CSV exit: the month\u2019s replay files through the same format every HR report, the desk report and the period ledger file through \u2014 one click in the footer, no screenshot bookkeeping.',
+      'One row per replay line \u2014 posted day, entry number, source, debit, credit \u2014 and an Opening / Month totals / Closing footer whose Closing line equals the last replay row: the file closes its own loop.',
+      'Balances file the accountant\u2019s way \u2014 258000.00 Dr, 70414.80 Cr, never a bare negative \u2014 and an assumed normal side is filed as assumed, never silently picked.',
+      'The file names its account and period (mbumah-account-movement-5200-salaries-expense-october-2026.csv) and lands an audit row that says what was filed, never who is in it.',
+      'Nothing posted inside the window means nothing to file \u2014 and a balance that sits on the other side of the T-account now wears the amber eyebrow on screen, the one state you should never scroll past.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) \u2014 filing what you may read widens nothing.',
+    ],
+  },
+  {
     version: '2.102.0',
     title: 'The account opens its month',
     bullets: [

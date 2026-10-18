@@ -735,6 +735,10 @@ function PeriodJournalDrawer({
   const [drill, setDrill] = useState<AccountMovementPayload | null>(null);
   const [drillLoading, setDrillLoading] = useState(false);
   const [drillError, setDrillError] = useState<string | null>(null);
+  // v2.103.0: the drill's own filing door — busy flag + note, reset per open
+  // and per period (the same stale-state hygiene the ledger CSV note taught).
+  const [movementCsvBusy, setMovementCsvBusy] = useState(false);
+  const [movementCsvNote, setMovementCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
   useEffect(() => {
     setCsvNote(null);
     setCsvBusy(false);
@@ -744,6 +748,9 @@ function PeriodJournalDrawer({
     setDrill(null);
     setDrillError(null);
     setDrillLoading(false);
+    // v2.103.0: the movement CSV's note rides the same hygiene.
+    setMovementCsvBusy(false);
+    setMovementCsvNote(null);
   }, [periodName]);
 
   const exportLedgerCsv = async () => {
@@ -819,12 +826,54 @@ function PeriodJournalDrawer({
     }
   };
 
+  // v2.103.0: the account files its month — the drill's governed CSV exit,
+  // the ledger CSV's download pattern (blob → anchor → revoke) pointed at
+  // the account route's export sibling. Same envelope honesty: a failed
+  // response names its reason, never a silent nothing.
+  const exportMovementCsv = async () => {
+    if (movementCsvBusy || !payload?.period?.id || !drillCode) return;
+    setMovementCsvBusy(true);
+    setMovementCsvNote(null);
+    try {
+      const res = await fetch(
+        `/api/payroll/period-journal/account/export?periodId=${encodeURIComponent(payload.period.id)}&accountCode=${encodeURIComponent(drillCode)}`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'mbumah-account-movement.csv';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setMovementCsvNote({
+        tone: 'ok',
+        text: `Movement CSV downloaded — ${filename}. The governed filing format (header block, injection guard), and the Closing line that equals the last replay row — the file closes its own loop, exactly the month on this dialog.`,
+      });
+    } catch (e) {
+      setMovementCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setMovementCsvBusy(false);
+    }
+  };
+
   // Back to the ledger: the drill closes, the drawer stays put.
   const closeDrill = () => {
     setDrillCode(null);
     setDrill(null);
     setDrillError(null);
     setDrillLoading(false);
+    // v2.103.0: the note belongs to THIS drill — the next account opens clean.
+    setMovementCsvBusy(false);
+    setMovementCsvNote(null);
   };
 
   return (
@@ -1126,7 +1175,17 @@ function PeriodJournalDrawer({
                       </TableCell>
                       <TableCell className="py-1.5 text-right text-xs tabular-nums">{m.debit ? kes(m.debit) : '—'}</TableCell>
                       <TableCell className="py-1.5 text-right text-xs tabular-nums">{m.credit ? kes(m.credit) : '—'}</TableCell>
-                      <TableCell className="py-1.5 text-right text-xs font-medium tabular-nums" data-testid="payroll-account-running">
+                      <TableCell
+                        className={`py-1.5 text-right text-xs font-medium tabular-nums ${
+                          // v2.103.0 styling detail: a balance that sits on the
+                          // OTHER side of the T-account wears the amber eyebrow —
+                          // the one state a teller should never scroll past.
+                          m.running < 0 && Math.round(Math.abs(m.running) * 100) !== 0
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : ''
+                        }`}
+                        data-testid="payroll-account-running"
+                      >
                         {sideLabel(m.running, drill.account.normalBalance)}
                       </TableCell>
                     </TableRow>
@@ -1158,11 +1217,39 @@ function PeriodJournalDrawer({
           </div>
         )}
 
-        <DialogFooter className="mt-2">
-          <Button variant="outline" size="sm" onClick={closeDrill} data-testid="payroll-account-back">
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            Back to ledger
-          </Button>
+        <DialogFooter className="mt-2 flex-col gap-2 sm:flex-col">
+          {movementCsvNote && (
+            <div
+              role="status"
+              data-testid="payroll-account-csv-note"
+              className={`w-full rounded-md border px-3 py-2 text-left text-xs ${
+                movementCsvNote.tone === 'ok'
+                  ? 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300'
+                  : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+              }`}
+            >
+              {movementCsvNote.text}
+            </div>
+          )}
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+              disabled={movementCsvBusy || !drill || drill.movements.length === 0}
+              aria-label="Download the account movement CSV — the governed filing file of this account's month replay"
+              title={drill && drill.movements.length === 0 ? 'Nothing to file — nothing posted on this account inside the window.' : 'The governed filing file: one row per replay line, and a Closing line that equals the last one'}
+              data-testid="payroll-account-csv"
+              onClick={() => void exportMovementCsv()}
+            >
+              {movementCsvBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+              {movementCsvBusy ? 'Building…' : 'Movement CSV'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={closeDrill} data-testid="payroll-account-back">
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+              Back to ledger
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
