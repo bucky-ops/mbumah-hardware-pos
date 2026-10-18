@@ -203,9 +203,19 @@ describe('whats-new — the ledger story leads the feed', () => {
     const i99 = WN.indexOf("version: '2.99.0'");
     expect(i100).toBeGreaterThan(-1);
     expect(i99).toBeGreaterThan(i100);
-    expect(PKG.version).toBe('2.100.0');
-    expect(PKG.mbumah.releaseVersion).toBe('2.100.0');
-    expect(PKG.mbumah.baseVersion).toBe('2.100.0');
+    // atLeast, not exact: this file outlives its own release — the version
+    // slots keep moving every round, and an exact pin would go stale the
+    // moment the next feature ships (the v2.98 stale-pin lesson).
+    const atLeast = (actual: string, floor: string) => {
+      const a = actual.split('.').map(Number);
+      const f = floor.split('.').map(Number);
+      return a.length === 3 && f.length === 3 && (a[0] > f[0] || (a[0] === f[0] && (a[1] > f[1] || (a[1] === f[1] && a[2] >= f[2]))));
+    };
+    expect(atLeast(PKG.version, '2.100.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.releaseVersion, '2.100.0')).toBe(true);
+    expect(atLeast(PKG.mbumah.baseVersion, '2.100.0')).toBe(true);
+    expect(PKG.version).toBe(PKG.mbumah.releaseVersion);
+    expect(PKG.mbumah.releaseVersion).toBe(PKG.mbumah.baseVersion);
   });
 
   it('the bullets carry the honesty', () => {
