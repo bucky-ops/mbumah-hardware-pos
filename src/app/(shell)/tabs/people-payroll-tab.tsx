@@ -21,7 +21,7 @@
 //
 // All data shown is real server data; nothing is fabricated client-side.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, UserCog } from 'lucide-react';
 
@@ -43,6 +43,47 @@ async function fetchOrgSummary(): Promise<{ status: number; body: SummaryEnvelop
 
 export default function PeoplePayrollTab() {
   const [refreshKey, setRefreshKey] = useState(0);
+  // v2.111.0: the tab speaks deep links. A URL carrying ?branch=<storeId>
+  // opens the panel pre-filtered; every filter change mirrors back into the
+  // URL (replaceState — never a navigation, never a history entry); leaving
+  // the tab strips the param so a stale filter cannot haunt the next mount.
+  // The seed is a LAZY initializer (no setState-in-effect): the panel only
+  // renders after the client fetch resolves, so the SSR pass never disagrees.
+  const [linkBranchId] = useState(() => {
+    try {
+      if (typeof window === 'undefined') return '';
+      return new URLSearchParams(window.location.search).get('branch') ?? '';
+    } catch {
+      return '';
+    }
+  });
+  useEffect(() => {
+    return () => {
+      // Strip ?branch on unmount so re-mounting fresh (e.g. from the sidebar)
+      // does not silently inherit an old filter.
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        if (sp.has('branch')) {
+          sp.delete('branch');
+          const qs = sp.toString();
+          window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+        }
+      } catch {
+        // same honesty: no URL, no cleanup
+      }
+    };
+  }, []);
+  const mirrorBranchToUrl = (branchId: string) => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      if (branchId) sp.set('branch', branchId);
+      else sp.delete('branch');
+      const qs = sp.toString();
+      window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    } catch {
+      // no URL surface — the filter still works, it just cannot be shared
+    }
+  };
   const { data, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } = useQuery({
     queryKey: ['people-payroll-org-summary', refreshKey],
     queryFn: fetchOrgSummary,
@@ -122,7 +163,13 @@ export default function PeoplePayrollTab() {
         ) : unavailable ? (
           <PeoplePayrollUnavailable code={unavailable.code} detail={unavailable.detail} />
         ) : rows && rows.length > 0 ? (
-          <PeoplePayrollByBranch rows={rows} defaultOpen testIdPrefix="people-payroll-tab" />
+          <PeoplePayrollByBranch
+            rows={rows}
+            defaultOpen
+            testIdPrefix="people-payroll-tab"
+            defaultBranchId={linkBranchId}
+            onBranchFilterChange={mirrorBranchToUrl}
+          />
         ) : (
           <PeoplePayrollUnavailable
             code="HR_DATA_SOURCE_UNAVAILABLE"

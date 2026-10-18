@@ -687,6 +687,14 @@ export default function HrPayrollPage() {
         onRetry={() => {
           if (ledgerPeriodId) void openPeriodJournal(ledgerPeriodId);
         }}
+        onOpenRun={(runId) => {
+          // v2.111.0: the drawer's settled-run chips are DOORS — clicking one
+          // hands the run to the run-detail dialog (one drawer closes, one
+          // opens; never two dialogs stacked).
+          setLedgerPeriodId(null);
+          setLedgerPeriodName(null);
+          setOpenRunId(runId);
+        }}
       />
 
       <CreateRunDialog
@@ -722,6 +730,7 @@ function PeriodJournalDrawer({
   error,
   onClose,
   onRetry,
+  onOpenRun,
 }: {
   periodName: string | null;
   payload: PeriodJournalPayload | null;
@@ -729,6 +738,8 @@ function PeriodJournalDrawer({
   error: string | null;
   onClose: () => void;
   onRetry: () => void;
+  /** v2.111.0: settled-run chips are doors — hand the run to the run dialog. */
+  onOpenRun?: (runId: string) => void;
 }) {
   const p = payload?.period;
   // v2.101.0: the ledger files itself — the governed CSV exit rides the
@@ -1678,12 +1689,18 @@ function PeriodJournalDrawer({
                 <p className="mt-0.5 text-[11px]">Correct by design: a run owing KES 0.00 has no entry to carry. This is not the missing-journal alarm.</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {payload.zeroRuns.map((r) => (
-                    <span
+                    <button
                       key={r.runId}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] dark:border-slate-700 dark:bg-slate-800"
+                      type="button"
+                      onClick={() => onOpenRun?.(r.runId)}
+                      aria-label={`Open the ${r.runType} run's detail — a zero-value settled run`}
+                      title="A zero run has no journal — open its run detail"
+                      data-testid="payroll-ledger-zero-run-door"
+                      className="group/door inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] transition-colors hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-500 dark:hover:bg-slate-700"
                     >
                       {r.runType} · {r.status.replaceAll('_', ' ')} · KES 0.00
-                    </span>
+                      <ChevronRight className="h-3 w-3 text-slate-400 transition-colors group-hover/door:text-violet-500" aria-hidden />
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1699,6 +1716,22 @@ function PeriodJournalDrawer({
                   {payload.missingJournal.length} settled {payload.missingJournal.length === 1 ? 'run has' : 'runs have'} no journal — this must never happen.
                 </p>
                 <p className="mt-0.5 text-[11px]">The header counts their money, but no entry carries it. Re-post or investigate before trusting this period.</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {payload.missingJournal.map((r) => (
+                    <button
+                      key={r.runId}
+                      type="button"
+                      onClick={() => onOpenRun?.(r.runId)}
+                      aria-label={`Open the ${r.runType} run's detail — a settled run missing its journal`}
+                      title="Open the run's detail to investigate the missing journal"
+                      data-testid="payroll-ledger-missing-run-door"
+                      className="group/door inline-flex items-center gap-1 rounded-full border border-rose-300 bg-white px-2 py-0.5 text-[10px] transition-colors hover:border-rose-400 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:border-rose-800 dark:bg-rose-950/40 dark:hover:border-rose-600"
+                    >
+                      {r.runType} · {r.status.replaceAll('_', ' ')}
+                      <ChevronRight className="h-3 w-3 text-rose-400 transition-colors group-hover/door:text-rose-600" aria-hidden />
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

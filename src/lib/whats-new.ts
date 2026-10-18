@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.111.0',
+    title: 'The app speaks deep links; every settled run opens its door',
+    bullets: [
+      'Share a view, not a story: /?tab=people-payroll&branch=<id> opens the app on the People & Payroll tab already narrowed to that branch \u2014 the tab param is consumed once at boot, the branch filter mirrors into the URL as you change it, and leaving the tab strips it so nothing stale haunts the next visit.',
+      'The (from link) hint is honest: it shows only while the filter still holds the link\u2019s value \u2014 your first manual change retires it for good.',
+      'The ledger drawer\u2019s settled-run chips are now doors: a zero-run chip or a missing-journal chip opens that run\u2019s full detail dialog \u2014 one drawer closes, one opens, never two stacked \u2014 so an audit starts from the line, not from a hunt.',
+      'The missing-journal alarm\u2019s chips wear rose and open the same way: investigating \u201cthis must never happen\u201d is now one click from the alarm itself.',
+      'October\u2019s BONUS run walked the whole maker-checker path this release: approved by a different actor than its preparer, posted with its journal, and the period drawer now carries three entries plus the quiet zero run \u2014 the lifecycle proven end to end.',
+    ],
+  },
+  {
     version: '2.110.0',
     title: 'The drawer knows a zero when it sees one',
     bullets: [

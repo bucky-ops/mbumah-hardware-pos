@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.111.0] The app speaks deep links; every settled run opens its door
+
+Reach-and-auditability release: deep links into the People & Payroll tab (`?tab=` + `?branch=`), run-detail doors on the ledger drawer's settled-run chips, and the October BONUS run walked the full maker-checker lifecycle (approved by a different actor, posted with its journal) as the round's live end-to-end proof.
+
+### Added
+- **Deep links** (`src/app/(shell)/page.tsx`): a URL may name the tab (`?tab=<id>`). The boot effect validates the id against TAB_CONFIG and applies it AFTER the persisted store's async rehydrate settles (a synchronous write would be overwritten), then strips the param — a refresh returns to the persisted tab. Unknown ids are ignored silently.
+- **Branch deep links** (`src/app/(shell)/tabs/people-payroll-tab.tsx`): `?branch=<storeId>` seeds the shared panel's filter. Every user change mirrors into the URL via `history.replaceState` (no navigation, no history entry); leaving the tab strips the param so a stale filter cannot haunt the next mount. While the filter still holds the link's value (and only then) the count reads "showing 1 of 5 (from link)".
+- **Run-detail doors** (`src/app/(shell)/hr/payroll/page.tsx`): the ledger drawer's zero-run chips (slate, violet focus ring) and missing-journal chips (rose, rose focus ring) are real buttons with honest aria labels. Clicking hands the run to the run-detail dialog — the ledger drawer closes first, so two dialogs never stack. An audit starts from the line, not from a hunt.
+- **The October BONUS run completed its lifecycle** (live data): prepared and submitted by SUPER_ADMIN, approved by STORE_OWNER (a distinct actor — maker-checker holds), posted with its journal and payslip numbers. The period drawer now shows three posted entries plus the quiet zero run.
+
+### Changed
+- `PeoplePayrollByBranch` accepts `defaultBranchId` and `onBranchFilterChange`; every mutation path (select AND Reset) reports through one `changeBranch` funnel.
+- The What's-New feed leads with the deep-link story; the unread counter test re-anchored for the 2.111.0-fed feed (2.109.0→1, 2.108.0→2, 2.77.0→33).
+
+### Security
+- The deep links widen nothing: `?tab=` only selects among tabs the session can already see (a role-locked tab still renders its locked state, and server guards still fail-closed on every fetch); `?branch=` is a client-side filter over already-authorized rows. No URL value is trusted beyond choosing what to display — no navigation targets, no redirect surface.
+
 ## [2.110.0] The drawer knows a zero when it sees one; the people panel learns to filter
 
 Honesty-and-reach release: the payroll period ledger's missing-journal alarm stops firing on zero-value runs (a long-running false alarm on the seeded 0-value LOCKED REGULAR October run), the People & Payroll shared panel gains a per-branch filter, and the period-journal API carries each run's payable truth so the drawer's classification reads server numbers, never guesses.
