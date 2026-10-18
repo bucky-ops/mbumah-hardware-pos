@@ -47,6 +47,66 @@ import {
 import { ErrorNote, StatusBadge, formatDate } from '@/components/hr/self-service-ui';
 import { describeOnboardConsent, ONBOARD_CONSENT_TONE_CLASSES } from '@/lib/hr/onboard-consent';
 
+// v2.121.0: the roster's consent overlay — the page needs only id + status;
+// a LOCAL type keeps the client page decoupled from the server module (the
+// ledger's full rows stay on the Privacy tab).
+interface RosterConsentRow {
+  employeeId: string;
+  status: 'ACTIVE' | 'WITHDRAWN' | 'NONE';
+}
+
+interface ConsentLedgerPayload {
+  records?: RosterConsentRow[];
+  summary?: { active?: number; withdrawn?: number; none?: number };
+}
+
+/**
+ * The consent chip (v2.121.0): the roster answers the payroll run's read at
+ * a glance. Tones mirror the Privacy tab's consent card EXACTLY (emerald
+ * Active / amber Withdrawn / slate None on file) — one vocabulary across the
+ * two surfaces, so a color never means two things. Each tone says its
+ * MISSING_CONSENT truth aloud in the tooltip instead of relying on color.
+ */
+const CONSENT_CHIP: Record<
+  RosterConsentRow['status'],
+  { label: string; className: string; title: string }
+> = {
+  ACTIVE: {
+    label: 'Active',
+    className:
+      'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300',
+    title: 'An active data-processing consent stands — the payroll run passes this hire.',
+  },
+  WITHDRAWN: {
+    label: 'Withdrawn',
+    className:
+      'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300',
+    title: 'The employee withdrew their consent — the run reports MISSING_CONSENT until it is re-granted on the Privacy tab.',
+  },
+  NONE: {
+    label: 'None on file',
+    className:
+      'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    title: 'No consent on file — the run reports MISSING_CONSENT until it is granted on the Privacy tab.',
+  },
+};
+
+function ConsentChip({ status, compact = false }: { status?: RosterConsentRow['status']; compact?: boolean }) {
+  const chip = status ? CONSENT_CHIP[status] : undefined;
+  if (!chip) return null; // an unknown or absent status never renders a look-alike
+  return (
+    <span
+      data-testid="hr-employees-consent-chip"
+      title={chip.title}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${chip.className} ${
+        compact ? 'px-1.5' : ''
+      }`}
+    >
+      {chip.label}
+    </span>
+  );
+}
+
 interface EmployeeRow {
   id: string;
   employeeCode: string | null;
@@ -182,6 +242,49 @@ export default function EmployeesPage() {
   // through the same audited grant the Privacy tab uses.
   const [canCreate, setCanCreate] = useState(false);
   const [onboardOpen, setOnboardOpen] = useState(false);
+  // ── Consent overlay (v2.121.0) ──────────────────────────────────────
+  // The ledger GET (hr.report.branch + VIEW_ROLES) folds every in-scope
+  // employee's consent state; the roster overlays it as chips. null means
+  // the view is NOT available to this session (403 — e.g. the accountant —
+  // or any fetch failure): the column and the counts hide WHOLESALE. The
+  // page never shows a dash that could read as "no consent" — absence of
+  // the view is not absence of consent.
+  const [consentLedger, setConsentLedger] = useState<{
+    byId: Map<string, RosterConsentRow['status']>;
+    summary: { active: number; withdrawn: number; none: number };
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/hr/privacy/consent', { credentials: 'include' });
+        const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: ConsentLedgerPayload };
+        if (!alive) return;
+        if (!res.ok || !json.success || !json.data || !Array.isArray(json.data.records)) {
+          setConsentLedger(null);
+          return;
+        }
+        const byId = new Map<string, RosterConsentRow['status']>();
+        for (const r of json.data.records) {
+          // only the three known statuses map — an invented one never renders
+          if (r.employeeId && (r.status === 'ACTIVE' || r.status === 'WITHDRAWN' || r.status === 'NONE')) {
+            byId.set(r.employeeId, r.status);
+          }
+        }
+        const s = json.data.summary ?? {};
+        setConsentLedger({
+          byId,
+          summary: { active: s.active ?? 0, withdrawn: s.withdrawn ?? 0, none: s.none ?? 0 },
+        });
+      } catch {
+        if (alive) setConsentLedger(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [reloadKey]);
   const [obFirst, setObFirst] = useState('');
   const [obLast, setObLast] = useState('');
   const [obTitle, setObTitle] = useState('');
@@ -375,9 +478,29 @@ export default function EmployeesPage() {
           </button>
         )}
         {!loading && rows && (
-          <span className="ml-auto text-xs text-slate-400 dark:text-slate-500" data-testid="hr-employees-count">
-            {rows.length} {rows.length === 1 ? 'employee' : 'employees'}
-          </span>
+          <div className="ml-auto flex items-center gap-3">
+            {consentLedger && (
+              <span
+                data-testid="hr-employees-consent-counts"
+                title="Across the whole consent view — not the filtered list. The without-consent hires are the next run's MISSING_CONSENT blockers."
+                className="text-xs tabular-nums text-slate-400 dark:text-slate-500"
+              >
+                {consentLedger.summary.active} active · {consentLedger.summary.withdrawn} withdrawn ·{' '}
+                <span
+                  className={
+                    consentLedger.summary.none > 0
+                      ? 'font-semibold text-rose-600 dark:text-rose-400'
+                      : ''
+                  }
+                >
+                  {consentLedger.summary.none} without consent
+                </span>
+              </span>
+            )}
+            <span className="text-xs text-slate-400 dark:text-slate-500" data-testid="hr-employees-count">
+              {rows.length} {rows.length === 1 ? 'employee' : 'employees'}
+            </span>
+          </div>
         )}
       </div>
 
@@ -409,6 +532,11 @@ export default function EmployeesPage() {
                     <TableHead>Job title</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
+                    {consentLedger && (
+                      <TableHead data-testid="hr-employees-consent-col" className="whitespace-nowrap">
+                        Payroll consent
+                      </TableHead>
+                    )}
                     <TableHead>Hired</TableHead>
                     <TableHead className="text-right">Expiring docs</TableHead>
                     <TableHead className="w-10" aria-label="Open record" />
@@ -437,6 +565,20 @@ export default function EmployeesPage() {
                       <TableCell>
                         <StatusBadge status={r.status} />
                       </TableCell>
+                      {consentLedger && (
+                        <TableCell>
+                          {consentLedger.byId.has(r.id) ? (
+                            <ConsentChip status={consentLedger.byId.get(r.id)} />
+                          ) : (
+                            <span
+                              className="text-xs text-slate-300 dark:text-slate-600"
+                              title="Outside the consent view's first 200 in scope — the Privacy tab holds the authoritative ledger."
+                            >
+                              —
+                            </span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="text-sm text-muted-foreground">{formatDate(r.hireDate)}</TableCell>
                       <TableCell className="text-right">
                         {r.expiringDocuments != null && r.expiringDocuments > 0 ? (
@@ -486,6 +628,9 @@ export default function EmployeesPage() {
                     {r.firstName} {r.lastName}
                   </a>
                   <StatusBadge status={r.status} />
+                  {consentLedger && consentLedger.byId.has(r.id) && (
+                    <ConsentChip status={consentLedger.byId.get(r.id)} compact />
+                  )}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {r.jobTitle || 'No job title'} · {r.employmentType.toLowerCase()}
