@@ -25,6 +25,10 @@ const db = vi.hoisted(() => ({
     findFirst: vi.fn(),
   },
   employee: { findUnique: vi.fn() },
+  // v2.116.0: the restricted-read path reads the trail back BEFORE writing
+  // its own event — re-anchored with empty defaults (first logged view).
+  auditLog: { findMany: vi.fn(), groupBy: vi.fn() },
+  user: { findUnique: vi.fn() },
 }));
 
 const hrAudit = vi.hoisted(() => vi.fn());
@@ -75,6 +79,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.disciplinaryCase.updateMany.mockResolvedValue({ count: 0 });
   db.employee.findUnique.mockResolvedValue({ firstName: 'Ada', lastName: 'One' });
+  db.auditLog.findMany.mockResolvedValue([]);
+  db.user.findUnique.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -93,6 +99,10 @@ describe('getCaseDetail — a granted restricted read leaves a trace', () => {
     expect(call.actorRole).toBe('STORE_OWNER');
     expect(call.metadata).toEqual({ confidentiality: 'RESTRICTED', fieldNames: [] });
     expect(JSON.stringify(call.metadata)).not.toContain('description text');
+    // v2.116.0 re-anchor: the trail is read back before the write; an empty
+    // prior trail honestly reads null (first logged view).
+    expect(db.auditLog.findMany).toHaveBeenCalledTimes(1);
+    expect(detail.accessTrail).toBeNull();
   });
 
   it('a STANDARD case writes no restricted audit — the trail is for restricted reads only', async () => {
