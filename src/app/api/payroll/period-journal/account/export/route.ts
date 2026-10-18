@@ -1,4 +1,4 @@
-// GET /api/payroll/period-journal/account/export?periodId=...&accountCode=...
+// GET /api/payroll/period-journal/account/export?periodId=...&accountCode=...[&window=month|year]
 //
 // v2.103.0: the account files its month — the governed CSV of the EXACT
 // replay the movement dialog (v2.102.0) shows, through the same server
@@ -8,23 +8,30 @@
 // the drill's deepest layer: what an account's month looked like can now
 // leave the console as a file, not a screenshot.
 //
+// v2.104.0: the account files its YEAR — window=year files the calendar
+// year's replay through the SAME builder, whose windowNoun makes the file
+// say its own word ('starts the year at zero', 'Year totals') and whose
+// filename carries the year it filed ('…-2026.csv', never a fake period).
+//
 // Contract:
 //   • Guard: hr.payroll.read.all — the SAME guard the ledger route, the
 //     drawer route and the account route answer through; the export widens
 //     nothing. Who may read an account's movement may file it.
-//   • The file is the whole replay (no cap — a period is a bounded month),
-//     chronological (the dialog's order), one row per posted line, plus an
-//     Opening / Month totals / Closing footer whose Closing balance cell IS
-//     the last replay row's running cell — the file closes its own loop.
+//   • The file is the whole replay (no cap — a month is bounded, and a
+//     year of payroll is bounded by the runs that posted), chronological
+//     (the dialog's order), one row per posted line, plus an Opening /
+//     totals / Closing footer whose Closing balance cell IS the last
+//     replay row's running cell — the file closes its own loop.
 //   • Nothing posted inside the window → 404 NO_MOVEMENT_DATA (never an
 //     empty-looking sheet).
 //   • Exports are audit logged (PAYROLL_ACCOUNT_MOVEMENT_EXPORTED) with
 //     field-name-only metadata — counts, sizes and the account CODE ride
-//     the row; employee names ride nothing.
+//     the row; employee names ride nothing. The audit names the window.
 //   • The query mirrors the account route's EXACTLY (same scoping, same
-//     isPosted + !isVoided honesty, same inclusive window arithmetic) —
-//     the file cannot disagree with the screen because it is built from
-//     the same truth, through the same pure builder.
+//     isPosted + !isVoided honesty, same inclusive window arithmetic,
+//     same window validation) — the file cannot disagree with the screen
+//     because it is built from the same truth, through the same pure
+//     builder.
 
 import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
@@ -52,6 +59,17 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
         { status: 400 },
       );
     }
+
+    // v2.104.0: the window — the account route's exact validation and
+    // default. An unknown value is a 400, never a silent month.
+    const windowParam = url.searchParams.get('window');
+    if (windowParam !== null && windowParam !== 'month' && windowParam !== 'year') {
+      return Response.json(
+        { success: false, error: 'window must be "month" or "year".' },
+        { status: 400 },
+      );
+    }
+    const window: 'month' | 'year' = windowParam === 'year' ? 'year' : 'month';
 
     const period = await db.payrollPeriod.findFirst({
       where: { id: periodId, storeId: session.storeId || '' },
@@ -81,10 +99,20 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
       );
     }
 
-    // The window is the period's own days inclusive: [startDate, endDate + 1 day) —
-    // the account route's exact arithmetic, the file cannot disagree with the screen.
-    const windowEnd = new Date(period.endDate);
-    windowEnd.setUTCDate(windowEnd.getUTCDate() + 1);
+    // The window's bounds, INCLUSIVE of its days — the account route's
+    // exact arithmetic, the file cannot disagree with the screen. Month:
+    // [startDate, endDate + 1 day). Year (v2.104.0): the calendar year the
+    // period's first day lives in — [Jan 1, next Jan 1) in UTC.
+    const year = period.startDate.getUTCFullYear();
+    const monthEnd = new Date(period.endDate);
+    monthEnd.setUTCDate(monthEnd.getUTCDate() + 1);
+    const windowStart = window === 'year' ? new Date(Date.UTC(year, 0, 1)) : period.startDate;
+    const windowEnd = window === 'year' ? new Date(Date.UTC(year + 1, 0, 1)) : monthEnd;
+    const windowLabel =
+      window === 'year'
+        ? `${year}-01-01 → ${year}-12-31`
+        : `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
+    const displayName = window === 'year' ? String(year) : period.name;
 
     const prior = await db.journalEntryLine.aggregate({
       where: {
@@ -93,7 +121,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
           storeId: session.storeId || '',
           isPosted: true,
           isVoided: false,
-          entryDate: { lt: period.startDate },
+          entryDate: { lt: windowStart },
         },
       },
       _sum: { debit: true, credit: true },
@@ -107,7 +135,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
           storeId: session.storeId || '',
           isPosted: true,
           isVoided: false,
-          entryDate: { gte: period.startDate, lt: windowEnd },
+          entryDate: { gte: windowStart, lt: windowEnd },
         },
       },
       orderBy: [{ journalEntry: { entryDate: 'asc' } }, { createdAt: 'asc' }],
@@ -168,12 +196,12 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
       session.storeId ?? null,
     );
 
-    const windowLabel = `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
     const file = accountMovementToCsv(movement, {
       organizationName,
       scopeLabel,
-      periodName: period.name,
+      periodName: displayName,
       windowLabel,
+      windowNoun: window,
     });
     // Unreachable while movements.length > 0 (the builder's only null path is
     // the empty replay), but the guard keeps the route honest.
@@ -202,7 +230,8 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
         format: 'csv',
         channel: 'ad_hoc_download',
         window: windowLabel,
-        period: period.name,
+        windowKind: window,
+        period: displayName,
       },
     }).catch(() => undefined);
 

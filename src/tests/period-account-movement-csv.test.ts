@@ -292,8 +292,8 @@ describe('route — the export widens nothing', () => {
   it('mirrors the account route honesty: posted, never-voided, inclusive window, org-scoped account', () => {
     expect(ROUTE.includes('isPosted: true,')).toBe(true);
     expect(ROUTE.includes('isVoided: false,')).toBe(true);
-    expect(ROUTE.includes("entryDate: { lt: period.startDate }")).toBe(true);
-    expect(ROUTE.includes("entryDate: { gte: period.startDate, lt: windowEnd }")).toBe(true);
+    expect(ROUTE.includes("entryDate: { lt: windowStart },")).toBe(true);
+    expect(ROUTE.includes("entryDate: { gte: windowStart, lt: windowEnd },")).toBe(true);
     expect(ROUTE.includes("where: { id: periodId, storeId: session.storeId || '' }")).toBe(true);
     expect(ROUTE.includes("where: { code: accountCode, organizationId: store.organizationId }")).toBe(true);
     expect(ACCOUNT_ROUTE.includes('isPosted: true,')).toBe(true);

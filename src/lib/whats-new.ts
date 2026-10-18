@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.104.0',
+    title: 'The account opens its year',
+    bullets: [
+      'The account movement dialog grows a window switch: This month or Full year — one click and the account\u2019s whole year replays, opening honest over every posted line before January, any source.',
+      'The year at a glance: twelve calendar cells above the replay, each carrying the running balance at the month\u2019s end — quiet months leave the balance carried forward and say so, active months wear the violet ring.',
+      'A balance on the other side of the T-account keeps the amber eyebrow everywhere — the one state you should never scroll past, now impossible to miss even in a twelve-cell strip.',
+      'The Movement CSV files either window through the same governed format: a year filing says "starts the year at zero" and "Year totals", and its Closing line still equals the last replay row.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) — reading the year of what you may read widens nothing.',
+    ],
+  },
+  {
     version: '2.103.0',
     title: 'The account files its month',
     bullets: [

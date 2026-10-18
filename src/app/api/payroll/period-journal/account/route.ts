@@ -1,31 +1,40 @@
-// GET /api/payroll/period-journal/account?periodId=...&accountCode=...
-// The account opens its month (v2.102.0).
+// GET /api/payroll/period-journal/account?periodId=...&accountCode=...[&window=month|year]
+// The account opens its month (v2.102.0) — and, since v2.104.0, its year.
 //
 // Click a ledger line and the account's month movement opens beside the
 // drawer. This endpoint hands that drill its whole story, resolved from
 // the REAL journal — not just the drawer's payroll entries:
 //   • opening — every POSTED, never-voided line the account carries before
-//     the period's first day (any source: sales, payments, payroll),
+//     the window's first day (any source: sales, payments, payroll),
 //     aggregated, not guessed; zero prior lines means the account starts
-//     the month at zero and says so;
-//   • movements — the posted lines INSIDE the period's days, chronological
+//     the month (or the year) at zero and says so;
+//   • movements — the posted lines INSIDE the window's days, chronological
 //     (oldest first, stable on equal stamps) so the running balance tells
 //     the story forward;
 //   • the pure builder (period-journal.ts) recomputes the running balance
 //     on the account's NORMAL side and proves the closing at money
 //     precision — the route never trusts its own sums.
 //
+// v2.104.0 — THE YEAR WINDOW: window=year widens the drill to the calendar
+// year the period's first day lives in ([Jan 1, next Jan 1) in UTC — no
+// timezone roulette on stored dates). The periodId still anchors the year
+// AND the scope: the period is tenant-resolved first, its year derived from
+// its own startDate. The response echoes window and names the period
+// honestly ('2026', not a fake period) so the UI cannot call a year a
+// month. An unknown window value is a 400, never a silent month — a
+// category that does not exist must not be invented.
+//
 // GUARD: exactly the ledger route's read contract — same permission
 // (hr.payroll.read.all), same roles. Reading an account's movement widens
 // nothing: who may read the ledger may read what it posted, account by
-// account.
+// account, month by month, year by year.
 //
 // HONESTY: isPosted + !isVoided everywhere — a voided entry is a closed
 // door (same stance as the drawer), an unposted entry does not exist yet.
-// The window is the period's own days INCLUSIVE: gte startDate, lt
-// endDate + 1 day — an entry posted on the closing day belongs to the
-// month, midnight of the day after does not. A read endpoint, like the
-// ledger read: no audit row (only exports land those).
+// The window is INCLUSIVE of its days: month = [startDate, endDate + 1
+// day); year = [Jan 1, next Jan 1) — an entry posted on the closing day
+// belongs to its window, midnight of the day after does not. A read
+// endpoint, like the ledger read: no audit row (only exports land those).
 
 import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
@@ -48,6 +57,18 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
       { status: 400 },
     );
   }
+
+  // v2.104.0: the window — 'month' (default, the v2.102 behavior) or 'year'.
+  // An unknown value is a 400: a window that does not exist must not
+  // silently mean a month.
+  const windowParam = url.searchParams.get('window');
+  if (windowParam !== null && windowParam !== 'month' && windowParam !== 'year') {
+    return Response.json(
+      { success: false, error: 'window must be "month" or "year".' },
+      { status: 400 },
+    );
+  }
+  const window: 'month' | 'year' = windowParam === 'year' ? 'year' : 'month';
 
   const period = await db.payrollPeriod.findFirst({
     where: { id: periodId, storeId: session.storeId || '' },
@@ -77,9 +98,23 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
     );
   }
 
-  // The window is the period's own days inclusive: [startDate, endDate + 1 day).
-  const windowEnd = new Date(period.endDate);
-  windowEnd.setUTCDate(windowEnd.getUTCDate() + 1);
+  // The window's bounds, INCLUSIVE of its days. Month: the period's own
+  // days — [startDate, endDate + 1 day). Year (v2.104.0): the calendar
+  // year the period's first day lives in — [Jan 1, next Jan 1) in UTC, no
+  // timezone roulette on stored dates. The prior aggregate reaches back
+  // over EVERY posted line before the window's first day (any source).
+  const year = period.startDate.getUTCFullYear();
+  const monthEnd = new Date(period.endDate);
+  monthEnd.setUTCDate(monthEnd.getUTCDate() + 1);
+  const windowStart = window === 'year' ? new Date(Date.UTC(year, 0, 1)) : period.startDate;
+  const windowEnd = window === 'year' ? new Date(Date.UTC(year + 1, 0, 1)) : monthEnd;
+  const windowLabel =
+    window === 'year'
+      ? `${year}-01-01 → ${year}-12-31`
+      : `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
+  // A year is not a period — the response names it '2026', never a fake
+  // period name, and echoes the window so the UI cannot desync.
+  const displayName = window === 'year' ? String(year) : period.name;
 
   const prior = await db.journalEntryLine.aggregate({
     where: {
@@ -88,7 +123,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
         storeId: session.storeId || '',
         isPosted: true,
         isVoided: false,
-        entryDate: { lt: period.startDate },
+        entryDate: { lt: windowStart },
       },
     },
     _sum: { debit: true, credit: true },
@@ -102,7 +137,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
         storeId: session.storeId || '',
         isPosted: true,
         isVoided: false,
-        entryDate: { gte: period.startDate, lt: windowEnd },
+        entryDate: { gte: windowStart, lt: windowEnd },
       },
     },
     orderBy: [{ journalEntry: { entryDate: 'asc' } }, { createdAt: 'asc' }],
@@ -147,13 +182,12 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
     sources,
   );
 
-  // The period's window, dayKey form — the same label the CSV files.
-  const windowLabel = `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
-
+  // The window label rides the payload — the same label the CSV files.
   return Response.json({
     success: true,
     data: {
-      period: { name: period.name, windowLabel },
+      period: { name: displayName, windowLabel },
+      window,
       ...movement,
     },
   });
