@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.122.0',
+    title: 'The hold takes the desk',
+    bullets: [
+      'The Privacy tab grows its third posture card: Retention & legal holds — the reviewable windows the nightly sweep works through (applicant rejections, closed discipline, attendance), each with its legal basis in plain sight.',
+      'A legal hold pauses one scope with one click; the nightly sweep skips it until a settings manager releases it. Setting and releasing are both audit-logged on the exact setting row the sweeper reads.',
+      'Releasing asks twice — the sweep resuming is the destructive direction, so the confirm row says exactly what happens next: the scope\u2019s expired records are swept again on the next nightly run.',
+      'The counts strip answers \u201cN of 3 scopes on hold\u201d at a glance, amber-tinted when any scope is paused; idle scopes wear an honest \u201cSweeping nightly\u201d chip instead of silence.',
+      'Decisions stay with settings managers \u2014 everyone else reads the desk and sees the muted \u201csettings managers decide\u201d truth, the same gate that decides erasures and consent records.',
+    ],
+  },
+  {
     version: '2.121.0',
     title: 'The roster reads the room',
     bullets: [

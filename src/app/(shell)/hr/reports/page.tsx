@@ -226,6 +226,24 @@ interface ConsentDto {
   }>;
 }
 
+// v2.122.0: the retention desk (spec Phase 4.8) — the reviewable retention
+// policies folded with their live legal-hold state (what the nightly sweep
+// will and will not touch); hold/release decisions mirror the erasure +
+// consent decision gate (hr.settings.manage). windowLabel is computed
+// server-side so this page never imports the service module.
+interface RetentionDto {
+  canDecide: boolean;
+  heldCount: number;
+  policies: Array<{
+    scope: string;
+    description: string;
+    windowLabel: string;
+    basis: string;
+    held: boolean;
+    heldAt: string | null;
+  }>;
+}
+
 const YEARS = [new Date().getUTCFullYear(), new Date().getUTCFullYear() - 1, new Date().getUTCFullYear() - 2];
 
 
@@ -351,6 +369,11 @@ export default function HrReportsPage() {
   const [p10, setP10] = useState<P10Dto | null>(null);
   const [erasure, setErasure] = useState<ErasureDto | null>(null);
   const [consent, setConsent] = useState<ConsentDto | null>(null);
+  const [retention, setRetention] = useState<RetentionDto | null>(null);
+  // v2.122.0: release is the destructive direction (the sweep resumes on its
+  // next run) — it asks twice; releaseArm holds the scope currently armed.
+  const [releaseArm, setReleaseArm] = useState<string | null>(null);
+  const [retentionNote, setRetentionNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [leaveUtil, setLeaveUtil] = useState<LeaveUtilDto | null>(null);
   const [leaveYear, setLeaveYear] = useState(String(new Date().getUTCFullYear()));
   // v2.36.0: drill-down correction surface (balance + history + adjust form).
@@ -423,6 +446,15 @@ export default function HrReportsPage() {
     }
   }, []);
 
+  // v2.122.0: the retention desk loads with the Privacy tab.
+  const loadRetention = useCallback(async () => {
+    try {
+      setRetention(await apiGet<RetentionDto>('/api/hr/privacy/retention'));
+    } catch {
+      setRetention(null);
+    }
+  }, []);
+
   // v2.35.0: leave balances follow the leave YEAR (calendar year), not the
   // global reporting period — loaded independently so the year picker only
   // refetches this report.
@@ -449,6 +481,9 @@ export default function HrReportsPage() {
   useEffect(() => {
     void loadConsent();
   }, [loadConsent]);
+  useEffect(() => {
+    void loadRetention();
+  }, [loadRetention]);
   // v2.36.0: resolve one report row into the governed correction surface.
   const openDrill = useCallback(async (employeeCode: string, typeCode: string) => {
     setDrill({ open: true, loading: true, data: null });
@@ -507,6 +542,29 @@ export default function HrReportsPage() {
       await loadErasure();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Action failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // v2.122.0: hold/release reports where the action lives (the card's own
+  // note — the page-level error sits behind three other cards), refetches
+  // the desk, and disarms whatever release was armed.
+  const runHold = async (scope: string, held: boolean) => {
+    setBusy(true);
+    setRetentionNote(null);
+    try {
+      await apiSend('/api/hr/privacy/legal-hold', 'POST', { scope, held });
+      setReleaseArm(null);
+      await loadRetention();
+      setRetentionNote({
+        ok: true,
+        text: held
+          ? `Hold set — the nightly sweep skips ${scope} until a settings manager releases it.`
+          : `Hold released — ${scope}'s expired records are swept again on the next nightly run.`,
+      });
+    } catch (e) {
+      setRetentionNote({ ok: false, text: e instanceof Error ? e.message : 'Hold action failed.' });
     } finally {
       setBusy(false);
     }
@@ -1675,6 +1733,98 @@ export default function HrReportsPage() {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+          <Card data-testid="hr-privacy-retention">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Landmark className="h-4 w-4 text-amber-600" aria-hidden /> Retention &amp; legal holds (Data Protection Act posture)
+              </CardTitle>
+              <CardDescription>
+                The nightly sweep anonymises expired personal data scope by scope — reviewable windows, never legal advice. A legal hold pauses one scope until a settings manager releases it; setting and releasing are both audit-logged.
+              </CardDescription>
+              <p data-testid="hr-privacy-retention-hold-count" className="mt-1 text-xs tabular-nums text-muted-foreground">
+                {retention === null ? (
+                  'Loading holds…'
+                ) : retention.heldCount > 0 ? (
+                  <>
+                    <span className="font-medium text-amber-600 dark:text-amber-400">{retention.heldCount} of {retention.policies.length} scopes on hold</span>
+                    <span> — the sweep skips them until release</span>
+                  </>
+                ) : (
+                  <span>0 of {retention.policies.length} scopes on hold — the sweep runs nightly</span>
+                )}
+              </p>
+            </CardHeader>
+            <CardContent>
+              {!retention ? (
+                <Skeleton className="h-28 w-full" />
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Scope</TableHead><TableHead>Window</TableHead><TableHead>Hold</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {retention.policies.map((p) => (
+                      <TableRow key={p.scope} data-testid={`hr-retention-row-${p.scope}`}>
+                        <TableCell className="max-w-72">
+                          <div className="font-medium">{p.description}</div>
+                          <div className="truncate text-[11px] text-muted-foreground" title={p.basis}>{p.basis}</div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">{p.windowLabel}</TableCell>
+                        <TableCell>
+                          {p.held ? (
+                            <span
+                              data-testid={`hr-retention-hold-${p.scope}`}
+                              className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                              title={p.heldAt ? `On hold since ${formatDate(p.heldAt)} — the nightly sweep skips this scope.` : 'On hold — the nightly sweep skips this scope.'}
+                            >
+                              On hold
+                            </span>
+                          ) : (
+                            <span
+                              data-testid={`hr-retention-hold-${p.scope}`}
+                              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300"
+                              title="No hold — the nightly sweep anonymises this scope's expired records."
+                            >
+                              Sweeping nightly
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {retention.canDecide ? (
+                            p.held ? (
+                              releaseArm === p.scope ? (
+                                <div className="flex items-center justify-end gap-1.5" data-testid={`hr-retention-arm-${p.scope}`}>
+                                  <span className="text-xs text-rose-600 dark:text-rose-400">Release? The sweep resumes on its next run.</span>
+                                  <Button size="sm" variant="destructive" disabled={busy} onClick={() => void runHold(p.scope, false)}>Confirm release</Button>
+                                  <Button size="sm" variant="outline" disabled={busy} onClick={() => setReleaseArm(null)}>Cancel</Button>
+                                </div>
+                              ) : (
+                                <Button size="sm" variant="outline" disabled={busy} onClick={() => { setReleaseArm(p.scope); setRetentionNote(null); }}>Release…</Button>
+                              )
+                            ) : (
+                              <Button size="sm" variant="outline" disabled={busy} onClick={() => void runHold(p.scope, true)}>Hold</Button>
+                            )
+                          ) : (
+                            <span className="text-xs text-muted-foreground">settings managers decide</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              {retentionNote ? (
+                <p
+                  data-testid="hr-retention-note"
+                  role="status"
+                  className={`mt-2 text-xs ${retentionNote.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                >
+                  {retentionNote.text}
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         </TabsContent>

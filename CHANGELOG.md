@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.122.0] The hold takes the desk
+
+The retention mechanism gets a surface (Task 136 option 7): the nightly sweep has anonymised expired personal data scope by scope since v2.20.0 and legal holds have always been able to block it — but a hold could only be set by a raw HrSetting write. This release puts the desk on the Privacy tab: the reviewable policies, their live hold state, and the decisions that pause or resume a scope.
+
+### Added
+- **Retention & legal holds card** (`src/app/(shell)/hr/reports/page.tsx`, Privacy tab): the third Data Protection Act posture card lists every scope in `HR_RETENTION_POLICIES` with its humanised window ("3 years after updatedAt", "the row's own expiry (dataRetentionUntil)" — computed server-side and carried on the DTO so the client never imports the service module), its legal basis, and a hold chip — amber "On hold" (with the held-since date in the tooltip) or slate "Sweeping nightly". A counts strip answers "N of 3 scopes on hold", amber-tinted when any scope is paused.
+- **The desk read** (`GET /api/hr/privacy/retention`): `hrGuard('hr.report.branch')` with the consent ledger's VIEW_ROLES trio, folding `HR_RETENTION_POLICIES` with the live `legalHold:<scope>` HrSetting rows — presence with value `true` IS the hold, the exact representation `getLegalHolds` (the sweep's single reader) already obeys. `canDecide` mirrors the erasure gate.
+- **The hold decision** (`POST /api/hr/privacy/legal-hold`): reserved to `hr.settings.manage` (`canDecideErasure` — the same key that decides erasures and consent records; others get 403 `DECISION_FORBIDDEN`). Setting creates the row (value `true`, `updatedByUserId` stamped) and refuses 409 `HOLD_ACTIVE` when one stands; releasing DELETES the row (no dead settings linger) and refuses 409 `NO_ACTIVE_HOLD` when nothing is held. Unknown scopes answer 400 `UNKNOWN_SCOPE` naming the valid list; non-boolean `held` answers 400 `INVALID_HELD`. Both decisions audit `LEGAL_HOLD_SET` / `LEGAL_HOLD_RELEASED` on the `legalHold:<scope>` key (HrSetting resource).
+- **Two-step release**: the sweep resuming is the destructive direction, so Release… arms an inline rose confirm row ("Release? The sweep resumes on its next run.") before `Confirm release`; setting a hold is one click. The outcome reports in the card's own note (`role="status"`, emerald/rose — the report-where-the-action-lives lesson), never the page-level banner three cards away.
+
+### Changed
+- The What's-New feed leads with the hold story; the unread-counter test re-anchored for the 2.122.0-fed feed (2.110.0→11, 2.109.0→12, 2.108.0→13, 2.77.0→44).
+
+### Security
+- The decision gate fails closed exactly like its siblings: the read is `hr.report.branch` + VIEW_ROLES, the write is `hr.settings.manage` only, both decisions are audit-logged with field-name-only metadata (scope + held — never record contents), and the release path deletes only rows whose value is `true` — a stale or tampered row can neither block the sweep invisibly nor survive a release it should not have.
+
 ## [2.121.0] The roster reads the room
 
 Consent visibility where HR actually works (v2.120.0's option 1): the consent ledger (v2.119.0) and the onboarding capture (v2.120.0) both exist — but the roster, the surface HR lives in all day, still answered nothing about consent. This release overlays the ledger onto /hr/employees, so the roster answers the payroll run's read at a glance and the Privacy tab keeps the authoritative detail.

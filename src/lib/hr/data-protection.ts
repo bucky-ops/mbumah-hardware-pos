@@ -73,6 +73,158 @@ export interface RetentionSweepResult {
   anonymised: number;
 }
 
+// ── v2.122.0: the retention desk (legal holds get a surface) ────────────────
+//
+// The nightly cron (/api/cron/retention) has swept these scopes since v2.20.0
+// and legal holds have always blocked it — but a hold could only be set by a
+// raw HrSetting write. The desk folds the reviewable policies with their live
+// hold state so the Privacy tab can show what the sweeper will do, and let
+// settings managers pause a scope with the same decision key that decides
+// erasures (hr.settings.manage). Presence of a row with value 'true' IS the
+// hold — getLegalHolds above is the single reader the sweep obeys.
+
+const LEGAL_HOLD_KEY_PREFIX = 'legalHold:';
+
+export interface RetentionPolicyView {
+  scope: string;
+  description: string;
+  retentionDays: number;
+  measuredFrom: string;
+  basis: string;
+  /** Human window text from describeRetentionWindow — computed server-side so
+   * the client never imports this module (it pulls the db client). */
+  windowLabel: string;
+  held: boolean;
+  heldAt: string | null;
+}
+
+export interface RetentionDeskDto {
+  policies: RetentionPolicyView[];
+  heldCount: number;
+  canDecide: boolean;
+}
+
+/** Human window text for a policy ("3 years after updatedAt"). Pure. */
+export function describeRetentionWindow(
+  policy: Pick<HrRetentionPolicy, 'retentionDays' | 'measuredFrom'>,
+): string {
+  if (policy.retentionDays === 0) {
+    return `the row's own expiry (${policy.measuredFrom})`;
+  }
+  const years = policy.retentionDays / 365;
+  const span = Number.isInteger(years)
+    ? `${years} year${years === 1 ? '' : 's'}`
+    : `${policy.retentionDays} days`;
+  return `${span} after ${policy.measuredFrom}`;
+}
+
+/** The retention desk: every reviewable policy folded with its live hold state. */
+export async function listRetentionPolicies(session: Session): Promise<RetentionDeskDto> {
+  const [rows, policies] = await Promise.all([
+    db.hrSetting.findMany({
+      where: { organizationId: session.organizationId, key: { startsWith: LEGAL_HOLD_KEY_PREFIX } },
+      select: { key: true, value: true, updatedAt: true },
+    }),
+    Promise.resolve(HR_RETENTION_POLICIES),
+  ]);
+  const heldRows = new Map(
+    rows
+      .filter((r) => r.value === 'true')
+      .map((r) => [r.key.replace(LEGAL_HOLD_KEY_PREFIX, ''), r] as const),
+  );
+  const views: RetentionPolicyView[] = policies.map((p) => {
+    const row = heldRows.get(p.scope);
+    return {
+      scope: p.scope,
+      description: p.description,
+      retentionDays: p.retentionDays,
+      measuredFrom: p.measuredFrom,
+      basis: p.basis,
+      windowLabel: describeRetentionWindow(p),
+      held: row !== undefined,
+      heldAt: row ? row.updatedAt.toISOString() : null,
+    };
+  });
+  return {
+    policies: views,
+    heldCount: views.filter((v) => v.held).length,
+    canDecide: canDecideErasure(session.role),
+  };
+}
+
+export interface LegalHoldResult {
+  scope: string;
+  held: boolean;
+  heldAt: string | null;
+}
+
+/**
+ * Set or release a legal hold. Setting upserts the HrSetting row (value
+ * 'true' — the exact representation the sweep's getLegalHolds reads);
+ * releasing DELETES the row so no dead setting rows linger behind a hold
+ * that is no longer there. Decisions reserved to hr.settings.manage.
+ */
+export async function setLegalHold(
+  input: { scope?: unknown; held?: unknown },
+  session: Session,
+): Promise<LegalHoldResult> {
+  const knownScopes = HR_RETENTION_POLICIES.map((p) => p.scope);
+  if (typeof input.scope !== 'string' || !knownScopes.includes(input.scope)) {
+    throw new StageGError(
+      'UNKNOWN_SCOPE',
+      `Unknown retention scope. Valid scopes: ${knownScopes.join(', ')}.`,
+      400,
+    );
+  }
+  if (typeof input.held !== 'boolean') {
+    throw new StageGError('INVALID_HELD', 'held must be exactly true or false.', 400);
+  }
+  const key = `${LEGAL_HOLD_KEY_PREFIX}${input.scope}`;
+  if (input.held) {
+    const existing = await db.hrSetting.findFirst({
+      where: { organizationId: session.organizationId, key },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new StageGError('HOLD_ACTIVE', 'A legal hold already stands for this scope.', 409);
+    }
+    const row = await db.hrSetting.create({
+      data: {
+        organizationId: session.organizationId,
+        key,
+        value: 'true',
+        updatedByUserId: session.userId,
+      },
+    });
+    await hrAudit({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: 'LEGAL_HOLD_SET',
+      resourceType: HrEntityType.HR_SETTING,
+      resourceId: key,
+      storeId: session.storeId,
+      metadata: { scope: input.scope, held: true },
+    });
+    return { scope: input.scope, held: true, heldAt: row.updatedAt.toISOString() };
+  }
+  const released = await db.hrSetting.deleteMany({
+    where: { organizationId: session.organizationId, key, value: 'true' },
+  });
+  if (released.count === 0) {
+    throw new StageGError('NO_ACTIVE_HOLD', 'No legal hold stands for this scope.', 409);
+  }
+  await hrAudit({
+    actorId: session.userId,
+    actorRole: session.role,
+    action: 'LEGAL_HOLD_RELEASED',
+    resourceType: HrEntityType.HR_SETTING,
+    resourceId: key,
+    storeId: session.storeId,
+    metadata: { scope: input.scope, held: false },
+  });
+  return { scope: input.scope, held: false, heldAt: null };
+}
+
 /**
  * Run the HR retention sweep. Legal hold (HrSetting legalHold:<scope>=true)
  * skips the scope entirely. Personal data is ANONYMISED in place (not hard
