@@ -689,6 +689,50 @@ function PeriodJournalDrawer({
   onRetry: () => void;
 }) {
   const p = payload?.period;
+  // v2.101.0: the ledger files itself — the governed CSV exit rides the
+  // drawer footer. State lives here: the drawer is the file's source, and
+  // a stale note from a previous period must never greet the next open.
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvNote, setCsvNote] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  useEffect(() => {
+    setCsvNote(null);
+    setCsvBusy(false);
+  }, [periodName]);
+
+  const exportLedgerCsv = async () => {
+    if (csvBusy || !payload?.period?.id) return;
+    setCsvBusy(true);
+    setCsvNote(null);
+    try {
+      const res = await fetch(`/api/payroll/period-journal/export?periodId=${encodeURIComponent(payload.period.id)}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? 'mbumah-period-ledger.csv';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setCsvNote({
+        tone: 'ok',
+        text: `Ledger CSV downloaded — ${filename}. The governed filing format (header block, injection guard, self-balancing Totals line), exactly the entries on this drawer.`,
+      });
+    } catch (e) {
+      setCsvNote({ tone: 'err', text: e instanceof Error ? e.message : 'Export failed.' });
+    } finally {
+      setCsvBusy(false);
+    }
+  };
+
   return (
     <Dialog open={periodName !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="print:hidden max-h-[85vh] overflow-y-auto sm:max-w-2xl">
@@ -824,10 +868,38 @@ function PeriodJournalDrawer({
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Close
-          </Button>
+        <DialogFooter className="mt-2 flex-col gap-2 sm:flex-col">
+          {csvNote && (
+            <div
+              role="status"
+              data-testid="payroll-ledger-csv-note"
+              className={`w-full rounded-md border px-3 py-2 text-left text-xs ${
+                csvNote.tone === 'ok'
+                  ? 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300'
+                  : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+              }`}
+            >
+              {csvNote.text}
+            </div>
+          )}
+          <div className="flex w-full items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+              disabled={csvBusy || !payload || payload.entries.length === 0}
+              aria-label="Download the period ledger CSV — the governed filing file of this period's journal entries"
+              title={payload && payload.entries.length === 0 ? 'Nothing to file — nothing has posted in this period.' : 'The governed filing file: one row per journal line, a Totals line that balances by itself'}
+              data-testid="payroll-ledger-csv"
+              onClick={() => void exportLedgerCsv()}
+            >
+              {csvBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+              {csvBusy ? 'Building…' : 'Ledger CSV'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Close
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

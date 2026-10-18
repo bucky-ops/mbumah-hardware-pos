@@ -24,6 +24,7 @@
 // PURE module: no db, no network, no env — same constraint as
 // run-groups.ts, so unit tests run without any mocking.
 
+import { csvCell } from '@/lib/hr/digest-csv';
 import { SETTLED_RUN_STATUSES } from './run-groups';
 
 /** One journal line as the API serves it: the account resolved, money numeric. */
@@ -159,4 +160,139 @@ export function buildPeriodLedger(
   }
 
   return { entries: posted, unsettled, missingJournal };
+}
+
+// ── v2.101.0: the ledger files itself ────────────────────────────────────────
+
+/** '2026-10-17T09:21:00.000Z' → '2026-10-17'; null/invalid → ''. */
+function dayKey(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
+
+/** Lowercase, non-alphanumeric → '-' — the governed filename fragment
+ *  (same shape as performance-csv's slug). Falls back so the file is
+ *  never anonymous. */
+export function periodSlug(value: string, fallback: string): string {
+  const s = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return s || fallback;
+}
+
+export interface PeriodLedgerCsvMeta {
+  organizationName: string;
+  scopeLabel: string;
+  periodName: string;
+  /** The period's honest date range, dayKey form: '2026-10-01 → 2026-10-31'. */
+  windowLabel: string;
+}
+
+export interface PeriodLedgerCsvFile {
+  filename: string;
+  csv: string;
+  byteSize: number;
+}
+
+/**
+ * Build the governed CSV of the period's ledger — the EXACT entries the
+ * drawer shows, through the same filing family the report tabs (v2.58),
+ * the desk report (v2.70), the performance exports (v2.96–v2.99) and the
+ * run digest (v2.53) file through.
+ *
+ * Layout:
+ *   Report,Payroll period ledger
+ *   Organization,<org>
+ *   Scope,<scope>
+ *   Period,<period name>
+ *   Window,<start → end>
+ *   Generated (UTC),<iso>
+ *
+ *   Ledger
+ *   Entry Number,Entry Day,Run Type,Run ID,Entry Description,Account Code,Account Name,Account Type,Debit,Credit,Line Description
+ *   <one row per journal line, entries newest first (drawer order)>
+ *
+ *   Totals,,,,,<sum debit>,<sum credit>   ← the file balances BY ITSELF
+ *
+ * Returns null on empty entries — the route turns that into an honest 404
+ * NO_LEDGER_DATA (never an empty-looking sheet). Money files as bare 2dp
+ * numbers (machine-readable, no thousands separators). The shared csvCell
+ * escaper guards every cell (one OWASP formula-injection guard family-wide).
+ */
+export function periodLedgerToCsv(
+  entries: readonly PeriodLedgerEntry[],
+  meta: PeriodLedgerCsvMeta,
+  generatedAt: Date = new Date(),
+): PeriodLedgerCsvFile | null {
+  if (entries.length === 0) return null;
+
+  const lines: string[] = [];
+  const row = (cells: Array<string | number>) => lines.push(cells.map(csvCell).join(','));
+
+  row(['Report', 'Payroll period ledger']);
+  row(['Organization', meta.organizationName]);
+  row(['Scope', meta.scopeLabel]);
+  row(['Period', meta.periodName]);
+  row(['Window', meta.windowLabel]);
+  row(['Generated (UTC)', generatedAt.toISOString()]);
+
+  lines.push('');
+  lines.push('Ledger');
+  row([
+    'Entry Number',
+    'Entry Day',
+    'Run Type',
+    'Run ID',
+    'Entry Description',
+    'Account Code',
+    'Account Name',
+    'Account Type',
+    'Debit',
+    'Credit',
+    'Line Description',
+  ]);
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+  for (const e of entries) {
+    for (const l of e.lines) {
+      row([
+        e.entryNumber,
+        dayKey(e.entryDate),
+        e.runType,
+        e.runId,
+        e.description,
+        l.accountCode,
+        l.accountName,
+        l.accountType,
+        Number(l.debit || 0).toFixed(2),
+        Number(l.credit || 0).toFixed(2),
+        l.description ?? '',
+      ]);
+      totalDebit += Number(l.debit || 0);
+      totalCredit += Number(l.credit || 0);
+    }
+  }
+
+  lines.push('');
+  row([
+    'Totals',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    money2(totalDebit).toFixed(2),
+    money2(totalCredit).toFixed(2),
+    `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`,
+  ]);
+
+  const csv = lines.join('\r\n') + '\r\n';
+  const filename = `mbumah-period-ledger-${periodSlug(meta.periodName, 'period')}.csv`;
+
+  return { filename, csv, byteSize: Buffer.byteLength(csv, 'utf8') };
 }

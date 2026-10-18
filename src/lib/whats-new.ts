@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.101.0',
+    title: 'The ledger files itself',
+    bullets: [
+      'The period ledger drawer grows the governed CSV exit: the month\u2019s journal entries file through the same format every HR report, the desk report and the performance lists file through \u2014 one click in the footer, no screenshot bookkeeping.',
+      'One row per journal line \u2014 entry number, posted day, run type, account code, account name, account type, debit, credit \u2014 and a Totals line that proves the file balances by itself.',
+      'The file names its period (mbumah-period-ledger-october-2026.csv) and lands an audit row that says what was filed, never who is in it.',
+      'Nothing posted means nothing to file: the button rests with that reason, the same honesty the bench taught the performance family.',
+      'Same read roles as the ledger itself (HR, branch managers, owners, accountants) \u2014 filing what you may read widens nothing.',
+    ],
+  },
+  {
     version: '2.100.0',
     title: 'The period opens its ledger',
     bullets: [
