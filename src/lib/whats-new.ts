@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.92.0',
+    title: 'The goals can leave \u2014 and the custom metric has a name',
+    bullets: [
+      'Draft mistakes no longer live forever: every goal card grows a manage-gated Delete with a confirm dialog that says exactly what a removal means \u2014 the board and the portal lose the goal at once, while the record and its audit history stay (a soft delete, never a hard one).',
+      'The confirm shows what you are removing: employee, source, status, and the progress recorded \u2014 no blind deletions.',
+      'Custom metrics go end-to-end: the New goal dialog offers "Custom metric" and asks what the metric counts (2-120 characters \u2014 the service refuses an anonymous custom goal), and the name shows on the card, the portal, and the details panel.',
+      'Signed-out visitors get the same honest door as the wrong-role ones: a sign-in panel instead of tabs rendering fake empty states over lists that never loaded.',
+    ],
+  },
+  {
     version: '2.91.0',
     title: 'The HR door is honest \u2014 and the goals take edits',
     bullets: [

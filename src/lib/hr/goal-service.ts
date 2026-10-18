@@ -31,6 +31,9 @@ export interface GoalDto {
   cycleName: string | null;
   title: string;
   metricSource: string;
+  // v2.92.0: CUSTOM goals carry the metric's name (metricConfig.label) —
+  // derived on the row, so every read path surfaces it for free.
+  metricLabel: string | null;
   targetValue: string;
   currentValue: string;
   progressPct: number;
@@ -82,6 +85,11 @@ function toDto(goal: GoalRow, employeeName: string | null, cycleName: string | n
   const current = goal.currentValue ?? new Prisma.Decimal(0);
   const target = goal.targetValue ?? new Prisma.Decimal(0);
   const window = goalWindow(goal);
+  // v2.92.0: CUSTOM goals name their metric in metricConfig.label — the
+  // label rides on the row itself (no fold, no mapping-path risk), so the
+  // console card can say what counts instead of a bare "Custom" chip.
+  const cfg = parseMetricConfig(goal.metricConfig);
+  const metricLabel = typeof cfg.label === 'string' && cfg.label.trim() ? cfg.label.trim() : null;
   return {
     id: goal.id,
     employeeId: goal.employeeId,
@@ -90,6 +98,7 @@ function toDto(goal: GoalRow, employeeName: string | null, cycleName: string | n
     cycleName,
     title: goal.title,
     metricSource: goal.metricSource,
+    metricLabel,
     targetValue: target.toFixed(2),
     currentValue: current.toFixed(2),
     progressPct: progressPct(current, target),
@@ -355,6 +364,19 @@ export async function createGoal(
     // Persisted as JSON string for SQLite parity (schema convention).
     metricConfig = JSON.stringify(input.metricConfig);
   }
+  // v2.92.0: a CUSTOM goal without a name for its metric is just a MANUAL
+  // goal wearing a costume — the console asks for a description, so the
+  // service refuses an anonymous custom metric (honest at the door).
+  if (metricSource === 'CUSTOM') {
+    const label = (input.metricConfig as { label?: unknown } | undefined)?.label;
+    if (typeof label !== 'string' || label.trim().length < 2 || label.trim().length > 120) {
+      throw new StageGError(
+        'CUSTOM_METRIC_LABEL_REQUIRED',
+        'A custom goal needs a metric description (2-120 characters) so the team knows what counts.',
+        400,
+      );
+    }
+  }
 
   const target = toDecimal(input.targetValue ?? 0);
   if (target.lt(0)) {
@@ -503,6 +525,28 @@ export async function updateGoal(
     await employeeNameFor(goal.employeeId),
     (await cycleNamesFor([goal.cycleId])).get(goal.cycleId ?? '') ?? null,
   );
+}
+
+/**
+ * Soft-delete a goal (v2.92.0): draft mistakes happen, and until now a
+ * mistaken goal polluted the team board forever. The row stays (history,
+ * audits, and the archive stay honest) — every read already filters
+ * deletedAt: null, so the goal leaves the console, the portal, the cycle
+ * meter, and the counts in one write. Never a hard delete.
+ */
+export async function deleteGoal(goalId: string, session: Session): Promise<{ deleted: true; id: string }> {
+  const goal = await loadGoal(goalId, session);
+  await db.goal.update({ where: { id: goal.id }, data: { deletedAt: new Date() } });
+  await hrAudit({
+    actorId: session.userId,
+    actorRole: session.role,
+    action: 'GOAL_DELETED',
+    resourceType: HrEntityType.GOAL,
+    resourceId: goal.id,
+    storeId: session.storeId,
+    metadata: { title: goal.title, status: goal.status, metricSource: goal.metricSource },
+  });
+  return { deleted: true, id: goal.id };
 }
 
 /**
