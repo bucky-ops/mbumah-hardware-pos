@@ -22,10 +22,21 @@
 // the machine-readable code in the title and the human words in the cell.
 
 import { useState } from 'react';
-import { ChevronDown, Users } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, Users } from 'lucide-react';
 import type { OrgSummaryData } from '@/components/org/primitives';
 
 export type HrPerStoreRow = NonNullable<OrgSummaryData['hrPerStore']>[number];
+
+/**
+ * v2.110.0: the per-branch filter, as a pure function — the panel's table
+ * and its mobile cards render EXACTLY what this returns, so the unit test
+ * pins the one truth both surfaces share. '' (or an unknown id) = all rows,
+ * original order preserved (the filter narrows, it never reorders).
+ */
+export function filterBranchRows(rows: HrPerStoreRow[], branchId: string): HrPerStoreRow[] {
+  if (!branchId) return rows;
+  return rows.filter((r) => r.storeId === branchId);
+}
 
 /** KES with thousands separators (money cell contract). */
 export function kesMoney(v: number): string {
@@ -113,6 +124,12 @@ export function PeoplePayrollByBranch({
   testIdPrefix?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  // v2.110.0: the branch filter lives INSIDE the shared panel, so both homes
+  // (the Finance & Insights tab AND the Expert Console) get it from one
+  // implementation. '' = every branch; a storeId narrows table AND cards.
+  const [branchId, setBranchId] = useState('');
+  const visible = filterBranchRows(rows, branchId);
+  const filtered = branchId !== '';
   return (
     <section
       className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
@@ -140,6 +157,47 @@ export function PeoplePayrollByBranch({
       </button>
       {open ? (
         <div id={`${testIdPrefix}-body`} className="border-t border-slate-100 dark:border-slate-800">
+          {/* v2.110.0: the branch filter — a native select (keyboard + mobile
+              friendly), styled to the panel's design system. Filtering narrows
+              the rows, never reorders them; Reset returns the whole org. */}
+          <div
+            className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2 dark:border-slate-800 dark:bg-slate-900/60"
+            data-testid={`${testIdPrefix}-filter-row`}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+            <label htmlFor={`${testIdPrefix}-branch-filter`} className="text-xs text-slate-500 dark:text-slate-400">
+              Branch
+            </label>
+            <select
+              id={`${testIdPrefix}-branch-filter`}
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              data-testid={`${testIdPrefix}-branch-filter`}
+              className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 shadow-sm outline-none transition-colors focus:border-orange-400 focus:ring-2 focus:ring-orange-400/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            >
+              <option value="">All branches</option>
+              {rows.map((r) => (
+                <option key={r.storeId} value={r.storeId}>
+                  {r.storeName}
+                </option>
+              ))}
+            </select>
+            {filtered && (
+              <span className="text-[11px] text-slate-400 dark:text-slate-500" data-testid={`${testIdPrefix}-filter-count`}>
+                showing {visible.length} of {rows.length}
+              </span>
+            )}
+            {filtered && (
+              <button
+                type="button"
+                onClick={() => setBranchId('')}
+                data-testid={`${testIdPrefix}-filter-reset`}
+                className="ml-auto rounded-md px-2 py-0.5 text-[11px] font-medium text-orange-600 underline-offset-2 transition-colors hover:bg-orange-50 hover:underline dark:text-orange-400 dark:hover:bg-orange-950/40"
+              >
+                Reset
+              </button>
+            )}
+          </div>
           {/* Desktop: dense table with a sticky header (max height + scroll). */}
           <div className="hidden max-h-96 overflow-y-auto custom-scrollbar md:block" data-testid={`${testIdPrefix}-table-wrap`}>
             <table className="w-full text-sm">
@@ -154,7 +212,7 @@ export function PeoplePayrollByBranch({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {visible.map((row) => (
                   <tr
                     key={row.storeId}
                     className="border-b border-slate-50 transition-colors last:border-0 hover:bg-orange-50/40 dark:border-slate-800/60 dark:hover:bg-orange-950/20"
@@ -193,7 +251,12 @@ export function PeoplePayrollByBranch({
           </div>
           {/* Mobile: card list, no horizontal scroll, same numbers. */}
           <div className="space-y-2 p-3 md:hidden" data-testid={`${testIdPrefix}-cards`}>
-            {rows.map((row) => {
+            {visible.length === 0 ? (
+              <p className="px-1 py-4 text-center text-xs text-slate-400 dark:text-slate-500" data-testid={`${testIdPrefix}-cards-empty`}>
+                No branches match this filter.
+              </p>
+            ) : (
+              visible.map((row) => {
               const alerts = row.expiryAlerts.documentsExpiring90Days + row.expiryAlerts.assetsOverdue;
               return (
                 <div
@@ -237,7 +300,8 @@ export function PeoplePayrollByBranch({
                   </dl>
                 </div>
               );
-            })}
+              })
+            )}
           </div>
         </div>
       ) : null}

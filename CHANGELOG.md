@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.110.0] The drawer knows a zero when it sees one; the people panel learns to filter
+
+Honesty-and-reach release: the payroll period ledger's missing-journal alarm stops firing on zero-value runs (a long-running false alarm on the seeded 0-value LOCKED REGULAR October run), the People & Payroll shared panel gains a per-branch filter, and the period-journal API carries each run's payable truth so the drawer's classification reads server numbers, never guesses.
+
+### Added
+- **Zero-run honesty in the period ledger** (`src/lib/hr/payroll/period-journal.ts`): `PeriodLedger` grows a `zeroRuns` bucket — settled runs with nothing payable (totalNet 0 at 2dp) and no journal are surfaced in their own quiet block ("nothing was payable, so no journal posts — correct by design") instead of tripping the red missing-journal alarm. The alarm keeps its teeth: a settled run that owed money without an entry still fires "this must never happen".
+- **Payable truth on the wire** (`GET /api/payroll/period-journal`): the runs select now reads `totalNet` and feeds it to the builder, so the value-aware split (money → alarm, dust → quiet) is decided on server numbers at 2dp precision — a float hair (0.004) is still a zero run, and a fake zero can never mask a real debt.
+- **Per-branch filter on the People & Payroll panel** (`src/components/finance/people-payroll-by-branch.tsx`): a native select ("All branches" + each branch), a "showing X of Y" count and a Reset affordance, styled to the panel's design system (orange focus ring, dark variants). The filter is ONE pure function (`filterBranchRows`) feeding BOTH the desktop table and the mobile cards; it narrows, never reorders, and an unknown id is an honest empty state, never a silent fallback to all. Because it lives inside the shared panel, the Finance & Insights tab and the Expert Console both get it from one implementation.
+- **Documentation**: docs/PAYROLL_LEDGER_ZERO_RUNS.md (the value-aware classification contract) and the filter contract added to docs/PEOPLE_PAYROLL_BY_BRANCH.md.
+
+### Changed
+- The period ledger drawer's empty state also counts zero runs before claiming "Nothing posted in this period yet."
+- The What's-New feed leads with the zero-run story; the unread counter test re-anchored for the 2.110.0-fed feed (2.108.0→1, 2.107.0→2, 2.77.0→32).
+
+### Security
+- No new endpoints and no widened reads: the period-journal route keeps its exact guard (hr.payroll.read.all, the runs list's roles), tenant scoping, and payload shape (additive `zeroRuns` only). The filter is client-side over already-authorized rows — selecting a branch cannot fetch anything the caller could not already read.
+
 ## [2.109.0] People and payroll joins Finance and Insights; console navigation and icons unified
 
 Information-architecture release directed by product feedback: the per-branch people and payroll drill-down moves under Finance and Insights, the two consoles share one implementation, the Expert Console gains a Home action back to POS, and the navigation order and icons are made deterministic.

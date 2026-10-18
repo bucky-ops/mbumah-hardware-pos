@@ -52,6 +52,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
       id: true,
       runType: true,
       status: true,
+      totalNet: true, // v2.110.0: the run's payable truth — zero runs cannot be "missing" journals
       journalEntry: {
         select: {
           entryNumber: true,
@@ -98,7 +99,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
 
   const ledger = buildPeriodLedger(
     entries,
-    runs.map((r) => ({ id: r.id, runType: r.runType, status: r.status })),
+    runs.map((r) => ({ id: r.id, runType: r.runType, status: r.status, totalNet: Number(r.totalNet) })),
   );
 
   return Response.json({

@@ -62,6 +62,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
         id: true,
         runType: true,
         status: true,
+        totalNet: true, // v2.110.0: the CSV's missing-journal section splits value-aware, same as the drawer
         journalEntry: {
           select: {
             entryNumber: true,
@@ -105,7 +106,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
         })),
       });
     }
-    const ledger = buildPeriodLedger(entries, runs.map((r) => ({ id: r.id, runType: r.runType, status: r.status })));
+    const ledger = buildPeriodLedger(entries, runs.map((r) => ({ id: r.id, runType: r.runType, status: r.status, totalNet: Number(r.totalNet) })));
 
     if (ledger.entries.length === 0) {
       return Response.json(
