@@ -2,6 +2,16 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.151.0] The last slate family
+
+The v2.150.0 re-audit's remaining contrast cluster: 15 `text-slate-400` nodes at 7–11px on white across the Expert Console's module tiles, empty states and specialist-console captions (2.9:1) — the same family the earlier sweeps fixed on the other files, hiding here.
+
+### Fixed
+- **The light-surface slate family finishes its sweep** (`experts.tsx` ×18, `primitives.tsx` ×1): module-tile labels and sub-lines, empty-state rows ("Everything is above its reorder level.", "No M-Pesa transactions recorded yet.", …), journal/audit/rental captions and the `text-[7px]` tile label all move `text-slate-400` → `text-slate-500` (4.76:1 on white). No `dark:` pairs existed in either file to preserve. The desk-report's deliberate `text-slate-400 dark:text-slate-500` pairs stay untouched (measured clean live).
+
+### Verified
+- axe on the Expert Console: the 15-node contrast violation is gone; the buttons and triggers stay named; 390px holds.
+
 ## [2.150.0] The header wraps too
 
 The v2.149.0 re-audit's follow-up pass (lesson 64 in its purest form: the fix round's first live audit found what the pre-release audit could not, because the bigger failure had masked it).

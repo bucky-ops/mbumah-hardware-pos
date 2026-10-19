@@ -270,7 +270,7 @@ export function HealthGauge({ score, label, size = 56 }: { score: number; label?
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
         <span className="text-[13px] font-bold" style={{ color: stroke }}>{shown}</span>
-        {label ? <span className="text-[7px] uppercase tracking-wide text-slate-400">{label}</span> : null}
+        {label ? <span className="text-[7px] uppercase tracking-wide text-slate-500">{label}</span> : null}
       </div>
     </div>
   );

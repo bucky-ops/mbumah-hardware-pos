@@ -80,6 +80,13 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.151.0',
+    title: 'The last slate family',
+    bullets: [
+      'The Expert Console module tiles and their empty states finish the readability sweep — the last of the too-light grey small print now clears the contrast bar everywhere in the console.',
+    ],
+  },
+  {
     version: '2.150.0',
     title: 'The header wraps too',
     bullets: [
