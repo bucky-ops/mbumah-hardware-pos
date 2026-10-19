@@ -30,6 +30,23 @@ export interface BranchHrCsvRow {
   expiryAlerts: number;
 }
 
+/**
+ * v2.154.0: the desk's morning note as a CSV section — the yesterday digest
+ * the Expert Console's desk-report panel renders (headlined figures plus the
+ * per-branch visit breakdown). Shape mirrors DeskActivityData['yesterday'],
+ * narrowed to what the file speaks.
+ */
+export interface BranchDeskCsvBlock {
+  label: string;
+  visits: number;
+  clears: number;
+  reviewers: number;
+  requests: number;
+  busiestBranch: { storeName: string; visits: number } | null;
+  topReviewer: { name: string; visits: number } | null;
+  branches: ReadonlyArray<{ storeName: string; visits: number }>;
+}
+
 /** RFC-4180 field quoting: wrap when the value carries , " \n or \r. */
 function csvField(value: string | number): string {
   const s = String(value);
@@ -69,11 +86,19 @@ export const BRANCHES_HR_CSV_COLUMNS = [
  * second section — the People & payroll drill-down's rows — so one download
  * carries both tables the console shows. Absent or empty: the file ends
  * after the branches table exactly as v2.149.0 shipped it (honest absence).
+ *
+ * v2.154.0: `desk` (when the review-activity read answered) appends a third
+ * section — the desk's yesterday digest: the headlined figures plus the
+ * per-branch visit breakdown, the same morning note the desk-report panel
+ * renders. Nullish: the file ends exactly where v2.152.0 ended (byte-pinned
+ * by the tests); an empty branch list still prints the headline figures —
+ * a quiet desk is an honest zero, not an absence.
  */
 export function buildBranchesCsv(
   stores: readonly BranchCsvRow[],
   generatedAt: Date = new Date(),
   hrPerStore?: readonly BranchHrCsvRow[] | null,
+  desk?: BranchDeskCsvBlock | null,
 ): string {
   const header = BRANCHES_CSV_COLUMNS.join(',');
   const rows = stores.map((s) =>
@@ -114,6 +139,32 @@ export function buildBranchesCsv(
         ]
           .map(csvField)
           .join(','),
+      ),
+      '',
+    );
+  }
+  if (desk) {
+    lines.push(
+      `Desk report — ${desk.label}`,
+      'Desk activity,Value',
+      `Visits,${csvField(desk.visits)}`,
+      `Corrections cleared,${csvField(desk.clears)}`,
+      `Distinct reviewers,${csvField(desk.reviewers)}`,
+      `Requests visited,${csvField(desk.requests)}`,
+      `Busiest branch,${csvField(
+        desk.busiestBranch
+          ? `${desk.busiestBranch.storeName} (${desk.busiestBranch.visits} visits)`
+          : 'None',
+      )}`,
+      `Most active reviewer,${csvField(
+        desk.topReviewer
+          ? `${desk.topReviewer.name} (${desk.topReviewer.visits} visits)`
+          : 'None',
+      )}`,
+      '',
+      'Branch,Visits (yesterday)',
+      ...desk.branches.map((b) =>
+        [b.storeName, b.visits].map(csvField).join(','),
       ),
       '',
     );
