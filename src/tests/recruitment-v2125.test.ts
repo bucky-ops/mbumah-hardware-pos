@@ -39,10 +39,12 @@ import {
 
 describe('recruitment-policy — the pipeline single source of truth', () => {
   it('early statuses move forward and can always be rejected', () => {
-    expect(actionsForStatus('NEW')).toEqual(['interview', 'reject']);
-    expect(actionsForStatus('SCREENING')).toEqual(['interview', 'reject']);
-    expect(actionsForStatus('INTERVIEW')).toEqual(['offer', 'reject']);
-    expect(actionsForStatus('OFFER')).toEqual(['hire', 'reject']);
+    // v2.127.0 re-anchor: every live status also carries 'withdraw' (the
+    // candidate's own exit — the WITHDRAWN door).
+    expect(actionsForStatus('NEW')).toEqual(['interview', 'reject', 'withdraw']);
+    expect(actionsForStatus('SCREENING')).toEqual(['interview', 'reject', 'withdraw']);
+    expect(actionsForStatus('INTERVIEW')).toEqual(['offer', 'reject', 'withdraw']);
+    expect(actionsForStatus('OFFER')).toEqual(['hire', 'reject', 'withdraw']);
   });
 
   it('terminal statuses allow nothing — history, not buttons that 403', () => {
@@ -56,8 +58,10 @@ describe('recruitment-policy — the pipeline single source of truth', () => {
   });
 
   it('interview actions hinge on the pending DRAFT offer — the handoff the old desk dead-ended', () => {
-    expect(interviewActions(false)).toEqual(['offer', 'reject']);
-    expect(interviewActions(true)).toEqual(['approve', 'reject']);
+    // v2.127.0 re-anchor: every live branch now carries 'withdraw' too (the
+    // candidate's own exit) — the DRAFT hinge still decides offer vs approve.
+    expect(interviewActions(false)).toEqual(['offer', 'reject', 'withdraw']);
+    expect(interviewActions(true)).toEqual(['approve', 'reject', 'withdraw']);
   });
 
   it('role gates: BRANCH_MANAGER reads, only HR_MANAGER/STORE_OWNER write', () => {

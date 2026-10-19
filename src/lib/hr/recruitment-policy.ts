@@ -1,4 +1,4 @@
-// MBUMAH HARDWARE POS - recruitment pipeline policy (v2.125.0)
+// MBUMAH HARDWARE POS - recruitment pipeline policy (v2.127.0)
 //
 // PURE module (client-safe, no db import — same constraint as permissions.ts):
 // the recruitment pipeline's single source of truth for WHO may act and WHAT
@@ -14,19 +14,23 @@ export const RECRUITMENT_READ_ROLES = ['HR_MANAGER', 'BRANCH_MANAGER', 'STORE_OW
 /** Who may open/close jobs, move candidates, draft offers, hire, reject. */
 export const RECRUITMENT_WRITE_ROLES = ['HR_MANAGER', 'STORE_OWNER'] as const;
 
-export type RecruitmentAction = 'interview' | 'offer' | 'approve' | 'hire' | 'reject';
+export type RecruitmentAction = 'interview' | 'offer' | 'approve' | 'hire' | 'reject' | 'withdraw';
 
 /**
  * The pipeline's honest map: which actions a status allows. Terminal states
  * (HIRED, REJECTED, WITHDRAWN) allow nothing — the desk shows history, not
  * buttons that 403. Rejection rides the 90-day retention window set by
  * rejectApplicant, so it stays available until a terminal state is reached.
+ *
+ * v2.127.0: every live status also allows 'withdraw' — the candidate's own
+ * exit, recorded by the desk but never decided by it. Leaving the process,
+ * whichever direction, starts the SAME retention clock (REJECTION_RETENTION_DAYS).
  */
 const PIPELINE_ACTIONS: Record<string, readonly RecruitmentAction[]> = {
-  NEW: ['interview', 'reject'],
-  SCREENING: ['interview', 'reject'],
-  INTERVIEW: ['offer', 'reject'],
-  OFFER: ['hire', 'reject'],
+  NEW: ['interview', 'reject', 'withdraw'],
+  SCREENING: ['interview', 'reject', 'withdraw'],
+  INTERVIEW: ['offer', 'reject', 'withdraw'],
+  OFFER: ['hire', 'reject', 'withdraw'],
   HIRED: [],
   REJECTED: [],
   WITHDRAWN: [],
@@ -43,7 +47,7 @@ export function actionsForStatus(status: string): readonly RecruitmentAction[] {
  * offer" forever dead-ends the pipeline before Hire).
  */
 export function interviewActions(hasDraftOffer: boolean): readonly RecruitmentAction[] {
-  return hasDraftOffer ? ['approve', 'reject'] : ['offer', 'reject'];
+  return hasDraftOffer ? ['approve', 'reject', 'withdraw'] : ['offer', 'reject', 'withdraw'];
 }
 
 /** A candidate the desk can no longer act on — history, not buttons. */
@@ -51,15 +55,21 @@ export function isTerminalCandidate(status: string): boolean {
   return actionsForStatus(status).length === 0;
 }
 
-export type StageTone = 'neutral' | 'progress' | 'offer' | 'hired' | 'rejected';
+export type StageTone = 'neutral' | 'progress' | 'offer' | 'hired' | 'rejected' | 'withdrawn';
 
-/** Badge tone per candidate status — one mapping for the pipeline table. */
+/**
+ * Badge tone per candidate status — one mapping for the pipeline table.
+ * WITHDRAWN wears its own slate tone (v2.127.0): neither rejection's rose
+ * nor hire's emerald — the candidate left on their own terms.
+ */
 export function stageBadgeTone(status: string): StageTone {
   switch (status) {
     case 'HIRED':
       return 'hired';
     case 'REJECTED':
       return 'rejected';
+    case 'WITHDRAWN':
+      return 'withdrawn';
     case 'OFFER':
       return 'offer';
     case 'INTERVIEW':
@@ -74,7 +84,11 @@ export function canCloseJob(status: string): boolean {
   return status === 'OPEN';
 }
 
-/** Rejection keeps candidate data 90 days, then the retention window takes over. */
+/**
+ * Rejection keeps candidate data 90 days, then the retention window takes
+ * over. Withdrawal rides the SAME clock (v2.127.0): leaving the process,
+ * whichever direction, starts the same window — one constant, one sweep.
+ */
 export const REJECTION_RETENTION_DAYS = 90;
 
 /**

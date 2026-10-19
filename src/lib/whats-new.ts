@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.127.0',
+    title: 'The desk says goodbye',
+    bullets: [
+      'Withdraw… joins the desk: when a candidate pulls out, the pipeline records their exit as WITHDRAWN instead of leaving them movable forever.',
+      'Withdrawal is honoured as the candidate\u2019s own decision — the note is optional and rides the audit log, and their data starts the same 90-day retention clock a rejection does.',
+      'Withdrawn candidates read as history: a slate badge, a muted row, and an italic \u201cwithdrew from the process\u201d line — no buttons that would 403.',
+      'The audit trail now has a published coverage inventory (docs/EMS_AUDIT_COVERAGE.md): every mutation accounted for — audited, deliberately silent, or named as a gap.',
+      'Security headers and rate-limit tiers are documented in the RBAC matrix, so the defences a reviewer can probe are written down, not tribal knowledge.',
+    ],
+  },
+  {
     version: '2.126.0',
     title: 'The pipeline shows its steps',
     bullets: [

@@ -49,6 +49,7 @@ const TONE_CLASS: Record<StageTone, string> = {
   offer: 'border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300',
   hired: 'border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300',
   rejected: 'border-rose-200 bg-rose-100 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-300',
+  withdrawn: 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-500/30 dark:bg-slate-500/15 dark:text-slate-300',
 };
 
 export default function HrRecruitmentPage() {
@@ -62,6 +63,8 @@ export default function HrRecruitmentPage() {
   const [busy, setBusy] = useState(false);
   const [rejectArm, setRejectArm] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [withdrawArm, setWithdrawArm] = useState<string | null>(null);
+  const [withdrawNote, setWithdrawNote] = useState('');
   const [offerArm, setOfferArm] = useState<string | null>(null);
   const [offerForm, setOfferForm] = useState({ salary: '', startDate: '' });
   const [closeArm, setCloseArm] = useState<string | null>(null);
@@ -123,10 +126,12 @@ export default function HrRecruitmentPage() {
 
   function disarmAll() {
     setRejectArm(null);
+    setWithdrawArm(null);
     setOfferArm(null);
     setCloseArm(null);
     setStageArm(null);
     setRejectReason('');
+    setWithdrawNote('');
     setOfferForm({ salary: '', startDate: '' });
     setStageForm({ stage: 'SCREENING', outcome: 'PENDING', notes: '' });
   }
@@ -399,10 +404,19 @@ export default function HrRecruitmentPage() {
                       a.status === 'INTERVIEW' ? interviewActions(a.offers?.[0]?.status === 'DRAFT') : actionsForStatus(a.status);
                     const chip = offerChipLabel(a.offers?.[0]);
                     return (
-                      <tr key={a.id} data-testid={`hr-recruitment-row-${a.id}`} className="transition-colors hover:bg-accent/40">
+                      <tr
+                        key={a.id}
+                        data-testid={`hr-recruitment-row-${a.id}`}
+                        className={`transition-colors hover:bg-accent/40 ${a.status === 'WITHDRAWN' ? 'bg-slate-50/60 dark:bg-slate-500/5' : ''}`}
+                      >
                         <td className="px-4 py-2.5">
-                          <p className="font-medium">{a.fullName}</p>
+                          <p className={`font-medium ${a.status === 'WITHDRAWN' ? 'text-muted-foreground' : ''}`}>{a.fullName}</p>
                           <p className="text-xs text-muted-foreground">{a.email}</p>
+                          {a.status === 'WITHDRAWN' ? (
+                            <p className="mt-0.5 text-xs italic text-muted-foreground" data-testid={`hr-recruitment-withdrawn-note-${a.id}`}>
+                              Candidate withdrew from the process
+                            </p>
+                          ) : null}
                         </td>
                         <td className="px-4 py-2.5">{a.job?.title ?? '-'}</td>
                         <td className="px-4 py-2.5">
@@ -493,6 +507,21 @@ export default function HrRecruitmentPage() {
                                 }}
                               >
                                 Reject…
+                              </Button>
+                            ) : null}
+                            {writer && actions.includes('withdraw') ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={busy}
+                                className="text-violet-600 hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-500/10 dark:hover:text-violet-300"
+                                data-testid={`hr-recruitment-withdraw-${a.id}`}
+                                onClick={() => {
+                                  disarmAll();
+                                  setWithdrawArm(a.id);
+                                }}
+                              >
+                                Withdraw…
                               </Button>
                             ) : null}
                             {isTerminalCandidate(a.status) ? (
@@ -677,6 +706,49 @@ export default function HrRecruitmentPage() {
                                 Confirm reject
                               </Button>
                               <Button size="sm" variant="ghost" data-testid="hr-recruitment-reject-cancel" onClick={disarmAll}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {applicants.map((a) => {
+                    if (withdrawArm !== a.id) return null;
+                    return (
+                      <tr key={`${a.id}-withdraw`} className="bg-violet-50/70 dark:bg-violet-500/10">
+                        <td colSpan={4} className="px-4 py-3">
+                          <div data-testid={`hr-recruitment-withdraw-arm-${a.id}`} className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                            <p className="flex-1 text-sm text-violet-800 dark:text-violet-200">
+                              Withdraw <strong>{a.fullName}</strong>? This records the candidate&apos;s own exit —
+                              their data is kept {REJECTION_RETENTION_DAYS} days, then anonymised, the same
+                              clock a rejection starts.
+                            </p>
+                            <Input
+                              data-testid="hr-recruitment-withdraw-note"
+                              value={withdrawNote}
+                              onChange={(e) => setWithdrawNote(e.target.value)}
+                              className="h-8 w-full lg:w-64"
+                              placeholder="Note (optional — rides the audit log)"
+                              aria-label="Withdrawal note"
+                            />
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                disabled={busy}
+                                className="bg-violet-600 text-white hover:bg-violet-700 dark:bg-violet-500 dark:hover:bg-violet-600"
+                                data-testid="hr-recruitment-withdraw-confirm"
+                                onClick={async () => {
+                                  if (await post(`/api/recruitment/applicants/${a.id}/withdraw`, { note: withdrawNote.trim() || undefined })) {
+                                    disarmAll();
+                                    setNote(`${a.fullName} withdrew from the pipeline — data kept ${REJECTION_RETENTION_DAYS} days, then anonymised.`);
+                                  }
+                                }}
+                              >
+                                Confirm withdraw
+                              </Button>
+                              <Button size="sm" variant="ghost" data-testid="hr-recruitment-withdraw-cancel" onClick={disarmAll}>
                                 Cancel
                               </Button>
                             </div>
