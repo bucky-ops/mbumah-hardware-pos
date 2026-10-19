@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.142.0] The activity answers back
+
+The Gate activity card (v2.141.0) kept the whole story readable but not workable: a manager hunting the stops scanned every PASSED row by eye, and the audit story could not leave the screen. And the New-run picker — which already wears the gate's pending counts (v2.137.0) — said nothing about what happened the LAST time someone prepared the selected period. This release gives the card a lens and a print door, and the picker its parity chip.
+
+### Added
+- **The blocked-only lens** (`filterGateTimeline` + `payroll-gate-timeline-blocked-only`): one toggle filters the card to BLOCKED attempts — aria-pressed speaks the state, the rose family when on (the BLOCKED outcome's own family, dark twins included). A view preference, not a data change: the summary chip keeps speaking ALL attempts, the lens composes BEFORE the show-all bound ("Show all N" speaks what the lens shows; a PASSED row can never smuggle into a blocked-only view), and a window with no blocked attempts renders an honest rose note ("every prepare got through") rather than an empty card.
+- **The gate activity CSV export** (`buildGateTimelineCsv` + `escapeGateCsvCell` in `gate-timeline.ts`, `payroll-gate-timeline-export`): the RFC 4180 family's newest member (after discipline-ledger, discipline-list, and the timesheet desk). Header pinned `attempted_at,period,run_status,outcome,verdict,actor` — counts and verdicts, never employee codes or pay fields (the verdict text speaks counts, not identities, so an export can never become a surveillance list). CRLF, quote-on-need, double embedded quotes, nulls export empty (an unreadable clock exports '', never a guess), and the serializer NEVER re-sorts: what the card shows is what prints. The export carries the WHOLE window the read returned — never the 8-row viewport (a display bound must never silently truncate an audit artifact) — with the lens applied. Client-side blob (`gate-activity-YYYY-MM-DD.csv`), the desk export's own pattern; disabled while loading or when the visible set is empty.
+- **The picker's last-run attempts chip** (`payroll-picker-attempts-chip`): the SAME `buildGateAttemptChip` the runs table wears, now under the New-run picker's gate preview line for the SELECTED period — built from the runs the page already holds (the list is createdAt-desc, so the first match is the newest), ZERO new fetch. Tone follows the last outcome (emerald/amber/muted); honest absence: a period with no runs, or a pre-v2.138 run with no trail, renders nothing — the chip never invents an attempt.
+
+### Changed
+- `docs/hr/payroll-run-lifecycle.md`: the store-timeline contract now names the lens (view preference, composes before the bound) and the export contract (whole window, never the viewport; counts and verdicts only).
+
+### Tests
+- `src/tests/gate-activity-v2142.test.ts` (19): the serializer (header pin, CRLF, quote matrix, no-sort, empty-cell honesty, junk-row skip), the lens filter (order preserved, UNKNOWN never passes, non-array), the card contract (aria-pressed + rose family + dark twins, lens-before-bound composition, lens-empty note, export disabled-when-empty, window-not-viewport pin), and the picker chip (from memory, honest absence, parity with the table's chip).
+- `scripts/verify-v2-142-0.mjs` (12 checks, written fresh).
+- `console-changelog` unread counters re-anchored for 2.142.0 joining the feed.
+
 ## [2.141.0] The gate tells its story across runs
 
 The gate's history lived inside each run: the dialog told one run's trail, the table counted one run's attempts — but "how has the gate behaved across every run?" meant opening run after run. And the desk's weekends-only lens (v2.140.0) reset on every navigation, so an anomaly hunt meant re-toggling all morning. This release reads the trail across runs and lets the lens keep its preference.

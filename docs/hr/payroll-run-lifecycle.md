@@ -70,7 +70,7 @@ logging). Branch context always resolves from the session, never the client.
 Blocked runs stay in `DRAFT` with the issue list persisted to
 `PayrollRun.errorMessage`; the UI renders the codes verbatim.
 
-### Gate surfaces and contracts (v2.135.0 → v2.141.0)
+### Gate surfaces and contracts (v2.135.0 → v2.142.0)
 
 The gate's verdict is not a transient — every surface below reads the same
 frozen facts and follows the same honesty rules:
@@ -123,6 +123,14 @@ frozen facts and follows the same honesty rules:
   honest empty for a store that has never prepared, and a "Show all"
   toggle past eight rows. Same vocabulary everywhere: outcome verbatim,
   `Verdict unreadable` for garbage, movement marked with the sky pill.
+  Since v2.142.0 the card carries its own lens and export door: "Blocked
+  only" (a view preference — the summary chip keeps speaking ALL attempts,
+  the show-all bound composes AFTER the lens, and a PASSED row can never
+  smuggle into a blocked-only view) and `buildGateTimelineCsv` (the RFC 4180
+  family's newest member: header `attempted_at,period,run_status,outcome,
+  verdict,actor` — counts and verdicts, never employee codes or pay data).
+  The export carries the WHOLE window the read returned, never the 8-row
+  viewport — a display bound must never silently truncate an audit artifact.
 
 ## Posting (spec acceptance #1–#4)
 

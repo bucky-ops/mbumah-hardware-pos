@@ -147,3 +147,78 @@ export function summarizeGateTimeline(rows: readonly GateTimelineRow[]): GateTim
     lastAtIso: last ? last.atIso : null,
   };
 }
+
+// ── v2.142.0: the activity card answers back ────────────────────────────────
+// The card kept the whole story readable but not WORKABLE: a manager hunting
+// the stops had to scan every PASSED row, and the audit story could not
+// leave the screen. The lens (a view preference — the summary chip keeps
+// speaking ALL attempts) and the RFC 4180 export door (the family's newest
+// member, after discipline-ledger, discipline-list, and the timesheet desk)
+// fix both. Same honesty rules as everywhere else on the card.
+
+export interface GateTimelineCsvRow {
+  /** ISO string or '' — an unreadable clock exports empty, never guessed. */
+  attemptedAt: string;
+  period: string;
+  runStatus: string;
+  outcome: string;
+  /** The frozen strip's own words ('Verdict unreadable' when garbage). */
+  verdict: string;
+  actor: string;
+}
+
+// Pinned by tests: the honest column set of the timeline row itself. No
+// employee codes, no pay fields — the verdict text speaks counts, not
+// identities, so an export can never become a surveillance list.
+const GATE_CSV_HEADERS = [
+  'attempted_at',
+  'period',
+  'run_status',
+  'outcome',
+  'verdict',
+  'actor',
+] as const;
+
+/** RFC 4180 cell escaping: quote when needed, double embedded quotes. */
+export function escapeGateCsvCell(value: unknown): string {
+  const s = value === null || value === undefined ? '' : String(value);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * The gate activity as CSV — the caller passes rows AS SHOWN (lens applied,
+ * display order preserved): what the card shows is what prints. The export
+ * is the WHOLE window the read returned (never the 8-row viewport — a
+ * display bound must never silently truncate an audit artifact).
+ */
+export function buildGateTimelineCsv(rows: readonly GateTimelineCsvRow[]): string {
+  const lines = [GATE_CSV_HEADERS.join(',')];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row) continue;
+    lines.push(
+      [
+        escapeGateCsvCell(row.attemptedAt),
+        escapeGateCsvCell(row.period),
+        escapeGateCsvCell(row.runStatus),
+        escapeGateCsvCell(row.outcome),
+        escapeGateCsvCell(row.verdict),
+        escapeGateCsvCell(row.actor),
+      ].join(','),
+    );
+  }
+  return lines.join('\r\n') + '\r\n';
+}
+
+/**
+ * The card's blocked-only lens. A view preference, not a data change: order
+ * preserved, garbage never passes (an UNKNOWN outcome is not BLOCKED), and
+ * the summary chip keeps speaking the row set's TOTAL. Non-array → [].
+ */
+export function filterGateTimeline(
+  rows: readonly GateTimelineRow[],
+  blockedOnly: boolean,
+): GateTimelineRow[] {
+  if (!Array.isArray(rows)) return [];
+  if (!blockedOnly) return [...rows];
+  return rows.filter((r) => r && r.outcome === 'BLOCKED');
+}
