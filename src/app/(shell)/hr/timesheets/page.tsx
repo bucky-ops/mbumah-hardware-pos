@@ -18,8 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, CalendarCheck, CheckCircle2, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
-import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, type AttendanceDeskRow } from '@/lib/hr/attendance-desk';
+import { AlertTriangle, CalendarCheck, CheckCircle2, CheckCheck, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
+import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, buildBulkApproveSummary, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary } from '@/lib/hr/attendance-desk';
 import { buildTimesheetDeskCsv } from '@/lib/hr/timesheet-desk-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 
@@ -76,6 +76,12 @@ export default function HrTimesheetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rowNote, setRowNote] = useState<{ employeeId: string; tone: 'ok' | 'err'; text: string } | null>(null);
+  // v2.139.0: the batch — "Approve all" walks the SAME per-employee service
+  // one row at a time (never a new bulk write path), reporting honest
+  // progress and an end-of-batch receipt that names every failure.
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkNote, setBulkNote] = useState<DeskBulkSummary | null>(null);
 
   const loadPeriods = useCallback(async () => {
     try {
@@ -160,6 +166,80 @@ export default function HrTimesheetsPage() {
     [scopeId, loadPending],
   );
 
+  // v2.139.0: the batch loop — one POST per employee, in the desk's own
+  // order, failures never aborting the walk (the receipt names them). The
+  // per-row spinner rides approvingId so every other button (single AND the
+  // batch itself) stays disabled — single-flight both directions.
+  const approveAll = useCallback(async () => {
+    if (!payload || payload.rows.length === 0) return;
+    const rows = payload.rows;
+    setBulkNote(null);
+    setRowNote(null);
+    setBulkRunning(true);
+    setBulkProgress({ done: 0, total: rows.length });
+    const results: DeskBulkAttemptResult[] = [];
+    try {
+      for (const row of rows) {
+        if (!row.firstDay || !row.lastDay) {
+          results.push({
+            employeeId: row.employeeId,
+            employeeCode: row.employeeCode,
+            employeeName: row.employeeName,
+            ok: false,
+            approved: 0,
+            error: 'The pending row has no day range on file.',
+          });
+          setBulkProgress({ done: results.length, total: rows.length });
+          continue;
+        }
+        setApprovingId(row.employeeId);
+        try {
+          const res = await fetch('/api/attendance/timesheets/approve', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ employeeId: row.employeeId, from: row.firstDay, to: row.lastDay }),
+          });
+          const body = (await res.json().catch(() => ({}))) as { data?: { approved: number }; error?: string };
+          if (!res.ok) {
+            results.push({
+              employeeId: row.employeeId,
+              employeeCode: row.employeeCode,
+              employeeName: row.employeeName,
+              ok: false,
+              approved: 0,
+              error: body.error || `Approval failed (${res.status}).`,
+            });
+          } else {
+            results.push({
+              employeeId: row.employeeId,
+              employeeCode: row.employeeCode,
+              employeeName: row.employeeName,
+              ok: true,
+              approved: body.data?.approved ?? 0,
+            });
+          }
+        } catch {
+          results.push({
+            employeeId: row.employeeId,
+            employeeCode: row.employeeCode,
+            employeeName: row.employeeName,
+            ok: false,
+            approved: 0,
+            error: 'Approval request failed — the desk stays honest rather than guess.',
+          });
+        }
+        setBulkProgress({ done: results.length, total: rows.length });
+      }
+    } finally {
+      setApprovingId(null);
+      setBulkRunning(false);
+      setBulkProgress(null);
+      setBulkNote(buildBulkApproveSummary(results));
+      await loadPending(scopeId);
+    }
+  }, [payload, scopeId, loadPending]);
+
   const scopeLine = useMemo(() => {
     if (!payload?.scope) return 'All pending days, every period — unscoped by choice.';
     const range = deskRangeLabel(payload.scope.startDate.slice(0, 10), payload.scope.endDate.slice(0, 10));
@@ -210,7 +290,13 @@ export default function HrTimesheetsPage() {
         <div className="flex items-center gap-2">
           <Select
             value={scopeId}
-            onValueChange={(value) => setScopeId(value || '__all__')}
+            onValueChange={(value) => {
+              // Fresh scope, fresh notes — the old receipts described the
+              // old scope, and carrying them over would only confuse.
+              setRowNote(null);
+              setBulkNote(null);
+              setScopeId(value || '__all__');
+            }}
             aria-label="Scope the timesheet desk to a payroll period"
           >
             <SelectTrigger className="w-56" data-testid="hr-timesheet-scope-picker">
@@ -226,6 +312,30 @@ export default function HrTimesheetsPage() {
               ))}
             </SelectContent>
           </Select>
+          {/* v2.139.0: the batch door — every pending row cleared through the
+              ONE audited per-employee service, walked one at a time. Disabled
+              while anything (single or batch) is in flight; the label keeps
+              an honest count of the walk. */}
+          <Button
+            size="sm"
+            onClick={() => void approveAll()}
+            disabled={!payload || loading || payload.rows.length === 0 || approvingId !== null || bulkRunning}
+            aria-label="Approve every pending day listed, one employee at a time, through the same audited approval service"
+            title="Walks every pending row through the same approval service the single button uses — one employee at a time, failures named, never a bulk write"
+            data-testid="hr-timesheet-approve-all"
+          >
+            {bulkRunning ? (
+              <>
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" aria-hidden />
+                Approving {bulkProgress ? `${bulkProgress.done}/${bulkProgress.total}` : '…'}
+              </>
+            ) : (
+              <>
+                <CheckCheck className="mr-1 h-3.5 w-3.5" aria-hidden />
+                Approve all
+              </>
+            )}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -288,6 +398,31 @@ export default function HrTimesheetsPage() {
           data-testid="hr-timesheet-note"
         >
           {rowNote.text}
+        </div>
+      ) : null}
+
+      {bulkNote ? (
+        <div
+          role="status"
+          className={`rounded-md border px-3 py-2 text-xs ${
+            bulkNote.tone === 'ok'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+              : bulkNote.tone === 'partial'
+                ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+          }`}
+          data-testid="hr-timesheet-bulk-note"
+        >
+          <p className="font-medium">{bulkNote.text}</p>
+          {bulkNote.failures.length > 0 ? (
+            <ul className="mt-1 space-y-0.5">
+              {bulkNote.failures.map((f, i) => (
+                <li key={i} className="font-medium" data-testid="hr-timesheet-bulk-failure">
+                  {f}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 

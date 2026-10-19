@@ -46,7 +46,14 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
     take: 60,
     include: {
       payrollPeriod: { select: { name: true, payDate: true, startDate: true, endDate: true } },
-      _count: { select: { details: true } },
+      _count: { select: { details: true, gateEvents: true } },
+      // The last attempt's outcome — newest clock wins, createdAt breaks
+      // ties (two attempts can share a clock only in a same-instant tx).
+      gateEvents: {
+        orderBy: [{ checkedAt: 'desc' }, { createdAt: 'desc' }],
+        take: 1,
+        select: { outcome: true },
+      },
     },
   });
   const data = runs.map((r) => ({
@@ -76,6 +83,13 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
     // per-run detail fetch. Null for pre-v2.135.0 runs (honest absence).
     gateCheckedAt: r.gateCheckedAt?.toISOString() ?? null,
     gateSummary: r.gateSummary ?? null,
+    // v2.139.0: the trail's compact surface rides too — the run's attempt
+    // count (one gateEvents row per prepare attempt since v2.138.0) and the
+    // LAST attempt's outcome, so the table answers "how did this run get
+    // here" at a glance. Zero for pre-v2.138.0 runs (honest absence — the
+    // chip renders nothing, never a guessed attempt).
+    gateAttemptCount: r._count.gateEvents,
+    gateLastOutcome: r.gateEvents[0]?.outcome ?? null,
     periodName: r.payrollPeriod.name,
     periodStartDate: r.payrollPeriod.startDate.toISOString(),
     periodEndDate: r.payrollPeriod.endDate.toISOString(),
