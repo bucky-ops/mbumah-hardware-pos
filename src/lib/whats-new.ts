@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.152.0',
+    title: 'Counts that read',
+    bullets: [
+      'The Expert Console’s entrance animation no longer fades the text it carries — counts and alerts read at full strength from the first frame instead of flashing through a low-contrast one.',
+      'The overdue-rental and purchase-order count chips deepen a shade so every count on a tinted chip clears the contrast bar with room to spare.',
+      'The console footer’s health score now keeps its colour on both the light and the dark footer.',
+      'The desk report’s small print finishes its readability pass — same look, lighter greys gone.',
+      'The Organization Console’s branches export now carries the People & payroll per-branch table as a second section in the same file.',
+    ],
+  },
+  {
     version: '2.151.0',
     title: 'The last slate family',
     bullets: [

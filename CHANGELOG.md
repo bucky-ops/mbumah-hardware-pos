@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.152.0] Counts that read
+
+The v2.151.0 re-audit's six contrast nodes, each probed numerically and fixed at its true root — three were animation frames, not rest states.
+
+### Fixed
+- **The slide-in no longer dims its text** (`globals.css`): `console-slide-fade` ramped opacity 0→1, and the Expert Console's alerts rows re-animate on every poll — axe kept catching `text-red-600` at 3.36:1 mid-fade on rows that measure 4.83:1 at rest. The keyframe is transform-only now; the entrance still reads, and contrast is measurable at every frame for every `anim-slide-fade` user (alerts, chat messages, matrix rows, the store strip).
+- **The overdue badge clears with margin** (`store-matrix.tsx`): `text-red-700` on `bg-red-100` measured 4.53:1 — inside the rounding noise axe resolves as a fail. `text-red-800` on the same tint is 5.9:1.
+- **The Action queue's warning count clears** (`panels.tsx`): `text-orange-600` measured 3.2:1 on the outline badge — `text-orange-800` (7.0:1) with `dark:text-orange-300` for the dark queue.
+- **The console footer's health score keeps its colour** (`chrome.tsx`): the footer sits on `bg-white` in light mode, so the v2.149.0 light-token choice (`emerald-400`) measured 1.97:1 there — the footer now speaks `text-emerald-700 dark:text-emerald-400` (and `amber-700 dark:amber-400` for the warning tone); the always-dark rail's own bright tokens are untouched.
+- **The desk report's small print finishes the pass** (`desk-report-view.tsx`): the sixteen `text-slate-400 dark:text-slate-500` pairs unify to `text-slate-500` (the dark half already was slate-500 — dark rendering byte-identical, light 2.9 → 4.76:1), and the twenty-one bare light-context tokens gain `dark:text-slate-400` so dark mode keeps its brighter token exactly as it rendered.
+
+### Added
+- **The branches CSV export carries both tables** (`lib/org/branches-csv.ts`, `org-console.tsx`): `buildBranchesCsv` takes the summary's `hrPerStore` rows and appends a "People & payroll by branch" section — headcount, cost, absence rate, latest payroll period + status (honest empty cells when a branch has no runs), expiry alerts — so one download carries everything the console shows. Absent or empty input: the file ends exactly as v2.149.0 shipped it (pinned byte-identical).
+
+### Verified
+- The v2.151.0 six-node violation class is resolved at rest AND mid-animation; the numeric probes (lab-aware) recorded in the worklog.
+
 ## [2.151.0] The last slate family
 
 The v2.150.0 re-audit's remaining contrast cluster: 15 `text-slate-400` nodes at 7–11px on white across the Expert Console's module tiles, empty states and specialist-console captions (2.9:1) — the same family the earlier sweeps fixed on the other files, hiding here.

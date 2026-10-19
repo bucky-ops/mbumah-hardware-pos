@@ -80,7 +80,7 @@ function QueueRow({ label, value, onToast }: {
     <li className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
       <span className="text-slate-600">{label}</span>
       <span className="flex items-center gap-2">
-        <Badge variant="outline" className={value > 0 ? 'border-orange-200 text-orange-600' : 'text-slate-500'}>{value}</Badge>
+        <Badge variant="outline" className={value > 0 ? 'border-orange-300 text-orange-800 dark:border-orange-500/40 dark:text-orange-300' : 'text-slate-500'}>{value}</Badge>
         <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => onToast(`${label}: ${value} - drill down from the branch workspace`)}>View</Button>
       </span>
     </li>

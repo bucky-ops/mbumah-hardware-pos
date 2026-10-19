@@ -27,16 +27,18 @@ describe('the last slate-400 family is swept', () => {
     }
   });
 
-  it('the desk-report deliberate dark pairs survive untouched', () => {
+  it('the desk-report carries no bare text-slate-400 (v2.152.0: pairs unified, dark preserved)', () => {
     const src = readRepo('src/components/org/desk-report-view.tsx');
-    expect(src.match(/text-slate-400 dark:text-slate-500/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    const bare = src.match(/(^|[^:-])text-slate-400/g) ?? [];
+    expect(bare.length).toBe(0);
+    expect((src.match(/dark:text-slate-400/g) ?? []).length).toBeGreaterThan(0);
   });
 
-  it('the release surfaces speak 2.151.0', () => {
+  it('the release surfaces speak 2.152.0 (re-anchored per release)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.151.0');
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.151.0] The last slate family');
+    expect(pkg.version).toBe('2.152.0');
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.152.0] Counts that read');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.151.0'")).toBeLessThan(feed.indexOf("'2.150.0'"));
+    expect(feed.indexOf("'2.152.0'")).toBeLessThan(feed.indexOf("'2.151.0'"));
   });
 });

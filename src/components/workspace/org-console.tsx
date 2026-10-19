@@ -280,6 +280,19 @@ export function OrgConsole() {
         debtOutstanding: s.debtOutstanding,
         pendingMpesa: s.pendingMpesa,
       })),
+      new Date(),
+      // v2.152.0: the drill-down's rows ride the same download (present even
+      // while the section is collapsed — the data is the summary's).
+      (summary.hrPerStore ?? []).map((r) => ({
+        storeName: r.storeName,
+        headcountActive: r.headcountActive,
+        monthEmploymentCost: r.monthEmploymentCost,
+        monthAbsenceRatePct: r.monthAbsenceRatePct,
+        latestPayroll: r.latestPayroll
+          ? { periodName: r.latestPayroll.periodName, status: r.latestPayroll.status }
+          : null,
+        expiryAlerts: r.expiryAlerts.documentsExpiring90Days + r.expiryAlerts.assetsOverdue,
+      })),
     );
     const stamp = new Date().toISOString().slice(0, 10);
     const filename = `branches_${stamp}.csv`;

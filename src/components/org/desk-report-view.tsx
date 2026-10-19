@@ -638,7 +638,7 @@ export function DeskReportView() {
       ) : null}
 
       {!error && !data ? (
-        <p data-testid="desk-report-loading" className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-500">
+        <p data-testid="desk-report-loading" className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-500">
           Filing the desk report…
         </p>
       ) : null}
@@ -658,7 +658,7 @@ export function DeskReportView() {
               <h1 className="flex items-center gap-2 text-base font-bold text-slate-800 dark:text-slate-100">
                 <Sunrise className="h-5 w-5 text-amber-500" aria-hidden /> Desk report
               </h1>
-              <p className="text-[11px] tabular-nums text-slate-400 dark:text-slate-500">
+              <p className="text-[11px] tabular-nums text-slate-500">
                 Generated {new Date(data.generatedAt).toLocaleString('en-GB', { hour12: false })} · EAT
               </p>
             </div>
@@ -670,7 +670,7 @@ export function DeskReportView() {
                 <Building2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden /> {scopeLabel}
               </span>
               <span className="inline-flex items-center gap-1">
-                <FileText className="h-3.5 w-3.5 text-slate-400" aria-hidden /> {data.window.days} EAT calendar days, today included
+                <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" aria-hidden /> {data.window.days} EAT calendar days, today included
               </span>
             </p>
           </header>
@@ -700,7 +700,7 @@ export function DeskReportView() {
                     data-testid={`desk-report-tot-${id}`}
                     className="rounded-xl border border-slate-100 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
                   >
-                    <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
                     <p className={`mt-0.5 text-xl font-bold leading-none tabular-nums ${tone}`}>{num(value)}</p>
                   </div>
                 ))}
@@ -748,7 +748,7 @@ export function DeskReportView() {
 
               {/* Day-by-day bar strip — every day of the window, honest zeros */}
               <section aria-label="Visits per day" data-testid="desk-report-series">
-                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <CalendarRange className="h-3.5 w-3.5" aria-hidden /> Day by day
                 </h2>
                 <div className="flex items-end gap-1 overflow-x-auto pb-1">
@@ -763,7 +763,7 @@ export function DeskReportView() {
                           style={{ height: `${h}px` }}
                           aria-hidden
                         />
-                        <span className="whitespace-nowrap text-[9px] tabular-nums text-slate-400 dark:text-slate-500">{p.label.split(', ')[1] ?? p.label}</span>
+                        <span className="whitespace-nowrap text-[9px] tabular-nums text-slate-500">{p.label.split(', ')[1] ?? p.label}</span>
                       </div>
                     );
                   })}
@@ -772,13 +772,13 @@ export function DeskReportView() {
 
               {/* Per-branch roll-up — the heart of the report */}
               <section aria-label="Per-branch desk activity" data-testid="desk-report-branches">
-                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <Building2 className="h-3.5 w-3.5" aria-hidden /> By branch ({data.branches.length})
                 </h2>
                 <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-slate-50/70 text-left text-[10px] uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-500">
+                      <tr className="border-b bg-slate-50/70 text-left text-[10px] uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-500">
                         <th className="px-3 py-2 font-medium">Branch</th>
                         <th className="px-3 py-2 text-right font-medium">Visits</th>
                         <th className="px-3 py-2 text-right font-medium">Corrections answered</th>
@@ -795,7 +795,7 @@ export function DeskReportView() {
                           <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{num(b.clears)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(b.reviewers)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(b.requests)}</td>
-                          <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400 dark:text-slate-500">{b.lastVisitAt ? `${timeAgo(b.lastVisitAt)} ago` : '—'}</td>
+                          <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-500">{b.lastVisitAt ? `${timeAgo(b.lastVisitAt)} ago` : '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -807,9 +807,9 @@ export function DeskReportView() {
                   door — click it and the reviewer's own visits for this same
                   window open beneath, straight from the same derivation. */}
               <section aria-label="Reviewers in this window" data-testid="desk-report-reviewers">
-                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <Users className="h-3.5 w-3.5" aria-hidden /> Reviewers ({data.reviewers.length})
-                  <span className="hidden font-normal normal-case tracking-normal text-slate-400 sm:inline print:hidden dark:text-slate-500">
+                  <span className="hidden font-normal normal-case tracking-normal text-slate-500 sm:inline print:hidden dark:text-slate-500">
                     — click a reviewer to read their visits · file names inside a drawer jump across
                   </span>
                 </h2>
@@ -843,11 +843,11 @@ export function DeskReportView() {
                             </span>
                           ) : null}
                           <span className="shrink-0 text-xs tabular-nums text-slate-600 dark:text-slate-300">{num(r.visits)} visit{r.visits === 1 ? '' : 's'}</span>
-                          <span className="hidden shrink-0 text-xs tabular-nums text-slate-400 dark:text-slate-500 sm:inline">{r.branches} branch{r.branches === 1 ? '' : 'es'}</span>
-                          <span className="hidden shrink-0 text-[10px] tabular-nums text-slate-400 dark:text-slate-500 md:inline">last {r.lastVisitAt ? timeAgo(r.lastVisitAt) : '—'}</span>
+                          <span className="hidden shrink-0 text-xs tabular-nums text-slate-500 sm:inline">{r.branches} branch{r.branches === 1 ? '' : 'es'}</span>
+                          <span className="hidden shrink-0 text-[10px] tabular-nums text-slate-500 md:inline">last {r.lastVisitAt ? timeAgo(r.lastVisitAt) : '—'}</span>
                           <ChevronDown
                             aria-hidden
-                            className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 dark:text-slate-500 ${open ? 'rotate-180' : ''}`}
+                            className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform duration-200 dark:text-slate-500 ${open ? 'rotate-180' : ''}`}
                           />
                         </button>
                         {open ? (
@@ -903,7 +903,7 @@ export function DeskReportView() {
                               </button>
                             </p>
                             {visits.length === 0 ? (
-                              <p data-testid="desk-report-reviewer-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
+                              <p data-testid="desk-report-reviewer-empty" className="py-1 text-xs text-slate-500">
                                 No visits recorded for this reviewer in this window.
                               </p>
                             ) : (
@@ -917,7 +917,7 @@ export function DeskReportView() {
                                     <span className="shrink-0 font-medium tabular-nums text-slate-600 dark:text-slate-300">
                                       {deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT
                                     </span>
-                                    <span className="shrink-0 text-slate-400 dark:text-slate-500" title={v.storeName}>
+                                    <span className="shrink-0 text-slate-500" title={v.storeName}>
                                       {deskReportShortStoreName(v.storeName)}
                                     </span>
                                     <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
@@ -964,9 +964,9 @@ export function DeskReportView() {
                   open beneath — the ledger answers WHICH days the desk came
                   to this file, WHO came, and what they answered. */}
               <section aria-label="Most visited requests" data-testid="desk-report-top-requests">
-                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <FileText className="h-3.5 w-3.5" aria-hidden /> Most-visited requests
-                  <span className="hidden font-normal normal-case tracking-normal text-slate-400 sm:inline print:hidden dark:text-slate-500">
+                  <span className="hidden font-normal normal-case tracking-normal text-slate-500 sm:inline print:hidden dark:text-slate-500">
                     — click a request to read its visits · reviewer names inside a drawer jump across
                   </span>
                 </h2>
@@ -991,14 +991,14 @@ export function DeskReportView() {
                           </span>
                           <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">
                             <span className="font-semibold">{r.employeeName}</span>&apos;s {r.leaveTypeName}
-                            {r.storeName ? <span className="text-slate-400 dark:text-slate-500"> · {r.storeName}</span> : null}
+                            {r.storeName ? <span className="text-slate-500"> · {r.storeName}</span> : null}
                           </span>
                           <span className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium ${REPORT_STATUS_CHIP[r.status] ?? STATUS_CHIP_FALLBACK}`}>
                             {r.status.toLowerCase()}
                           </span>
                           <ChevronDown
                             aria-hidden
-                            className={`h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-200 dark:text-slate-500 ${open ? 'rotate-180' : ''}`}
+                            className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform duration-200 dark:text-slate-500 ${open ? 'rotate-180' : ''}`}
                           />
                         </button>
                         {open ? (
@@ -1046,7 +1046,7 @@ export function DeskReportView() {
                               </button>
                             </p>
                             {visits.length === 0 ? (
-                              <p data-testid="desk-report-request-empty" className="py-1 text-xs text-slate-400 dark:text-slate-500">
+                              <p data-testid="desk-report-request-empty" className="py-1 text-xs text-slate-500">
                                 No visits recorded for this request in this window.
                               </p>
                             ) : (
@@ -1060,7 +1060,7 @@ export function DeskReportView() {
                                     <span className="shrink-0 font-medium tabular-nums text-slate-600 dark:text-slate-300">
                                       {deskReportDayLabel(v.dayKey)} · {deskReportVisitTime(v.at)} EAT
                                     </span>
-                                    <span className="shrink-0 text-slate-400 dark:text-slate-500" title={v.storeName}>
+                                    <span className="shrink-0 text-slate-500" title={v.storeName}>
                                       {deskReportShortStoreName(v.storeName)}
                                     </span>
                                     <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200">
@@ -1095,7 +1095,7 @@ export function DeskReportView() {
                 </ul>
               </section>
 
-              <p data-testid="desk-report-footnote" className="text-[10px] leading-relaxed text-slate-400 dark:text-slate-500">
+              <p data-testid="desk-report-footnote" className="text-[10px] leading-relaxed text-slate-500">
                 {/* v2.79.0 — the paper names its scope: the parenthetical now
                     rides the header's own scopeLabel voice ("Branch: …" /
                     "All branches"), so a filed or printed copy says which
