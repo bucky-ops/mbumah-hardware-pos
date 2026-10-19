@@ -25,6 +25,11 @@ import { buildGateAttemptChip } from '@/lib/hr/payroll/gate-trail';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { emptyPeriodRows, groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
 import { gatePreviewChips, gatePreviewLine, type GatePreview } from '@/lib/hr/payroll/gate-preview';
+// v2.141.0: the store's gate story across runs — the per-run trail (v2.138)
+// kept each run's attempts; this read-back walks the SAME append-only rows
+// across every run, so the page can answer "how has the gate behaved" at a
+// glance. Types only here — the route does the building, the card renders.
+import type { GateTimelineRow, GateTimelineSummary } from '@/lib/hr/payroll/gate-timeline';
 import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
@@ -132,6 +137,18 @@ export interface AccountMovementPayload {
   totals: { debit: number; credit: number };
   closing: { balance: number };
   normalBalanceAssumed: boolean;
+}
+
+// v2.141.0: the gate-activity card's payload — served by
+// GET /api/payroll/gate-timeline, shaped by the pure builder
+// (buildGateTimeline in gate-timeline.ts). The window is the route's
+// honesty line: the card never pretends it saw more than the read took.
+export interface GateTimelinePayload {
+  rows: GateTimelineRow[];
+  summary: GateTimelineSummary;
+  window: number;
+  totalEvents: number;
+  checkedAt: string;
 }
 
 export const RUN_STATUS_STYLES: Record<string, string> = {
@@ -391,6 +408,12 @@ export default function HrPayrollPage() {
   // v2.98.0: periods fold — a collapsed period keeps its header story
   // (counts, settled net) while its run rows stand down.
   const [collapsedPeriods, setCollapsedPeriods] = useState<ReadonlySet<string>>(new Set());
+  // v2.141.0: the store's gate story across runs — the activity card's own
+  // read (best-effort BY DESIGN: a timeline failure degrades the card alone,
+  // never the runs table). showAll is a view preference, reset by nothing.
+  const [timeline, setTimeline] = useState<GateTimelinePayload | null>(null);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [timelineShowAll, setTimelineShowAll] = useState(false);
 
   const togglePeriod = useCallback((name: string) => {
     setCollapsedPeriods((prev) => {
@@ -526,6 +549,33 @@ export default function HrPayrollPage() {
     // inside the effect body (react-hooks/set-state-in-effect).
     void Promise.resolve().then(() => load());
   }, [load]);
+
+  // v2.141.0: the gate-activity card's own loader — one fetch, honest
+  // degrade (error state on the card alone), Retry re-walks the same read.
+  // A timeline failure must never touch the page-level error (the runs
+  // table and the gate panel keep their own voices).
+  const loadTimeline = useCallback(async () => {
+    setTimelineError(null);
+    try {
+      const res = await fetch('/api/payroll/gate-timeline', { credentials: 'include' });
+      const j = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        data?: GateTimelinePayload;
+        error?: string;
+      };
+      if (!res.ok || !j.success || !j.data) {
+        throw new Error(j.error || `The gate activity read failed (${res.status}).`);
+      }
+      setTimeline(j.data);
+    } catch (e: unknown) {
+      setTimeline(null);
+      setTimelineError(e instanceof Error ? e.message : 'The gate activity read failed.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => loadTimeline());
+  }, [loadTimeline]);
 
   const stats = useMemo(() => {
     const list = runs ?? [];
@@ -1064,6 +1114,180 @@ export default function HrPayrollPage() {
             </Card>
           )}
 
+          {/* v2.141.0: the store's gate story across runs — the per-run trail
+              (v2.138.0) lives inside each run's dialog; the runs table counts
+              each run's attempts (v2.139.0). Neither answers the cross-run
+              question: "how has the gate behaved across every run?" This card
+              walks the SAME append-only rows across runs, newest first, with
+              the movement still computed chronologically (the builder's own
+              contract). Best-effort by design: a timeline failure wears the
+              card's rose error, never the page's. The window is spoken: when
+              the read bounded itself at 120, the card says so. */}
+          <Card data-testid="payroll-gate-timeline">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    Gate activity
+                    {timeline && timeline.summary.attempts > 0 ? (
+                      <span
+                        className="rounded-full border bg-muted/50 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide tabular-nums text-muted-foreground"
+                        data-testid="payroll-gate-timeline-summary"
+                        title="Every prepare attempt on record across all runs — the newest first, the movement marked"
+                      >
+                        {timeline.summary.attempts}{' '}
+                        {timeline.summary.attempts === 1 ? 'attempt' : 'attempts'} ·{' '}
+                        {timeline.summary.runs} {timeline.summary.runs === 1 ? 'run' : 'runs'} · last{' '}
+                        {timeline.summary.lastOutcome ?? 'UNKNOWN'}
+                      </span>
+                    ) : null}
+                  </CardTitle>
+                  <CardDescription>
+                    Every prepare attempt across every run, newest first — the append-only trail the
+                    gate keeps, read across runs. A verdict&apos;s movement is marked where it changed.
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring"
+                  aria-label="Refresh the gate activity read"
+                  data-testid="payroll-gate-timeline-refresh"
+                  onClick={() => void loadTimeline()}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {timelineError ? (
+                <div
+                  className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 dark:border-rose-900 dark:bg-rose-950/40"
+                  data-testid="payroll-gate-timeline-error"
+                >
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-rose-800 dark:text-rose-300">
+                    <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+                    {timelineError}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 h-7 gap-1.5 text-xs"
+                    data-testid="payroll-gate-timeline-retry"
+                    onClick={() => void loadTimeline()}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Retry
+                  </Button>
+                </div>
+              ) : timeline === null ? (
+                <div className="space-y-2" data-testid="payroll-gate-timeline-loading" aria-busy="true">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-5/6" />
+                  <Skeleton className="h-10 w-4/6" />
+                </div>
+              ) : timeline.rows.length === 0 ? (
+                <p
+                  className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  data-testid="payroll-gate-timeline-empty"
+                >
+                  No gate attempts on record yet — the trail starts with the first prepare, and every
+                  attempt after that keeps its row.
+                </p>
+              ) : (
+                <div>
+                  <ol className="divide-y rounded-md border">
+                    {(timelineShowAll ? timeline.rows : timeline.rows.slice(0, 8)).map((row, i) => (
+                      <li
+                        key={row.id}
+                        data-testid={`payroll-gate-timeline-row-${i}`}
+                        className="flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-muted/30"
+                      >
+                        <span aria-hidden className="mt-0.5 shrink-0">
+                          {row.outcome === 'BLOCKED' ? (
+                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          ) : row.outcome === 'PASSED' ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <ShieldCheck className="h-4 w-4 text-muted-foreground/50" />
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="flex flex-wrap items-center gap-1.5 text-sm leading-tight">
+                            <Badge
+                              variant="outline"
+                              data-testid={`payroll-gate-timeline-outcome-${i}`}
+                              className={`font-mono text-[10px] tabular-nums ${
+                                row.outcome === 'PASSED'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                  : row.outcome === 'BLOCKED'
+                                    ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                    : 'border-muted bg-muted/40 text-muted-foreground'
+                              }`}
+                            >
+                              {row.outcome}
+                            </Badge>
+                            <span className="tabular-nums">{row.text}</span>
+                            {row.moved ? (
+                              <span
+                                data-testid={`payroll-gate-timeline-moved-${i}`}
+                                className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-300"
+                                title="The verdict moved between this attempt and the one before it — chronologically, whatever run each belonged to"
+                              >
+                                moved
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs tabular-nums text-muted-foreground">
+                            <span>{row.atIso ? formatEatStamp(new Date(row.atIso)) : 'no timestamp recorded'}</span>
+                            {row.actorLabel ? <span>· {row.actorLabel}</span> : null}
+                            {row.runLabel ? (
+                              <span className="font-mono text-[10px] uppercase tracking-wide" title="The run this attempt belonged to">
+                                · {row.runLabel}
+                                {row.runStatus ? ` · ${row.runStatus}` : ''}
+                              </span>
+                            ) : null}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  {timeline.rows.length > 8 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 h-7 gap-1 text-xs text-muted-foreground"
+                      data-testid="payroll-gate-timeline-toggle"
+                      aria-expanded={timelineShowAll}
+                      onClick={() => setTimelineShowAll((v) => !v)}
+                    >
+                      {timelineShowAll ? (
+                        <>
+                          <ChevronDown className="h-3.5 w-3.5" aria-hidden /> Show recent only
+                        </>
+                      ) : (
+                        <>
+                          <ChevronRight className="h-3.5 w-3.5" aria-hidden /> Show all{' '}
+                          {timeline.rows.length} attempts
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {timeline.totalEvents > timeline.window && (
+                    <p
+                      className="mt-1.5 text-xs text-muted-foreground"
+                      data-testid="payroll-gate-timeline-window"
+                    >
+                      Showing the newest {timeline.window} of {timeline.totalEvents} attempts — older
+                      attempts stay in the ledger, never rewritten.
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* v2.53.0: inline note for the row-level digest CSV download. */}
           {digestNote && (
             <div
@@ -1090,7 +1314,12 @@ export default function HrPayrollPage() {
           setOpenRunId(null);
           setGateIssues(null);
         }}
-        onChanged={() => void load()}
+        onChanged={() => {
+          void load();
+          // v2.141.0: a prepare/submit/approve just moved the trail — the
+          // activity card re-reads alongside the table, never on its own clock.
+          void loadTimeline();
+        }}
       />
 
       <PeriodJournalDrawer

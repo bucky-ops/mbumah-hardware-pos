@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertTriangle, CalendarCheck, CalendarDays, CheckCircle2, CheckCheck, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
-import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, deskWeekendDays, buildBulkApproveSummary, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary } from '@/lib/hr/attendance-desk';
+import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, deskWeekendDays, buildBulkApproveSummary, readDeskLensPref, writeDeskLensPref, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary } from '@/lib/hr/attendance-desk';
 import { buildTimesheetDeskCsv } from '@/lib/hr/timesheet-desk-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 
@@ -86,7 +86,23 @@ export default function HrTimesheetsPage() {
   // (v2.138) made a Saturday punch stand out; a long strip still buries it.
   // A view preference, not a data change: the count chip keeps speaking the
   // row's total, and flipping the lens never touches notes or scope.
-  const [weekendsOnly, setWeekendsOnly] = useState(false);
+  // v2.141.0: the lens keeps its preference — but the persisted read happens
+  // AFTER hydration (microtask-deferred, the page load()'s own pattern). A
+  // lazy initializer would render true on the client while the server
+  // rendered false, and React never patches stale hydration ATTRIBUTES:
+  // the strip's children got fixed while the toggle's aria-pressed stayed
+  // stale — a franken-state caught live in E2E and not allowed to ship.
+  const [weekendsOnly, setWeekendsOnly] = useState<boolean>(false);
+  useEffect(() => {
+    void Promise.resolve().then(() => setWeekendsOnly(readDeskLensPref(window.localStorage)));
+  }, []);
+  const toggleWeekendsOnly = useCallback(() => {
+    setWeekendsOnly((v) => {
+      const next = !v;
+      writeDeskLensPref(window.localStorage, next);
+      return next;
+    });
+  }, []);
 
   const loadPeriods = useCallback(async () => {
     try {
@@ -348,11 +364,11 @@ export default function HrTimesheetsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setWeekendsOnly((v) => !v)}
+            onClick={toggleWeekendsOnly}
             disabled={loading}
             aria-pressed={weekendsOnly}
             aria-label="Show only weekend days on the pending strips"
-            title="Filters the day strips to Saturdays and Sundays — the count chip still speaks every pending day"
+            title="Filters the day strips to Saturdays and Sundays — the count chip still speaks every pending day, and the lens keeps its setting in this browser"
             data-testid="hr-timesheet-weekends-only"
             className={
               weekendsOnly

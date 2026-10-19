@@ -2,6 +2,24 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.141.0] The gate tells its story across runs
+
+The gate's history lived inside each run: the dialog told one run's trail, the table counted one run's attempts — but "how has the gate behaved across every run?" meant opening run after run. And the desk's weekends-only lens (v2.140.0) reset on every navigation, so an anomaly hunt meant re-toggling all morning. This release reads the trail across runs and lets the lens keep its preference.
+
+### Added
+- **The store gate timeline** (`buildGateTimeline` + `summarizeGateTimeline` in `src/lib/hr/payroll/gate-timeline.ts`, served by `GET /api/payroll/gate-timeline`): the SAME append-only `PayrollRunGateEvent` rows read ACROSS runs — newest 120, with run period/status context attached in the same read, actor labels resolved in the ONE-query fallback ladder (name → email → 'Unknown user'). Movement is computed CHRONOLOGICALLY (the caller feeds oldest-first): a verdict moves from the attempt before it, whatever run each belonged to — a run boundary does not reset the comparison. Window honesty: the payload says `window: 120` and `totalEvents`, so the card can never pretend it saw more than the read took. Read-only; store-scoped; rides the gate read-right quartet (`hr.payroll.read.all` × HR_MANAGER/BRANCH_MANAGER/STORE_OWNER/ACCOUNTANT).
+- **The Gate activity card** (`payroll-gate-timeline` on /hr/payroll): newest-first rows with outcome badges (emerald/amber/muted families, dark twins), the frozen strip's exact verdict words, the sky `moved` pill where the verdict changed, EAT stamps + actor + run label + run status in tabular-nums, a summary chip ("N attempts · M runs · last PASSED"), its own Refresh, and best-effort degrade BY DESIGN — a timeline failure wears the card's rose error + Retry, never the page's. Honest states: skeleton while loading, an emerald "no gate attempts on record yet" for a store that has never prepared, a "Show all N attempts" toggle past eight rows, and a window line when the ledger outgrew the read.
+- **The lens keeps its preference** (`readDeskLensPref`/`writeDeskLensPref` + `DESK_LENS_STORAGE_KEY` in `attendance-desk.ts`): the weekends-only lens persists per browser over localStorage — guarded reads degrade to OFF (never a crash), turn-off REMOVES the key rather than littering a stale `0`, and the toggle's title now says the lens keeps its setting.
+
+### Changed
+- `docs/hr/payroll-run-lifecycle.md`: the gate-contract section now names the store timeline (movement chronologically across runs, bounded window spoken, best-effort card) and the lens's persistence contract alongside the existing six surfaces.
+- The run dialog's `onChanged` now also re-reads the gate activity — a prepare/submit/approve that moved the trail refreshes the card alongside the table.
+
+### Tests
+- `src/tests/gate-timeline-v2141.test.ts` (24): the pure builder (chronological movement, cross-run movement never resetting, garbage rows degrading, junk dropping), the summary rollup (counts, distinct runs, last outcome by clock), the lens prefs (read/write/exception guards, key removal), the route (guard quartet, store scoping, desc→chronological reversal, window honesty), the card contract (newest-first render, moved pill, summary chip, empty/error/skeleton, toggle, refresh wiring), and the desk lens contract (init from storage, persist on flip).
+- `scripts/verify-v2-141-0.mjs` (12 checks, written fresh).
+- `console-changelog` unread counters re-anchored for 2.141.0 joining the feed.
+
 ## [2.140.0] The desk finds its weekends
 
 The weekend tint (v2.138.0) made a Saturday punch stand out, but a long strip still buried it — a Monday-morning review asking "who worked the weekend?" had to count sky chips by eye. And the run dialog's frozen-verdict strip (the dialog's counterpart of the table's verdict chip) went without the compact attempts surface the table has worn since v2.139.0. This release gives the desk a lens and the strip its chip.

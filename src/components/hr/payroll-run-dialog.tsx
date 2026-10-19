@@ -376,6 +376,15 @@ export function PayrollRunDialog({
           respBody.error ||
             `${action} failed (${res.status}).${respBody.code ? ` [${respBody.code}]` : ''}`,
         );
+        // v2.141.0: a BLOCKED prepare is not silence — the gate APPENDED its
+        // trail row and refreshed the frozen snapshot before the 422 came
+        // back, so the page's runs table AND the gate-activity card must
+        // re-read (the success path's onChanged covers every other step;
+        // this is the stop's own echo). The lifecycle's prepare step rides
+        // the dialog's `validate` action (the validate endpoint calls
+        // preparePayrollRun); every other action's failure changes nothing
+        // on record.
+        if (action === 'prepare' || action === 'validate') onChanged();
         return { ok: false, body: respBody as Record<string, unknown> };
       }
       if (action === 'validate') {

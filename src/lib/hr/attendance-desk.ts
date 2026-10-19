@@ -268,3 +268,39 @@ export function buildBulkApproveSummary(
     failures: [],
   };
 }
+
+// ── v2.141.0: the desk lens keeps its preference ────────────────────────────
+// The weekends-only lens (v2.140.0) reset on every navigation — a manager
+// hunting weekend anomalies re-toggled it all morning. The lens now persists
+// per browser (localStorage), read through these guards so a dead storage
+// degrades to the lens OFF, never a crash. Stored here (the desk's own pure
+// module) so the desk page stays thin and the contract is testable without
+// a browser host.
+
+export const DESK_LENS_STORAGE_KEY = 'mbumah.hr.timesheets.lens.weekendsOnly';
+
+/** Read the persisted lens preference. Anything but '1' (or a throwing
+ * storage) reads OFF — the lens never guesses a preference it cannot read. */
+export function readDeskLensPref(store: Pick<Storage, 'getItem'> | null | undefined): boolean {
+  try {
+    return store?.getItem(DESK_LENS_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Persist the lens preference. 'on' writes '1', off REMOVES the key (no
+ * stale '0' litter); a throwing storage degrades to silence — the lens is
+ * a view preference, never worth a crashed render. */
+export function writeDeskLensPref(
+  store: Pick<Storage, 'setItem' | 'removeItem'> | null | undefined,
+  on: boolean,
+): void {
+  try {
+    if (!store) return;
+    if (on) store.setItem(DESK_LENS_STORAGE_KEY, '1');
+    else store.removeItem(DESK_LENS_STORAGE_KEY);
+  } catch {
+    // Cosmetic — a blocked persistence costs nothing honest.
+  }
+}
