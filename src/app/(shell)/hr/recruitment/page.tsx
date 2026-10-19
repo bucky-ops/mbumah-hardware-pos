@@ -9,9 +9,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   actionsForStatus,
   canCloseJob,
+  formatOfferKes,
   interviewActions,
   isTerminalCandidate,
+  offerChipLabel,
+  PIPELINE_STAGES,
   REJECTION_RETENTION_DAYS,
+  STAGE_OUTCOMES,
   stageBadgeTone,
   type RecruitmentAction,
   type StageTone,
@@ -25,6 +29,7 @@ interface Job {
   status: string;
   openings: number;
   openedAt: string | null;
+  closedAt: string | null;
   _count?: { applicants: number };
 }
 
@@ -35,7 +40,7 @@ interface Applicant {
   status: string;
   job?: { title: string };
   stages?: Array<{ stage: string; outcome: string }>;
-  offers?: Array<{ id: string; status: string }>;
+  offers?: Array<{ id: string; status: string; proposedSalaryCents: number; sentAt: string | null; createdAt: string }>;
 }
 
 const TONE_CLASS: Record<StageTone, string> = {
@@ -60,6 +65,8 @@ export default function HrRecruitmentPage() {
   const [offerArm, setOfferArm] = useState<string | null>(null);
   const [offerForm, setOfferForm] = useState({ salary: '', startDate: '' });
   const [closeArm, setCloseArm] = useState<string | null>(null);
+  const [stageArm, setStageArm] = useState<string | null>(null);
+  const [stageForm, setStageForm] = useState<{ stage: string; outcome: string; notes: string }>({ stage: 'SCREENING', outcome: 'PENDING', notes: '' });
 
   const load = useCallback(async () => {
     try {
@@ -118,8 +125,10 @@ export default function HrRecruitmentPage() {
     setRejectArm(null);
     setOfferArm(null);
     setCloseArm(null);
+    setStageArm(null);
     setRejectReason('');
     setOfferForm({ salary: '', startDate: '' });
+    setStageForm({ stage: 'SCREENING', outcome: 'PENDING', notes: '' });
   }
 
   const openJobs = (jobs ?? []).filter((j) => j.status === 'OPEN').length;
@@ -246,6 +255,7 @@ export default function HrRecruitmentPage() {
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {j.openings} opening{j.openings === 1 ? '' : 's'} · {j._count?.applicants ?? 0} applicant{j._count?.applicants === 1 ? '' : 's'}
                           {j.openedAt ? ` · opened ${j.openedAt.slice(0, 10)}` : ''}
+                          {j.status === 'CLOSED' && j.closedAt ? ` · closed ${j.closedAt.slice(0, 10)}` : ''}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -386,7 +396,8 @@ export default function HrRecruitmentPage() {
                 <tbody className="divide-y">
                   {applicants.map((a) => {
                     const actions: readonly RecruitmentAction[] =
-                      a.status === 'INTERVIEW' ? interviewActions((a.offers?.length ?? 0) > 0) : actionsForStatus(a.status);
+                      a.status === 'INTERVIEW' ? interviewActions(a.offers?.[0]?.status === 'DRAFT') : actionsForStatus(a.status);
+                    const chip = offerChipLabel(a.offers?.[0]);
                     return (
                       <tr key={a.id} data-testid={`hr-recruitment-row-${a.id}`} className="transition-colors hover:bg-accent/40">
                         <td className="px-4 py-2.5">
@@ -398,6 +409,11 @@ export default function HrRecruitmentPage() {
                           <Badge variant="outline" className={`text-[10px] ${TONE_CLASS[stageBadgeTone(a.status)]}`}>
                             {a.status}
                           </Badge>
+                          {chip ? (
+                            <p data-testid={`hr-recruitment-offer-chip-${a.id}`} className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                              {chip} · {formatOfferKes(a.offers?.[0]?.proposedSalaryCents)}
+                            </p>
+                          ) : null}
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex flex-wrap justify-end gap-1.5">
@@ -406,10 +422,13 @@ export default function HrRecruitmentPage() {
                                 size="sm"
                                 variant="outline"
                                 disabled={busy}
-                                data-testid={`hr-recruitment-interview-${a.id}`}
-                                onClick={() => void post(`/api/recruitment/applicants/${a.id}/stage`, { stage: 'INTERVIEW_ONE', outcome: 'PASS' })}
+                                data-testid={`hr-recruitment-stage-${a.id}`}
+                                onClick={() => {
+                                  disarmAll();
+                                  setStageArm(a.id);
+                                }}
                               >
-                                To interview
+                                Record stage…
                               </Button>
                             ) : null}
                             {writer && actions.includes('offer') ? (
@@ -541,6 +560,81 @@ export default function HrRecruitmentPage() {
                                 Confirm offer
                               </Button>
                               <Button size="sm" variant="ghost" data-testid="hr-recruitment-offer-cancel" onClick={disarmAll}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {applicants.map((a) => {
+                    if (stageArm !== a.id) return null;
+                    return (
+                      <tr key={`${a.id}-stage`} className="bg-sky-50/70 dark:bg-sky-500/10">
+                        <td colSpan={4} className="px-4 py-3">
+                          <div data-testid={`hr-recruitment-stage-arm-${a.id}`} className="flex flex-col gap-2 lg:flex-row lg:items-end">
+                            <p className="flex-1 text-sm text-sky-800 dark:text-sky-200">
+                              Record a stage for <strong>{a.fullName}</strong> — the desk writes the step
+                              and its outcome, it never skips ahead for you.
+                            </p>
+                            <label className="text-xs">
+                              <span className="mb-1 block font-medium text-sky-800 dark:text-sky-200">Stage</span>
+                              <select
+                                data-testid="hr-recruitment-stage-select"
+                                className="h-8 w-40 rounded-md border border-input bg-transparent px-2 text-xs"
+                                value={stageForm.stage}
+                                onChange={(e) => setStageForm({ ...stageForm, stage: e.target.value })}
+                                aria-label="Stage"
+                              >
+                                {PIPELINE_STAGES.map((s) => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-xs">
+                              <span className="mb-1 block font-medium text-sky-800 dark:text-sky-200">Outcome</span>
+                              <select
+                                data-testid="hr-recruitment-outcome-select"
+                                className="h-8 w-32 rounded-md border border-input bg-transparent px-2 text-xs"
+                                value={stageForm.outcome}
+                                onChange={(e) => setStageForm({ ...stageForm, outcome: e.target.value })}
+                                aria-label="Outcome"
+                              >
+                                {STAGE_OUTCOMES.map((o) => (
+                                  <option key={o} value={o}>{o}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-xs">
+                              <span className="mb-1 block font-medium text-sky-800 dark:text-sky-200">Notes (optional)</span>
+                              <Input
+                                data-testid="hr-recruitment-stage-notes"
+                                value={stageForm.notes}
+                                onChange={(e) => setStageForm({ ...stageForm, notes: e.target.value })}
+                                className="h-8 w-full lg:w-56"
+                                placeholder="What the step showed"
+                              />
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                disabled={busy}
+                                data-testid="hr-recruitment-stage-confirm"
+                                onClick={async () => {
+                                  if (await post(`/api/recruitment/applicants/${a.id}/stage`, {
+                                    stage: stageForm.stage,
+                                    outcome: stageForm.outcome,
+                                    notes: stageForm.notes.trim() || undefined,
+                                  })) {
+                                    disarmAll();
+                                    setNote(`${stageForm.stage} recorded — ${stageForm.outcome} for ${a.fullName}.`);
+                                  }
+                                }}
+                              >
+                                Confirm stage
+                              </Button>
+                              <Button size="sm" variant="ghost" data-testid="hr-recruitment-stage-cancel" onClick={disarmAll}>
                                 Cancel
                               </Button>
                             </div>

@@ -44,7 +44,7 @@ export const POST = hrGuard('hr.recruitment.manage', RECRUITMENT_WRITE_ROLES)(
       return Response.json({ success: true, data: { id: offer.id } }, { status: 201 });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create offer.';
-      const status = message.includes('not found') ? 404 : message.includes('integer') ? 400 : 500;
+      const status = message.includes('not found') ? 404 : message.includes('integer') ? 400 : message.includes('DUPLICATE_DRAFT') ? 409 : 500;
       return Response.json({ success: false, error: message }, { status });
     }
   },

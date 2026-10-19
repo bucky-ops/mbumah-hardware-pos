@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.126.0',
+    title: 'The pipeline shows its steps',
+    bullets: [
+      'Record stage… replaces the old one-click jump: pick the real stage (screening through offer), its outcome, and optional notes — the desk writes what it observed, never what it skipped to.',
+      'One live offer per candidate: the API refuses a second draft while one is pending approval, so no offer gets silently orphaned.',
+      'Sent offers stay visible — the pipeline row now shows the terms ("Offer sent 2026-10-19 · KES 32,000") instead of letting them vanish.',
+      'Closed jobs print when they closed, right in the job list.',
+      'Stage lists and rejection retention are single-sourced in the policy module — the desk, the API, and the tests read one truth.',
+    ],
+  },
+  {
     version: '2.125.0',
     title: 'The desk starts hiring',
     bullets: [

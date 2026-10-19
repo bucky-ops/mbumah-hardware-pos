@@ -163,12 +163,16 @@ describe('the desk — honest terms, honest posture, real counts', () => {
   });
 
   it('the offer handoff is closed: pending DRAFT offer turns into Approve & send (PATCH)', () => {
-    expect(page).toContain('interviewActions((a.offers?.length ?? 0) > 0)');
+    // Re-anchored for 2.126.0: the hinge keys on the LATEST offer's DRAFT status.
+    expect(page).toContain("interviewActions(a.offers?.[0]?.status === 'DRAFT')");
     expect(page).toContain('data-testid={`hr-recruitment-approve-${a.id}`}');
     expect(page).toContain('Approve &amp; send');
     expect(page).toContain("?offerId=${draftId}`, {}, 'PATCH')");
     const applicantsRoute = src('src/app/api/recruitment/applicants/route.ts');
-    expect(applicantsRoute).toContain("offers: { where: { status: 'DRAFT' }, take: 1, select: { id: true, status: true } }");
+    // Re-anchored for 2.126.0: the include carries the LATEST offer of any
+    // status (the desk's approve hinge keys on DRAFT; the chip shows SENT).
+    expect(applicantsRoute).toContain('offers: {\n          orderBy: { createdAt: \'desc\' },');
+    expect(applicantsRoute).toContain('select: { id: true, status: true, proposedSalaryCents: true, sentAt: true, createdAt: true }');
   });
 
   it('reject and close are two-step arms; arming one disarms the others', () => {
@@ -207,6 +211,8 @@ describe('prior anchors — the pipeline keeps its consent spine', () => {
   it('the desk still surfaces the rejection retention window the sweep reads', () => {
     const service = src('src/lib/hr/recruitment-service.ts');
     expect(service).toContain('dataRetentionUntil: retentionUntil');
-    expect(service).toContain('REJECTION_RETENTION_DAYS = 90');
+    // Re-anchored for 2.126.0: the constant is single-sourced in the policy
+    // module and the service imports it (no local copy left to drift).
+    expect(service).toContain("import { PIPELINE_STAGES, REJECTION_RETENTION_DAYS } from './recruitment-policy';");
   });
 });

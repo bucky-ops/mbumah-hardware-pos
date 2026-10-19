@@ -76,3 +76,54 @@ export function canCloseJob(status: string): boolean {
 
 /** Rejection keeps candidate data 90 days, then the retention window takes over. */
 export const REJECTION_RETENTION_DAYS = 90;
+
+/**
+ * The stages recordStage accepts — ONE list for the service's validation,
+ * the desk's arm select, and the tests (v2.126.0: the desk used to hard-code
+ * INTERVIEW_ONE + PASS on a single button; now every stage is recordable).
+ */
+export const PIPELINE_STAGES = ['SCREENING', 'INTERVIEW_ONE', 'INTERVIEW_TWO', 'TASK', 'REFERENCE', 'OFFER'] as const;
+export type PipelineStage = (typeof PIPELINE_STAGES)[number];
+
+export const STAGE_OUTCOMES = ['PENDING', 'PASS', 'FAIL'] as const;
+export type StageOutcome = (typeof STAGE_OUTCOMES)[number];
+
+/**
+ * Offer money reads as KES with thousands separators; offers are integer
+ * cents (spec rule 16), so whole KES prints bare and odd cents print with
+ * two decimals. Unreadable input degrades to an em dash — never a fake 0.
+ */
+export function formatOfferKes(cents: unknown): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents) || !Number.isInteger(cents) || cents <= 0) return '—';
+  const value = cents / 100;
+  const text = Number.isInteger(value)
+    ? value.toLocaleString('en-KE')
+    : value.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `KES ${text}`;
+}
+
+export interface OfferChipView {
+  status: string;
+  sentAt?: string | null;
+}
+
+/**
+ * A one-line offer chip for the pipeline row — the desk should SEE the terms
+ * it sent, not just a status badge. DRAFT offers return null (the approve
+ * hinge is the draft's voice); unreadable statuses return null too.
+ */
+export function offerChipLabel(offer: OfferChipView | null | undefined): string | null {
+  if (!offer || typeof offer.status !== 'string') return null;
+  switch (offer.status) {
+    case 'SENT':
+      return `Offer sent${offer.sentAt ? ` ${String(offer.sentAt).slice(0, 10)}` : ''}`;
+    case 'ACCEPTED':
+      return 'Offer accepted';
+    case 'DECLINED':
+      return 'Offer declined';
+    case 'EXPIRED':
+      return 'Offer expired';
+    default:
+      return null;
+  }
+}

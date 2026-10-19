@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.126.0] The pipeline shows its steps
+
+Task 140's option 1: harden what the hiring round (v2.125.0) exposed and let the desk record what it actually observed. Three changes move the recruitment pipeline from "buttons that work" to "a record you can trust": every stage is recordable with its outcome and notes, one live offer per candidate, and the terms the desk sent stay visible on the row.
+
+### Added
+- **The stage arm** (`src/app/(shell)/hr/recruitment/page.tsx` + `src/lib/hr/recruitment-policy.ts`): the desk hard-coded INTERVIEW_ONE + PASS on a single "To interview" button — history written from a script, not from observation. "Record stage…" now arms a sky row with the FULL stage list (SCREENING → OFFER), the outcome (PENDING/PASS/FAIL), and optional notes, confirmed before anything is written. The stage list lives once as `PIPELINE_STAGES` in the policy module; the service's `recordStage` validation imports the same list, so the desk can never offer a stage the API refuses. Success notes name the step and its outcome ("SCREENING recorded — PASS for Grace Wanjiru.").
+- **The duplicate-draft guard** (`src/lib/hr/recruitment-service.ts` + offer route): `approveAndSendOffer` approves `offers[0]`, so a stacked second DRAFT would silently orphan the first. `createOffer` now refuses while a DRAFT pends ("A DRAFT offer is already pending for this applicant — approve and send it before drafting another (DUPLICATE_DRAFT).", mapped to 409). The desk already hid the button while a draft pends; now the API refuses it outright.
+- **The offer chip** (applicants GET + desk): the terms the desk sent used to vanish — the applicants GET now rides the LATEST offer of any status (`orderBy createdAt desc, take 1`) and the pipeline row prints "Offer sent 2026-10-19 · KES 32,000" (ACCEPTED/DECLINED/EXPIRED speak plainly; DRAFT stays silent — the approve hinge is its voice) under the stage badge. `formatOfferKes` prints integer-cents KES with thousands separators and degrades unreadable input to an em dash, never a fake 0.
+- **The closed date**: CLOSED jobs print "closed 2026-10-19" in the job meta line.
+- **Tests** (`src/tests/recruitment-v2126.test.ts`, 20): the one-list pins (service imports PIPELINE_STAGES, no local STAGES/retention copies), `formatOfferKes` and `offerChipLabel` behaviour tables, the duplicate-draft guard + 409 mapping, the stage-arm desk pins with the hard-coded jump EXORCISED, and the v2.125.0 door anchors.
+
+### Changed
+- `REJECTION_RETENTION_DAYS` is single-sourced in the policy module; the service imports it (the local copy is gone — nothing left to drift). The v2.125.0 suite re-anchored to the latest-offer include and the DRAFT-keyed hinge.
+
+### Security
+- The stage arm writes through the SAME `hr.recruitment.manage` route and the SAME service validation as before — no new surface, one new source of the allowed-stage list that both sides read. The duplicate-draft guard closes a real audit-trail hazard (two DRAFT rows where the approver's intent is ambiguous) rather than a display nit, and the chip exposes only what the desk itself already sent — no new PII leaves the pipeline.
+
 ## [2.125.0] The desk starts hiring
 
 Task 139's dead-surface discovery, root-caused this round: the dev database held zero RecruitmentJobs and zero Applicants while /hr/recruitment sat in the navigation — and the E2E proved WHY: a one-line permission drift (`hr.recruitment.read.branch` omitted STORE_OWNER while every route whitelisted it, and no HR_MANAGER exists in the seeded org) 403'd EVERY living user, so the pipeline could never start — the same dead-surface family as consent (v2.119.0), onboarding (v2.120.0), and legal holds (v2.122.0). This release fixes the drift, makes the recruitment desk fully operable and honest: candidates can leave the pipeline, jobs can stop intake, offer terms are never fabricated, and readers see their true posture.
