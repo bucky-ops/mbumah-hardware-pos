@@ -251,19 +251,19 @@ describe('the live re-audit follow-ups (found on the rebuilt build)', () => {
 });
 
 describe('the release surfaces speak the version', () => {
-  it('package.json, whats-new and the changelog lead with 2.150.0 (re-anchored per release)', () => {
+  it('package.json, whats-new and the changelog lead with 2.151.0 (re-anchored per release)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.150.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.150.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.150.0');
+    expect(pkg.version).toBe('2.151.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.151.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.151.0');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.150.0'")).toBeGreaterThan(-1);
-    expect(feed.indexOf("'2.150.0'")).toBeLessThan(feed.indexOf("'2.149.0'"));
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.150.0] The header wraps too');
+    expect(feed.indexOf("'2.151.0'")).toBeGreaterThan(-1);
+    expect(feed.indexOf("'2.151.0'")).toBeLessThan(feed.indexOf("'2.150.0'"));
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.151.0] The last slate family');
   });
 
   it('the unread counter test is re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(39);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(40);");
   });
 });

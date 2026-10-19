@@ -59,7 +59,7 @@ function Unavailable({ reason }: { reason: string }) {
     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
       <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-amber-500" />
       <p className="text-xs font-semibold text-slate-600">Unavailable in this release for your account</p>
-      <p className="mt-1 text-[11px] text-slate-400">{reason}</p>
+      <p className="mt-1 text-[11px] text-slate-500">{reason}</p>
     </div>
   );
 }
@@ -106,7 +106,7 @@ function FinancialsExpert() {
                   <TableCell className="text-right text-xs tabular-nums">{t.creditTotal ? kes(t.creditTotal) : '-'}</TableCell>
                 </TableRow>
               ))}
-              {rows.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-xs text-slate-400">No journal lines posted yet.</TableCell></TableRow>}
+              {rows.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-xs text-slate-500">No journal lines posted yet.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
@@ -144,7 +144,7 @@ function AuditExpert() {
                 <TableCell className="max-w-[280px] truncate text-xs text-slate-500">{a.message}</TableCell>
               </TableRow>
             ))}
-            {items.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-400">No audit events yet.</TableCell></TableRow>}
+            {items.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-500">No audit events yet.</TableCell></TableRow>}
           </TableBody>
         </Table>
       </div>
@@ -177,11 +177,11 @@ function SystemExpert({ kpi }: { kpi: KpiSummaryData }) {
             <div key={key} className="rounded-xl border border-slate-100 p-2 text-center">
               <p className={`text-sm font-bold ${checks[key]?.status === 'ok' ? 'text-emerald-700' : checks[key]?.status === 'warning' ? 'text-amber-700' : 'text-red-500'}`}>{checks[key]?.status ?? 'n/a'}</p>
               <p className="text-[10px] font-medium text-slate-600">{key.replace('_', ' ')}</p>
-              <p className="truncate text-[9px] text-slate-400" title={checks[key]?.detail ?? ''}>{checks[key]?.detail ?? ''}</p>
+              <p className="truncate text-[9px] text-slate-500" title={checks[key]?.detail ?? ''}>{checks[key]?.detail ?? ''}</p>
             </div>
           ))}
           {state.error && (
-            <div className="rounded-xl border border-dashed border-slate-200 p-2 text-center text-[10px] text-slate-400 sm:col-span-4">{state.error}</div>
+            <div className="rounded-xl border border-dashed border-slate-200 p-2 text-center text-[10px] text-slate-500 sm:col-span-4">{state.error}</div>
           )}
         </div>
         <SubTitle>Environment variables</SubTitle>
@@ -191,7 +191,7 @@ function SystemExpert({ kpi }: { kpi: KpiSummaryData }) {
               {key.replace('env_', '')}: {value.status}
             </Badge>
           ))}
-          {envChecks.length === 0 && <span className="text-xs text-slate-400">{state.loading ? 'Loading...' : 'No env checks reported.'}</span>}
+          {envChecks.length === 0 && <span className="text-xs text-slate-500">{state.loading ? 'Loading...' : 'No env checks reported.'}</span>}
         </div>
       </div>
     </div>
@@ -204,7 +204,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
     <section aria-label="Domain Expert Modules" className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-100 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-800">Domain Expert Modules</h2>
-        <p className="text-[11px] text-slate-400">Specialist consoles over shared, store-scoped data - each endpoint re-verifies the session and role server-side.</p>
+        <p className="text-[11px] text-slate-500">Specialist consoles over shared, store-scoped data - each endpoint re-verifies the session and role server-side.</p>
       </header>
       <Tabs defaultValue="inventory" className="px-4 pb-4 pt-3">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-slate-50 p-1">
@@ -234,13 +234,13 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                 <TableBody>
                   {e.inventory.lowStockItems.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="text-xs"><span className="font-medium text-slate-700">{p.name}</span> <span className="text-slate-400">{p.sku}</span></TableCell>
+                      <TableCell className="text-xs"><span className="font-medium text-slate-700">{p.name}</span> <span className="text-slate-500">{p.sku}</span></TableCell>
                       <TableCell className="text-xs text-slate-500">{p.category}</TableCell>
                       <TableCell className="text-xs text-slate-500">{p.store ?? '-'}</TableCell>
                       <TableCell className="text-right text-xs font-semibold tabular-nums text-orange-600">{num(p.stockQty)} / {num(p.reorderLevel)}</TableCell>
                     </TableRow>
                   ))}
-                  {e.inventory.lowStockItems.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-xs text-slate-400">Everything is above its reorder level.</TableCell></TableRow>}
+                  {e.inventory.lowStockItems.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-xs text-slate-500">Everything is above its reorder level.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -271,7 +271,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {e.debtExpert.topDebtors.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-400">No outstanding balances.</TableCell></TableRow>}
+                  {e.debtExpert.topDebtors.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-500">No outstanding balances.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -298,11 +298,11 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                       <TableCell className="text-xs text-slate-500">{r.customer}</TableCell>
                       <TableCell className="text-right text-xs tabular-nums">{kes(r.ratePerDay)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${r.status === 'ACTIVE' ? 'border-emerald-200 text-emerald-700' : r.status === 'OVERDUE' ? 'border-red-200 bg-red-50 text-red-600' : 'text-slate-400'}`}>{r.status}</Badge>
+                        <Badge variant="outline" className={`text-[10px] ${r.status === 'ACTIVE' ? 'border-emerald-200 text-emerald-700' : r.status === 'OVERDUE' ? 'border-red-200 bg-red-50 text-red-600' : 'text-slate-500'}`}>{r.status}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {e.rentals.items.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-400">No active or overdue rentals.</TableCell></TableRow>}
+                  {e.rentals.items.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-500">No active or overdue rentals.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -336,7 +336,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                       <TableCell className="text-right text-xs text-slate-500">{p.expectedDate ? new Date(p.expectedDate).toLocaleDateString('en-KE') : '-'}</TableCell>
                     </TableRow>
                   ))}
-                  {e.suppliers.purchaseOrders.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-400">No open purchase orders.</TableCell></TableRow>}
+                  {e.suppliers.purchaseOrders.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-500">No open purchase orders.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -368,7 +368,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                       <TableCell className="font-mono text-[10px]">{m.mpesaReceipt ?? '-'}</TableCell>
                     </TableRow>
                   ))}
-                  {e.mpesa.txns.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-400">No M-Pesa transactions recorded yet.</TableCell></TableRow>}
+                  {e.mpesa.txns.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-xs text-slate-500">No M-Pesa transactions recorded yet.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -410,7 +410,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                 <div key={b.key} className="rounded-xl border border-slate-100 p-2 text-center">
                   <p className={`text-lg font-bold ${b.score >= 80 ? 'text-emerald-700' : b.score >= 40 ? 'text-amber-700' : 'text-red-500'}`}>{b.score}</p>
                   <p className="text-[10px] font-medium text-slate-600">{b.label}</p>
-                  <p className="text-[9px] text-slate-400">{b.detail}</p>
+                  <p className="text-[9px] text-slate-500">{b.detail}</p>
                 </div>
               ))}
             </div>
@@ -425,12 +425,12 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: string }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm">
-      <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
       <p className={`text-lg font-bold ${tone ?? 'text-slate-800'}`}>{value}</p>
-      {sub && <p className="text-[10px] text-slate-400">{sub}</p>}
+      {sub && <p className="text-[10px] text-slate-500">{sub}</p>}
     </div>
   );
 }
 function SubTitle({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <h3 className={`mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 ${className}`}>{children}</h3>;
+  return <h3 className={`mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 ${className}`}>{children}</h3>;
 }
