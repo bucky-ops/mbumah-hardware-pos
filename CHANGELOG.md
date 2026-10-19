@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.130.0] The timeline files its copy
+
+The consent timeline drawer (v2.129.0) grew an Export CSV door — the export-honesty theme's third beat (v2.115 case list → v2.118 access ledger → now the consent timeline). The same round fixes the Privacy tab's honesty gap this work exposed: a card whose ledger fails to load used to spin "Loading…" forever (the catch folded a failure into the same null state that "not yet answered" renders as); every card now speaks its failure with a rose strip and a retry.
+
+### Added
+- **The timeline CSV serializer** (`src/lib/hr/consent-timeline-csv.ts`): `buildConsentTimelineCsv(rows)` — RFC 4180 cells (quote on comma/quote/CR/LF, double embedded quotes), CRLF line endings, header row first, nulls become empty cells, timestamps become ISO strings (a garbage timestamp degrades to an empty cell, never "Invalid Date" on file). The header is the ledger's own column set, pinned exactly: `cycle,state,granted_at,withdrawn_at,stood_days,purpose,policy_version,employee_code,employee_name`. `consentTimelineStateLabel` speaks the chips' own two words (WITHDRAWN / STANDING, derived from `withdrawnAt`, never free text); a standing cycle leaves `withdrawn_at` and `stood_days` empty — an open consent has no honest day count to write down. `consentTimelineCsvFilename` sanitizes the employee code into `consent-timeline-{code}-{date}.csv`. The confidentiality contract is the row type itself: no content field exists, so an export can never become a back door.
+- **The drawer's Export CSV door** (`src/app/(shell)/hr/reports/page.tsx`): an outline button (FileDown icon) rides the timeline footer, rendered ONLY when the ledger has rows (an empty ledger files nothing). The tooltip states the honesty: "Only who, when, and what purpose are exported — the ledger's own columns, never more." The export maps the drawer's own payload (the employee's code and name ride every row) through the pure serializer with the house Blob-download mechanics.
+
+### Fixed
+- **The Loading-forever spin** (Privacy tab): `loadConsent` / `loadErasure` / `loadRetention` caught a failed fetch into `null` — the same state "not yet answered" renders as — so an expired session or a network failure left the card spinning forever. Each loader now carries its own `failed` flag (set true in the catch, cleared on success), and each card renders an honest rose error strip with dark twins and a Retry button: "The consent ledger could not be loaded — the desk stays dark rather than guess." (and the erasure-queue and retention-desk siblings). Skeletons remain the not-yet-answered state; failure and loading stay distinct.
+
+### Tests
+- `src/tests/consent-timeline-csv-v2130.test.ts` (18): the serializer's RFC 4180 discipline (exact header pinned; WITHDRAWN row files ISO stamps + day count; STANDING row leaves withdrawn/stood cells empty; input order preserved; quote-on-need with double embedded quotes; garbage timestamp → empty cell; CRLF everywhere with the trailing line ending), the state label and filename sanitization, the confidentiality contract (the row type's fields are exactly the ledger's columns — no note/description/salary/content field can exist; the header array is named as the line that must change), the drawer door's manners (testid, per-employee aria-label, honesty tooltip, rendered only with rows, riding the pure serializer with the payload's own identity), and the failure-speech fix (three per-card error strips with retries, rose + dark twins ×3, each loader's failed flag declared/set/cleared exactly three times, skeletons distinct from failures).
+
 ## [2.129.0] The ledger shows its timeline
 
 The consent ledger's `re-granted ×N` chip (v2.128.0) counted an employee's append-only consent history; this round the history becomes readable. A History door on every consent row opens a timeline drawer that reads the ledger the way it is stored: cycle by cycle, oldest first, verbatim — what was granted, when it was withdrawn, how many whole days it stood, and whether it still stands.

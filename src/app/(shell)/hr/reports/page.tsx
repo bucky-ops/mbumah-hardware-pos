@@ -44,6 +44,7 @@ import {
   MailX,
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate, formatKes } from '@/components/hr/self-service-ui';
+import { buildConsentTimelineCsv, consentTimelineCsvFilename, type ConsentTimelineCsvRow } from '@/lib/hr/consent-timeline-csv';
 import { describeSweepOutcome } from '@/lib/hr/sweep-outcome';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { ReportSchedulesTab } from '@/components/hr/report-schedules-tab';
@@ -391,8 +392,14 @@ export default function HrReportsPage() {
   const [statutory, setStatutory] = useState<StatutoryDto | null>(null);
   const [p10, setP10] = useState<P10Dto | null>(null);
   const [erasure, setErasure] = useState<ErasureDto | null>(null);
+  // v2.130.0: the Privacy tab speaks its failures — a failed load renders an
+  // honest error strip with a retry, never a Loading-forever spin (the null
+  // state means "not yet answered", not "broken").
+  const [erasureFailed, setErasureFailed] = useState(false);
   const [consent, setConsent] = useState<ConsentDto | null>(null);
+  const [consentFailed, setConsentFailed] = useState(false);
   const [retention, setRetention] = useState<RetentionDto | null>(null);
+  const [retentionFailed, setRetentionFailed] = useState(false);
   // v2.129.0: the consent timeline drawer — one door, per-employee payload.
   // All four reset on close (the stale-state hygiene: one employee's history
   // must never greet the next open).
@@ -465,8 +472,10 @@ export default function HrReportsPage() {
   const loadErasure = useCallback(async () => {
     try {
       setErasure(await apiGet<ErasureDto>('/api/hr/privacy/erasure-requests'));
+      setErasureFailed(false);
     } catch {
       setErasure(null);
+      setErasureFailed(true); // v2.130.0: speak the failure, offer the retry
     }
   }, []);
 
@@ -490,12 +499,40 @@ export default function HrReportsPage() {
     setHistoryLoading(false);
   }, []);
 
+  // v2.130.0: the timeline files its copy — the export-honesty theme's third
+  // beat. The CSV carries the LEDGER's own columns (who, when, what purpose,
+  // which policy, how long stood) and nothing more: there is no content field
+  // on a ConsentRecord and none in the serializer's row type, so an export
+  // can never become a back door. Disabled while loading/errored/empty.
+  const exportHistoryCsv = useCallback(() => {
+    if (!historyPayload || historyPayload.events.length === 0) return;
+    const rows: ConsentTimelineCsvRow[] = historyPayload.events.map((ev) => ({
+      cycle: ev.cycle,
+      grantedAt: ev.grantedAt,
+      withdrawnAt: ev.withdrawnAt,
+      stoodDays: ev.stoodDays,
+      purpose: ev.purpose,
+      policyVersion: ev.policyVersion,
+      employeeCode: historyPayload.employee.code,
+      employeeName: historyPayload.employee.name,
+    }));
+    const blob = new Blob([buildConsentTimelineCsv(rows)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = consentTimelineCsvFilename(historyPayload.employee.code);
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [historyPayload]);
+
   // v2.119.0: the consent ledger loads with the Privacy tab.
   const loadConsent = useCallback(async () => {
     try {
       setConsent(await apiGet<ConsentDto>('/api/hr/privacy/consent'));
+      setConsentFailed(false);
     } catch {
       setConsent(null);
+      setConsentFailed(true); // v2.130.0: speak the failure, offer the retry
     }
   }, []);
 
@@ -503,8 +540,10 @@ export default function HrReportsPage() {
   const loadRetention = useCallback(async () => {
     try {
       setRetention(await apiGet<RetentionDto>('/api/hr/privacy/retention'));
+      setRetentionFailed(false);
     } catch {
       setRetention(null);
+      setRetentionFailed(true); // v2.130.0: speak the failure, offer the retry
     }
   }, []);
 
@@ -1693,7 +1732,14 @@ export default function HrReportsPage() {
                 </Button>
               </div>
               {!consent ? (
-                <Skeleton className="h-28 w-full" />
+                consentFailed ? (
+                  <div data-testid="hr-privacy-consent-error" role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40">
+                    <p className="text-xs text-rose-700 dark:text-rose-300">The consent ledger could not be loaded — the desk stays dark rather than guess.</p>
+                    <Button variant="outline" size="sm" onClick={() => void loadConsent()} aria-label="Retry loading consent records">Retry</Button>
+                  </div>
+                ) : (
+                  <Skeleton className="h-28 w-full" />
+                )
               ) : consent.records.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">No employees in scope.</p>
               ) : (
@@ -1792,7 +1838,14 @@ export default function HrReportsPage() {
             </CardHeader>
             <CardContent>
               {!erasure ? (
-                <Skeleton className="h-28 w-full" />
+                erasureFailed ? (
+                  <div data-testid="hr-privacy-erasure-error" role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40">
+                    <p className="text-xs text-rose-700 dark:text-rose-300">The erasure queue could not be loaded — the desk stays dark rather than guess.</p>
+                    <Button variant="outline" size="sm" onClick={() => void loadErasure()} aria-label="Retry loading erasure requests">Retry</Button>
+                  </div>
+                ) : (
+                  <Skeleton className="h-28 w-full" />
+                )
               ) : erasure.requests.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">No erasure requests.</p>
               ) : (
@@ -1893,7 +1946,14 @@ export default function HrReportsPage() {
             </CardHeader>
             <CardContent>
               {!retention ? (
-                <Skeleton className="h-28 w-full" />
+                retentionFailed ? (
+                  <div data-testid="hr-privacy-retention-error" role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40">
+                    <p className="text-xs text-rose-700 dark:text-rose-300">The retention desk could not be loaded — the desk stays dark rather than guess.</p>
+                    <Button variant="outline" size="sm" onClick={() => void loadRetention()} aria-label="Retry loading the retention desk">Retry</Button>
+                  </div>
+                ) : (
+                  <Skeleton className="h-28 w-full" />
+                )
               ) : (
                 <Table>
                   <TableHeader><TableRow>
@@ -2088,6 +2148,20 @@ export default function HrReportsPage() {
                   ? ' The newest consent stands; the run gates on it.'
                   : ' No active consent stands; the run reports MISSING_CONSENT until a re-grant.'}
               </p>
+              {historyPayload.events.length > 0 ? (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    data-testid="hr-privacy-consent-history-csv"
+                    aria-label={`Export consent timeline CSV — ${historyPayload.employee.name}`}
+                    title="Only who, when, and what purpose are exported — the ledger's own columns, never more."
+                    onClick={exportHistoryCsv}
+                  >
+                    <FileDown className="h-4 w-4" aria-hidden /> Export CSV
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DialogContent>
