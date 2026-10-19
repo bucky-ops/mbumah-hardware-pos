@@ -224,6 +224,8 @@ interface ConsentDto {
     latestPolicyVersion: string | null;
     grantedAt: string | null;
     withdrawnAt: string | null;
+    /** v2.128.0: append-only history depth — rows ≥1 wear the re-granted ×N marker. */
+    priorGrants: number;
   }>;
 }
 
@@ -1666,13 +1668,24 @@ export default function HrReportsPage() {
                           <div className="text-xs text-muted-foreground">{r.employeeName}</div>
                         </TableCell>
                         <TableCell>
-                          {r.status === 'ACTIVE' ? (
-                            <span data-testid="hr-privacy-consent-chip-active" className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Active</span>
-                          ) : r.status === 'WITHDRAWN' ? (
-                            <span data-testid="hr-privacy-consent-chip-withdrawn" className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300" title={r.withdrawnAt ? `Withdrawn ${formatDate(r.withdrawnAt)}` : undefined}>Withdrawn</span>
-                          ) : (
-                            <span data-testid="hr-privacy-consent-chip-none" className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">None on file</span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {r.status === 'ACTIVE' ? (
+                              <span data-testid="hr-privacy-consent-chip-active" className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Active</span>
+                            ) : r.status === 'WITHDRAWN' ? (
+                              <span data-testid="hr-privacy-consent-chip-withdrawn" className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300" title={r.withdrawnAt ? `Withdrawn ${formatDate(r.withdrawnAt)}` : undefined}>Withdrawn</span>
+                            ) : (
+                              <span data-testid="hr-privacy-consent-chip-none" className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">None on file</span>
+                            )}
+                            {r.priorGrants > 0 ? (
+                              <span
+                                data-testid="hr-privacy-consent-regrant"
+                                className="inline-flex items-center gap-0.5 rounded-full border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300"
+                                title={`Withdrawn and re-granted before — ${r.priorGrants} earlier record${r.priorGrants === 1 ? '' : 's'} stay${r.priorGrants === 1 ? 's' : ''} on file (append-only ledger).`}
+                              >
+                                <History className="h-3 w-3" aria-hidden /> re-granted ×{r.priorGrants}
+                              </span>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.latestPolicyVersion ?? '—'}</TableCell>
                         <TableCell className="text-muted-foreground">{r.grantedAt ? formatDate(r.grantedAt) : '—'}</TableCell>

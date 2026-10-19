@@ -641,6 +641,13 @@ export interface ConsentRow {
   latestPolicyVersion: string | null;
   grantedAt: string | null;
   withdrawnAt: string | null;
+  /**
+   * Append-only history depth (v2.128.0): how many earlier consent rows this
+   * state supersedes. grantConsent refuses while an active record stands, so
+   * every row beyond the first is a withdraw-then-re-grant cycle — a value
+   * ≥1 is the ledger's honest "this consent was withdrawn once" trace.
+   */
+  priorGrants: number;
 }
 
 export interface ConsentLedger {
@@ -686,6 +693,7 @@ export async function listConsentRecords(session: Session): Promise<ConsentLedge
       latestPolicyVersion: (active ?? latest)?.policyVersion ?? null,
       grantedAt: (active ?? latest)?.grantedAt.toISOString() ?? null,
       withdrawnAt: active ? null : (latest?.withdrawnAt?.toISOString() ?? null),
+      priorGrants: Math.max(0, crs.length - 1),
     };
   });
 

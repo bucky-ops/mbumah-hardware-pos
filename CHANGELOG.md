@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.128.0] The record stands corrected
+
+The v2.127.0 governance round published an audit-coverage inventory whose one honest gap — "linkPortalAccount/unlinkPortalAccount write no audit row — fix queued" — was itself a false finding. Both mutators have written hash-chained UPDATE/EMPLOYEE rows since v2.39.0, pinned by tests and now live-verified against the database. This round corrects the record the honest way (with re-runnable evidence, not a silent edit), and completes the carried withdrawn-consent re-grant loop: the consent ledger now shows its own append-only history.
+
+### Added
+- **The re-grant trace** (`src/lib/hr/data-protection.ts`): the consent ledger's read-back carries `priorGrants` — the append-only history depth. Because `grantConsent` refuses while an active record stands, every record beyond the first is a withdraw-then-re-grant cycle; `priorGrants ≥ 1` is the ledger's honest "this consent was withdrawn once". The field rides every row (ACTIVE, WITHDRAWN, NONE — always the truth: 0 when there is no history).
+- **The re-grant marker** (`src/app/(shell)/hr/reports/page.tsx`, styling): the Privacy tab's consent card renders an indigo `re-granted ×N` chip (History icon, dark-mode twin) beside the status chip — only when the history exists. The tooltip states the count and the append-only reason ("N earlier records stay on file (append-only ledger)"). Status chips keep their own testids and tones; the marker never replaces a state, it annotates one.
+- **The withdrawn-consent re-grant loop** (carried since v2.121.0, closed by E2E): grant → roster chip ACTIVE → withdraw → roster chip flips withdrawn + Privacy chip WITHDRAWN → re-grant → roster chip ACTIVE again + `re-granted ×1` marker on the Privacy tab. The loop ran through the real UI with the append-only ConsentRecord rows and the GRANT/WITHDRAW audit rows verified in the database afterwards.
+
+### Changed
+- **docs/EMS_AUDIT_COVERAGE.md corrected** (Phase 4.8 acceptance 8 completes honestly): §4 is now "Known gaps — NONE (a correction, recorded 2026-10-19, v2.128.0)" — the false finding is quoted, then refuted with evidence a reviewer can re-run (the v2.39.0 code, the portal-link test pin, the live POST/DELETE → AuditLog verification). The Employees domain row claims **5/5** mutators including the portal-link pair; the raw count is corrected to **98 `hrAudit` call sites across 30 files** (the v2.127.0 note of 96 under-counted by 2). The method lesson is written into the doc: a coverage claim is verified per MUTATOR, not per FILE, and a named gap is verified against the code before it is published — an unverified gap claim is itself a defect in the record.
+
+### Tests
+- `src/tests/consent-regrant-v2128.test.ts` (14): `priorGrants` folds honestly (re-granted-ACTIVE reads 1; first-time reads 0; withdrawn-only history counts its depth; two full cycles read 2; NONE reads 0), the Privacy tab's marker contract (renders only when priorGrants > 0, indigo chip + dark twin + testid + append-only tooltip, status chips untouched), and the doc-correction pins (§4 states NONE with evidence; the false claim cannot return; the code really audits both mutators — the doc follows the code, never the reverse).
+
 ## [2.127.0] The desk says goodbye
 
 The schema declared WITHDRAWN terminal from day one, but nothing could set it — a candidate who pulled out stayed movable forever while the pipeline pretended to offer them a future. This round opens the WITHDRAWN door: the desk can record the candidate's own exit, the API refuses the exits it must refuse, and the row reads as history. The round also publishes the two governance inventories the EMS spec's Phase 4.8 asks for (audit coverage; security headers and rate limits).
