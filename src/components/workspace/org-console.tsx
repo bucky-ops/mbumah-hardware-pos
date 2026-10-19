@@ -10,7 +10,7 @@
 // safe URL exists (missing slug) a calm inline message replaces the button
 // instead of opening a broken placeholder (/stores/<undefined>) tab.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight,
@@ -46,7 +46,7 @@ import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
-import { buildBranchesCsv } from '@/lib/org/branches-csv';
+import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
 // Type-only import: erased at compile time, so the server-only diagnostics
 // data layer never enters the client bundle.
 import type { BranchDiagnostic } from '@/lib/org/diagnostics';
@@ -250,6 +250,13 @@ export function OrgConsole() {
   // v2.149.0: the branches table's CSV export — same honest take-away the
   // Store Intelligence Matrix has; the note is the polite confirmation.
   const [exportNote, setExportNote] = useState('');
+  // v2.154.0: the note grew a follow-up — an "Open" link pointing at the
+  // just-built blob, so the owner can eyeball the file without digging it
+  // out of the downloads folder. The previous blob URL is revoked on each
+  // new export (one live URL at a time — no leak).
+  const [exportUrl, setExportUrl] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const exportUrlRef = useRef('');
   // v2.23.0: per-branch HR drill-down visibility (collapsed until asked for —
   // the console opens with the summary tiles; the table is one click away).
   const [hrPerStoreOpen, setHrPerStoreOpen] = useState(false);
@@ -265,8 +272,76 @@ export function OrgConsole() {
   // same shape store-matrix's export uses; numbers export RAW (no thousands
   // separators) so a spreadsheet re-reads them as numbers, and the polite
   // note names the file that just landed.
-  function exportBranchesCsv(): void {
-    if (!summary) return;
+  //
+  // v2.154.0: the export grew a third section and a follow-up. The desk's
+  // yesterday digest rides the same download (fetched from the org-wide
+  // review-activity read; a refused or shapeless answer exports WITHOUT the
+  // section and the note says so — the file is never blocked by it), and the
+  // note ends with an Open link to the fresh blob (previous URL revoked).
+  async function exportBranchesCsv(): Promise<void> {
+    if (!summary || exporting) return;
+    setExporting(true);
+    let desk: BranchDeskCsvBlock | null = null;
+    let deskNote = '';
+    try {
+      const res = await authorizedFetchJson('/api/org/review-activity');
+      const data = res.json?.data as { yesterday?: unknown } | undefined;
+      const y = data?.yesterday as
+        | {
+            label?: unknown;
+            visits?: unknown;
+            clears?: unknown;
+            reviewers?: unknown;
+            requests?: unknown;
+            busiestBranch?: unknown;
+            topReviewer?: unknown;
+            branches?: unknown;
+          }
+        | undefined;
+      if (
+        res.ok &&
+        res.json?.success &&
+        y &&
+        typeof y.label === 'string' &&
+        typeof y.visits === 'number' &&
+        typeof y.clears === 'number' &&
+        typeof y.reviewers === 'number' &&
+        typeof y.requests === 'number' &&
+        Array.isArray(y.branches)
+      ) {
+        desk = {
+          label: y.label,
+          visits: y.visits,
+          clears: y.clears,
+          reviewers: y.reviewers,
+          requests: y.requests,
+          busiestBranch:
+            y.busiestBranch &&
+            typeof y.busiestBranch === 'object' &&
+            typeof (y.busiestBranch as { storeName?: unknown }).storeName === 'string' &&
+            typeof (y.busiestBranch as { visits?: unknown }).visits === 'number'
+              ? (y.busiestBranch as { storeName: string; visits: number })
+              : null,
+          topReviewer:
+            y.topReviewer &&
+            typeof y.topReviewer === 'object' &&
+            typeof (y.topReviewer as { name?: unknown }).name === 'string' &&
+            typeof (y.topReviewer as { visits?: unknown }).visits === 'number'
+              ? (y.topReviewer as { name: string; visits: number })
+              : null,
+          branches: (y.branches as Array<{ storeName?: unknown; visits?: unknown }>)
+            .filter(
+              (b): b is { storeName: string; visits: number } =>
+                typeof b?.storeName === 'string' && typeof b?.visits === 'number',
+            )
+            .map((b) => ({ storeName: b.storeName, visits: b.visits })),
+        };
+      }
+    } catch {
+      /* the desk section is best-effort by contract — the branches export
+         must never fail because the morning note did not answer */
+    }
+    if (!desk) deskNote = ' · desk activity unavailable';
     const csv = buildBranchesCsv(
       summary.stores.map((s) => ({
         name: s.name,
@@ -293,6 +368,9 @@ export function OrgConsole() {
           : null,
         expiryAlerts: r.expiryAlerts.documentsExpiring90Days + r.expiryAlerts.assetsOverdue,
       })),
+      // v2.154.0: the desk's yesterday digest as the third section (null
+      // when the read refused — the file ends at the v2.152.0 shape).
+      desk,
     );
     const stamp = new Date().toISOString().slice(0, 10);
     const filename = `branches_${stamp}.csv`;
@@ -302,8 +380,14 @@ export function OrgConsole() {
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
-    setExportNote(`Exported ${filename}`);
+    // v2.154.0: the download URL stays alive — the note's Open link points
+    // at the same blob so the owner can eyeball the file in a new tab. The
+    // PREVIOUS export's URL is revoked here (one live blob at a time).
+    if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
+    exportUrlRef.current = url;
+    setExportUrl(url);
+    setExportNote(`Exported ${filename}${deskNote}`);
+    setExporting(false);
   }
 
   async function fetchDiagnostics(force: boolean): Promise<BranchDiagnostic[] | null> {
@@ -671,6 +755,24 @@ export function OrgConsole() {
             <div className="flex items-center gap-2">
               <p aria-live="polite" data-testid="org-console-export-note" className="text-xs text-muted-foreground">
                 {exportNote}
+                {/* v2.154.0: the follow-up — the fresh blob opens in a new tab,
+                    so the owner can eyeball the export without hunting the
+                    downloads folder. Same blob the download used. */}
+                {exportUrl ? (
+                  <>
+                    {' · '}
+                    <a
+                      href={exportUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid="org-console-export-open"
+                      aria-label="Open the exported CSV in a new tab"
+                      className="underline underline-offset-2 text-amber-700 dark:text-amber-400 hover:text-orange-800 dark:hover:text-amber-300"
+                    >
+                      Open
+                    </a>
+                  </>
+                ) : null}
               </p>
               <Button
                 size="sm"
@@ -678,6 +780,7 @@ export function OrgConsole() {
                 className="h-7 text-[11px]"
                 data-testid="org-console-export-csv"
                 onClick={exportBranchesCsv}
+                disabled={exporting}
               >
                 <Download className="mr-1 h-3 w-3" aria-hidden="true" />
                 Export CSV

@@ -226,11 +226,14 @@ export function LoginScreen() {
                       <AlertDescription className="font-medium text-destructive">
                         {errorMessage}
                       </AlertDescription>
+                      {/* v2.154.0: was text-destructive/70 — on the red-tint
+                          alert bg the 70% alpha icon sat at the 3:1 non-text
+                          edge; the solid token clears it. */}
                       <button
                         type="button"
                         onClick={() => setErrorMessage(null)}
                         aria-label="Dismiss error"
-                        className="absolute right-2 top-2 rounded-md p-1 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        className="absolute right-2 top-2 rounded-md p-1 text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -356,21 +359,26 @@ export function LoginScreen() {
               </form>
             </CardContent>
             <CardFooter className="flex flex-col gap-3 text-sm text-muted-foreground">
-              <div className="flex items-center justify-center gap-3 w-full text-[11px] text-muted-foreground/70">
+              {/* v2.154.0: the footer line drops the muted-foreground alphas —
+                  on the light glass card (white/60 over the navy gradient,
+                  effective ≈ #ababb5) muted/70 measured ~1.7:1 and the muted/30
+                  separators ~1.2:1. The foreground alphas are theme-adaptive:
+                  80% reads ~6:1 on the light glass AND on the dark glass. */}
+              <div className="flex items-center justify-center gap-3 w-full text-[11px] text-foreground/80">
                 <a
                   href="tel:+254795191909"
                   className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
                 >
                   <Smartphone className="h-3 w-3" /> 0795 191 909
                 </a>
-                <span className="text-muted-foreground/30">·</span>
+                <span className="text-foreground/50">·</span>
                 <a
                   href="mailto:info@mbumahhardware.co.ke"
                   className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
                 >
                   <Mail className="h-3 w-3" /> Support
                 </a>
-                <span className="text-muted-foreground/30">·</span>
+                <span className="text-foreground/50">·</span>
                 <span className="inline-flex items-center gap-1">
                   <ShieldCheck className="h-3 w-3" /> Privacy
                 </span>
@@ -385,9 +393,10 @@ export function LoginScreen() {
             </div>
           </Card>
         </motion.div>
-        {/* Branding text - fade-in from below */}
+        {/* Branding text - fade-in from below. v2.154.0: was white/40 —
+            3.55:1 on the navy gradient at 12px; white/70 reads ~7.6:1. */}
         <motion.p
-          className="text-center mt-4 text-xs text-white/40 font-medium tracking-wider"
+          className="text-center mt-4 text-xs text-white/70 font-medium tracking-wider"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.7 }}
@@ -395,9 +404,11 @@ export function LoginScreen() {
           Powered by MBUMAH HARDWARE · Made in Kenya 🇰🇪
         </motion.p>
         {/* VERSION BADGE (v2.6.2): version + build commit, visible BEFORE
-            login - support can verify the deployed release from the gate. */}
+            login - support can verify the deployed release from the gate.
+            v2.154.0: was white/25 — 2.26:1 on support-critical release info;
+            white/55 reads ~5.3:1. */}
         <motion.p
-          className="text-center mt-1 text-[10px] text-white/25 tracking-wider"
+          className="text-center mt-1 text-[10px] text-white/55 tracking-wider"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.9 }}

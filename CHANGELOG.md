@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.154.0] Buttons that read in the dark
+
+The a11y campaign rode to the surfaces the console sweeps never reached — the unauthenticated login screen and /hr/reports dark mode — and found one real axe violation hiding app-wide.
+
+### Fixed
+- **Dark primary buttons read their own blue** (`globals.css`): the dark block's `--primary` is a mid blue (≈ #568de9) while its `--primary-foreground` stayed near-white — 3.15:1 on every dark `bg-primary` surface (first flagged on /hr/reports' "Apply period"). The foreground flips to a cool near-black (~5.5:1 on the same blue). All 36 `text-primary-foreground` usages sit on primary-family fills, so nothing else regresses; the 108 `text-primary` usages are why the background token never moved (darkening `--primary` would have broken primary-as-text on dark cards).
+- **Dark orange CTAs lose the white text** (`globals.css`): the orange fill never changes between themes, but the dark block flipped `--accent-orange-foreground` to near-white — every `bg-accent-orange` button (login submit, customers/inventory actions) measured ~2.2:1 in dark mode. The dark block now mirrors the light block's warm near-black, one pair for both themes.
+- **The login screen passes on both glass cards** (`login-screen.tsx`): the footer's muted/70 links measured ~1.7:1 and the muted/30 separators ~1.2:1 on the light glass card — they wear theme-adaptive foreground alphas now. The dark-gradient branding (white/40 → white/70) and the support-critical version badge (white/25 → white/55) clear their navy background; the destructive dismiss icon drops its 70% alpha.
+
+### Added
+- **The branches CSV carries the desk report** (`branches-csv.ts`, `org-console.tsx`): a third section — the desk's yesterday digest (visits, corrections cleared, distinct reviewers, requests, busiest branch, most active reviewer, per-branch visits) — fetched org-wide from the review-activity read. A refused or shapeless read exports without the section and the note says so; the branches export is never blocked by the morning note.
+- **The export note follows up** (`org-console.tsx`): after downloading, the note grows an Open link to the fresh blob — eyeball the file in a new tab without hunting the downloads folder. One live blob at a time (the previous URL is revoked on re-export), and the button is honestly busy during the fetch.
+
+### Tests
+- console-org-v2154.test.ts (13): the dark token pairs, the primary-foreground-on-primary-fill safety sweep, the login token contract, the desk section bytes + honest zeros + RFC-4180 quoting + the v2.152.0 byte pins, and the handler's fetch/tolerance/Open-link contract.
+
 ## [2.153.0] The tinted cards tell the truth
 
 The v2.152.0 re-audit's six nodes, probed with the lesson-65 discipline — check the PARENT background, never assume white. The alert cards' own tints were the missing variable.

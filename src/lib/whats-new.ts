@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.154.0',
+    title: 'Buttons that read in the dark',
+    bullets: [
+      'Dark-mode primary and orange buttons now wear text that reads on their own bright fills.',
+      'The sign-in screen’s small print — footer, version badge — clears its glass background in both themes.',
+      'The branches CSV export now carries the desk’s morning note: headline figures and per-branch visits.',
+      'After exporting, an Open link in the note lets you eyeball the file without hunting your downloads folder.',
+    ],
+  },
+  {
     version: '2.153.0',
     title: 'The tinted cards tell the truth',
     bullets: [
