@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertTriangle, Briefcase, CalendarCheck, CalendarDays, CheckCircle2, CheckCheck, FileDown, Loader2, RefreshCw, Sun, X } from 'lucide-react';
-import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, deskWeekendDays, deskWeekdayDays, buildBulkApproveSummary, readDeskLensPref, writeDeskLensPref, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary, type DeskLensPref } from '@/lib/hr/attendance-desk';
+import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, deskWeekendDays, deskWeekdayDays, deskDaySplit, deskSplitLabel, buildBulkApproveSummary, readDeskLensPref, writeDeskLensPref, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary, type DeskLensPref } from '@/lib/hr/attendance-desk';
 import { buildTimesheetDeskCsv } from '@/lib/hr/timesheet-desk-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 
@@ -583,6 +583,14 @@ export default function HrTimesheetsPage() {
                         ? deskWeekdayDays(row.days)
                         : row.days,
                   );
+                  // v2.146.0: the split the lenses imply — the two counts the
+                  // trio filters would show, printed under the total chip,
+                  // always visible without lensing. Composes the same two
+                  // day-kind builders the lenses use (ONE definition of each
+                  // kind); garbage days count in NEITHER bucket (the total
+                  // chip above keeps speaking the whole row).
+                  const split = deskDaySplit(row.days);
+                  const splitLabel = deskSplitLabel(split);
                   const focused = row.employeeId === focusId;
                   return (
                     <TableRow
@@ -601,12 +609,44 @@ export default function HrTimesheetsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span
-                          className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300"
-                          data-testid="hr-timesheet-count-chip"
-                        >
-                          {row.days.length} {row.days.length === 1 ? 'day' : 'days'}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span
+                            className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300"
+                            data-testid="hr-timesheet-count-chip"
+                          >
+                            {row.days.length} {row.days.length === 1 ? 'day' : 'days'}
+                          </span>
+                          {/* v2.146.0: the split line — weekday count in the
+                              weekday chips' amber, weekend count in the
+                              weekend chips' sky (the lens trio's own dress
+                              code), separator muted. An all-garbage row has
+                              no honest split and renders none; the words are
+                              in the aria-label so the icons stay decoration. */}
+                          {splitLabel ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground"
+                              data-testid="hr-timesheet-split"
+                              aria-label={`${row.days.length} pending ${row.days.length === 1 ? 'day' : 'days'} — ${splitLabel}`}
+                              title="Pending days by kind — the lens trio filters to either kind; an unreadable day counts in neither"
+                            >
+                              {split.weekday > 0 ? (
+                                <span className="inline-flex items-center gap-0.5">
+                                  <Briefcase className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-hidden />
+                                  {split.weekday}
+                                </span>
+                              ) : null}
+                              {split.weekday > 0 && split.weekend > 0 ? (
+                                <span aria-hidden>·</span>
+                              ) : null}
+                              {split.weekend > 0 ? (
+                                <span className="inline-flex items-center gap-0.5">
+                                  <Sun className="h-3 w-3 text-sky-600 dark:text-sky-400" aria-hidden />
+                                  {split.weekend}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {/* v2.138.0: weekend chips wear the sky tint — a

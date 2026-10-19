@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.146.0',
+    title: 'The table wears the same dots',
+    bullets: [
+      'Each payroll period in the runs table now wears its last prepare-attempt outcome as a colour dot — the same green, amber, or grey dot the period picker has, readable without expanding anything.',
+      'The dots come from the same clock-based “last” the gate card speaks — one definition of last, never a second parser; a period with no recorded attempts wears nothing.',
+      'The timesheets desk now prints the split under each row’s day count — weekdays and weekends counted separately, so a row’s shape reads without lensing.',
+      'The split composes the same two day-kind filters the lens trio uses — an unreadable day counts in neither bucket, and the total chip still speaks every day.',
+      'The payroll zero-run ledger doc now points to the gate-contract catalogue, so the family’s honesty rules live one link away.',
+    ],
+  },
+  {
     version: '2.145.0',
     title: 'The desk lens learns weekdays',
     bullets: [

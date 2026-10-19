@@ -705,6 +705,18 @@ export default function HrPayrollPage() {
     () => listTimelinePeriods(timeline?.rows ?? []),
     [timeline],
   );
+  // v2.146.0: the runs table wears the same dots — each period group's
+  // header carries its last prepare-attempt outcome as a tone dot, the
+  // picker's own dot (v2.144.0) riding the table's collapsed state. ONE
+  // definition of "last": the SAME listTimelinePeriods computation the
+  // picker reads (clock-based, summarizeGateTimeline inside), looked up by
+  // the group's own period name. Honest absence: a period with no labeled
+  // attempts in the window (or a failed timeline read) wears nothing —
+  // the dots never invent a story the trail does not hold.
+  const timelineOutcomeByPeriod = useMemo(
+    () => new Map(timelinePeriods.map((p) => [p.label, p.lastOutcome] as const)),
+    [timelinePeriods],
+  );
   const timelineFiltered = useMemo(
     () =>
       scopeGateTimeline(timeline?.rows ?? [], {
@@ -868,6 +880,11 @@ export default function HrPayrollPage() {
                     <TableBody>
                       {periodGroups.map((group) => {
                         const open = !collapsedPeriods.has(group.periodName);
+                        // v2.146.0: this period's last gate-attempt outcome
+                        // (the trail's clock-based "last" — the picker's own
+                        // reading), or null when the window holds nothing.
+                        const periodOutcome =
+                          timelineOutcomeByPeriod.get(group.periodName) ?? null;
                         const chips: Array<{ key: string; label: string; cls: string; dot: string }> = [];
                         if (group.settledCount > 0)
                           chips.push({
@@ -917,7 +934,7 @@ export default function HrPayrollPage() {
                                     type="button"
                                     onClick={() => togglePeriod(group.periodName)}
                                     aria-expanded={open}
-                                    aria-label={`${open ? 'Collapse' : 'Expand'} the ${group.periodName} payroll period`}
+                                    aria-label={`${open ? 'Collapse' : 'Expand'} the ${group.periodName} payroll period${periodOutcome ? ` — last gate attempt ${periodOutcome}` : ''}`}
                                     data-testid="payroll-period-toggle"
                                     className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left"
                                   >
@@ -927,6 +944,27 @@ export default function HrPayrollPage() {
                                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                                   )}
                                   <span className="text-sm font-semibold tracking-tight">{group.periodName}</span>
+                                  {/* v2.146.0: the period's last prepare-attempt
+                                      outcome as a tone dot — the picker's own
+                                      dot (v2.144.0), same classes, same one
+                                      definition of "last", now on the table's
+                                      collapsed state. aria-hidden decoration:
+                                      the toggle's aria-label carries the word
+                                      for screen readers, the title for pointers. */}
+                                  {periodOutcome ? (
+                                    <span
+                                      data-testid="payroll-period-gate-outcome"
+                                      aria-hidden
+                                      title={`Last prepare attempt outcome in the gate trail: ${periodOutcome}`}
+                                      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                                        periodOutcome === 'PASSED'
+                                          ? 'bg-emerald-500 dark:bg-emerald-400'
+                                          : periodOutcome === 'BLOCKED'
+                                            ? 'bg-amber-500 dark:bg-amber-400'
+                                            : 'bg-muted-foreground/40'
+                                      }`}
+                                    />
+                                  ) : null}
                                   {group.payDate && (
                                     <span className="text-[11px] text-muted-foreground">
                                       pays {formatEatStamp(new Date(group.payDate))}

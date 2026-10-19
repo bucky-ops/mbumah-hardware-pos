@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.146.0] The table wears the same dots
+
+The picker's period dots (v2.144.0) and the desk's day-kind counts lived on different pages than the questions they answer: the runs table's collapsed header said nothing about what the gate last said, and the desk's count chip hid the weekday/weekend shape the lenses imply. Both answers move onto the surfaces where the questions arise. Pure layer + two pages + one docs line: no new fetch, no new endpoint.
+
+### Added
+- **The runs table's period outcome dots** (`payroll-period-gate-outcome`): each period group's header wears its last prepare-attempt outcome as a tone dot — emerald PASSED, amber BLOCKED, muted otherwise — the picker's own dot (same classes, same `title` pattern, `aria-hidden` decoration) riding the table's collapsed state. ONE definition of "last": the SAME `listTimelinePeriods` computation the picker reads (clock-based, `summarizeGateTimeline` inside), looked up by the group's own period name. Honest absence: a period with no labeled attempts in the window (or a failed timeline read) wears nothing.
+- **The toggle's aria-label carries the word**: `…payroll period — last gate attempt BLOCKED` when the trail holds an outcome, so screen readers get what the dot shows.
+- **The desk's split line** (`hr-timesheet-split`): the two counts the lens trio implies, printed under the total chip, always visible without lensing — weekday count beside a Briefcase icon in the weekday chips' amber, weekend count beside a Sun icon in the weekend chips' sky, separator muted, `tabular-nums` throughout. The `aria-label` speaks the full words ("2 pending days — 1 weekday · 1 weekend"); the `title` names the honesty rule.
+- **`deskDaySplit` + `deskSplitLabel`** (`attendance-desk.ts`): the split composes `deskWeekdayDays`/`deskWeekendDays` themselves — ONE definition of each kind, never a second parser. Garbage days count in NEITHER bucket (the total chip keeps speaking the whole row); a lone kind speaks alone; an all-garbage row renders no split at all; non-array reads zero, never a guessed pair.
+
+### Changed
+- `docs/PAYROLL_LEDGER_ZERO_RUNS.md` gains a "Related contracts" section pointing at `docs/hr/payroll-run-lifecycle.md`'s "Gate surfaces and contracts" — the gate family's honesty rules live one link away from the ledger drawer's doc.
+- The desk's "Pending days" cell stacks the count chip and the split line (`flex flex-col items-start gap-1`); nothing else in the row moved.
+
 ## [2.145.0] The desk lens learns weekdays
 
 The weekends-only lens (v2.140.0) answered "who worked the weekend?"; the mirror question — "show me just the working-week days" — still needed an eyeball. The lens completes the pair as a three-way day-kind filter (the gate card's outcome trio's own shape), and the persisted preference grows without abandoning old browsers. Pure layer + desk only: no new fetch, no new endpoint.
