@@ -88,7 +88,7 @@ function CurrencyRow({
             · {meta.name}
           </span>
         </div>
-        <p className="text-[10px] text-muted-foreground/80 truncate">
+        <p className="text-[10px] text-muted-foreground truncate">
           {rateLabel}
         </p>
       </div>

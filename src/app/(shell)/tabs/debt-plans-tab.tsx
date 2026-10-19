@@ -57,7 +57,7 @@ const FILTER_CHIPS: FilterChip[] = [
 
 // Chip colour classes (statically declared so Tailwind can find them).
 const CHIP_ACTIVE_CLASSES: Record<string, string> = {
-  emerald: 'bg-emerald-500 text-white border-emerald-600 shadow-sm',
+  emerald: 'bg-emerald-700 text-white border-emerald-700 shadow-sm',
   amber: 'bg-amber-500 text-white border-amber-600 shadow-sm',
   rose: 'bg-rose-500 text-white border-rose-600 shadow-sm',
   green: 'bg-green-500 text-white border-green-600 shadow-sm',
