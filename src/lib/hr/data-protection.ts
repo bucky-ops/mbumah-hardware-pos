@@ -13,6 +13,7 @@ import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
 import { hasHrPermission } from './permissions';
 import { StageGError, employeeScopeWhere, employeeInScope } from './stage-g-shared';
+import { buildConsentTimelineCsv, consentTimelinesCsvFilename, type ConsentTimelineCsvRow } from './consent-timeline-csv';
 import type { AuthSession } from '@/lib/auth';
 
 type Session = AuthSession;
@@ -733,6 +734,18 @@ export interface ConsentHistory {
 }
 
 /**
+ * Whole days a consent stood before withdrawal — the SERVER-side clock so no
+ * drawer or export ever reimplements it (the describeRetentionWindow
+ * lesson). An open consent has no honest day count: null while it stands;
+ * a span shorter than a day floors to 0; a nonsense span clamps to 0.
+ */
+export function stoodDaysBetween(grantedAt: Date, withdrawnAt: Date | null): number | null {
+  if (!withdrawnAt) return null;
+  const stoodMs = withdrawnAt.getTime() - grantedAt.getTime();
+  return Math.max(0, Math.floor(stoodMs / 86_400_000));
+}
+
+/**
  * Read-back: ONE employee's full consent timeline (v2.129.0) — the drawer's
  * source. Scope-checked like every ledger read (a cross-branch id 404s, it
  * does not leak), append-only rows verbatim: nothing is edited, folded, or
@@ -751,17 +764,14 @@ export async function listConsentHistory(session: Session, employeeId: string): 
   });
   if (!employee) throw new StageGError('CONSENT_HISTORY_NOT_FOUND', 'Employee not found in your scope.', 404);
 
-  const events: ConsentHistoryEvent[] = employee.consentRecords.map((c, i) => {
-    const stoodMs = (c.withdrawnAt ? c.withdrawnAt.getTime() : 0) - c.grantedAt.getTime();
-    return {
-      purpose: c.purpose,
-      policyVersion: c.policyVersion,
-      grantedAt: c.grantedAt.toISOString(),
-      withdrawnAt: c.withdrawnAt?.toISOString() ?? null,
-      stoodDays: c.withdrawnAt ? Math.max(0, Math.floor(stoodMs / 86_400_000)) : null,
-      cycle: i + 1,
-    };
-  });
+  const events: ConsentHistoryEvent[] = employee.consentRecords.map((c, i) => ({
+    purpose: c.purpose,
+    policyVersion: c.policyVersion,
+    grantedAt: c.grantedAt.toISOString(),
+    withdrawnAt: c.withdrawnAt?.toISOString() ?? null,
+    stoodDays: stoodDaysBetween(c.grantedAt, c.withdrawnAt),
+    cycle: i + 1,
+  }));
 
   return {
     employee: {
@@ -771,6 +781,63 @@ export async function listConsentHistory(session: Session, employeeId: string): 
     },
     events,
     standing: events.length > 0 && events[events.length - 1].withdrawnAt === null,
+  };
+}
+
+/** The bulk export's receipt (v2.132.0): what was filed, in numbers. */
+export interface ConsentTimelinesExport {
+  /** RFC 4180 CSV — one row per consent cycle, every in-scope employee. */
+  csv: string;
+  filename: string;
+  /** How many employees were in scope (rows can be fewer: NONE has no cycles). */
+  employees: number;
+  /** How many consent cycles made it onto the file. */
+  cycles: number;
+}
+
+/**
+ * Read-back: EVERY in-scope employee's consent timeline as ONE flat CSV
+ * (v2.132.0, the export-honesty theme's fourth beat — case list v2.115, the
+ * access ledger v2.118, one drawer's timeline v2.130, now the whole branch).
+ * The scope where is the ledger's own (deletedAt null + employeeScopeWhere),
+ * the serializer is the drawer's own (the employee columns were already in
+ * the row type — the bulk file adds no column the drawer never showed), and
+ * the clock is the server's own (stoodDaysBetween). Rows order employee →
+ * cycle: a branch ledger reads top to bottom, one employee's story at a
+ * time. Read-only by construction — nothing here mutates, and the route
+ * carries the ledger's view-right guard trio, never a decision right.
+ */
+export async function exportConsentTimelines(session: Session): Promise<ConsentTimelinesExport> {
+  const employees = await db.employee.findMany({
+    where: { deletedAt: null, AND: [employeeScopeWhere(session)] },
+    select: {
+      employeeCode: true,
+      firstName: true,
+      lastName: true,
+      consentRecords: { orderBy: { grantedAt: 'asc' } },
+    },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    take: 200,
+  });
+
+  const rows: ConsentTimelineCsvRow[] = employees.flatMap((e) =>
+    e.consentRecords.map((c, i) => ({
+      cycle: i + 1,
+      grantedAt: c.grantedAt.toISOString(),
+      withdrawnAt: c.withdrawnAt?.toISOString() ?? null,
+      stoodDays: stoodDaysBetween(c.grantedAt, c.withdrawnAt),
+      purpose: c.purpose,
+      policyVersion: c.policyVersion,
+      employeeCode: e.employeeCode ?? '—',
+      employeeName: `${e.firstName} ${e.lastName}`.trim(),
+    })),
+  );
+
+  return {
+    csv: buildConsentTimelineCsv(rows),
+    filename: consentTimelinesCsvFilename(),
+    employees: employees.length,
+    cycles: rows.length,
   };
 }
 

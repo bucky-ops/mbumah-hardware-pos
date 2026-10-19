@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.132.0',
+    title: 'The columns bend, the branch files itself',
+    bullets: [
+      'The consent ledger grew a branch-level export: every in-scope employee\u2019s consent cycles in ONE flat CSV \u2014 the export-honesty theme\u2019s fourth beat (case list \u2192 access ledger \u2192 one timeline \u2192 the whole branch).',
+      'The file is the drawer\u2019s own serializer and columns \u2014 who, when, what purpose, which policy, how long stood; never content, and a standing consent still files with empty withdrawn/stood cells.',
+      'Report tables learned to bend: drag a column\u2019s right edge to resize it \u2014 the EMS spec\u2019s last unsatisfied table affordance \u2014 and double-click the edge to reset.',
+      'Widths persist per browser under their column key: two tables sharing a \u201cPeriod\u201d column share their width on purpose, and the desk remembers after a reload.',
+      'A failed export speaks too: a rose \u201cnothing was downloaded\u201d line replaces the button\u2019s silence.',
+    ],
+  },
+  {
     version: '2.131.0',
     title: 'The reports speak their failures',
     bullets: [

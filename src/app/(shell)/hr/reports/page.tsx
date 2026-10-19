@@ -7,7 +7,7 @@
 // Reports are aggregates; per-employee rows carry employeeCode + job title
 // only. The Privacy tab governs erasure requests (decision + legal basis).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { apiGet, apiSend, ErrorNote, StatusBadge, formatDate, formatKes } from '@/components/hr/self-service-ui';
 import { buildConsentTimelineCsv, consentTimelineCsvFilename, type ConsentTimelineCsvRow } from '@/lib/hr/consent-timeline-csv';
+import { COL_WIDTHS_STORAGE_KEY, EDGE_BAND, loadColWidths, nudgeColWidth } from '@/lib/hr/column-resize';
 import { describeSweepOutcome } from '@/lib/hr/sweep-outcome';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { ReportSchedulesTab } from '@/components/hr/report-schedules-tab';
@@ -453,6 +454,36 @@ export default function HrReportsPage() {
   const [adjustResult, setAdjustResult] = useState<{ bell: boolean; email: boolean } | null>(null);
 
   const [hiddenCols, setHiddenCols] = useState<Record<string, boolean>>({});
+
+  // v2.132.0: resizable columns — the EMS spec Phase 4.8 acceptance's last
+  // unsatisfied table affordance (sticky headers, visibility, CSV and print
+  // already shipped). Widths live per column key, persist in localStorage,
+  // and ride onto every resizable TableHead through head(); the drag itself
+  // is DELEGATED to the tabs container (no new DOM, no table-layout flip).
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const [exportAllBusy, setExportAllBusy] = useState(false);
+  const [exportAllError, setExportAllError] = useState<string | null>(null);
+  const colResize = useRef<{ key: string; startX: number; startW: number } | null>(null);
+  const colWidthsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    try {
+      const loaded = loadColWidths(window.localStorage.getItem(COL_WIDTHS_STORAGE_KEY));
+      setColWidths(loaded);
+      colWidthsRef.current = loaded;
+    } catch {
+      // private mode or blocked storage: the desk renders default widths
+    }
+  }, []);
+
+  const persistColWidths = useCallback((next: Record<string, number>) => {
+    colWidthsRef.current = next;
+    try {
+      window.localStorage.setItem(COL_WIDTHS_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // a blocked store never breaks the drag — the width still applies live
+    }
+  }, []);
   const [rejectTarget, setRejectTarget] = useState<ErasureDto['requests'][number] | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
   const [rejectBasis, setRejectBasis] = useState('');
@@ -565,6 +596,41 @@ export default function HrReportsPage() {
     a.click();
     URL.revokeObjectURL(url);
   }, [historyPayload]);
+
+  // v2.132.0: the branch files itself — the export-honesty theme's fourth
+  // beat (case list v2.115 → access ledger v2.118 → one drawer's timeline
+  // v2.130 → every timeline in scope). One flat CSV built server-side by the
+  // drawer's own serializer; the file carries who, when, and what purpose,
+  // and the row type guarantees nothing else exists to carry.
+  const exportAllTimelines = useCallback(async () => {
+    if (exportAllBusy) return;
+    setExportAllBusy(true);
+    setExportAllError(null);
+    try {
+      const res = await fetch('/api/hr/privacy/consent/export', { credentials: 'include' });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `Export failed (${res.status}).`);
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get('Content-Disposition') ?? '').match(/filename="([^"]+)"/);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = match?.[1] ?? 'consent-timelines.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch (e: unknown) {
+      setExportAllError(
+        e instanceof Error
+          ? `The export could not be built — nothing was downloaded. ${e.message}`
+          : 'The export could not be built — nothing was downloaded.',
+      );
+    } finally {
+      setExportAllBusy(false);
+    }
+  }, [exportAllBusy]);
 
   // v2.119.0: the consent ledger loads with the Privacy tab.
   const loadConsent = useCallback(async () => {
@@ -928,6 +994,82 @@ export default function HrReportsPage() {
 
   const col = (key: string) => (hiddenCols[key] ? 'hidden' : '');
 
+  // v2.132.0: head(key) is the ONE-SPREAD way a TableHead becomes resizable —
+  // the key is the delegated handlers' identity, the style is the live width,
+  // and the tooltip says the edge is grabbable. A column the user has never
+  // dragged renders exactly as before (no width, browser's own layout).
+  const head = (key: string) => ({
+    'data-resize-key': key,
+    style: colWidths[key] ? { width: colWidths[key], minWidth: colWidths[key] } : undefined,
+    title: 'Drag the right edge to resize · double-click the edge to reset',
+  });
+
+  // The resize lives HERE, delegated once for every table on the desk: a
+  // pointerdown within EDGE_BAND of a resizable th's right edge opens the
+  // drag (the move/up halves ride window listeners so a drag that leaves the
+  // table still lands), double-click on the edge resets that one column,
+  // and hovering the band shows col-resize so the affordance is visible.
+  const edgeOf = (e: { clientX: number; target: EventTarget | null }) => {
+    const th = (e.target as HTMLElement).closest?.('th[data-resize-key]') as HTMLElement | null;
+    if (!th) return null;
+    const rect = th.getBoundingClientRect();
+    if (rect.right - e.clientX > EDGE_BAND) return null;
+    const key = th.getAttribute('data-resize-key') ?? '';
+    return key ? { key, right: rect.right, width: colWidthsRef.current[key] ?? rect.width } : null;
+  };
+
+  const onReportPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const hit = edgeOf(e);
+    if (!hit) return;
+    e.preventDefault();
+    colResize.current = { key: hit.key, startX: e.clientX, startW: hit.width };
+  };
+
+  const onReportDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const hit = edgeOf(e);
+    if (!hit) return;
+    const next = { ...colWidthsRef.current };
+    if (!(hit.key in next)) return;
+    delete next[hit.key];
+    persistColWidths(next);
+    setColWidths(next);
+  };
+
+  const onReportPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const th = (e.target as HTMLElement).closest?.('th[data-resize-key]') as HTMLElement | null;
+    const near = th ? th.getBoundingClientRect().right - e.clientX <= EDGE_BAND : false;
+    const wasNear = el.dataset.colCursorNear === '1';
+    if (near !== wasNear) {
+      el.style.cursor = near ? 'col-resize' : '';
+      if (near) el.dataset.colCursorNear = '1';
+      else delete el.dataset.colCursorNear;
+    }
+  };
+
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const r = colResize.current;
+      if (!r) return;
+      const next = nudgeColWidth(r.startW, e.clientX - r.startX);
+      // the REF is the source of truth during a drag (state only mirrors it)
+      // — pointerup persists exactly what the last move produced
+      colWidthsRef.current = { ...colWidthsRef.current, [r.key]: next };
+      setColWidths(colWidthsRef.current);
+    };
+    const up = () => {
+      if (!colResize.current) return;
+      colResize.current = null;
+      persistColWidths(colWidthsRef.current);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+  }, [persistColWidths]);
+
   return (
     <div className="space-y-6 print:space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
@@ -1003,7 +1145,14 @@ export default function HrReportsPage() {
         </div>
       ) : null}
 
-      <Tabs value={tab} onValueChange={changeTab} className="space-y-4">
+      <Tabs
+        value={tab}
+        onValueChange={changeTab}
+        className="space-y-4"
+        onPointerDown={onReportPointerDown}
+        onDoubleClick={onReportDoubleClick}
+        onPointerMove={onReportPointerMove}
+      >
         <TabsList className="flex-wrap print:hidden">
           <TabsTrigger value="headcount">Headcount</TabsTrigger>
           <TabsTrigger value="cost">Employment cost</TabsTrigger>
@@ -1131,11 +1280,11 @@ export default function HrReportsPage() {
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-card">
                         <TableRow>
-                          <TableHead className={col('label')}>Period</TableHead>
-                          <TableHead className={`text-right ${col('gross')}`}>Gross</TableHead>
-                          <TableHead className={`text-right ${col('er')}`}>Employer statutory</TableHead>
-                          <TableHead className={`text-right ${col('total')}`}>Total cost</TableHead>
-                          <TableHead className={`text-right ${col('net')}`}>Net paid</TableHead>
+                          <TableHead {...head('label')}    className={col('label')}>Period</TableHead>
+                          <TableHead {...head('gross')}   className={`text-right ${col('gross')}`}>Gross</TableHead>
+                          <TableHead {...head('er')}   className={`text-right ${col('er')}`}>Employer statutory</TableHead>
+                          <TableHead {...head('total')}   className={`text-right ${col('total')}`}>Total cost</TableHead>
+                          <TableHead {...head('net')}   className={`text-right ${col('net')}`}>Net paid</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1193,9 +1342,9 @@ export default function HrReportsPage() {
                   />
                   <Table>
                     <TableHeader><TableRow>
-                      <TableHead className={`sticky top-0 bg-card ${col('status')}`}>Status</TableHead>
-                      <TableHead className={`sticky top-0 bg-card text-right ${col('days')}`}>Days</TableHead>
-                      <TableHead className={`sticky top-0 bg-card text-right ${col('share')}`}>Share</TableHead>
+                      <TableHead {...head('status')}   className={`sticky top-0 bg-card ${col('status')}`}>Status</TableHead>
+                      <TableHead {...head('days')}   className={`sticky top-0 bg-card text-right ${col('days')}`}>Days</TableHead>
+                      <TableHead {...head('share')}   className={`sticky top-0 bg-card text-right ${col('share')}`}>Share</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
                       {absence.byStatus.map((s) => (
@@ -1341,16 +1490,16 @@ export default function HrReportsPage() {
                     <div className="max-h-[520px] overflow-auto">
                       <Table>
                         <TableHeader><TableRow>
-                          <TableHead className={`sticky top-0 bg-card ${col('code')}`}>Employee</TableHead>
-                          <TableHead className={`sticky top-0 bg-card ${col('title')}`}>Title</TableHead>
-                          <TableHead className={`sticky top-0 bg-card ${col('type')}`}>Branch</TableHead>
-                          <TableHead className={`sticky top-0 bg-card ${col('ltype')}`}>Leave type</TableHead>
-                          <TableHead className={`sticky top-0 bg-card text-right ${col('alloc')}`}>Allocated</TableHead>
-                          <TableHead className={`sticky top-0 bg-card text-right ${col('used')}`}>Used</TableHead>
-                          <TableHead className={`sticky top-0 bg-card text-right ${col('pend')}`}>Pending</TableHead>
-                          <TableHead className={`sticky top-0 bg-card text-right ${col('avail')}`}>Available</TableHead>
-                          <TableHead className={`sticky top-0 bg-card ${col('rail')}`}>Committed</TableHead>
-                          <TableHead className={`sticky top-0 bg-card ${col('flag')}`}>Flag</TableHead>
+                          <TableHead {...head('code')}   className={`sticky top-0 bg-card ${col('code')}`}>Employee</TableHead>
+                          <TableHead {...head('title')}   className={`sticky top-0 bg-card ${col('title')}`}>Title</TableHead>
+                          <TableHead {...head('type')}   className={`sticky top-0 bg-card ${col('type')}`}>Branch</TableHead>
+                          <TableHead {...head('ltype')}   className={`sticky top-0 bg-card ${col('ltype')}`}>Leave type</TableHead>
+                          <TableHead {...head('alloc')}   className={`sticky top-0 bg-card text-right ${col('alloc')}`}>Allocated</TableHead>
+                          <TableHead {...head('used')}   className={`sticky top-0 bg-card text-right ${col('used')}`}>Used</TableHead>
+                          <TableHead {...head('pend')}   className={`sticky top-0 bg-card text-right ${col('pend')}`}>Pending</TableHead>
+                          <TableHead {...head('avail')}   className={`sticky top-0 bg-card text-right ${col('avail')}`}>Available</TableHead>
+                          <TableHead {...head('rail')}   className={`sticky top-0 bg-card ${col('rail')}`}>Committed</TableHead>
+                          <TableHead {...head('flag')}   className={`sticky top-0 bg-card ${col('flag')}`}>Flag</TableHead>
                         </TableRow></TableHeader>
                         <TableBody>
                           {leaveUtil.rows.map((r) => (
@@ -1619,12 +1768,12 @@ export default function HrReportsPage() {
                   <div className="max-h-96 overflow-y-auto">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-card"><TableRow>
-                        <TableHead className={col('code')}>Code</TableHead>
-                        <TableHead className={col('title')}>Title</TableHead>
-                        <TableHead className={col('type')}>Type</TableHead>
-                        <TableHead className={col('hired')}>Hired</TableHead>
-                        <TableHead className={col('left')}>Left</TableHead>
-                        <TableHead className={`text-right ${col('tenure')}`}>Tenure</TableHead>
+                        <TableHead {...head('code')}    className={col('code')}>Code</TableHead>
+                        <TableHead {...head('title')}    className={col('title')}>Title</TableHead>
+                        <TableHead {...head('type')}    className={col('type')}>Type</TableHead>
+                        <TableHead {...head('hired')}    className={col('hired')}>Hired</TableHead>
+                        <TableHead {...head('left')}    className={col('left')}>Left</TableHead>
+                        <TableHead {...head('tenure')}   className={`text-right ${col('tenure')}`}>Tenure</TableHead>
                       </TableRow></TableHeader>
                       <TableBody>
                         {turnover.exitRows.length === 0 ? (
@@ -1685,10 +1834,10 @@ export default function HrReportsPage() {
                   <div className="max-h-96 overflow-y-auto">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-card"><TableRow>
-                        <TableHead className={col('job')}>Position</TableHead>
-                        <TableHead className={col('applied')}>Applied</TableHead>
-                        <TableHead className={col('accepted')}>Accepted</TableHead>
-                        <TableHead className={`text-right ${col('days')}`}>Days</TableHead>
+                        <TableHead {...head('job')}    className={col('job')}>Position</TableHead>
+                        <TableHead {...head('applied')}    className={col('applied')}>Applied</TableHead>
+                        <TableHead {...head('accepted')}    className={col('accepted')}>Accepted</TableHead>
+                        <TableHead {...head('days')}   className={`text-right ${col('days')}`}>Days</TableHead>
                       </TableRow></TableHeader>
                       <TableBody>
                         {tth.rows.length === 0 ? (
@@ -1754,12 +1903,12 @@ export default function HrReportsPage() {
                   <div className="max-h-96 overflow-y-auto">
                     <Table>
                       <TableHeader className="sticky top-0 z-10 bg-card"><TableRow>
-                        <TableHead className={col('label')}>Period</TableHead>
-                        <TableHead className={`text-right ${col('paye')}`}>PAYE</TableHead>
-                        <TableHead className={`text-right ${col('nssf')}`}>NSSF</TableHead>
-                        <TableHead className={`text-right ${col('shif')}`}>SHIF</TableHead>
-                        <TableHead className={`text-right ${col('ahl')}`}>Housing levy</TableHead>
-                        <TableHead className={`text-right ${col('arr')}`}>Arrears</TableHead>
+                        <TableHead {...head('label')}    className={col('label')}>Period</TableHead>
+                        <TableHead {...head('paye')}   className={`text-right ${col('paye')}`}>PAYE</TableHead>
+                        <TableHead {...head('nssf')}   className={`text-right ${col('nssf')}`}>NSSF</TableHead>
+                        <TableHead {...head('shif')}   className={`text-right ${col('shif')}`}>SHIF</TableHead>
+                        <TableHead {...head('ahl')}   className={`text-right ${col('ahl')}`}>Housing levy</TableHead>
+                        <TableHead {...head('arr')}   className={`text-right ${col('arr')}`}>Arrears</TableHead>
                       </TableRow></TableHeader>
                       <TableBody>
                         {statutory.monthly.map((m) => (
@@ -1827,10 +1976,10 @@ export default function HrReportsPage() {
                 <div className="max-h-96 overflow-y-auto">
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-card"><TableRow>
-                      <TableHead>Code</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Months</TableHead>
-                      <TableHead className="text-right">Gross</TableHead><TableHead className="text-right">NSSF</TableHead>
-                      <TableHead className="text-right">SHIF</TableHead><TableHead className="text-right">Housing levy</TableHead>
-                      <TableHead className="text-right">PAYE</TableHead><TableHead className="text-right">Net</TableHead>
+                      <TableHead {...head('p10-code')}>Code</TableHead><TableHead {...head('p10-type')}>Type</TableHead><TableHead {...head('p10-months')} className="text-right">Months</TableHead>
+                      <TableHead {...head('p10-gross')} className="text-right">Gross</TableHead><TableHead {...head('p10-nssf')} className="text-right">NSSF</TableHead>
+                      <TableHead {...head('p10-shif')} className="text-right">SHIF</TableHead><TableHead {...head('p10-levy')} className="text-right">Housing levy</TableHead>
+                      <TableHead {...head('p10-paye')} className="text-right">PAYE</TableHead><TableHead {...head('p10-net')} className="text-right">Net</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
                       {p10.rows.map((r) => (
@@ -1896,11 +2045,35 @@ export default function HrReportsPage() {
               </p>
             </CardHeader>
             <CardContent>
-              <div className="mb-3 flex justify-end">
+              <div className="mb-3 flex items-center justify-end gap-2">
+                {consent && consent.records.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void exportAllTimelines()}
+                    disabled={exportAllBusy}
+                    aria-label="Export all consent timelines CSV"
+                    title="One flat CSV: every in-scope employee's consent cycles — who, when, and what purpose. Never content."
+                    data-testid="hr-privacy-consent-export-all"
+                    className="border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40 dark:hover:text-violet-200 print:hidden"
+                  >
+                    <FileDown className="h-3.5 w-3.5" aria-hidden />
+                    {exportAllBusy ? 'Exporting…' : 'Export all'}
+                  </Button>
+                ) : null}
                 <Button variant="outline" size="sm" onClick={() => void loadConsent()} disabled={consentBusy} aria-label="Refresh consent records">
                   {consentBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <History className="h-4 w-4" aria-hidden />} Refresh
                 </Button>
               </div>
+              {exportAllError ? (
+                <p
+                  role="status"
+                  data-testid="hr-privacy-consent-export-error"
+                  className="mb-2 text-xs font-medium text-rose-600 dark:text-rose-400"
+                >
+                  {exportAllError}
+                </p>
+              ) : null}
               {!consent ? (
                 consentFailed ? (
                   <ReportFailureStrip
@@ -1918,9 +2091,9 @@ export default function HrReportsPage() {
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Employee</TableHead><TableHead>Status</TableHead>
-                    <TableHead>Policy</TableHead><TableHead>Granted</TableHead><TableHead>Withdrawn</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead {...head('c-emp')}>Employee</TableHead><TableHead {...head('c-status')}>Status</TableHead>
+                    <TableHead {...head('c-policy')}>Policy</TableHead><TableHead {...head('c-granted')}>Granted</TableHead><TableHead {...head('c-withdrawn')}>Withdrawn</TableHead>
+                    <TableHead {...head('c-action')} className="text-right">Action</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {consent.records.map((r) => (
@@ -2030,8 +2203,8 @@ export default function HrReportsPage() {
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Employee</TableHead><TableHead>Status</TableHead><TableHead>Requested</TableHead>
-                    <TableHead>Decision</TableHead><TableHead className="text-right">Actions</TableHead>
+                    <TableHead {...head('e-emp')}>Employee</TableHead><TableHead {...head('e-status')}>Status</TableHead><TableHead {...head('e-req')}>Requested</TableHead>
+                    <TableHead {...head('e-decision')}>Decision</TableHead><TableHead {...head('e-actions')} className="text-right">Actions</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {erasure.requests.map((r) => (
@@ -2142,16 +2315,17 @@ export default function HrReportsPage() {
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Scope</TableHead><TableHead>Window</TableHead>
+                    <TableHead {...head('r-scope')}>Scope</TableHead><TableHead {...head('r-window')}>Window</TableHead>
                     <TableHead
+                      {...head('r-sweep')}
                       data-testid="hr-retention-preview-col"
                       className="whitespace-nowrap"
                       title="Dry run — counts rows matching the sweep's own criteria; nothing is changed."
                     >
                       Next sweep
                     </TableHead>
-                    <TableHead>Hold</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead {...head('r-hold')}>Hold</TableHead>
+                    <TableHead {...head('r-actions')} className="text-right">Actions</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {retention.policies.map((p) => (
