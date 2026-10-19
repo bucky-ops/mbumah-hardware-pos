@@ -287,7 +287,7 @@ export function LeaveView({ initialData, selfUserId }: { initialData: LeaveDto; 
                     <strong className="text-foreground tabular-nums">{Number(b.availableDays).toLocaleString()}</strong> of{' '}
                     <span className="tabular-nums">{allocated.toLocaleString()}</span> days available
                   </span>
-                  {Number(b.pendingDays) > 0 ? <span className="text-amber-600 dark:text-amber-400">{Number(b.pendingDays)} pending</span> : null}
+                  {Number(b.pendingDays) > 0 ? <span className="text-amber-700 dark:text-amber-400">{Number(b.pendingDays)} pending</span> : null}
                 </div>
               </div>
             );
@@ -618,7 +618,7 @@ export function LeaveView({ initialData, selfUserId }: { initialData: LeaveDto; 
             <DialogTitle className="flex items-center gap-2">
               {resubmitOf ? (
                 <>
-                  <RefreshCw className="h-4 w-4 text-amber-600" aria-hidden /> Resubmit leave request
+                  <RefreshCw className="h-4 w-4 text-amber-700" aria-hidden /> Resubmit leave request
                 </>
               ) : (
                 'Request leave'

@@ -1314,11 +1314,11 @@ export default function FinancialTab() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30">
-                <KeyRound className="h-5 w-5 text-amber-600" />
+                <KeyRound className="h-5 w-5 text-amber-700" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Active Rentals</p>
-                <p className="text-xl font-bold text-amber-600">{stats?.activeRentals || 0}</p>
+                <p className="text-xl font-bold text-amber-700">{stats?.activeRentals || 0}</p>
               </div>
             </div>
           </CardContent>
@@ -1336,7 +1336,7 @@ export default function FinancialTab() {
             </CardTitle>
             <div className="flex items-center gap-2">
               {plBreakdown.isDemo && (
-                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
                   Demo Data
                 </Badge>
               )}
@@ -1406,7 +1406,7 @@ export default function FinancialTab() {
 
             {/* Operating Expenses */}
             <div className="p-3 rounded-lg bg-gradient-to-r from-amber-50 to-amber-50/50 dark:from-amber-900/20 dark:to-amber-900/10 border border-amber-100 dark:border-amber-900/30">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <Wallet className="h-3.5 w-3.5" /> Operating Expenses
               </p>
               <div className="space-y-1">
@@ -1414,7 +1414,7 @@ export default function FinancialTab() {
                   plBreakdown.operatingExpenses.map((exp, i) => (
                     <div key={i} className="flex justify-between pl-4">
                       <span className="text-muted-foreground">{exp.name}</span>
-                      <span className="font-medium text-amber-600 dark:text-amber-400">({formatKES(exp.amount)})</span>
+                      <span className="font-medium text-amber-700 dark:text-amber-400">({formatKES(exp.amount)})</span>
                     </div>
                   ))
                 ) : (
@@ -1468,7 +1468,7 @@ export default function FinancialTab() {
                 <TrendingUp className="h-4 w-4" /> Revenue Trend
               </CardTitle>
               {revenueSummary?.isDemo && (
-                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
                   Demo Data
                 </Badge>
               )}
@@ -1575,7 +1575,7 @@ export default function FinancialTab() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Payment Methods Distribution</CardTitle>
               {paymentBreakdown.length === 0 && paymentPieData.length > 0 && (
-                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
                   Demo Data
                 </Badge>
               )}
@@ -1645,7 +1645,7 @@ export default function FinancialTab() {
                 <ArrowDownRight className="h-4 w-4 text-orange-500" /> Expense Categories
               </CardTitle>
               {journals.every(je => !je.lines?.some(l => l.account?.type === 'EXPENSE')) && expenseByAccount.length > 0 && (
-                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
                   Demo Data
                 </Badge>
               )}
@@ -1701,7 +1701,7 @@ export default function FinancialTab() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Profit Margin Trend</CardTitle>
               {revenueSummary?.isDemo && (
-                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+                <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
                   Demo Data
                 </Badge>
               )}

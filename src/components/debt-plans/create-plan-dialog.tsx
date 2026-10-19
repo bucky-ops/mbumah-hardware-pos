@@ -346,7 +346,7 @@ export function CreatePlanDialog({
                     <Loader2 className="h-3 w-3 animate-spin" /> Loading debts…
                   </p>
                 ) : outstandingDebts.length === 0 ? (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
                     This customer has no outstanding debts eligible for a plan.
                   </p>
                 ) : (

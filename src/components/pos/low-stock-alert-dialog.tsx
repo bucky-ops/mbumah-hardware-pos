@@ -114,7 +114,7 @@ export function LowStockAlertDialog({
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <h4 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                    <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400">
                       Low Stock ({lowStockProducts.length})
                     </h4>
                   </div>
@@ -143,7 +143,7 @@ export function LowStockAlertDialog({
                           <div className="mt-2">
                             <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
                               <span>Current: {product.quantityInStock} / Reorder at: {product.reorderLevel}</span>
-                              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                              <span className="text-amber-700 dark:text-amber-400 font-medium">
                                 Restock ~{formatQtyWithUnit(restockQty, product.unitType)}
                               </span>
                             </div>

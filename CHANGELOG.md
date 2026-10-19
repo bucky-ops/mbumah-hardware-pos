@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.156.0] The amber family settles
+
+The lesson-64 re-audit on the shipped v2.155.0 build surfaced the next render-state layer: the amber text family and the muted-alpha helper lines. Same standing fix, ridden to the end in-round.
+
+### Fixed
+- **The amber text family deepens** (166 sites across the tabs): `text-amber-600` → `text-amber-700` (3.17-3.19:1 on white/gray-50 → 5.03:1; the axe-flagged nodes were transactions' summary twin and gift-cards' hover link, the rest were one re-audit away per lesson 64). Hover pairs move one step (`hover:text-amber-800`, 4 pairs); `focus:text-amber-600` → `focus:text-amber-700` (2); no `dark:text-amber-600` existed, dark pairs (`dark:text-amber-400`) untouched.
+- **The muted-alpha helper lines reach full strength** (57 sites): `text-muted-foreground/60` (28) and `/70` (29) → bare `text-muted-foreground` — the 9-10px flagged nodes measured 2.51:1 and 3.07:1; full muted is 5.76:1. No `dark:text-muted-foreground/N` existed, so dark renders are untouched by construction (lesson 66 held).
+- Prior-round pins re-anchored by the committed script (its first real use): v2149's amber-600-forbidden pin, v2153's amber regex pin, v2154's muted/70 pin restored to forbid the OLD tokens; source-moved pins (retention's amber pair, the desk Briefcase icon) ride with their sources.
+
+### Tests
+- Full suite 3149/3149 (160 files); lint 0 errors on changed files; verify-v2-156-0 pinning the token families and the reanchor script's own contract.
+
 ## [2.155.0] Recovery that never sleeps
 
 The "persistence" half of the B2C retry story: the disciplined retry gate v2.33.0 built finally stops waiting for someone to open the run dialog, and the POS tabs' never-audited family gets the same contrast discipline the console family earned.

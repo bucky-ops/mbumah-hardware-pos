@@ -348,7 +348,7 @@ export function LoyaltyCard({
           </div>
           <div className="rounded-lg border bg-gradient-to-br from-amber-50 to-amber-100/30 dark:from-amber-950/30 dark:to-amber-900/10 p-3">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              <HandCoins className="h-3 w-3 text-amber-600" /> Redeemed
+              <HandCoins className="h-3 w-3 text-amber-700" /> Redeemed
             </div>
             <div className="text-lg font-bold text-amber-700 dark:text-amber-400 tabular-nums">
               {data.totalRedeemed.toLocaleString()}
@@ -461,7 +461,7 @@ function LoyaltyTxRow({ tx }: { tx: LoyaltyTransactionItem }) {
         </p>
       </div>
       <div className="text-right shrink-0">
-        <div className={`text-sm font-bold tabular-nums ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+        <div className={`text-sm font-bold tabular-nums ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>
           {isPositive ? '+' : ''}
           {tx.points.toLocaleString()}
         </div>

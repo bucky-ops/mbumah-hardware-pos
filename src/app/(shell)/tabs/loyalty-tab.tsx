@@ -746,7 +746,7 @@ export default function LoyaltyTab() {
                         <span className={`text-xs font-semibold ${
                           ['EARN', 'BONUS'].includes(tx.transactionType) ? 'text-green-700' :
                           tx.transactionType === 'REDEEM' ? 'text-blue-600' :
-                          tx.transactionType === 'EXPIRE' ? 'text-gray-500' : 'text-amber-600'
+                          tx.transactionType === 'EXPIRE' ? 'text-gray-500' : 'text-amber-700'
                         }`}>
                           {['EARN', 'BONUS'].includes(tx.transactionType) ? '+' : tx.transactionType === 'EXPIRE' ? '-' : ''}
                           {tx.points.toLocaleString()}
@@ -1197,7 +1197,7 @@ export default function LoyaltyTab() {
                         <TableCell className="text-right text-xs font-semibold">
                           <span className={
                             ['EARN', 'BONUS'].includes(tx.transactionType) ? 'text-green-700' :
-                            tx.transactionType === 'REDEEM' ? 'text-blue-600' : 'text-amber-600'
+                            tx.transactionType === 'REDEEM' ? 'text-blue-600' : 'text-amber-700'
                           }>
                             {['EARN', 'BONUS'].includes(tx.transactionType) ? '+' : ''}
                             {tx.points.toLocaleString()}

@@ -713,7 +713,7 @@ export default function MessagingTab() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                <Clock className="h-4 w-4 text-amber-600" />
+                <Clock className="h-4 w-4 text-amber-700" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">
@@ -1028,7 +1028,7 @@ export default function MessagingTab() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-amber-300 text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
                   onClick={() => {
                     const emailTo = sendForm.subject || selectedCustomer?.email || '';
                     if (!emailTo.trim()) {
@@ -1094,7 +1094,7 @@ export default function MessagingTab() {
             <Card className="border-amber-200 dark:border-amber-900/40">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-amber-600" />
+                  <FileText className="h-5 w-5 text-amber-700" />
                   Send Balance Updates
                 </CardTitle>
               </CardHeader>
@@ -1304,7 +1304,7 @@ export default function MessagingTab() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-amber-300 text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
                   onClick={() => {
                     const emailTo = sendForm.subject || selectedCustomer?.email || '';
                     if (!emailTo.trim()) {
@@ -2140,7 +2140,7 @@ export default function MessagingTab() {
             </Button>
             <Button
               variant="outline"
-              className="border-amber-300 text-amber-600 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+              className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
               onClick={() => {
                 const emailTo = sendForm.subject || selectedCustomer?.email || '';
                 if (!emailTo.trim()) { toast.error('Email required'); return; }
@@ -2277,7 +2277,7 @@ export default function MessagingTab() {
         <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-amber-600" />
+              <FileText className="h-5 w-5 text-amber-700" />
               Send Balance Updates
             </DialogTitle>
             <DialogDescription>
@@ -2345,7 +2345,7 @@ export default function MessagingTab() {
                             {cust.phone || 'No phone number'}
                           </p>
                         </div>
-                        <Badge variant="outline" className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20">
+                        <Badge variant="outline" className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-900/20">
                           {formatKES(cust.balance)}
                         </Badge>
                       </label>

@@ -452,7 +452,7 @@ function ConfirmActionDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className={`h-5 w-5 ${variant === 'destructive' ? 'text-red-600' : 'text-amber-600'}`} />
+            <AlertTriangle className={`h-5 w-5 ${variant === 'destructive' ? 'text-red-600' : 'text-amber-700'}`} />
             {title}
           </DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -537,7 +537,7 @@ function TransactionRow({
           </Badge>
         </TableCell>
         <TableCell className="text-xs font-bold text-right">
-          <span className={`text-sm ${txType === 'refund' ? 'text-amber-600' : txType === 'void' ? 'text-red-600 line-through' : 'text-foreground'}`}>
+          <span className={`text-sm ${txType === 'refund' ? 'text-amber-700' : txType === 'void' ? 'text-red-600 line-through' : 'text-foreground'}`}>
             {txType === 'refund' ? '-' : ''}{formatKES(transaction.totalAmount)}
           </span>
         </TableCell>
@@ -608,7 +608,7 @@ function TransactionRow({
                   <Printer className="h-3 w-3 mr-1" /> Print
                 </Button>
                 {txType === 'sale' && transaction.paymentStatus === 'COMPLETED' && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30" onClick={(e) => { e.stopPropagation(); onRefund(); }}>
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30" onClick={(e) => { e.stopPropagation(); onRefund(); }}>
                     <RotateCcw className="h-3 w-3 mr-1" /> Refund
                   </Button>
                 )}
@@ -907,11 +907,11 @@ export default function TransactionsTab() {
         <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-3 flex items-center gap-3">
             <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/40 dark:to-amber-900/20">
-              <RotateCcw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <RotateCcw className="h-4 w-4 text-amber-700 dark:text-amber-400" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-muted-foreground">Total Refunds</p>
-              <p className="text-sm sm:text-base font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">{formatKES(summaryStats.totalRefunds)}</p>
+              <p className="text-sm sm:text-base font-bold text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatKES(summaryStats.totalRefunds)}</p>
             </div>
           </CardContent>
         </Card>
@@ -1110,7 +1110,7 @@ export default function TransactionsTab() {
                 <ShoppingBag className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
               </div>
               <p className="text-base font-medium text-muted-foreground">No transactions found</p>
-              <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your date range or filters</p>
+              <p className="text-sm text-muted-foreground mt-1">Try adjusting your date range or filters</p>
             </div>
           ) : (
             <div className="overflow-x-auto max-h-[calc(100vh-32rem)] overflow-y-auto custom-scrollbar">

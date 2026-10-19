@@ -44,7 +44,7 @@ function scoreColor(score: number): { text: string; bg: string; stroke: string }
   }
   if (score >= 40) {
     return {
-      text: 'text-amber-600 dark:text-amber-400',
+      text: 'text-amber-700 dark:text-amber-400',
       bg: 'bg-amber-500',
       stroke: '#f59e0b',
     };
@@ -179,7 +179,7 @@ export function StoreHealthWidget({ storeId }: StoreHealthWidgetProps) {
         score: stockScore,
         weight: 0.25,
         detail: `${lowStockProducts} low`,
-        color: 'text-amber-600 dark:text-amber-400',
+        color: 'text-amber-700 dark:text-amber-400',
       },
       {
         label: 'Debt Control',
@@ -261,7 +261,7 @@ export function StoreHealthWidget({ storeId }: StoreHealthWidgetProps) {
                       {item.label}
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground/70 text-[10px]">{item.detail}</span>
+                      <span className="text-muted-foreground text-[10px]">{item.detail}</span>
                       <span className={`font-semibold ${itemColors.text}`}>{item.score}</span>
                     </span>
                   </div>
@@ -274,7 +274,7 @@ export function StoreHealthWidget({ storeId }: StoreHealthWidgetProps) {
                 </div>
               );
             })}
-            <div className="pt-1.5 mt-1 border-t border-border/50 text-[10px] text-muted-foreground/70">
+            <div className="pt-1.5 mt-1 border-t border-border/50 text-[10px] text-muted-foreground">
               Weighted: Revenue 30% · Stock 25% · Debt 25% · Engagement 20%
             </div>
           </div>

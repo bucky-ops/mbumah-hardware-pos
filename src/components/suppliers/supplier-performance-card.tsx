@@ -169,7 +169,7 @@ export function SupplierPerformanceCard({ data, onClick, rank }: SupplierPerform
         <div className="mb-3">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground">On-Time Delivery</span>
-            <span className={`text-xs font-bold ${metrics.onTimeDeliveryRate >= 90 ? 'text-emerald-700' : metrics.onTimeDeliveryRate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>
+            <span className={`text-xs font-bold ${metrics.onTimeDeliveryRate >= 90 ? 'text-emerald-700' : metrics.onTimeDeliveryRate >= 70 ? 'text-amber-700' : 'text-red-600'}`}>
               {metrics.onTimeDeliveryRate}%
             </span>
           </div>

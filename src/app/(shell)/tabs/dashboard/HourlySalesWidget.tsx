@@ -162,7 +162,7 @@ export function HourlySalesWidget({ storeId }: HourlySalesWidgetProps) {
                   {hourLabel(hourNum)}
                 </div>
                 {i === 0 || hourNum % 3 === 0 ? (
-                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground/70 whitespace-nowrap">
+                  <span className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 text-[8px] text-muted-foreground whitespace-nowrap">
                     {hourLabel(hourNum).replace('AM', '').replace('PM', '')}
                   </span>
                 ) : null}

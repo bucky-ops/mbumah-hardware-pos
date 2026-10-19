@@ -282,11 +282,11 @@ export function FinancialOverview({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-900/30 dark:to-amber-800/30">
-                <KeyRound className="h-5 w-5 text-amber-600" />
+                <KeyRound className="h-5 w-5 text-amber-700" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Active Rentals</p>
-                <p className="text-xl font-bold text-amber-600">{stats?.activeRentals || 0}</p>
+                <p className="text-xl font-bold text-amber-700">{stats?.activeRentals || 0}</p>
               </div>
             </div>
           </CardContent>

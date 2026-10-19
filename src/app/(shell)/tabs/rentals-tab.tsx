@@ -109,7 +109,7 @@ function RentalTimeline({ rental }: { rental: RentalItem }) {
       </div>
       <div className="text-center">
         {isOverdue && <span className="text-[10px] font-medium text-red-600 dark:text-red-400">{daysOverdue}d overdue</span>}
-        {isCloseToDue && <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">{daysRemaining}d remaining</span>}
+        {isCloseToDue && <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">{daysRemaining}d remaining</span>}
         {isActive && daysRemaining > 3 && <span className="text-[10px] font-medium text-green-700 dark:text-green-400">{daysRemaining}d remaining</span>}
         {isReturned && <span className="text-[10px] font-medium text-muted-foreground">Returned</span>}
       </div>
@@ -591,7 +591,7 @@ function EquipmentCatalog({ products, rentals }: { products: ProductListItem[]; 
           <div className="text-center py-8">
             <Package className="h-10 w-10 mx-auto mb-2 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">No rental equipment found</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">Add rental products to see equipment catalog</p>
+            <p className="text-xs text-muted-foreground mt-1">Add rental products to see equipment catalog</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto custom-scrollbar pr-1">
@@ -699,7 +699,7 @@ function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, on
           <KeyRound className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
         </div>
         <p className="text-base font-medium text-muted-foreground">No rentals found</p>
-        <p className="text-sm text-muted-foreground/60 mt-1">Create a new rental to get started</p>
+        <p className="text-sm text-muted-foreground mt-1">Create a new rental to get started</p>
       </div>
     );
   }
@@ -1233,7 +1233,7 @@ export default function RentalsTab() {
                   <div>
                     <p className="text-sm text-muted-foreground">Rental Charges</p>
                     <p className="text-xl font-bold">{formatKES(revenueSummary.charges)}</p>
-                    <p className="text-[10px] text-muted-foreground/70">before fees &amp; damage</p>
+                    <p className="text-[10px] text-muted-foreground">before fees &amp; damage</p>
                   </div>
                 </div>
               </CardContent>
@@ -1247,7 +1247,7 @@ export default function RentalsTab() {
                   <div>
                     <p className="text-sm text-muted-foreground">Deposits Held</p>
                     <p className="text-xl font-bold">{formatKES(revenueSummary.depositsHeld)}</p>
-                    <p className="text-[10px] text-muted-foreground/70">
+                    <p className="text-[10px] text-muted-foreground">
                       collected all-time {formatKES(revenueSummary.depositsCollected)}
                     </p>
                   </div>
@@ -1334,7 +1334,7 @@ export default function RentalsTab() {
                       <KeyRound className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
                     </div>
                     <p className="text-base font-medium text-muted-foreground">No rentals found</p>
-                    <p className="text-sm text-muted-foreground/60 mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       {statusFilter !== 'all' ? 'Try a different status filter' : 'Create a new rental to get started'}
                     </p>
                     {statusFilter === 'all' && (

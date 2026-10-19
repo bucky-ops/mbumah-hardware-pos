@@ -42,8 +42,8 @@ export function EmptyCartState() {
       </div>
       <p className="text-sm font-medium text-muted-foreground">Your cart is empty</p>
       {/* Contrast bumped /50 -> /70 for WCAG AA on the drawer background. */}
-      <p className="text-xs text-muted-foreground/70 mt-1.5">Click on products to add them here</p>
-      <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/60">
+      <p className="text-xs text-muted-foreground mt-1.5">Click on products to add them here</p>
+      <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
         <Keyboard className="h-3 w-3" />
         <span>Press <kbd className="px-1 py-0.5 rounded border bg-muted text-[9px]">F9</kbd> to checkout</span>
       </div>

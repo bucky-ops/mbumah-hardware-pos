@@ -33,7 +33,7 @@ const SEGMENT_STYLES = [
 
 const SEGMENT_LABEL_STYLES = [
   'text-rose-600 dark:text-rose-400',
-  'text-amber-600 dark:text-amber-400',
+  'text-amber-700 dark:text-amber-400',
   'text-sky-700 dark:text-sky-400',
   'text-emerald-700 dark:text-emerald-400',
 ] as const;
@@ -239,7 +239,7 @@ export function ChangePasswordScreen() {
                           {rule.ok ? (
                             <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" aria-hidden />
                           ) : (
-                            <X className="h-3 w-3 text-muted-foreground/60" aria-hidden />
+                            <X className="h-3 w-3 text-muted-foreground" aria-hidden />
                           )}
                           <span className={rule.ok ? 'text-muted-foreground line-through decoration-emerald-500/40' : 'text-muted-foreground'}>
                             {rule.label}

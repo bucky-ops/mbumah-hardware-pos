@@ -173,7 +173,7 @@ function POReceivingProgress({ po }: { po: PurchaseOrderListItem }) {
   return (
     <div className="flex items-center gap-2 text-xs">
       <Progress value={pct} className="h-1.5 flex-1" />
-      <span className={`font-medium whitespace-nowrap ${isComplete ? 'text-green-700' : isPartial ? 'text-amber-600' : 'text-muted-foreground'}`}>
+      <span className={`font-medium whitespace-nowrap ${isComplete ? 'text-green-700' : isPartial ? 'text-amber-700' : 'text-muted-foreground'}`}>
         {totalReceived}/{totalOrdered}
       </span>
     </div>
@@ -283,10 +283,10 @@ function SupplierPOPerformanceCard({ purchaseOrders }: { purchaseOrders: Purchas
           </div>
           <div className="p-3 rounded-lg bg-amber-50/80 dark:bg-amber-900/20 backdrop-blur-sm border border-amber-200/30 dark:border-amber-800/30">
             <div className="flex items-center gap-2 mb-1">
-              <Timer className="h-4 w-4 text-amber-600" />
+              <Timer className="h-4 w-4 text-amber-700" />
               <span className="text-xs text-muted-foreground">Avg. Lead Time</span>
             </div>
-            <p className="text-xl font-bold text-amber-600">{avgLeadTime > 0 ? `${avgLeadTime}d` : '-'}</p>
+            <p className="text-xl font-bold text-amber-700">{avgLeadTime > 0 ? `${avgLeadTime}d` : '-'}</p>
           </div>
           <div className="p-3 rounded-lg bg-purple-50/80 dark:bg-purple-900/20 backdrop-blur-sm border border-purple-200/30 dark:border-purple-800/30">
             <div className="flex items-center gap-2 mb-1">
@@ -637,7 +637,7 @@ function CreatePODialog({
                 {lowStockLoading ? (
                   <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                 ) : (
-                  <AlertTriangle className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                  <AlertTriangle className="h-3.5 w-3.5 mr-1 text-amber-700" />
                 )}
                 Add Low Stock Items
               </Button>
@@ -698,7 +698,7 @@ function CreatePODialog({
                       <p className="text-xs text-muted-foreground font-mono">
                         {item.sku}
                         {item.currentStock !== undefined && (
-                          <span className="ml-2 text-amber-600">
+                          <span className="ml-2 text-amber-700">
                             <Package className="h-3 w-3 inline mr-0.5" />
                             {formatQty(item.currentStock)} in stock
                           </span>
@@ -1005,7 +1005,7 @@ function SupplierDetailView({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Pending Orders</p>
@@ -1204,7 +1204,7 @@ function SupplierDetailView({
               {supplier.taxPin && (
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                    <Hash className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    <Hash className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">KRA PIN</p>
@@ -1490,7 +1490,7 @@ function SendOrderDialog({
       <div className="space-y-4">
         {channelMissing && (
           <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800 dark:text-amber-300">
               This supplier has no {channel === 'WHATSAPP' ? 'phone number' : 'email address'} on file.
               {channel === 'WHATSAPP'
@@ -1515,7 +1515,7 @@ function SendOrderDialog({
               </SelectItem>
               <SelectItem value="EMAIL">
                 <span className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-amber-600" /> Email
+                  <Mail className="h-4 w-4 text-amber-700" /> Email
                 </span>
               </SelectItem>
             </SelectContent>
@@ -1854,7 +1854,7 @@ export default function SuppliersTab() {
                 <Truck className="absolute inset-0 m-auto h-10 w-10 text-muted-foreground/30" />
               </div>
               <p className="text-base font-medium">No suppliers found</p>
-              <p className="text-sm text-muted-foreground/60 mt-1">Add your first supplier to get started</p>
+              <p className="text-sm text-muted-foreground mt-1">Add your first supplier to get started</p>
               <Button size="sm" className="mt-3" onClick={() => setAddOpen(true)}>
                 <Plus className="h-4 w-4 mr-1" /> Add Supplier
               </Button>
@@ -2001,7 +2001,7 @@ export default function SuppliersTab() {
                                 }}
                                 className="gap-2 cursor-pointer"
                               >
-                                <Mail className="h-4 w-4 text-amber-600" />
+                                <Mail className="h-4 w-4 text-amber-700" />
                                 Quick Email
                               </DropdownMenuItem>
                             )}

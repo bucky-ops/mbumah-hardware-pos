@@ -594,10 +594,10 @@ export default function DeliveryNotesTab() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Pending Deliveries</p>
-                <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+                <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
               </div>
               <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-amber-600" />
+                <Clock className="h-5 w-5 text-amber-700" />
               </div>
             </div>
           </CardContent>

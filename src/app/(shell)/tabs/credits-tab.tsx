@@ -1121,7 +1121,7 @@ export default function CreditsTab() {
                   </SelectItem>
                   <SelectItem value="ADJUSTMENT">
                     <div className="flex items-center gap-2">
-                      <Minus className="h-3 w-3 text-amber-600" />
+                      <Minus className="h-3 w-3 text-amber-700" />
                       Adjustment
                     </div>
                   </SelectItem>
@@ -1288,7 +1288,7 @@ export default function CreditsTab() {
                     </SelectItem>
                     <SelectItem value="ADJUSTMENT">
                       <div className="flex items-center gap-2">
-                        <Minus className="h-3 w-3 text-amber-600" />
+                        <Minus className="h-3 w-3 text-amber-700" />
                         Adjustment
                       </div>
                     </SelectItem>

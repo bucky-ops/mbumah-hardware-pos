@@ -79,7 +79,7 @@ export default async function MyAttendance() {
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={`This month summary — ${monthLabel}`}>
         {[
           { label: 'Present', value: presentCount, icon: CheckCircle2, tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300' },
-          { label: 'Late', value: lateCount, icon: Timer, tone: 'text-amber-600 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300' },
+          { label: 'Late', value: lateCount, icon: Timer, tone: 'text-amber-700 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300' },
           { label: 'Absent', value: absentCount, icon: XCircle, tone: 'text-rose-600 bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300' },
           { label: 'On leave', value: leaveCount, icon: CalendarClock, tone: 'text-sky-700 bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300' },
         ].map((tile) => (
@@ -118,7 +118,7 @@ export default async function MyAttendance() {
                 <div className="flex items-center gap-2">
                   <StatusBadge status={r.status} />
                   {r.lateMinutes > 0 ? (
-                    <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">{r.lateMinutes} min late</span>
+                    <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">{r.lateMinutes} min late</span>
                   ) : null}
                 </div>
                 <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">

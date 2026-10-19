@@ -88,7 +88,7 @@ export const EXPORT_TYPES: ExportTypeMeta[] = [
     description: 'Stock levels, reorder points, bin locations, stock value.',
     icon: Boxes,
     gradient: 'from-amber-500 to-amber-600',
-    iconColor: 'text-amber-600 dark:text-amber-400',
+    iconColor: 'text-amber-700 dark:text-amber-400',
     hoverRing: 'hover:ring-amber-300/60 dark:hover:ring-amber-700/50',
     supportsDateRange: false,
   },

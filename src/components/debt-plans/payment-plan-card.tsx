@@ -141,7 +141,7 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
             <span className="flex items-center gap-1">
               <CalendarClock className="h-3.5 w-3.5" />
               Next: {formatDate(upcomingInstallment.dueDate)}
-              <span className="text-muted-foreground/70">
+              <span className="text-muted-foreground">
                 · {getFrequencyLabel(plan.frequency)}
               </span>
             </span>

@@ -107,7 +107,7 @@ describe('the desk wears the split (page contract)', () => {
   });
 
   it('the split dresses as the chips it counts (amber weekday, sky weekend)', () => {
-    expect(page).toContain('<Briefcase className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-hidden />');
+    expect(page).toContain('<Briefcase className="h-3 w-3 text-amber-700 dark:text-amber-400" aria-hidden />');
     expect(page).toContain('<Sun className="h-3 w-3 text-sky-700 dark:text-sky-400" aria-hidden />');
   });
 

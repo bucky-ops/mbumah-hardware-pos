@@ -185,7 +185,7 @@ function getTypeMeta(type: HistoryEntry['type']): { label: string; icon: React.E
   switch (type) {
     case 'sale': return { label: 'Sale', icon: ShoppingBag, color: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
     case 'invoice': return { label: 'Invoice', icon: FileText, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' };
-    case 'credit': return { label: 'Credit Note', icon: FileCheck, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
+    case 'credit': return { label: 'Credit Note', icon: FileCheck, color: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
     case 'gift_card': return { label: 'Gift Card', icon: Gift, color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-100 dark:bg-pink-900/30' };
     case 'voucher': return { label: 'Voucher', icon: Tag, color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
     case 'payment': return { label: 'Payment', icon: HandCoins, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' };
@@ -973,7 +973,7 @@ export default function CustomersTab() {
               {/* Duplicate warning */}
               {duplicateWarning && (
                 <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0" />
                   <p className="text-xs text-amber-800 dark:text-amber-300">{duplicateWarning}</p>
                 </div>
               )}
@@ -1150,7 +1150,7 @@ export default function CustomersTab() {
                           </div>
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">No customers found</p>
-                            <p className="text-xs text-muted-foreground/70 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {searchQuery || debtFilter !== 'all'
                                 ? 'Try adjusting your search or filters'
                                 : 'Add your first customer to get started'}

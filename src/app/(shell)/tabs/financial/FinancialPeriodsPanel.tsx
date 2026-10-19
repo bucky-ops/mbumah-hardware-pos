@@ -246,7 +246,7 @@ export default function FinancialPeriodsPanel() {
                           {p.status === 'OPEN' && (
                             <DropdownMenuItem
                               onClick={() => openAction(p, 'CLOSE')}
-                              className="gap-2 cursor-pointer text-amber-600 focus:text-amber-600"
+                              className="gap-2 cursor-pointer text-amber-700 focus:text-amber-700"
                             >
                               <CheckCircle2 className="h-4 w-4" /> Close Period
                             </DropdownMenuItem>
@@ -337,7 +337,7 @@ export default function FinancialPeriodsPanel() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600" /> {actionLabel}
+              <AlertTriangle className="h-5 w-5 text-amber-700" /> {actionLabel}
             </AlertDialogTitle>
             <AlertDialogDescription>
               You are about to <strong>{actionState?.action.toLowerCase()}</strong> the period

@@ -444,7 +444,7 @@ export default function TaxTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { title: 'Total VAT Collected', value: formatKES(totalVAT), icon: Receipt, color: 'text-emerald-700' },
-          { title: 'WHT Withheld', value: formatKES(totalWHT), icon: TrendingUp, color: 'text-amber-600' },
+          { title: 'WHT Withheld', value: formatKES(totalWHT), icon: TrendingUp, color: 'text-amber-700' },
           { title: 'Filings Due', value: filingsDue.toString(), icon: FileText, color: filingsDue > 0 ? 'text-red-600' : 'text-green-700' },
           { title: 'eTIMS Status', value: etimsActiveCategories > 0 ? `${etimsActiveCategories} Mapped` : 'Not Set', icon: ShieldCheck, color: etimsActiveCategories > 0 ? 'text-emerald-700' : 'text-slate-500' },
         ].map((stat) => (

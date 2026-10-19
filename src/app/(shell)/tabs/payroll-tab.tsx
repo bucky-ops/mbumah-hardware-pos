@@ -1582,9 +1582,9 @@ function EmployeeDetailDialog({ employee, onClose }: { employee: Employee | null
             </>
           )}
           <div className="flex flex-wrap gap-2 text-xs">
-            {employee.payeExempt && <Badge variant="outline" className="text-amber-600">PAYE Exempt</Badge>}
-            {employee.nssfExempt && <Badge variant="outline" className="text-amber-600">NSSF Exempt</Badge>}
-            {employee.nhifExempt && <Badge variant="outline" className="text-amber-600">SHIF Exempt</Badge>}
+            {employee.payeExempt && <Badge variant="outline" className="text-amber-700">PAYE Exempt</Badge>}
+            {employee.nssfExempt && <Badge variant="outline" className="text-amber-700">NSSF Exempt</Badge>}
+            {employee.nhifExempt && <Badge variant="outline" className="text-amber-700">SHIF Exempt</Badge>}
           </div>
         </div>
       </DialogContent>
@@ -2291,7 +2291,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                                    className="h-8 w-8 p-0 text-amber-700 hover:text-amber-800 hover:bg-amber-500/10"
                                     title="Correct request — fix dates, type or reason without cancelling"
                                     aria-label={`Correct leave for ${l.employeeName}`}
                                     onClick={() => openEdit(l)}
@@ -2383,7 +2383,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                           <div className={`h-full rounded-full transition-all ${tone.bar}`} style={{ width: `${Math.max(pct, util > 0 ? 4 : 0)}%` }} />
                         </div>
                         {toNum(b.pendingDays) > 0 && (
-                          <p className="text-[10px] text-amber-600 dark:text-amber-400 tabular-nums">
+                          <p className="text-[10px] text-amber-700 dark:text-amber-400 tabular-nums">
                             {toNum(b.pendingDays)} d pending approval
                           </p>
                         )}
@@ -2844,7 +2844,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-4 w-4 text-amber-600" /> Correct pending leave request
+              <Edit className="h-4 w-4 text-amber-700" /> Correct pending leave request
             </DialogTitle>
             <DialogDescription>
               {editTarget
@@ -3443,7 +3443,7 @@ function RunsSubTab({ storeId }: { storeId: string }) {
             </Button>
           </div>
           {openPeriods.length === 0 && (
-            <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
+            <p className="text-xs text-amber-700 flex items-center gap-1 mt-1">
               <AlertTriangle className="h-3 w-3" /> No open pay periods. Create a period first.
             </p>
           )}
@@ -3700,7 +3700,7 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
                       <td className="px-2 py-2.5 text-right font-medium tabular-nums">
                         {toNum(r.workingHours) > 0 ? `${toNum(r.workingHours).toFixed(1)}h` : '-'}
                         {toNum(r.overtimeHours) > 0 ? <span className="block text-[10px] text-emerald-700 dark:text-emerald-400">+{toNum(r.overtimeHours).toFixed(1)}h OT</span> : null}
-                        {toNum(r.lateMinutes) > 0 ? <span className="block text-[10px] text-amber-600 dark:text-amber-400">{toNum(r.lateMinutes)}m late</span> : null}
+                        {toNum(r.lateMinutes) > 0 ? <span className="block text-[10px] text-amber-700 dark:text-amber-400">{toNum(r.lateMinutes)}m late</span> : null}
                       </td>
                       <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>
                     </tr>

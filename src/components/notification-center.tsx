@@ -111,7 +111,7 @@ function SecurityEventsFeed({
   }
   if (!events || events.length === 0) {
     return (
-      <p className="pt-1 text-xs text-muted-foreground/70">
+      <p className="pt-1 text-xs text-muted-foreground">
         No recent security events
       </p>
     );
@@ -144,7 +144,7 @@ function SecurityEventsFeed({
                   {event.ipAddress ? ` · ${event.ipAddress}` : ''}
                 </p>
                 <p
-                  className="text-[10px] text-muted-foreground/60 mt-1"
+                  className="text-[10px] text-muted-foreground mt-1"
                   title={formatDateTime(event.createdAt)}
                 >
                   {formatRelativeTime(event.createdAt)}
@@ -413,7 +413,7 @@ export function NotificationCenter({
       // "re-check before deciding" direction (the request they were
       // notified of changed under them).
       case 'leave_corrected':
-        return <FilePenLine className="h-4 w-4 text-amber-600" />;
+        return <FilePenLine className="h-4 w-4 text-amber-700" />;
       // v2.61.0: "your correction was seen" - cyan scan-eye, the receipt
       // moment (a person at the desk read your corrected request; nothing
       // to do). Distinct from the amber correction rail it answers.
@@ -442,7 +442,7 @@ export function NotificationCenter({
       // v2.50.0: disbursement - amber dollar-circle, money actually left
       // the door (M-Pesa B2C batch or manual bank-run confirmation).
       case 'payroll_disbursed':
-        return <CircleDollarSign className="h-4 w-4 text-amber-600" />;
+        return <CircleDollarSign className="h-4 w-4 text-amber-700" />;
       // v2.51.0: "you've been paid" - emerald hand-coins, the personal
       // settled-money moment (own receipt in hand) — the completion of the
       // teal payslip-issued family, never confused with the group's amber
@@ -612,12 +612,12 @@ export function NotificationCenter({
                     ? 'No notifications'
                     : `No ${filter} notifications`}
               </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">You&apos;re all caught up!</p>
+              <p className="text-xs text-muted-foreground mt-1">You&apos;re all caught up!</p>
             </div>
           ) : (
             <div className="p-3 space-y-2">
               {visibleNotifications.length === 0 && filter === 'security' && (
-                <p className="text-xs text-muted-foreground/70 py-1">
+                <p className="text-xs text-muted-foreground py-1">
                   No security notifications
                 </p>
               )}
@@ -643,7 +643,7 @@ export function NotificationCenter({
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                             {notification.description}
                           </p>
-                          <p className="text-[10px] text-muted-foreground/60 mt-1" title={formatDateTime(notification.timestamp)}>
+                          <p className="text-[10px] text-muted-foreground mt-1" title={formatDateTime(notification.timestamp)}>
                             {formatRelativeTime(notification.timestamp)}
                           </p>
                         </div>
@@ -936,7 +936,7 @@ export function NotificationCenter({
                             ) : null}
                           </div>
                         ) : null}
-                        <p className="text-[10px] text-muted-foreground/60 mt-1" title={formatDateTime(notification.timestamp)}>
+                        <p className="text-[10px] text-muted-foreground mt-1" title={formatDateTime(notification.timestamp)}>
                           {formatRelativeTime(notification.timestamp)}
                         </p>
                       </div>
