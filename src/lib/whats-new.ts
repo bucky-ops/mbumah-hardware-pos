@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.145.0',
+    title: 'The desk lens learns weekdays',
+    bullets: [
+      'The timesheets desk’s Weekends-only toggle completes the pair — Weekdays only shows just the working-week days, so a Monday triage reads the normal case without the weekend noise.',
+      'The lens is a true day-kind filter: unreadable days stay in All days, never claimed by either side — garbage is honestly neither weekend nor weekday.',
+      'Each lens member dresses as the chips it keeps — All neutral, Weekends sky, Weekdays amber — in the same joined segmented control the gate card wears.',
+      'Your saved choice survives the upgrade: an old Weekends-only preference still reads as Weekends; All days clears the stored setting exactly as before.',
+      'The count chip keeps speaking every pending day — the lens is a view, never a rewrite of the desk.',
+    ],
+  },
+  {
     version: '2.144.0',
     title: 'The lens learns the other outcome',
     bullets: [

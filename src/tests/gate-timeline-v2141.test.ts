@@ -197,32 +197,34 @@ describe('the desk lens keeps its preference', () => {
     }
   }
 
-  it('reads ON only from the exact stored "1"; anything else reads OFF', () => {
+  it('reads the three-value era; the LEGACY 1 still reads weekends (v2.145.0 re-anchor)', () => {
     const store = new FakeStore();
-    expect(readDeskLensPref(store)).toBe(false); // never set
+    expect(readDeskLensPref(store)).toBe('all'); // never set
     store.setItem(DESK_LENS_STORAGE_KEY, '1');
-    expect(readDeskLensPref(store)).toBe(true);
+    expect(readDeskLensPref(store)).toBe('weekends'); // the old choice survives the upgrade
+    store.setItem(DESK_LENS_STORAGE_KEY, 'weekdays');
+    expect(readDeskLensPref(store)).toBe('weekdays');
     store.setItem(DESK_LENS_STORAGE_KEY, '0');
-    expect(readDeskLensPref(store)).toBe(false); // a stale '0' never reads ON
+    expect(readDeskLensPref(store)).toBe('all'); // a stale '0' never reads a lens
     store.setItem(DESK_LENS_STORAGE_KEY, 'yes');
-    expect(readDeskLensPref(store)).toBe(false);
+    expect(readDeskLensPref(store)).toBe('all');
   });
 
-  it('turn-off REMOVES the key rather than littering a stale "0"', () => {
+  it("'all' REMOVES the key rather than littering a stale value", () => {
     const store = new FakeStore();
-    writeDeskLensPref(store, true);
-    expect(store.getItem(DESK_LENS_STORAGE_KEY)).toBe('1');
-    writeDeskLensPref(store, false);
+    writeDeskLensPref(store, 'weekends');
+    expect(store.getItem(DESK_LENS_STORAGE_KEY)).toBe('weekends');
+    writeDeskLensPref(store, 'all');
     expect(store.getItem(DESK_LENS_STORAGE_KEY)).toBeNull();
   });
 
-  it('a throwing storage degrades to OFF / silence — never a crashed render', () => {
+  it('a throwing storage degrades to all / silence — never a crashed render', () => {
     const dead = new DeadStore();
-    expect(readDeskLensPref(dead)).toBe(false);
-    expect(() => writeDeskLensPref(dead, true)).not.toThrow();
-    expect(readDeskLensPref(null)).toBe(false);
-    expect(() => writeDeskLensPref(null, true)).not.toThrow();
-    expect(readDeskLensPref(undefined)).toBe(false);
+    expect(readDeskLensPref(dead)).toBe('all');
+    expect(() => writeDeskLensPref(dead, 'weekends')).not.toThrow();
+    expect(readDeskLensPref(null)).toBe('all');
+    expect(() => writeDeskLensPref(null, 'all')).not.toThrow();
+    expect(readDeskLensPref(undefined)).toBe('all');
   });
 });
 
@@ -330,10 +332,11 @@ describe('the desk page reads and persists the lens', () => {
     // ATTRIBUTES — the strip's children got fixed while the toggle's
     // aria-pressed stayed stale. The read must ride the microtask-deferred
     // effect (the page load()'s own pattern) so the first client render
-    // matches the server exactly.
-    expect(desk).toContain('Promise.resolve().then(() => setWeekendsOnly(readDeskLensPref(window.localStorage)))');
+    // matches the server exactly. (v2.145.0 re-anchor: the state is the
+    // three-way lens; the read maps the legacy '1' to 'weekends'.)
+    expect(desk).toContain('Promise.resolve().then(() => setLens(readDeskLensPref(window.localStorage)))');
     expect(desk).not.toContain('useState<boolean>(() =>');
-    expect(desk).toContain('const toggleWeekendsOnly = useCallback');
+    expect(desk).toContain('const setLensPref = useCallback');
   });
 
   it('flips persist through the guarded write helper', () => {

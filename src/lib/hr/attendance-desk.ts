@@ -279,28 +279,65 @@ export function buildBulkApproveSummary(
 
 export const DESK_LENS_STORAGE_KEY = 'mbumah.hr.timesheets.lens.weekendsOnly';
 
-/** Read the persisted lens preference. Anything but '1' (or a throwing
- * storage) reads OFF — the lens never guesses a preference it cannot read. */
-export function readDeskLensPref(store: Pick<Storage, 'getItem'> | null | undefined): boolean {
+/** Read the persisted lens preference. 'weekdays' reads as itself; the legacy
+ * boolean era reads as its own meaning ('1' → 'weekends' — the value the
+ * writer of that '1' actually chose); anything else (unset, '0', junk) reads
+ * 'all'. A throwing/dead storage reads 'all' — the lens never guesses a
+ * preference it cannot read. */
+export function readDeskLensPref(store: Pick<Storage, 'getItem'> | null | undefined): DeskLensPref {
   try {
-    return store?.getItem(DESK_LENS_STORAGE_KEY) === '1';
+    const raw = store?.getItem(DESK_LENS_STORAGE_KEY);
+    if (raw === 'weekdays') return 'weekdays';
+    if (raw === 'weekends' || raw === '1') return 'weekends';
+    return 'all';
   } catch {
-    return false;
+    return 'all';
   }
 }
 
-/** Persist the lens preference. 'on' writes '1', off REMOVES the key (no
- * stale '0' litter); a throwing storage degrades to silence — the lens is
- * a view preference, never worth a crashed render. */
+/** Persist the lens preference: 'weekends'/'weekdays' store their word, 'all'
+ * REMOVES the key (no stale-value litter — the old turn-off's own rule); a
+ * throwing storage degrades to silence — the lens is a view preference,
+ * never worth a crashed render. */
 export function writeDeskLensPref(
   store: Pick<Storage, 'setItem' | 'removeItem'> | null | undefined,
-  on: boolean,
+  pref: DeskLensPref,
 ): void {
   try {
     if (!store) return;
-    if (on) store.setItem(DESK_LENS_STORAGE_KEY, '1');
+    if (pref === 'weekends' || pref === 'weekdays') store.setItem(DESK_LENS_STORAGE_KEY, pref);
     else store.removeItem(DESK_LENS_STORAGE_KEY);
   } catch {
     // Cosmetic — a blocked persistence costs nothing honest.
   }
+}
+
+// ── v2.145.0: the desk lens learns weekdays ─────────────────────────────
+// The weekends-only lens answered "who worked the weekend?"; the mirror
+// question — "show me just the working-week days" — still needed an eyeball.
+// The lens completes the pair as a three-way day-kind filter (ALL / WEEKENDS
+// / WEEKDAYS), the gate card's outcome trio's own shape (v2.144.0). The
+// persisted preference grows WITHOUT abandoning old browsers: the v2.141.0
+// boolean '1' still reads as 'weekends' — a reader who chose the weekend
+// lens keeps it across the upgrade, never a silent reset. The storage KEY
+// is unchanged (the name is cosmetic; this comment carries the dual-value
+// era). deskWeekdayDays is deskWeekendDays's honest sibling below.
+
+/** The desk lens's three ways: 'all' keeps every day, 'weekends' keeps real
+ * Sat/Sun, 'weekdays' keeps valid non-weekend days. Garbage survives only
+ * under 'all' — an unreadable day is honestly neither. */
+export type DeskLensPref = 'all' | 'weekends' | 'weekdays';
+
+/**
+ * The weekday subset of a row's pending days, order preserved — valid days
+ * that are NOT Sat/Sun. Garbage drops from BOTH day-kind lenses (an
+ * unreadable day belongs to no day-kind view, only to All) and stays counted
+ * in the row's total chip either way.
+ */
+export function deskWeekdayDays(days: readonly string[]): string[] {
+  if (!Array.isArray(days)) return [];
+  return days.filter((day) => {
+    if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+    return !deskDayIsWeekend(day);
+  });
 }

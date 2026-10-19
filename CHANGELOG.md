@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.145.0] The desk lens learns weekdays
+
+The weekends-only lens (v2.140.0) answered "who worked the weekend?"; the mirror question — "show me just the working-week days" — still needed an eyeball. The lens completes the pair as a three-way day-kind filter (the gate card's outcome trio's own shape), and the persisted preference grows without abandoning old browsers. Pure layer + desk only: no new fetch, no new endpoint.
+
+### Added
+- **`deskWeekdayDays`** (`attendance-desk.ts`): `deskWeekendDays`'s honest sibling — valid non-weekend days, order preserved. Garbage drops from BOTH day-kind lenses (an unreadable day belongs to no day-kind view and only to All) and stays counted in the row's total chip either way.
+- **The day-kind lens trio** (`hr-timesheet-lens{-all,-weekends,-weekdays}` on the desk): the joined segmented control in the toolbar — ALL neutral, WEEKENDS sky (the weekend chips' own tint), WEEKDAYS amber (the weekday chips' own tint). Each member speaks `aria-pressed` and its own label; the count chip keeps speaking the row's total (a view, never a rewrite).
+- **`DeskLensPref`** (`'all' | 'weekends' | 'weekdays'`): the persisted preference's three-value era. The storage KEY is unchanged; the legacy boolean `'1'` still reads `'weekends'` — a reader who chose the weekend lens keeps it across the upgrade, never a silent reset. `'all'` REMOVES the key (the old turn-off's own no-litter rule); a dead storage reads All, never a crash.
+
+### Changed
+- The desk's strip composes through the three-way ternary BEFORE the strip builder, so the `+N` overflow stays honest about exactly what the lens shows on every path; the strip's `data-lens` marker carries the lens word (`weekends`/`weekdays`).
+- Both honest empties keep their own voices: "no weekend days" and "no weekday days" — a row that has none of the lensed kind says so rather than vanishing.
+- `docs/hr/payroll-run-lifecycle.md`: the desk-surface contract names the day-kind lens and the legacy-`'1'` migration rule.
+
 ## [2.144.0] The lens learns the other outcome
 
 "Show me the stops" got a lens (v2.142.0); the mirror question — "show me the times the gate said YES" — still had to be scanned by eye. The blocked-only boolean becomes a three-way outcome lens, and the period picker's items wear each period's newest attempt's outcome as a tone dot. Pure-layer only plus the card: no new fetch, no new endpoint.

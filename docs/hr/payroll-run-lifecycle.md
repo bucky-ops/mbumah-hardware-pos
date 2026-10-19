@@ -112,6 +112,19 @@ frozen facts and follows the same honesty rules:
   the preference persists per browser (`readDeskLensPref`/`writeDeskLensPref`
   over localStorage): a dead storage degrades to OFF, never a crash, and the
   stored key is removed on turn-off rather than littered with a stale `0`.
+- **Day-kind lens (v2.145.0).** The weekend lens completes the pair as a
+  three-way day-kind filter — All days / Weekends only / Weekdays only, the
+  gate card's outcome trio's own shape. `deskWeekdayDays` is the honest
+  sibling (`deskWeekendDays` keeps real Sat/Sun; `deskWeekdayDays` keeps
+  valid non-weekend days; garbage drops from BOTH — an unreadable day
+  belongs to no day-kind view and only to All, still counted in the row's
+  total chip). The trio is a joined segmented control on the desk toolbar
+  whose members dress as the chips they keep: ALL neutral, WEEKENDS sky,
+  WEEKDAYS amber. The persisted preference grows without abandoning old
+  browsers: the same storage key now holds `weekends`/`weekdays`, and the
+  legacy boolean `'1'` still reads `'weekends'` — a reader who chose the
+  weekend lens keeps it across the upgrade; `'all'` removes the key exactly
+  as the old turn-off did; a dead storage reads All, never a crash.
 - **Store gate timeline (v2.141.0).** `GET /api/payroll/gate-timeline` reads
   the SAME append-only `PayrollRunGateEvent` rows ACROSS runs — newest 120
   (the payload says `window` and `totalEvents`, so the card never pretends

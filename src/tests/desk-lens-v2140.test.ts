@@ -135,39 +135,40 @@ describe('the verdict strip wears the attempt chip', () => {
 
 // ── 4. The desk lens UI contract ─────────────────────────────────────────────
 
-describe('the desk\'s weekends-only lens', () => {
+describe('the desk\'s day-kind lens (v2.145.0 re-anchor: trio era)', () => {
   const page = () => readRepo('src/app/(shell)/hr/timesheets/page.tsx');
 
-  it('the toggle speaks its state and its sky family', () => {
+  it('the weekends member speaks its state and its sky family', () => {
     const src = page();
-    expect(src.includes('aria-pressed={weekendsOnly}')).toBe(true);
-    expect(src.includes('hr-timesheet-weekends-only')).toBe(true);
-    expect(src.includes('border-sky-300 bg-sky-50 text-sky-800')).toBe(true);
+    expect(src.includes("aria-pressed={lens === 'weekends'}")).toBe(true);
+    expect(src.includes('hr-timesheet-lens-weekends')).toBe(true);
+    expect(src.includes('border border-sky-300 bg-sky-50 text-sky-800')).toBe(true);
     expect(src.includes('dark:bg-sky-950/50')).toBe(true);
   });
 
-  it('the lens composes BEFORE the strip builder', () => {
+  it('the lens composes BEFORE the strip builder (three ways now)', () => {
     const src = page();
-    expect(src.includes('deskDayStrip(weekendsOnly ? deskWeekendDays(row.days) : row.days)')).toBe(true);
+    expect(src.includes('? deskWeekendDays(row.days)')).toBe(true);
+    expect(src.includes('? deskWeekdayDays(row.days)')).toBe(true);
   });
 
-  it('the strip wears the lens marker and the honest empty note', () => {
+  it('the strip wears the lens marker and both honest empty notes', () => {
     const src = page();
-    expect(src.includes("data-lens={weekendsOnly ? 'weekends' : undefined}")).toBe(true);
+    expect(src.includes("data-lens={lens !== 'all' ? lens : undefined}")).toBe(true);
     expect(src.includes('hr-timesheet-strip-empty')).toBe(true);
     expect(src.includes('no weekend days')).toBe(true);
+    expect(src.includes('no weekday days')).toBe(true);
   });
 
   it('a view preference: disabled only while loading, never cleared by scopes', () => {
     const src = page();
-    const toggleIdx = src.indexOf('hr-timesheet-weekends-only');
-    const block = src.slice(toggleIdx - 900, toggleIdx + 200);
+    const trioIdx = src.indexOf('hr-timesheet-lens-weekends');
+    const block = src.slice(trioIdx - 900, trioIdx + 400);
     expect(block.includes('disabled={loading}')).toBe(true);
-    // Scope change clears notes, never the lens. (Re-anchored for v2.141.0:
-    // the flip moved into the persisted toggleWeekendsOnly handler — same
-    // view-preference contract, now with a memory across navigation.)
-    expect(src.includes('onClick={toggleWeekendsOnly}')).toBe(true);
-    expect(src.includes('const toggleWeekendsOnly = useCallback')).toBe(true);
+    // v2.145.0 re-anchor: the flip moved into setLensPref (the write-through
+    // callback) — same view-preference contract, now three ways wide.
+    expect(src.includes("onClick={() => setLensPref('weekends')}")).toBe(true);
+    expect(src.includes('const setLensPref = useCallback')).toBe(true);
   });
 });
 
