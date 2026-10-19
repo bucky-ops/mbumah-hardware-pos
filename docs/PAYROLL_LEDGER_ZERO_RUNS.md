@@ -74,3 +74,11 @@ starts from the line, not from a hunt.
   SUPER_ADMIN) was approved by STORE_OWNER — a distinct actor, so the
   maker-checker guard held — then posted with its journal; the drawer now
   carries three posted entries plus the quiet zero run.
+
+## Related contracts
+
+The run gate's own surfaces — frozen verdict, attempt trail, outcome lens,
+period dots, and the timesheet desk that answers the TIMESHEET_NOT_APPROVED
+block — are catalogued with their honesty rules in
+[docs/hr/payroll-run-lifecycle.md](./hr/payroll-run-lifecycle.md), section
+"Gate surfaces and contracts".

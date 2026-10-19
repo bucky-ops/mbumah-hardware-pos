@@ -332,12 +332,60 @@ export type DeskLensPref = 'all' | 'weekends' | 'weekdays';
  * The weekday subset of a row's pending days, order preserved — valid days
  * that are NOT Sat/Sun. Garbage drops from BOTH day-kind lenses (an
  * unreadable day belongs to no day-kind view, only to All) and stays counted
- * in the row's total chip either way.
+ * in the row's total chip either way. Readability rides deskDayLabel itself
+ * (v2.146.0) — a shape-valid but calendar-impossible day ('2026-13-99') is
+ * unreadable, and unreadable is honestly neither kind.
  */
 export function deskWeekdayDays(days: readonly string[]): string[] {
   if (!Array.isArray(days)) return [];
-  return days.filter((day) => {
-    if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
-    return !deskDayIsWeekend(day);
-  });
+  return days.filter((day) => deskDayLabel(day) !== null && !deskDayIsWeekend(day));
+}
+
+// ── v2.146.0: the split the lenses imply ────────────────────────────────
+// The lens trio (v2.145.0) answers "show me one kind" one click at a time;
+// neither click tells you the SHAPE of a row at a glance — a manager
+// scanning ten rows still counts chips by eye. The split is the two counts
+// the lenses imply, printed under the total chip, always visible without
+// lensing. ONE definition of each kind: the split composes
+// deskWeekdayDays/deskWeekendDays themselves — never a second parser. The
+// honesty rule is the lenses' own: an unreadable day counts in NEITHER
+// bucket (it stays counted in the row's total chip, which keeps speaking
+// the whole row) — the split speaks only what it can honestly read.
+
+/** A row's pending days by kind: weekday count (Mon–Fri) and weekend count
+ * (Sat/Sun). Garbage days contribute to neither — the total chip owns them. */
+export interface DeskDaySplit {
+  weekday: number;
+  weekend: number;
+}
+
+/**
+ * Count a row's pending days by kind. Composes the two day-kind siblings
+ * (ONE definition of weekday, ONE of weekend); non-array reads empty — a
+ * missing strip counts zero, never a guessed pair.
+ */
+export function deskDaySplit(days: readonly string[]): DeskDaySplit {
+  if (!Array.isArray(days)) return { weekday: 0, weekend: 0 };
+  return { weekday: deskWeekdayDays(days).length, weekend: deskWeekendDays(days).length };
+}
+
+/**
+ * The split's spoken form: '1 weekday · 1 weekend' when both kinds are
+ * present, the lone non-zero kind when only one is (a zero bucket adds
+ * noise, not honesty — the missing number reads as zero), '' when nothing
+ * is readable (an all-garbage row has no honest split; the total chip is
+ * already speaking its truth). Garbage input reads '' — never a guess.
+ */
+export function deskSplitLabel(split: DeskDaySplit | null | undefined): string {
+  if (!split) return '';
+  const weekday =
+    Number.isFinite(split.weekday) && split.weekday > 0
+      ? `${split.weekday} ${split.weekday === 1 ? 'weekday' : 'weekdays'}`
+      : '';
+  const weekend =
+    Number.isFinite(split.weekend) && split.weekend > 0
+      ? `${split.weekend} ${split.weekend === 1 ? 'weekend' : 'weekends'}`
+      : '';
+  if (weekday && weekend) return `${weekday} · ${weekend}`;
+  return weekday || weekend;
 }
