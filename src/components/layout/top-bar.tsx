@@ -186,7 +186,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                   Help &amp; Quick Tips
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                   Top Shortcuts
                 </DropdownMenuLabel>
                 <div className="px-2 py-1 space-y-1 text-xs">
@@ -366,7 +366,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
               <div className="p-6 text-center">
                 <Search className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">Type at least 2 characters to search</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Search across products and customers</p>
+                <p className="text-xs text-muted-foreground mt-1">Search across products and customers</p>
               </div>
             ) : searchResults && ((Array.isArray(searchResults.products) && searchResults.products.length > 0) || (Array.isArray(searchResults.customers) && searchResults.customers.length > 0)) ? (
               <div className="py-2">
@@ -419,7 +419,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
               <div className="p-6 text-center">
                 <Package className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">No results found</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Try a different search term</p>
+                <p className="text-xs text-muted-foreground mt-1">Try a different search term</p>
               </div>
             ) : null}
           </div>

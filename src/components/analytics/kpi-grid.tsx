@@ -225,7 +225,7 @@ function KpiCard({ config, index }: { config: KpiCardConfig; index: number }) {
             >
               <TrendIcon className="h-3 w-3" />
               <span>{pctLabel}</span>
-              <span className="hidden sm:inline text-muted-foreground/70 font-normal">
+              <span className="hidden sm:inline text-muted-foreground font-normal">
                 vs yesterday
               </span>
             </div>

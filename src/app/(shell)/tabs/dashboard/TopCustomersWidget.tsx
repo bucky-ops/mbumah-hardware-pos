@@ -152,7 +152,7 @@ export function TopCustomersWidget({ storeId, onSeeMore, onTabSwitch }: TopCusto
           <div className="flex flex-col items-center justify-center py-6 text-center">
             <Users className="h-8 w-8 text-muted-foreground/30 mb-2" />
             <p className="text-xs text-muted-foreground">No customers with purchases yet.</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-1">
+            <p className="text-[10px] text-muted-foreground mt-1">
               Customers will appear here once they make purchases.
             </p>
             {onTabSwitch && (

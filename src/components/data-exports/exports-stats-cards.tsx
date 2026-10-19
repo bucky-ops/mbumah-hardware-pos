@@ -117,7 +117,7 @@ export function ExportsStatsCards({ stats, isLoading }: ExportsStatsCardsProps) 
                 </p>
                 <p className="text-xl font-bold truncate">{card.value}</p>
                 {card.trend && (
-                  <p className="text-[10px] text-muted-foreground/70 truncate">
+                  <p className="text-[10px] text-muted-foreground truncate">
                     {card.trend}
                   </p>
                 )}

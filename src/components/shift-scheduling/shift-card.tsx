@@ -72,7 +72,7 @@ export function ShiftCard({ schedule, onClick, variant = 'default' }: ShiftCardP
       </div>
 
       {variant === 'default' && schedule.status !== 'ACTIVE' && (
-        <span className="absolute top-1 right-1 text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+        <span className="absolute top-1 right-1 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
           {schedule.status === 'PAUSED' ? 'Paused' : '✓'}
         </span>
       )}

@@ -276,7 +276,7 @@ function ProfileSection({ storeId }: { storeId: string }) {
           ) : (
             <div className="text-center py-12 space-y-3">
               <div className="mx-auto h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle className="h-6 w-6 text-amber-700 dark:text-amber-400" />
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-medium text-foreground">No KRA profile configured</p>
@@ -502,7 +502,7 @@ function InvoicesSection({ storeId }: { storeId: string }) {
       { label: 'Submitted', value: byStatus.SUBMITTED ?? 0, color: 'text-blue-600 dark:text-blue-400', icon: Send },
       { label: 'Accepted', value: byStatus.ACCEPTED ?? 0, color: 'text-emerald-700 dark:text-emerald-400', icon: CheckCircle },
       { label: 'Rejected', value: byStatus.REJECTED ?? 0, color: 'text-rose-600 dark:text-rose-400', icon: XCircle },
-      { label: 'Failed', value: byStatus.FAILED ?? 0, color: 'text-amber-600 dark:text-amber-400', icon: AlertCircle },
+      { label: 'Failed', value: byStatus.FAILED ?? 0, color: 'text-amber-700 dark:text-amber-400', icon: AlertCircle },
     ];
   }, [summary]);
 
@@ -581,7 +581,7 @@ function InvoicesSection({ storeId }: { storeId: string }) {
             <div className="text-center py-12 space-y-2">
               <FileText className="h-10 w-10 text-muted-foreground/40 mx-auto" />
               <p className="text-sm text-muted-foreground">No KRA invoices found.</p>
-              <p className="text-xs text-muted-foreground/60">
+              <p className="text-xs text-muted-foreground">
                 Submit a sales transaction to KRA to create your first invoice record.
               </p>
             </div>

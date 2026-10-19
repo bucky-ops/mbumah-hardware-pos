@@ -198,7 +198,7 @@ describe('the Privacy tab — the desk shows its hand', () => {
   });
 
   it('the held backlog wears the amber vocabulary; the dry run discloses itself in the tooltip', () => {
-    expect(page).toContain("p.held && p.sweepable > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'");
+    expect(page).toContain("p.held && p.sweepable > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'");
     expect(page).toContain('A hold stands — these rows wait until a settings manager releases the scope.');
     expect(page).toContain('Dry-run count — what the next nightly run would anonymise; nothing is changed.');
   });

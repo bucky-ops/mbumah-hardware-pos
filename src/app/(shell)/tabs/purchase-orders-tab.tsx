@@ -395,7 +395,7 @@ function CreatePODialog({
               {lowStockLoading ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
               ) : (
-                <AlertTriangle className="h-3.5 w-3.5 mr-1 text-amber-600" />
+                <AlertTriangle className="h-3.5 w-3.5 mr-1 text-amber-700" />
               )}
               Add Low Stock Items
             </Button>
@@ -456,7 +456,7 @@ function CreatePODialog({
                     <p className="text-xs text-muted-foreground font-mono">
                       {item.sku}
                       {item.currentStock !== undefined && (
-                        <span className="ml-2 text-amber-600">
+                        <span className="ml-2 text-amber-700">
                           <Package className="h-3 w-3 inline mr-0.5" />
                           {item.currentStock} in stock
                         </span>
@@ -660,7 +660,7 @@ function ReceiveItemsDialog({
                     <span className="mx-1">&middot;</span>
                     <span>Received: {formatQtyWithUnit(item.receivedQty, product?.unitType)}</span>
                     <span className="mx-1">&middot;</span>
-                    <span className={remaining > 0 ? 'text-amber-600 font-medium' : 'text-green-700'}>
+                    <span className={remaining > 0 ? 'text-amber-700 font-medium' : 'text-green-700'}>
                       Remaining: {formatQtyWithUnit(remaining, product?.unitType)}
                     </span>
                   </p>
@@ -1085,7 +1085,7 @@ function PODetailView({
                         itemStatus === 'Received'
                           ? 'text-emerald-700'
                           : itemStatus === 'Partial'
-                            ? 'text-amber-600'
+                            ? 'text-amber-700'
                             : 'text-muted-foreground';
 
                       return (
@@ -1440,7 +1440,7 @@ export default function PurchaseOrdersTab() {
           label="Pending Approval"
           value={stats.pendingApproval}
           iconBg="bg-amber-100 dark:bg-amber-900/30"
-          iconColor="text-amber-600 dark:text-amber-400"
+          iconColor="text-amber-700 dark:text-amber-400"
           borderLeftColor="border-l-amber-500"
         />
         <SummaryCard

@@ -175,7 +175,7 @@ export function RecordPaymentDialog({
               onChange={(e) => setAmount(e.target.value)}
             />
             {parseFloat(amount) < remaining && (
-              <p className="text-[10px] text-amber-600 dark:text-amber-400">
+              <p className="text-[10px] text-amber-700 dark:text-amber-400">
                 This will be recorded as a partial payment.
               </p>
             )}

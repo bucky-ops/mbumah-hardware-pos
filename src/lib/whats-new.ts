@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.156.0',
+    title: 'The amber family settles',
+    bullets: [
+      'Warning-coloured labels across every tab deepen a shade so they read on white and tinted cards alike.',
+      'Tiny helper lines (the 9-10px “before fees”, “updated”, delta text) drop their transparency — full-strength grey that actually reads.',
+      'The follow-up to the colour sweep: the re-audit found the amber layer, and it went home the same day.',
+    ],
+  },
+  {
     version: '2.155.0',
     title: 'Recovery that never sleeps',
     bullets: [

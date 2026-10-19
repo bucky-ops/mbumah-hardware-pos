@@ -152,7 +152,7 @@ const REASON_CATEGORIES = [
   { value: 'RESTOCK', label: 'Restock', icon: PlusCircle, color: 'text-green-700' },
   { value: 'DAMAGE', label: 'Damage', icon: PackageX, color: 'text-red-600' },
   { value: 'THEFT', label: 'Theft', icon: AlertOctagon, color: 'text-red-800' },
-  { value: 'CORRECTION', label: 'Correction', icon: Wrench, color: 'text-amber-600' },
+  { value: 'CORRECTION', label: 'Correction', icon: Wrench, color: 'text-amber-700' },
   { value: 'RETURN', label: 'Return', icon: RefreshCw, color: 'text-blue-600' },
 ];
 
@@ -338,7 +338,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
                   <span className="text-muted-foreground">New Stock Level</span>
                   <span className={`font-bold text-base ${
                     newStockLevel !== null && newStockLevel >= 0
-                      ? newStockLevel > selectedProduct.reorderLevel ? 'text-green-700' : 'text-amber-600'
+                      ? newStockLevel > selectedProduct.reorderLevel ? 'text-green-700' : 'text-amber-700'
                       : 'text-red-600'
                   }`}>
                     {newStockLevel ?? '-'} {unitLabel(selectedProduct.unitType)}
@@ -1567,7 +1567,7 @@ function UserManagement({ storeId }: { storeId: string }) {
                         title={user.isEngraved ? 'The engraved system administrator cannot be deactivated' : user.isActive ? 'Deactivate User' : 'Activate User'}
                       >
                         {user.isEngraved ? (
-                          <ShieldCheck className="h-3 w-3 text-amber-600 dark:text-amber-500" />
+                          <ShieldCheck className="h-3 w-3 text-amber-700 dark:text-amber-500" />
                         ) : user.isActive ? <UserX className="h-3 w-3 text-red-500" /> : <UserCheck className="h-3 w-3 text-green-500" />}
                       </Button>
                     </AlertDialogTrigger>

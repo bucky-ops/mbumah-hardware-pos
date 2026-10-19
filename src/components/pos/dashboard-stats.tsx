@@ -116,7 +116,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       animatedValue: animatedAvgOrder,
       format: 'kes' as const,
       icon: DollarSign,
-      color: 'text-amber-600 dark:text-amber-400',
+      color: 'text-amber-700 dark:text-amber-400',
       // Gradient icon circle - amber (value/money)
       iconCircle: 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/30',
       bg: 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/30',
@@ -248,7 +248,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       </div>
 
       {/* Subtle live activity indicator strip - shows we're tracking real-time */}
-      <div className="flex items-center justify-center gap-1.5 text-[9px] text-muted-foreground/60">
+      <div className="flex items-center justify-center gap-1.5 text-[9px] text-muted-foreground">
         <Activity className="h-2.5 w-2.5" />
         <span>Auto-refreshing every 30s · Last refresh {lastUpdatedStr}</span>
       </div>

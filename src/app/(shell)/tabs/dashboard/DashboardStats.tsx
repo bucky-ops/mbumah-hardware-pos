@@ -203,7 +203,7 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
       animatedValue: animatedLowStock,
       format: 'number' as const,
       icon: AlertTriangle,
-      color: 'text-amber-600 dark:text-amber-400',
+      color: 'text-amber-700 dark:text-amber-400',
       iconBg: 'bg-amber-100 dark:bg-amber-900/40',
       gradient: 'from-amber-50/80 to-yellow-50/50 dark:from-amber-950/30 dark:to-yellow-950/20',
       borderColor: 'border-l-amber-500',
@@ -311,7 +311,7 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
                       Tap to view debtors
                     </p>
                   )}
-                  <p className="text-[10px] text-muted-foreground/70 mt-1.5 text-right opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                  <p className="text-[10px] text-muted-foreground mt-1.5 text-right opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
                     Click for details ↓
                   </p>
                 </div>

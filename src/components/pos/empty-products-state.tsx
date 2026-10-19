@@ -11,11 +11,11 @@ export function EmptyProductsState({ searchQuery }: { searchQuery: string }) {
       </div>
       <p className="text-base font-medium text-muted-foreground">No products found</p>
       {searchQuery ? (
-        <p className="text-sm text-muted-foreground/60 mt-1">
+        <p className="text-sm text-muted-foreground mt-1">
           No results for &ldquo;{searchQuery}&rdquo;. Try a different search term.
         </p>
       ) : (
-        <p className="text-sm text-muted-foreground/60 mt-1">Try adjusting your search or filters</p>
+        <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters</p>
       )}
     </div>
   );

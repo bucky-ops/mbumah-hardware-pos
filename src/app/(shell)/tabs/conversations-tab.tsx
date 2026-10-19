@@ -517,7 +517,7 @@ function ConversationThread({
           <div className="text-center py-12 space-y-2">
             <MessageSquare className="h-10 w-10 text-muted-foreground/40 mx-auto" />
             <p className="text-sm text-muted-foreground">No messages yet.</p>
-            <p className="text-xs text-muted-foreground/60">Send the first message below to start the conversation.</p>
+            <p className="text-xs text-muted-foreground">Send the first message below to start the conversation.</p>
           </div>
         ) : (
           messages.map((msg, idx) => (
@@ -1057,7 +1057,7 @@ export default function ConversationsTab() {
             ) : (
               <div className="flex flex-col items-center justify-center h-full text-center p-8 space-y-3">
                 <div className="p-4 rounded-full bg-muted">
-                  <MessageSquare className="h-10 w-10 text-muted-foreground/60" />
+                  <MessageSquare className="h-10 w-10 text-muted-foreground" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-foreground">Select a conversation</p>

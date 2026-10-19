@@ -494,7 +494,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 <Sparkles className="h-4 w-4 text-primary" />
                 Trends &amp; Predictions
                 {trends?.isDemo && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
                     Demo Data
                   </Badge>
                 )}
@@ -624,7 +624,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <div className="h-64 flex flex-col items-center justify-center text-center">
                 <TrendingUp className="h-10 w-10 text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">No growing products in this range.</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">Try a wider range or check back after more sales are recorded.</p>
+                <p className="text-xs text-muted-foreground mt-1">Try a wider range or check back after more sales are recorded.</p>
               </div>
             ) : (
               <div className="h-64">
@@ -717,7 +717,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <div className="h-64 flex flex-col items-center justify-center text-center">
                 <TrendingDown className="h-10 w-10 text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">No declining products in this range.</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">All products are moving well - no reorders needed.</p>
+                <p className="text-xs text-muted-foreground mt-1">All products are moving well - no reorders needed.</p>
               </div>
             ) : (
               <>
@@ -747,7 +747,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 </div>
                 {/* Reorder warning strip */}
                 <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-800 dark:text-amber-300">
                     {decliningChart.length} product{decliningChart.length !== 1 ? 's' : ''} showing declining sales - review reorder levels and consider promotions or restocking.
                   </p>
@@ -780,7 +780,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
             <div className="h-72 flex flex-col items-center justify-center text-center">
               <Sparkle className="h-10 w-10 text-muted-foreground/30 mb-2" />
               <p className="text-sm text-muted-foreground">No forecast data available.</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Forecasts generate once enough sales history is available.</p>
+              <p className="text-xs text-muted-foreground mt-1">Forecasts generate once enough sales history is available.</p>
             </div>
           ) : (
             <div className="h-72">
@@ -844,7 +844,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
         <Card className="backdrop-blur-sm bg-card/80 border-border/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <PieChart className="h-4 w-4 text-amber-600" />
+              <PieChart className="h-4 w-4 text-amber-700" />
               Category Trends
             </CardTitle>
             <CardDescription className="text-xs">Revenue share &amp; growth by category</CardDescription>
@@ -913,7 +913,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 <CardDescription className="text-xs">Cross-sell opportunities for the sales team</CardDescription>
               </div>
               {reco?.isDemo && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
                   Demo
                 </Badge>
               )}
@@ -928,7 +928,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <div className="h-48 flex flex-col items-center justify-center text-center">
                 <Link2 className="h-10 w-10 text-muted-foreground/30 mb-2" />
                 <p className="text-sm text-muted-foreground">No associations found yet.</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">Patterns emerge once multi-item transactions are recorded.</p>
+                <p className="text-xs text-muted-foreground mt-1">Patterns emerge once multi-item transactions are recorded.</p>
               </div>
             ) : (
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -1876,7 +1876,7 @@ export default function ReportsTab() {
                         <AlertTriangle className="h-4 w-4 text-amber-500" />
                         <p className="text-sm text-muted-foreground">Low Stock</p>
                       </div>
-                      <p className="text-2xl font-bold text-amber-600">{inventoryReport.lowStockCount}</p>
+                      <p className="text-2xl font-bold text-amber-700">{inventoryReport.lowStockCount}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
@@ -2210,7 +2210,7 @@ export default function ReportsTab() {
                           </div>
                           <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20">
                             <p className="text-xs text-muted-foreground">Peak Share</p>
-                            <p className="text-xl font-bold text-amber-600">{peak ? ((peak.value / totalHourly) * 100).toFixed(1) : 0}%</p>
+                            <p className="text-xl font-bold text-amber-700">{peak ? ((peak.value / totalHourly) * 100).toFixed(1) : 0}%</p>
                           </div>
                         </div>
                       );

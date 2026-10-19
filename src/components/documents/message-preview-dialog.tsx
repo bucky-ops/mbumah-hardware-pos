@@ -169,7 +169,7 @@ export function MessagePreviewDialog({
                 className="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3"
                 role="alert"
               >
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
                     Not delivered - use the fallbacks below.

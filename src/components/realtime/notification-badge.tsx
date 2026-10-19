@@ -194,7 +194,7 @@ export function NotificationBadge({ storeId, userId, onNotificationClick }: Noti
                 <div className="p-6 text-center">
                   <Bell className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
                   <p className="text-xs text-muted-foreground">No real-time notifications yet</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-1">
+                  <p className="text-[10px] text-muted-foreground mt-1">
                     Alerts will appear here as they happen
                   </p>
                 </div>

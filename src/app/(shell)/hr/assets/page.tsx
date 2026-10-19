@@ -286,7 +286,7 @@ export default function AssetsPage() {
                           <Button size="sm" variant="ghost" className="text-rose-600 hover:text-rose-700 dark:text-rose-400" disabled={busy} onClick={() => { setOutcome({ asset: a, kind: 'LOST' }); setConditionIn(''); setAuthorizerId(''); setNotes(''); }}>
                             Lost
                           </Button>
-                          <Button size="sm" variant="ghost" className="text-amber-600 hover:text-amber-700 dark:text-amber-400" disabled={busy} onClick={() => { setOutcome({ asset: a, kind: 'DAMAGED' }); setConditionIn(''); setAuthorizerId(''); setNotes(''); }}>
+                          <Button size="sm" variant="ghost" className="text-amber-700 hover:text-amber-800 dark:text-amber-400" disabled={busy} onClick={() => { setOutcome({ asset: a, kind: 'DAMAGED' }); setConditionIn(''); setAuthorizerId(''); setNotes(''); }}>
                             Damaged
                           </Button>
                         </div>

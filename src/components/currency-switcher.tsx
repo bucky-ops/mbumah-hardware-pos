@@ -132,7 +132,7 @@ export function CurrencySwitcher({
           </span>
           <span className="text-xs">{currency}</span>
           {!compact && (
-            <ChevronDown className="h-3 w-3 text-muted-foreground/70" aria-hidden />
+            <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
           )}
         </Button>
       </DropdownMenuTrigger>
@@ -162,7 +162,7 @@ export function CurrencySwitcher({
           ))}
         </div>
         <DropdownMenuSeparator />
-        <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground/70 leading-tight">
+        <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground leading-tight">
           Rates are indicative (display only).
           <br />
           Accounting currency remains KES.

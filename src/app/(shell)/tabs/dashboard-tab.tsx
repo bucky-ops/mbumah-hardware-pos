@@ -549,7 +549,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
-              <Calculator className="h-5 w-5 text-amber-600" aria-hidden="true" />
+              <Calculator className="h-5 w-5 text-amber-700" aria-hidden="true" />
               Count Cash Drawer
             </DialogTitle>
             <DialogDescription>
@@ -580,7 +580,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
                     <span className="text-xs text-slate-500">
                       {Math.abs(endResult.cashDifference) < 1 ? 'Balanced' : endResult.cashDifference > 0 ? 'Over' : 'Short'}
                     </span>
-                    <span className={`font-mono text-base font-extrabold ${Math.abs(endResult.cashDifference) < 1 ? 'text-emerald-700' : 'text-amber-600'}`}>
+                    <span className={`font-mono text-base font-extrabold ${Math.abs(endResult.cashDifference) < 1 ? 'text-emerald-700' : 'text-amber-700'}`}>
                       {Math.abs(endResult.cashDifference) < 1
                         ? 'KES 0.00'
                         : `${endResult.cashDifference > 0 ? '+' : '−'}${formatKES(Math.abs(endResult.cashDifference))}`}
@@ -687,7 +687,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
                         const diff = (parseFloat(countedCash) || 0) - expectedCash;
                         if (Math.abs(diff) < 0.01) return <span className="text-emerald-700">Balanced</span>;
                         return diff > 0
-                          ? <span className="text-amber-600">+{formatKES(diff)} over</span>
+                          ? <span className="text-amber-700">+{formatKES(diff)} over</span>
                           : <span className="text-red-600">{formatKES(diff)} short</span>;
                       })()}
                     </div>
@@ -841,7 +841,7 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         label="Avg Transaction"
         value={formatKES(atv)}
         icon={Calculator}
-        iconClass="bg-amber-100 text-amber-600"
+        iconClass="bg-amber-100 text-amber-700"
         sub={<span>per sale today</span>}
         sparkline={atvSpark.some((v) => v > 0) ? atvSpark : null}
         sparklineClass="text-amber-500"
@@ -850,14 +850,14 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         label="Stock Alerts"
         value={String(stockTotal)}
         icon={Package}
-        iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}
-        valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-600' : 'text-slate-900'}
+        iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}
+        valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-700' : 'text-slate-900'}
         sub={
           stockTotal > 0 ? (
             <span>
               <span className={outOfStock > 0 ? 'font-semibold text-red-600' : ''}>{outOfStock} out</span>
               {' · '}
-              <span className={lowStock > 0 ? 'font-semibold text-amber-600' : ''}>{lowStock} low</span>
+              <span className={lowStock > 0 ? 'font-semibold text-amber-700' : ''}>{lowStock} low</span>
             </span>
           ) : (
             <span className="text-emerald-700">All stock healthy</span>
@@ -934,21 +934,21 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
           label="Avg Order"
           value={formatKES(atv)}
           icon={Calculator}
-          iconClass="bg-amber-100 text-amber-600"
+          iconClass="bg-amber-100 text-amber-700"
           sub={<span>your average sale</span>}
         />
         <KpiCard
           label="Low Stock"
           value={String(stockTotal)}
           icon={Package}
-          iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}
-          valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-600' : 'text-slate-900'}
+          iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}
+          valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-700' : 'text-slate-900'}
           sub={
             stockTotal > 0 ? (
               <span>
                 <span className={outOfStock > 0 ? 'font-semibold text-red-600' : ''}>{outOfStock} out</span>
                 {' · '}
-                <span className={low > 0 ? 'font-semibold text-amber-600' : ''}>{low} low</span>
+                <span className={low > 0 ? 'font-semibold text-amber-700' : ''}>{low} low</span>
               </span>
             ) : (
               <span className="text-emerald-700">All stock healthy</span>
@@ -1185,7 +1185,7 @@ function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
     <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Wallet className="h-4 w-4 text-amber-600" aria-hidden="true" />
+          <Wallet className="h-4 w-4 text-amber-700" aria-hidden="true" />
           Payment methods
         </CardTitle>
         <CardDescription className="text-xs">Share of today&rsquo;s collected payments</CardDescription>
@@ -2056,7 +2056,7 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
 
 function alertSeverityStyle(severity: string): { icon: React.ElementType; circle: string; text: string } {
   if (severity === 'critical') return { icon: AlertTriangle, circle: 'bg-red-100 text-red-600', text: 'text-red-600' };
-  if (severity === 'warning') return { icon: AlertTriangle, circle: 'bg-amber-100 text-amber-600', text: 'text-amber-600' };
+  if (severity === 'warning') return { icon: AlertTriangle, circle: 'bg-amber-100 text-amber-700', text: 'text-amber-700' };
   return { icon: Info, circle: 'bg-slate-100 text-slate-500', text: 'text-slate-500' };
 }
 

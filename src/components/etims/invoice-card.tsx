@@ -35,7 +35,7 @@ const statusConfig = {
   },
   PENDING: {
     icon: Clock,
-    color: 'text-amber-600',
+    color: 'text-amber-700',
     bg: 'bg-amber-50 border-amber-200',
     badge: 'bg-amber-100 text-amber-700',
     label: 'Pending',

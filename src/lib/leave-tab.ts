@@ -55,7 +55,7 @@ export function balanceTone(usedDays: number, allocatedDays: number, carryForwar
   if (u >= 0.5) {
     return {
       bar: 'bg-amber-500 dark:bg-amber-500',
-      text: 'text-amber-600 dark:text-amber-400',
+      text: 'text-amber-700 dark:text-amber-400',
     };
   }
   return {

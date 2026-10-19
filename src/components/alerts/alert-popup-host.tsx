@@ -51,7 +51,7 @@ const VARIANT_STYLES: Record<
   warning: {
     ring: 'border-amber-300 dark:border-amber-800',
     icon: AlertTriangle,
-    iconColor: 'text-amber-600 dark:text-amber-400',
+    iconColor: 'text-amber-700 dark:text-amber-400',
     bar: 'bg-amber-500',
   },
   critical: {

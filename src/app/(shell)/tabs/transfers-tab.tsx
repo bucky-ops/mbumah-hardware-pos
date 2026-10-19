@@ -382,7 +382,7 @@ export default function TransfersTab() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { title: 'Pending Transfers', value: pendingCount.toString(), icon: Clock, color: 'text-amber-600' },
+          { title: 'Pending Transfers', value: pendingCount.toString(), icon: Clock, color: 'text-amber-700' },
           { title: 'In Transit', value: inTransitCount.toString(), icon: Truck, color: 'text-blue-600' },
           { title: 'Completed This Month', value: completedThisMonth.toString(), icon: CheckCircle, color: 'text-green-700' },
           { title: 'Total Items Transferred', value: totalItemsTransferred.toString(), icon: Package, color: 'text-purple-600' },

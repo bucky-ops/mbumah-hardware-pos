@@ -649,7 +649,7 @@ export default function HrTimesheetsPage() {
                             >
                               {split.weekday > 0 ? (
                                 <span className="inline-flex items-center gap-0.5">
-                                  <Briefcase className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-hidden />
+                                  <Briefcase className="h-3 w-3 text-amber-700 dark:text-amber-400" aria-hidden />
                                   {split.weekday}
                                 </span>
                               ) : null}

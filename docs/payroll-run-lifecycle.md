@@ -111,6 +111,20 @@ of re-deciding them. Each contract names the release that set it.
   (`dark:bg-emerald-700` with `dark:hover:bg-emerald-600`) — protect `dark:`
   substrings BEFORE any family sweep, and re-check `dark:hover` pairs after.
 
+## The amber + muted-alpha families (v2.156.0)
+
+- The v2.155.0 re-audit on the shipped build surfaced the NEXT layer
+  (lesson 64, fourth consecutive round): the amber text family (3.17-3.19:1
+  on white) and the 9-10px muted-alpha helper lines (/60 measured 2.51:1,
+  /70 3.07:1). The standing fix rides the same discipline: `amber-700`
+  light tokens (hover pairs one step to -800), bare `text-muted-foreground`
+  (5.76:1) — never alpha-muted below /80 for small text.
+- The census-before-sweep ritual: grep the exact token AND its `dark:`
+  twin AND its hover/focus prefixes; protect dark: substrings first; after
+  the sweep grep for doubled tokens in both orders. `dark:text-amber-600`
+  and `dark:text-muted-foreground/N` do not exist in this codebase — the
+  sweeps are byte-safe by construction.
+
 ## The branches CSV contract (v2.152.0 + v2.154.0)
 
 - Three sections in one blob: the per-branch matrix, "People & payroll by

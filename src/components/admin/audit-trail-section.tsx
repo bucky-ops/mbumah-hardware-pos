@@ -82,7 +82,7 @@ function actionBadgeClass(action: string): string {
     case 'HIGH_RISK_ATTEMPT':
       return 'bg-red-500/10 text-red-600 border-red-500/20 dark:text-red-400';
     case 'MANAGER_OVERRIDE':
-      return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400';
+      return 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-400';
     case 'MANAGER_AUTHORIZED':
       return 'bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400';
     default:
@@ -317,7 +317,7 @@ export function AuditTrailSection() {
               <p className="text-sm font-medium text-muted-foreground">
                 Failed to load the audit trail
               </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {error instanceof Error ? error.message : 'Please try again.'}
               </p>
             </div>
@@ -333,7 +333,7 @@ export function AuditTrailSection() {
               <p className="text-sm font-medium text-muted-foreground">
                 No audit events match your filters
               </p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Permission denials, manager overrides and authorizations appear here.
               </p>
             </div>

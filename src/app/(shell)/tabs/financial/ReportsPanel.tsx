@@ -182,7 +182,7 @@ function ProfitAndLossReport({ storeId }: { storeId: string }) {
 
             {/* Expenses */}
             <div className="p-3 rounded-lg bg-gradient-to-r from-amber-50 to-amber-50/50 dark:from-amber-900/20 dark:to-amber-900/10 border border-amber-100 dark:border-amber-900/30">
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2">Expenses</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-2">Expenses</p>
               <div className="space-y-1">
                 {expenseAccounts.map((a) => (
                   <div key={a.accountCode} className="flex justify-between pl-4">

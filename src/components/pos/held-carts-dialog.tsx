@@ -80,7 +80,7 @@ export function HeldCartsDialog({
             <Pause className="h-5 w-5 text-amber-500" />
             Held carts
             {heldCarts.length > 0 && (
-              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+              <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">
                 {heldCarts.length}
               </Badge>
             )}

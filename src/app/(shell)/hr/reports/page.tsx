@@ -937,7 +937,7 @@ export default function HrReportsPage() {
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p
         className={`mt-1 text-xl font-bold tabular-nums ${
-          tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : tone === 'good' ? 'text-emerald-700 dark:text-emerald-400' : ''
+          tone === 'warn' ? 'text-amber-700 dark:text-amber-400' : tone === 'good' ? 'text-emerald-700 dark:text-emerald-400' : ''
         }`}
       >
         {value}
@@ -2243,7 +2243,7 @@ export default function HrReportsPage() {
           <Card data-testid="hr-privacy-retention">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <Landmark className="h-4 w-4 text-amber-600" aria-hidden /> Retention &amp; legal holds (Data Protection Act posture)
+                <Landmark className="h-4 w-4 text-amber-700" aria-hidden /> Retention &amp; legal holds (Data Protection Act posture)
               </CardTitle>
               <CardDescription>
                 The nightly sweep anonymises expired personal data scope by scope — reviewable windows, never legal advice. A legal hold pauses one scope until a settings manager releases it; setting and releasing are both audit-logged. The Next sweep column is a dry run: it counts what each run would anonymise, changing nothing.
@@ -2256,7 +2256,7 @@ export default function HrReportsPage() {
                   'Loading holds…'
                 ) : retention.heldCount > 0 ? (
                   <>
-                    <span className="font-medium text-amber-600 dark:text-amber-400">{retention.heldCount} of {retention.policies.length} scopes on hold</span>
+                    <span className="font-medium text-amber-700 dark:text-amber-400">{retention.heldCount} of {retention.policies.length} scopes on hold</span>
                     <span> — the sweep skips them until release</span>
                   </>
                 ) : (
@@ -2338,7 +2338,7 @@ export default function HrReportsPage() {
                         <TableCell className="whitespace-nowrap tabular-nums">
                           <span
                             data-testid={`hr-retention-sweep-${p.scope}`}
-                            className={p.held && p.sweepable > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}
+                            className={p.held && p.sweepable > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}
                             title={p.held && p.sweepable > 0 ? 'A hold stands — these rows wait until a settings manager releases the scope.' : 'Dry-run count — what the next nightly run would anonymise; nothing is changed.'}
                           >
                             {p.sweepLabel}

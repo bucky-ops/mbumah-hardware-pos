@@ -145,7 +145,7 @@ export function ProgressMeter({
 export function EmptyState({ icon, title, hint }: { icon: ReactNode; title: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-10 text-center">
-      <div className="text-muted-foreground/60">{icon}</div>
+      <div className="text-muted-foreground">{icon}</div>
       <p className="text-sm font-medium">{title}</p>
       {hint ? <p className="max-w-xs text-xs text-muted-foreground">{hint}</p> : null}
     </div>

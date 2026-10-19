@@ -107,7 +107,7 @@ const PAYMENT_METHODS: {
     iconGradient: 'bg-gradient-to-br from-emerald-500 to-green-600 text-white',
   },
   {
-    value: 'DEBT', label: 'Debt', icon: Wallet, desc: 'Put it on a customer account', color: 'text-amber-600',
+    value: 'DEBT', label: 'Debt', icon: Wallet, desc: 'Put it on a customer account', color: 'text-amber-700',
     selectedGradient: 'from-amber-500 to-orange-600',
     iconGradient: 'bg-gradient-to-br from-amber-500 to-orange-600 text-white',
   },
@@ -779,7 +779,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                             {!managerApprovalOpen ? (
                               <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 space-y-2">
                                 <div className="flex items-start gap-2">
-                                  <Lock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                  <Lock className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
                                   <p className="text-xs text-amber-800 dark:text-amber-300">
                                     A manager can authorise this sale as a credit-limit override.
                                   </p>
@@ -937,7 +937,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                     </div>
                     <div className="text-xs flex justify-between">
                       <span className="text-muted-foreground">Total Entered:</span>
-                      <span className={`font-semibold ${(Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal ? 'text-green-700' : 'text-amber-600'}`}>
+                      <span className={`font-semibold ${(Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal ? 'text-green-700' : 'text-amber-700'}`}>
                         {formatKES((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0))}
                         {((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0)) < finalTotal && (
                           <span className="ml-1">· short {formatKES(finalTotal - (Number(splitCashAmount) || 0) - (Number(splitMpesaAmount) || 0))}</span>

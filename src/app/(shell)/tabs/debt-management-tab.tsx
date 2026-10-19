@@ -191,7 +191,7 @@ function OverdueBoardSection({ storeId }: { storeId: string }) {
       {
         label: '1-60 days',
         value: (byBucket.DAYS_30 ?? 0) + (byBucket.DAYS_60 ?? 0),
-        color: 'text-amber-600 dark:text-amber-400',
+        color: 'text-amber-700 dark:text-amber-400',
         icon: Clock,
       },
       {
@@ -482,7 +482,7 @@ function PipelineSection({ storeId }: { storeId: string }) {
               )}
             </Button>
             {!canRun && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+              <p className="text-xs text-amber-700 dark:text-amber-400 text-center">
                 Manager+ role required to run the scheduler.
               </p>
             )}
@@ -759,7 +759,7 @@ function HistorySection({ storeId }: { storeId: string }) {
           <div className="text-center py-12 space-y-2">
             <History className="h-10 w-10 text-muted-foreground/40 mx-auto" />
             <p className="text-sm text-muted-foreground">No reminders found.</p>
-            <p className="text-xs text-muted-foreground/60">
+            <p className="text-xs text-muted-foreground">
               Run the scheduler in the Pipeline tab to create reminders.
             </p>
           </div>
@@ -862,7 +862,7 @@ export default function DebtManagementTab() {
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <AlertTriangle className="h-6 w-6 text-amber-600" />
+            <AlertTriangle className="h-6 w-6 text-amber-700" />
             Debt Management
           </h2>
           <p className="text-sm text-muted-foreground">

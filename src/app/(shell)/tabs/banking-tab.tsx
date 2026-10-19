@@ -371,7 +371,7 @@ export default function BankingTab() {
             title: 'Pending Reconciliations',
             value: String(pendingRecons),
             icon: Clock,
-            color: 'text-amber-600',
+            color: 'text-amber-700',
             bg: 'bg-amber-50 dark:bg-amber-950/30',
           },
           {
@@ -1271,7 +1271,7 @@ export default function BankingTab() {
               </div>
               {Math.abs(reconToApprove.difference) >= 0.01 && (
                 <div className="flex items-center gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <AlertCircle className="h-4 w-4 text-amber-700 shrink-0" />
                   <p className="text-xs text-amber-700 dark:text-amber-400">
                     This reconciliation has a difference of {formatKES(reconToApprove.difference)}. Approving may indicate unresolved items.
                   </p>

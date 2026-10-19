@@ -583,7 +583,7 @@ export default function EmployeesPage() {
                       <TableCell className="text-right">
                         {r.expiringDocuments != null && r.expiringDocuments > 0 ? (
                           <span
-                            className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-amber-600 dark:text-amber-400"
+                            className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400"
                             title={r.nearestExpiry ? `Nearest expiry ${formatDate(r.nearestExpiry)}` : undefined}
                           >
                             <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
@@ -639,7 +639,7 @@ export default function EmployeesPage() {
                 <div className="mt-2 flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">hired {formatDate(r.hireDate)}</span>
                   {r.expiringDocuments != null && r.expiringDocuments > 0 ? (
-                    <span className="font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                    <span className="font-semibold tabular-nums text-amber-700 dark:text-amber-400">
                       {r.expiringDocuments} expiring
                       {r.nearestExpiry ? ` · ${formatDate(r.nearestExpiry)}` : ''}
                     </span>

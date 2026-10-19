@@ -678,7 +678,7 @@ export default function PerformancePage() {
         <Card className="border-amber-300/70 dark:border-amber-900" data-testid="perf-lock">
           <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50">
-              <LockKeyhole className="h-6 w-6 text-amber-600 dark:text-amber-400" aria-hidden />
+              <LockKeyhole className="h-6 w-6 text-amber-700 dark:text-amber-400" aria-hidden />
             </span>
             <div className="space-y-1">
               <p className="text-base font-semibold">HR performance is locked for your role</p>
@@ -1703,7 +1703,7 @@ export default function PerformancePage() {
                           {g.cycleName}
                         </Badge>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground/70" data-testid={`goal-deleted-cycle-${g.id}`}>
+                        <span className="text-[10px] text-muted-foreground" data-testid={`goal-deleted-cycle-${g.id}`}>
                           No cycle
                         </span>
                       )}
@@ -1973,7 +1973,7 @@ export default function PerformancePage() {
                 {/* ── calibration notes — the manager's working record ── */}
                 <div className="rounded-md border border-amber-200/70 bg-amber-50/40 px-3 py-2.5 dark:border-amber-900/60 dark:bg-amber-950/20" data-testid="cycle-detail-notes">
                   <div className="flex items-center gap-1.5">
-                    <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden />
+                    <StickyNote className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" aria-hidden />
                     <p className="text-xs font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300">Calibration notes</p>
                     {cycleDetail.canEditNotes && !notesEditing ? (
                       <Button

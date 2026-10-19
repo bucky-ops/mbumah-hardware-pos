@@ -639,7 +639,7 @@ export default function HrPayrollPage() {
         money: false,
         icon: Clock,
         hint: 'Submitted runs waiting for a maker-checked approval',
-        tone: 'text-amber-600 dark:text-amber-400',
+        tone: 'text-amber-700 dark:text-amber-400',
       },
       {
         label: 'Posted runs',
@@ -1506,7 +1506,7 @@ export default function HrPayrollPage() {
                       >
                         <span aria-hidden className="mt-0.5 shrink-0">
                           {row.outcome === 'BLOCKED' ? (
-                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                           ) : row.outcome === 'PASSED' ? (
                             <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                           ) : (
@@ -2184,7 +2184,7 @@ function PeriodJournalDrawer({
             </label>
             <div className="relative">
               <Search
-                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60"
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
                 aria-hidden
               />
               <input

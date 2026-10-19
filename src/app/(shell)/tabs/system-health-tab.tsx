@@ -578,7 +578,7 @@ export default function SystemHealthTab() {
                     <AlertTriangle className="h-8 w-8 text-amber-500" />
                     <div>
                       <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{status.circuitBreakers.halfOpen}</p>
-                      <p className="text-xs text-amber-600 dark:text-amber-500">Half-Open (Probing)</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-500">Half-Open (Probing)</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -633,7 +633,7 @@ export default function SystemHealthTab() {
                               }`}>
                                 <Icon className={`h-4 w-4 ${
                                   breaker.state === 'OPEN' ? 'text-red-600 dark:text-red-400' :
-                                  breaker.state === 'HALF_OPEN' ? 'text-amber-600 dark:text-amber-400' :
+                                  breaker.state === 'HALF_OPEN' ? 'text-amber-700 dark:text-amber-400' :
                                   'text-emerald-700 dark:text-emerald-400'
                                 }`} />
                               </div>
@@ -649,7 +649,7 @@ export default function SystemHealthTab() {
                                 <p className="text-xs text-muted-foreground">Failure Rate</p>
                                 <p className={`font-mono text-sm font-medium ${
                                   breaker.failureRate > 0.5 ? 'text-red-600' :
-                                  breaker.failureRate > 0.2 ? 'text-amber-600' :
+                                  breaker.failureRate > 0.2 ? 'text-amber-700' :
                                   'text-emerald-700'
                                 }`}>
                                   {(breaker.failureRate * 100).toFixed(1)}%

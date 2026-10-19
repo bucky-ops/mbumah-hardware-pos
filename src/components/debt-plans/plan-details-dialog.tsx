@@ -524,7 +524,7 @@ export function PlanDetailsDialog({
                                 {formatKES(inst.amountPaid)}
                               </p>
                               {inst.lateFeeApplied > 0 && (
-                                <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                                <p className="text-[10px] text-amber-700 dark:text-amber-400">
                                   +{formatKES(inst.lateFeeApplied)} late fee
                                 </p>
                               )}
@@ -607,7 +607,7 @@ export function PlanDetailsDialog({
 
                       {current.status === 'DEFAULTED' && (
                         <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3 flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                           <span className="text-sm">
                             This plan has <strong>defaulted</strong> (≥25% of
                             installments overdue). Catch-up payments and

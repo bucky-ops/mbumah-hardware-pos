@@ -968,7 +968,7 @@ export function PayrollRunDialog({
                       )}
                       <span aria-hidden className="relative mt-1 shrink-0">
                         {row.outcome === 'BLOCKED' ? (
-                          <ShieldAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                          <ShieldAlert className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         ) : row.outcome === 'PASSED' ? (
                           <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                         ) : (

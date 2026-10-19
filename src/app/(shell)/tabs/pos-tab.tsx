@@ -1904,10 +1904,10 @@ export default function POSTab() {
                           <span className="text-xs font-medium text-foreground/90 line-clamp-1 break-words max-w-[150px]">{name}</span>
                           <span className="text-[11px] font-semibold text-foreground/70 whitespace-nowrap">{formatKES(price)}</span>
                           {isBestSellerChip && (
-                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 py-0 border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 shrink-0">TOP</Badge>
+                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 py-0 border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800 shrink-0">TOP</Badge>
                           )}
                           {stock > 0 && stock <= 5 && (
-                            <span className="text-[10px] text-amber-600 whitespace-nowrap">· {stock} left</span>
+                            <span className="text-[10px] text-amber-700 whitespace-nowrap">· {stock} left</span>
                           )}
                         </button>
                       );
@@ -1938,7 +1938,7 @@ export default function POSTab() {
                   </Badge>
                 )}
                 {heldCartCount > 0 && (
-                  <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300">
+                  <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">
                     <Pause className="h-2.5 w-2.5 mr-0.5" />{heldCartCount} held
                   </Badge>
                 )}
@@ -1951,7 +1951,7 @@ export default function POSTab() {
                 )}
                 {cart.items.length > 0 && (
                   <>
-                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 btn-press" title="Hold current cart (F10)">
+                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-700 h-7 btn-press" title="Hold current cart (F10)">
                       <Pause className="h-3.5 w-3.5 mr-1" /> Hold
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setClearCartConfirmOpen(true)} className="text-destructive h-7 btn-press" title="Clear cart (with confirmation)">
@@ -2811,7 +2811,7 @@ export default function POSTab() {
                 )}
                 {cart.items.length > 0 && (
                   <>
-                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-600 h-7 text-xs btn-press">
+                    <Button variant="ghost" size="sm" onClick={holdCart} className="text-amber-700 h-7 text-xs btn-press">
                       <Pause className="h-3.5 w-3.5 mr-1" /> Hold
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setClearCartConfirmOpen(true)} className="text-destructive h-7 text-xs btn-press" title="Clear cart (with confirmation)">

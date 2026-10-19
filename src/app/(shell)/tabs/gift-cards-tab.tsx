@@ -1110,7 +1110,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                                 setCancelDialogOpen(true);
                               }}
                               onSelect={(e) => e.preventDefault()}
-                              className="gap-2 cursor-pointer text-amber-600 dark:text-amber-400 focus:text-amber-600 focus:bg-amber-50 dark:focus:bg-amber-950/30"
+                              className="gap-2 cursor-pointer text-amber-700 dark:text-amber-400 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-950/30"
                             >
                               <Ban className="h-4 w-4" />
                               Cancel Card
@@ -1275,7 +1275,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs gap-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                        className="h-7 text-xs gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedCard(card);
@@ -2129,7 +2129,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Remaining Balance</span>
-                <span className="font-semibold text-amber-600 dark:text-amber-400">
+                <span className="font-semibold text-amber-700 dark:text-amber-400">
                   {formatKES(selectedCard.currentBalance)}
                 </span>
               </div>

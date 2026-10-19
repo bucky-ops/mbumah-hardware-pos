@@ -407,7 +407,7 @@ export function LowStockAlertPanel({
                           {formatQtyWithUnit(product.suggestedReorderQty, product.unitType)}
                         </span>
                         {' '}
-                        <span className="text-muted-foreground/70">
+                        <span className="text-muted-foreground">
                           (to reach 1.5× reorder level)
                         </span>
                       </div>

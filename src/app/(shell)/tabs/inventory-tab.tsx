@@ -787,7 +787,7 @@ export default function InventoryTab() {
       {(lowStockCount > 0 || outOfStockCount > 0) && (
         <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 p-3 flex items-center gap-3 backdrop-blur-sm">
           <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/50">
-            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-400 shrink-0" />
           </div>
           <div className="flex-1 text-sm">
             <span className="font-semibold text-amber-800 dark:text-amber-300">
@@ -1037,7 +1037,7 @@ export default function InventoryTab() {
                     <span className={`text-xs font-semibold ${
                       ((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100) >= 30
                         ? 'text-green-700' : ((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100) >= 15
-                        ? 'text-amber-600' : 'text-red-600'
+                        ? 'text-amber-700' : 'text-red-600'
                     }`}>
                       {((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100).toFixed(1)}%
                     </span>
@@ -1280,7 +1280,7 @@ export default function InventoryTab() {
                           </div>
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">No products found</p>
-                            <p className="text-xs text-muted-foreground/70 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {searchQuery || stockFilter !== 'all' || selectedCategory !== 'all'
                                 ? 'Try adjusting your filters'
                                 : 'Add your first product to get started'}
@@ -1455,7 +1455,7 @@ export default function InventoryTab() {
                                 {/* v2.14.1: Reorder prefill on at/below-reorder products */}
                                 {product.quantityInStock <= product.reorderLevel && (
                                   <DropdownMenuItem onClick={() => openReorderPrefill(product)}>
-                                    <PackagePlus className="mr-2 h-4 w-4 text-amber-600" /> Reorder (+{suggestedReorderQty(product)})
+                                    <PackagePlus className="mr-2 h-4 w-4 text-amber-700" /> Reorder (+{suggestedReorderQty(product)})
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem onClick={() => setEditProduct(product)}>
@@ -1554,7 +1554,7 @@ export default function InventoryTab() {
                 <RotateCcw className="h-10 w-10 text-muted-foreground/20" />
               </div>
               <p className="text-sm text-muted-foreground">No stock movements recorded yet</p>
-              <p className="text-xs text-muted-foreground/70">Movements will appear when you adjust stock or make sales</p>
+              <p className="text-xs text-muted-foreground">Movements will appear when you adjust stock or make sales</p>
             </div>
           ) : (
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
@@ -1955,7 +1955,7 @@ export default function InventoryTab() {
                     ((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100) >= 30
                       ? 'text-green-700'
                       : ((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100) >= 15
-                        ? 'text-amber-600'
+                        ? 'text-amber-700'
                         : 'text-red-600'
                   }`}>
                     {((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100).toFixed(1)}%

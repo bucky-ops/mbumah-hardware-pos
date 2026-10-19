@@ -68,7 +68,7 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
   const getPaymentIcon = (method: string) => {
     switch (method?.toUpperCase()) {
       case 'CASH': return <Banknote className="h-3.5 w-3.5 text-green-700" />;
-      case 'MPESA': return <Smartphone className="h-3.5 w-3.5 text-amber-600" />;
+      case 'MPESA': return <Smartphone className="h-3.5 w-3.5 text-amber-700" />;
       case 'DEBT': return <CircleDollarSign className="h-3.5 w-3.5 text-red-600" />;
       case 'SPLIT': return <CreditCard className="h-3.5 w-3.5 text-purple-600" />;
       default: return <Wallet className="h-3.5 w-3.5" />;
@@ -82,7 +82,7 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
     if (actionUpper.includes('PURCHASE_ORDER') || actionUpper.includes('PO_')) return { icon: Package, bg: 'bg-purple-100 dark:bg-purple-900/30', color: 'text-purple-600' };
     if (actionUpper.includes('SUPPLIER')) return { icon: BarChart3, bg: 'bg-teal-100 dark:bg-teal-900/30', color: 'text-teal-600' };
     if (actionUpper.includes('BUNDLE')) return { icon: Package, bg: 'bg-cyan-100 dark:bg-cyan-900/30', color: 'text-cyan-600' };
-    if (actionUpper.includes('CASH_DRAWER') || actionUpper.includes('EXPENSE')) return { icon: Banknote, bg: 'bg-amber-100 dark:bg-amber-900/30', color: 'text-amber-600' };
+    if (actionUpper.includes('CASH_DRAWER') || actionUpper.includes('EXPENSE')) return { icon: Banknote, bg: 'bg-amber-100 dark:bg-amber-900/30', color: 'text-amber-700' };
     return { icon: Activity, bg: 'bg-gray-100 dark:bg-gray-900/30', color: 'text-gray-600' };
   };
 

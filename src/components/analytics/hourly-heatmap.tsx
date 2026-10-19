@@ -124,7 +124,7 @@ export function HourlyHeatmap({ data, loading, className }: HourlyHeatmapProps) 
                   {Array.from({ length: 24 }).map((_, h) => (
                     <div
                       key={h}
-                      className="text-[9px] text-muted-foreground/70 text-center tabular-nums"
+                      className="text-[9px] text-muted-foreground text-center tabular-nums"
                     >
                       {h % 2 === 0 ? `${String(h).padStart(2, '0')}` : ''}
                     </div>
@@ -206,7 +206,7 @@ export function HourlyHeatmap({ data, loading, className }: HourlyHeatmapProps) 
                   </span>
                 </>
               ) : (
-                <span className="text-muted-foreground/60">
+                <span className="text-muted-foreground">
                   Hover over a cell to see detailed revenue and transaction count.
                 </span>
               )}
