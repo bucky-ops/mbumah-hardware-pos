@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.135.0',
+    title: 'The verdict leaves a paper trail',
+    bullets: [
+      'The run gate\u2019s verdict now freezes onto the run at prepare time \u2014 what the gate said when THIS run went through (or was stopped) becomes auditable history, not folklore.',
+      'Every run row on the payroll desk wears its verdict: \u201c5 clear \u00b7 19 Oct 12:30 EAT\u201d in emerald, block counts in amber \u2014 stamped from prepare\u2019s own gate loop, parity by construction.',
+      'The run detail dialog speaks the same frozen strip, and says plainly when a run predates the paper trail (v2.135.0) instead of guessing a verdict.',
+      'A missing-consent verdict now carries its own fix: the blocked row links straight to the Privacy tab\u2019s consent ledger, in its own tab, so diagnosis joins its repair.',
+      'Honest absences stay silent: runs prepared before v2.135.0 render no verdict anywhere \u2014 the desk never invents history.',
+    ],
+  },
+  {
     version: '2.134.0',
     title: 'The gate opens onto empty months',
     bullets: [

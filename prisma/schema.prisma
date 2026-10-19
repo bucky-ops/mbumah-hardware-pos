@@ -1629,6 +1629,16 @@ model PayrollRun {
   journalEntryId    String? // Posted combined journal (idempotencyKey = payroll-run:{id})
   journalEntry      JournalEntry? @relation(fields: [journalEntryId], references: [id])
 
+  // ── v2.135.0: the gate's verdict freezes at prepare time ──────────────────
+  // prepare's own loop evaluates both gates (consent, timesheets) per
+  // employee; the verdict it ACTED ON — clear or blocked — is snapped onto
+  // the run, so the lifecycle's front door becomes auditable history. The
+  // snapshot is prepare itself (parity by construction), never a re-read.
+  // Nullable by design: runs prepared before v2.135.0 carry no snapshot and
+  // the UI says so honestly — it never guesses.
+  gateCheckedAt DateTime?
+  gateSummary   Json?
+
   // Aggregate totals for THIS run (sum of PayrollDetail rows)
   totalGross      Decimal @default(0)
   totalDeductions Decimal @default(0)

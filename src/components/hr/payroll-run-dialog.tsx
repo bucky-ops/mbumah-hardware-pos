@@ -11,11 +11,12 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileArchive, FileDown, History, Hourglass, Loader2, Lock, Play, RefreshCw, Send, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, CheckCircle2, Clock, FileArchive, FileDown, History, Hourglass, Loader2, Lock, Play, RefreshCw, Send, ShieldCheck, ShieldQuestion, Smartphone, Undo2, XCircle } from 'lucide-react';
 import { formatCsvSize } from '@/lib/hr/digest-csv';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { downloadPayrollBundle } from '@/components/hr/payslip-bundle-download';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
+import { parseGateVerdict, buildGateVerdictText, gateVerdictTone } from '@/lib/hr/payroll/gate-verdict';
 import type { RunHistoryEvent } from '@/lib/hr/payroll/run-history';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/(shell)/hr/payroll/page';
 
@@ -94,9 +95,13 @@ interface RunDetail {
   employeeCount: number;
   errorMessage: string | null;
   preparedByUserId: string | null;
+  preparedAt?: string | null;
   rejectionReason: string | null;
   journalEntryId: string | null;
   payslipIssuedCount?: number;
+  /** v2.135.0: the frozen gate verdict (null for pre-v2.135.0 runs — honest absence). */
+  gateCheckedAt?: string | null;
+  gateSummary?: unknown;
   payrollPeriod: { name: string; payDate: string | null; startDate: string; endDate: string };
 }
 
@@ -897,6 +902,55 @@ export function PayrollRunDialog({
                 </ol>
               </div>
             )}
+
+            {/* v2.135.0: the frozen gate verdict — what the gate said when prepare
+                let this run through (or stopped it). The strip speaks the same
+                words as the live panel ("N clear · N missing consent · N timesheet
+                pending"), stamped with the EAT moment it was spoken. A run with no
+                snapshot is a run prepared before v2.135.0 — the strip says so
+                once, plainly, and never guesses a verdict. */}
+            {(() => {
+              const verdict = run ? parseGateVerdict(run.gateSummary, run.gateCheckedAt) : null;
+              if (verdict) {
+                const tone = gateVerdictTone(verdict.summary);
+                return (
+                  <div
+                    data-testid="payroll-run-gate-verdict-strip"
+                    className={`rounded-lg border p-4 ${
+                      tone === 'clear'
+                        ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30'
+                        : 'border-amber-300 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30'
+                    }`}
+                  >
+                    <p className={`flex flex-wrap items-center gap-1.5 text-sm font-medium ${
+                      tone === 'clear' ? 'text-emerald-900 dark:text-emerald-300' : 'text-amber-900 dark:text-amber-300'
+                    }`}>
+                      <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      Gate at prepare: {buildGateVerdictText(verdict.summary)}
+                      {verdict.checkedAt ? (
+                        <span className="text-xs font-normal tabular-nums text-muted-foreground">
+                          · {formatEatStamp(new Date(verdict.checkedAt))}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Frozen from prepare&apos;s own gate loop when this run was prepared{verdict.summary.codes.length ? ` — it acted on ${verdict.summary.codes.join(', ')}` : ''}; the live gate may have moved since.
+                    </p>
+                  </div>
+                );
+              }
+              if (run?.preparedAt) {
+                return (
+                  <p
+                    data-testid="payroll-run-gate-verdict-missing"
+                    className="rounded-lg border border-dashed px-4 py-3 text-xs text-muted-foreground"
+                  >
+                    No gate snapshot on this run — it was prepared before verdicts started leaving a paper trail (v2.135.0). The live Gate door still speaks for the period.
+                  </p>
+                );
+              }
+              return null;
+            })()}
 
             {/* Gate issues */}
             {parsedIssues && parsedIssues.length > 0 && (
