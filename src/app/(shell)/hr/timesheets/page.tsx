@@ -18,8 +18,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, CalendarCheck, CheckCircle2, Loader2, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, CheckCircle2, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
 import { deskRangeLabel, deskDayStrip, type AttendanceDeskRow } from '@/lib/hr/attendance-desk';
+import { buildTimesheetDeskCsv } from '@/lib/hr/timesheet-desk-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 
 interface PayrollPeriodLite {
@@ -170,6 +171,32 @@ export default function HrTimesheetsPage() {
     [focusId, payload],
   );
 
+  // v2.137.0: the pending list prints itself — the desk's rows as shown
+  // (scope, order, counts), never more. The row type has no field for pay
+  // data, so an export can never become a payslip preview.
+  const exportCsv = useCallback(() => {
+    if (!payload || payload.rows.length === 0) return;
+    const csv = buildTimesheetDeskCsv(
+      payload.rows.map((row) => ({
+        employeeCode: row.employeeCode,
+        employeeName: row.employeeName,
+        pendingDays: row.days.length,
+        firstDay: row.firstDay,
+        lastDay: row.lastDay,
+        pendingDates: row.days,
+      })),
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timesheet-pending-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [payload]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -199,6 +226,18 @@ export default function HrTimesheetsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={!payload || loading || payload.rows.length === 0}
+            aria-label="Export the pending timesheet list as CSV — codes, names, and days only, never pay data"
+            title="Exports the pending list as shown — codes, names, and days; no pay data"
+            data-testid="hr-timesheet-csv"
+          >
+            <FileDown className="mr-1 h-3.5 w-3.5" aria-hidden />
+            Export CSV
+          </Button>
           <Button
             variant="outline"
             size="sm"

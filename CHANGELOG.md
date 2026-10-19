@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.137.0] The picker sees the gate
+
+The gate's pre-flight lived on the desks — the gate panel, the timesheet desk — but the prepare INTENT itself was blind: the "Start a payroll run" dialog listed periods with no hint of what the gate would later say. And the timesheet desk's pending list had no export door while its ledger siblings (case list v2.115.0, access ledger v2.118.0) both print. This release closes both gaps.
+
+### Added
+- **The gate preview rides the periods list** (`GET /api/payroll/periods`, additive `gatePreview`): pre-flight inside the prepare intent. The SAME unapproved + employee where as the run gate (run-gate.ts parity), fetched ONCE for the store (pending days are bounded — the desk exists to clear them) and bucketed per period in memory (`bucketPendingDays`, pure), so the list never runs one query per period. Consent is period-independent: ONE count (`consentRecord: { none: { withdrawnAt: null } }`) rides every row honestly — it would block any period's prepare. A preview failure degrades to `null`; the periods list never dies and the picker says "unavailable", never a guess.
+- **The picker wears the gate** (`CreateRunDialog`): each period item carries the gate's own words as chips — rose "N missing consent", amber "N unapproved day(s)" (prepare's loop order: consent first) — mono, tabular numerals, dark twins; the selected item's chips carry into the trigger, so the intent starts pre-flight. Under the picker, a compact preview line (`gatePreviewLine`) names the consequence ("prepare would block until cleared"), and when unapproved days are pending it carries the amber door to `/hr/timesheets` (own tab, aria-labelled, the door family's fourth member).
+- **The pending list prints itself** (`src/lib/hr/timesheet-desk-csv.ts` + desk toolbar): the RFC 4180 family's newest member — exact header pin (`employee_code, employee_name, pending_days, first_day, last_day, pending_dates`), CRLF, quote-on-need, double embedded quotes, `pending_dates` joined with ';' inside one cell, trailing newline. The serializer never re-sorts: what the desk shows is what prints. Honesty pin: the column set IS the desk row's column set — the row type has no field for pay data, so an export can never become a payslip preview or an approval by spreadsheet. Button disabled when nothing is pending; aria says "never pay data".
+
+### Changed
+- `PayrollPeriodDto` grows the optional `gatePreview` field (additive, null-safe for cached payloads).
+
+### Tests
+- `src/tests/timesheet-desk-v2137.test.ts` (24): the serializer (header pin, join/quote/escape matrix, empty export, no-sort pin), the preview math (bucketing, overlap double-count honesty, garbage degradation, chip order/plurals/silence, the three preview-line voices), the periods route (parity where, one-count consent, in-memory bucketing pin, null-degrade pin), the picker (chips, line, door, dark twins, additive DTO), and the desk export (rows-as-shown, disabled-when-empty, never-pay-data aria).
+- `scripts/verify-v2-137-0.mjs` (12 checks, written fresh).
+- `console-changelog` unread counters re-anchored for 2.137.0 joining the feed.
+
 ## [2.136.0] The second door finds its desk
 
 The remediation door shipped in v2.135.0 had one leaf: a missing-consent row could walk to the Privacy tab's consent ledger, but a TIMESHEET_NOT_APPROVED row could only read its own explanation — the approve route was API-only, so the gate's second block had nowhere to be fixed from the UI. This release gives that block its desk.
