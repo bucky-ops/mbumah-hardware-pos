@@ -148,6 +148,23 @@ frozen facts and follows the same honesty rules:
   scoped export and the full-window export never look alike in a downloads
   folder. The picker renders only when the window holds a labeled period —
   a one-period store never wears a dead control.
+- **Outcome lens (v2.144.0).** The blocked-only boolean grows a third way:
+  the card's lens is now `all | blocked | passed`
+  (`gateTimelineLensFilter` / `scopeGateTimeline`'s `lens` option — the
+  boolean is gone). The UNKNOWN rows survive only under `all`: an unreadable
+  outcome is honestly neither passed nor blocked, so neither lens may claim
+  it, and a garbage lens degrades to the unfiltered view, never a guessed
+  filter. The lens is a joined segmented trio on the card (`lens-all` /
+  `lens-blocked` / `lens-passed`, each `aria-pressed`) whose active families
+  are the row badges' own tones — neutral for ALL, rose for BLOCKED, emerald
+  for PASSED. The period picker's items wear each period's NEWEST attempt's
+  outcome as a tone dot (`GateTimelinePeriod.lastOutcome`, computed through
+  `summarizeGateTimeline` itself — one definition of "last" everywhere on
+  the card; clock-based, ties falling back to the route's deterministic
+  array order). The export follows the lens ∩ period as before, so a
+  Passed-only CSV is the audit artifact, filtered by the same rules the
+  card shows. The summary chip keeps speaking the route-built ALL count —
+  a view preference never rewrites the whole story.
 
 ## Posting (spec acceptance #1–#4)
 

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, ArrowUpRight, Banknote, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, History, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Banknote, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, History, Landmark, ListFilter, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
@@ -29,7 +29,7 @@ import { gatePreviewChips, gatePreviewLine, type GatePreview } from '@/lib/hr/pa
 // kept each run's attempts; this read-back walks the SAME append-only rows
 // across every run, so the page can answer "how has the gate behaved" at a
 // glance. Types only here — the route does the building, the card renders.
-import type { GateTimelineRow, GateTimelineSummary, GateTimelineCsvRow } from '@/lib/hr/payroll/gate-timeline';
+import type { GateTimelineRow, GateTimelineSummary, GateTimelineCsvRow, GateTimelineLens } from '@/lib/hr/payroll/gate-timeline';
 import { buildGateTimelineCsv, listTimelinePeriods, scopeGateTimeline, gateTimelineCsvFilename, summarizeGateTimeline } from '@/lib/hr/payroll/gate-timeline';
 import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
@@ -419,7 +419,12 @@ export default function HrPayrollPage() {
   // pattern (a view preference, not a data change): the summary chip keeps
   // speaking ALL attempts, the toggle composes BEFORE the render bound and
   // BEFORE the export, and flipping it never touches the read itself.
-  const [timelineBlockedOnly, setTimelineBlockedOnly] = useState(false);
+  // v2.144.0: the lens learns the other outcome — the blocked-only boolean
+  // grows into a three-way outcome lens ('all' | 'blocked' | 'passed'). The
+  // UNKNOWN rows survive only under 'all' (garbage never passes either
+  // filter — the pure layer's own rule); the header chip keeps speaking ALL
+  // attempts either way.
+  const [timelineLens, setTimelineLens] = useState<GateTimelineLens>('all');
   // v2.143.0: the period scope — the story scopes itself. Holds the period's
   // own LABEL (the payload's only period identity); null reads "All periods".
   // A view preference like the lens: the header chip keeps speaking the
@@ -601,7 +606,7 @@ export default function HrPayrollPage() {
   const exportGateTimelineCsv = useCallback(() => {
     if (!timeline || timeline.rows.length === 0) return;
     const visible = scopeGateTimeline(timeline.rows, {
-      blockedOnly: timelineBlockedOnly,
+      lens: timelineLens,
       periodLabel: timelinePeriod,
     });
     const csv = buildGateTimelineCsv(
@@ -623,7 +628,7 @@ export default function HrPayrollPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  }, [timeline, timelineBlockedOnly, timelinePeriod]);
+  }, [timeline, timelineLens, timelinePeriod]);
 
   const stats = useMemo(() => {
     const list = runs ?? [];
@@ -703,10 +708,10 @@ export default function HrPayrollPage() {
   const timelineFiltered = useMemo(
     () =>
       scopeGateTimeline(timeline?.rows ?? [], {
-        blockedOnly: timelineBlockedOnly,
+        lens: timelineLens,
         periodLabel: timelinePeriod,
       }),
-    [timeline, timelineBlockedOnly, timelinePeriod],
+    [timeline, timelineLens, timelinePeriod],
   );
   const timelineScopedSummary = useMemo(
     () => summarizeGateTimeline(timelineFiltered),
@@ -1248,33 +1253,98 @@ export default function HrPayrollPage() {
                         </SelectItem>
                         {timelinePeriods.map((p) => (
                           <SelectItem key={p.label} value={p.label} className="text-xs">
+                            {/* v2.144.0: the item wears the period's newest
+                                attempt's outcome as a tone dot — the same
+                                clock-based "last" the scoped line speaks,
+                                computed through summarizeGateTimeline. The
+                                dot is aria-hidden decoration; the option's
+                                own text still announces the period and its
+                                attempt count, and the title carries the word. */}
+                            <span
+                              data-testid="payroll-gate-timeline-period-outcome"
+                              aria-hidden
+                              title={`Last attempt outcome: ${p.lastOutcome ?? 'UNKNOWN'}`}
+                              className={`mr-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                                p.lastOutcome === 'PASSED'
+                                  ? 'bg-emerald-500 dark:bg-emerald-400'
+                                  : p.lastOutcome === 'BLOCKED'
+                                    ? 'bg-amber-500 dark:bg-amber-400'
+                                    : 'bg-muted-foreground/40'
+                              }`}
+                            />
                             {p.label} · {p.attempts} {p.attempts === 1 ? 'attempt' : 'attempts'}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   ) : null}
-                  {/* v2.142.0: the blocked-only lens — aria-pressed speaks the
-                      state, rose when on (the BLOCKED outcome's own family,
-                      dark twins included), quiet outline when off. A view
-                      preference: the summary chip keeps speaking ALL attempts. */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`h-8 gap-1.5 rounded-full px-3 text-xs font-medium ${
-                      timelineBlockedOnly
-                        ? 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-900 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-950 dark:hover:text-rose-200'
-                        : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
-                    } focus-visible:ring-1 focus-visible:ring-ring`}
-                    aria-pressed={timelineBlockedOnly}
-                    aria-label="Show only the attempts the gate blocked"
-                    title="Filters the card to BLOCKED attempts — the summary chip still speaks every attempt, and the export follows the lens"
-                    data-testid="payroll-gate-timeline-blocked-only"
-                    onClick={() => setTimelineBlockedOnly((v) => !v)}
+                  {/* v2.144.0: the outcome lens trio — the blocked-only toggle
+                      (v2.142.0) grows a third way. A joined segmented control
+                      in the card's rounded-full quiet-control family: ALL is
+                      the neutral unfiltered view, BLOCKED wears its own rose
+                      family, PASSED its own emerald family (the row badges'
+                      tones — the lens dresses as the rows it keeps). Each
+                      button speaks aria-pressed + its own label; the summary
+                      chip keeps speaking ALL attempts. UNKNOWN rows survive
+                      only under ALL (garbage is honestly neither). */}
+                  <div
+                    className="inline-flex h-8 items-center gap-0.5 rounded-full border border-input bg-background p-0.5"
+                    role="group"
+                    aria-label="Outcome lens for the gate activity"
+                    data-testid="payroll-gate-timeline-lens"
                   >
-                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-                    <span className="hidden sm:inline">Blocked only</span>
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`h-7 gap-1 rounded-full px-2.5 text-xs font-medium ${
+                        timelineLens === 'all'
+                          ? 'bg-muted text-foreground hover:bg-muted hover:text-foreground'
+                          : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
+                      } focus-visible:ring-1 focus-visible:ring-ring`}
+                      aria-pressed={timelineLens === 'all'}
+                      aria-label="Show every attempt, whatever the gate said"
+                      title="The unfiltered view — every attempt on record, including the unreadable ones. The summary chip always speaks this count."
+                      data-testid="payroll-gate-timeline-lens-all"
+                      onClick={() => setTimelineLens('all')}
+                    >
+                      <ListFilter className="h-3.5 w-3.5" aria-hidden />
+                      <span className="hidden sm:inline">All</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`h-7 gap-1 rounded-full px-2.5 text-xs font-medium ${
+                        timelineLens === 'blocked'
+                          ? 'border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-900 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-950 dark:hover:text-rose-200'
+                          : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
+                      } focus-visible:ring-1 focus-visible:ring-ring`}
+                      aria-pressed={timelineLens === 'blocked'}
+                      aria-label="Show only the attempts the gate blocked"
+                      title="Filters the card to BLOCKED attempts — the summary chip still speaks every attempt, and the export follows the lens"
+                      data-testid="payroll-gate-timeline-lens-blocked"
+                      onClick={() => setTimelineLens('blocked')}
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                      <span className="hidden sm:inline">Blocked only</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`h-7 gap-1 rounded-full px-2.5 text-xs font-medium ${
+                        timelineLens === 'passed'
+                          ? 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-950 dark:hover:text-emerald-200'
+                          : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
+                      } focus-visible:ring-1 focus-visible:ring-ring`}
+                      aria-pressed={timelineLens === 'passed'}
+                      aria-label="Show only the attempts the gate passed"
+                      title="Filters the card to PASSED attempts — the summary chip still speaks every attempt, and the export follows the lens"
+                      data-testid="payroll-gate-timeline-lens-passed"
+                      onClick={() => setTimelineLens('passed')}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                      <span className="hidden sm:inline">Passed only</span>
+                    </Button>
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1337,7 +1407,7 @@ export default function HrPayrollPage() {
                   attempt after that keeps its row.
                 </p>
               ) : timelineFiltered.length === 0 ? (
-                timelinePeriod && !timelineBlockedOnly ? (
+                timelinePeriod && timelineLens === 'all' ? (
                   /* A scoped set can only empty out when the period stepped
                      outside the bounded window (a period picked from the list
                      always owns at least one attempt) — so this speaks the
@@ -1355,9 +1425,13 @@ export default function HrPayrollPage() {
                     className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
                     data-testid="payroll-gate-timeline-lens-empty"
                   >
-                    {timelinePeriod
-                      ? 'No blocked attempts in this period — every prepare got through. The full story stays one toggle away.'
-                      : 'No blocked attempts in the window — every prepare got through. The full story stays one toggle away.'}
+                    {timelineLens === 'passed'
+                      ? timelinePeriod
+                        ? 'No passed attempts in this period — the attempts on record were stopped or unreadable. The full story stays one toggle away.'
+                        : 'No passed attempts in the window — the attempts on record were stopped or unreadable. The full story stays one toggle away.'
+                      : timelinePeriod
+                        ? 'No blocked attempts in this period — every prepare got through. The full story stays one toggle away.'
+                        : 'No blocked attempts in the window — every prepare got through. The full story stays one toggle away.'}
                   </p>
                 )
               ) : (

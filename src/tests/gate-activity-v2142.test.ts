@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import {
   buildGateTimelineCsv,
   escapeGateCsvCell,
-  filterGateTimeline,
+  gateTimelineLensFilter,
   type GateTimelineCsvRow,
 } from '@/lib/hr/payroll/gate-timeline';
 
@@ -23,8 +23,10 @@ import {
  *     data), CRLF, quote-on-need with double embedded quotes, nulls export
  *     empty (an unreadable clock exports '', never a guess), junk rows
  *     skipped, and NEVER a re-sort (what the card shows is what prints).
- *  2. The blocked-only lens — a view preference: order preserved, UNKNOWN
- *     never passes as BLOCKED, non-array degrades to [].
+ *  2. The outcome lens — a view preference: order preserved, UNKNOWN never
+ *     passes as BLOCKED, non-array degrades to []. (v2.144.0 re-anchor: the
+ *     boolean grew into the three-way lens — this file pins the lens
+ *     builder itself; the card trio pins live in gate-lens-v2144.)
  *  3. The card contract — aria-pressed + rose family + dark twins, the lens
  *     composing BEFORE the show-all bound, the lens-empty honest note, the
  *     export disabled-when-empty, and the window-not-viewport export pin.
@@ -111,10 +113,10 @@ describe('escapeGateCsvCell - the family escape discipline', () => {
   });
 });
 
-// ── 2. The blocked-only lens ─────────────────────────────────────────────────
+// ── 2. The outcome lens ───────────────────────────────────────────────────
 
-describe('filterGateTimeline - the card answers "when did it block"', () => {
-  type LensRow = Parameters<typeof filterGateTimeline>[0][number];
+describe('gateTimelineLensFilter - the card answers "when did it block / pass"', () => {
+  type LensRow = Parameters<typeof gateTimelineLensFilter>[0][number];
   const lensRow = (id: string, outcome: string): LensRow =>
     ({
       id,
@@ -129,27 +131,27 @@ describe('filterGateTimeline - the card answers "when did it block"', () => {
       moved: false,
     }) as LensRow;
 
-  it('blocked-only keeps every BLOCKED row in order; UNKNOWN never passes', () => {
+  it('blocked lens keeps every BLOCKED row in order; UNKNOWN never passes (v2.144.0 re-anchor)', () => {
     const rows = [
       lensRow('e1', 'PASSED'),
       lensRow('e2', 'BLOCKED'),
       lensRow('e3', 'UNKNOWN'),
       lensRow('e4', 'BLOCKED'),
     ];
-    const filtered = filterGateTimeline(rows, true);
+    const filtered = gateTimelineLensFilter(rows, 'blocked');
     expect(filtered.map((r) => r.id)).toEqual(['e2', 'e4']); // order preserved
   });
 
-  it('lens off returns every row — a view preference, not a data change', () => {
+  it('lens off (undefined) returns every row — a view preference, not a data change', () => {
     const rows = [lensRow('e1', 'PASSED'), lensRow('e2', 'BLOCKED')];
-    const all = filterGateTimeline(rows, false);
+    const all = gateTimelineLensFilter(rows, undefined);
     expect(all.map((r) => r.id)).toEqual(['e1', 'e2']);
     expect(all).not.toBe(rows); // a copy — the caller's array is never mutated
   });
 
   it('non-array degrades to [] — never a crash', () => {
-    expect(filterGateTimeline(undefined as unknown as LensRow[], true)).toEqual([]);
-    expect(filterGateTimeline(null as unknown as LensRow[], false)).toEqual([]);
+    expect(gateTimelineLensFilter(undefined as unknown as LensRow[], 'blocked')).toEqual([]);
+    expect(gateTimelineLensFilter(null as unknown as LensRow[], undefined)).toEqual([]);
   });
 });
 
@@ -159,9 +161,9 @@ describe("the payroll page's card lens + export door", () => {
   const page = readRepo('src/app/(shell)/hr/payroll/page.tsx');
   const pure = readRepo('src/lib/hr/payroll/gate-timeline.ts');
 
-  it('the lens toggle speaks aria-pressed, wears rose when on, dark twins included', () => {
-    expect(page).toContain('aria-pressed={timelineBlockedOnly}');
-    expect(page).toContain('payroll-gate-timeline-blocked-only');
+  it('the lens trio speaks aria-pressed; the blocked member wears rose, dark twins included (v2.144.0 re-anchor)', () => {
+    expect(page).toContain('aria-pressed={timelineLens === \'blocked\'}');
+    expect(page).toContain('payroll-gate-timeline-lens-blocked');
     expect(page).toContain('border-rose-300 bg-rose-50 text-rose-800');
     expect(page).toContain('dark:bg-rose-950/50 dark:text-rose-300');
     expect(page).toContain('Blocked only');
@@ -207,7 +209,8 @@ describe("the payroll page's card lens + export door", () => {
 
   it('the pure module carries the serializer + lens; stays PURE', () => {
     expect(pure).toContain('export function buildGateTimelineCsv');
-    expect(pure).toContain('export function filterGateTimeline');
+    // v2.144.0 re-anchor: the boolean grew into the three-way lens builder.
+    expect(pure).toContain('export function gateTimelineLensFilter');
     expect(pure).toContain("export function escapeGateCsvCell");
     const code = pure.replace(/^\s*\/\/.*$/gm, '');
     // v2.143.0 re-anchor: the no-clock ban scopes to the trail/lens builders.
