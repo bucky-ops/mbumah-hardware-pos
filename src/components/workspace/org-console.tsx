@@ -479,8 +479,12 @@ export function OrgConsole() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
+          {/* v2.149.0 follow-up: the right group was a no-wrap flex row —
+              Badge + Global Chat measured 419px min-content and pushed the
+              whole page to 435 at 390 even after the shell fix. The group
+              wraps now and the long role Badge wraps inside itself. */}
+          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
+            <Badge variant="outline" className="max-w-full whitespace-normal text-xs">
               {user?.name || 'Signed in'} - {role}
             </Badge>
             <Button asChild size="sm" variant="outline">
@@ -578,6 +582,7 @@ export function OrgConsole() {
                   // scrolling region keyboard-reachable (the v2.148 rule).
                   <div
                     className="max-h-96 min-w-0 overflow-x-auto overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    role="region"
                     tabIndex={0}
                     aria-label="People and payroll by branch, scrollable table"
                   >
@@ -673,6 +678,7 @@ export function OrgConsole() {
               the scrolling region once it actually scrolls on a phone. */}
           <div
             className="min-w-0 overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            role="region"
             tabIndex={0}
             aria-label="Branches, scrollable table"
           >

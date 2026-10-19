@@ -80,6 +80,14 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.150.0',
+    title: 'The header wraps too',
+    bullets: [
+      'The phone re-check caught the Organization Console header pushing the page sideways once the wider fix landed — the account chip and Global Chat button now wrap onto their own lines on small screens.',
+      'The two scrollable tables in the console are now properly named regions for screen readers, not just labelled divs.',
+    ],
+  },
+  {
     version: '2.149.0',
     title: 'The console fits the phone',
     bullets: [
