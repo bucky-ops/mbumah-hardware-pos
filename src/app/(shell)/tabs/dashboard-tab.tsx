@@ -236,9 +236,12 @@ function DashboardHero({ onTab, limited }: { onTab: (tab: AppTab) => void; limit
   const storeName = STORE_LIST.find((s) => s.id === currentStoreId)?.shortName ?? 'your branch';
 
   return (
+    // v2.149.0: the light end darkened one step (#10b981 → #047857) — the
+    // white h1's worst corner measured 2.54:1 over emerald-500; over
+    // emerald-700 the whole banner clears 4.5:1 for every white line.
     <section
       aria-label="Welcome"
-      className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#059669] to-[#10b981] text-white shadow-md"
+      className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#059669] to-[#047857] text-white shadow-md"
     >
       {/* Subtle texture overlay */}
       <div

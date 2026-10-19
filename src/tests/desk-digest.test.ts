@@ -190,8 +190,8 @@ describe('DeskActivity panel - the dawn strip', () => {
   it('is dark-mode complete (card, figures, chips, empty state)', () => {
     const d = digest();
     expect(d).toMatch(/text-slate-800 dark:text-slate-100/);
-    expect(d).toMatch(/text-emerald-600 dark:text-emerald-400/);
-    expect(d).toMatch(/text-slate-400 dark:text-slate-500/);
+    expect(d).toMatch(/text-emerald-700 dark:text-emerald-400/);
+    expect(d).toMatch(/text-slate-500 dark:text-slate-500/); // v2.149.0: the light half swept slate-400 -> slate-500; the dark half is unchanged
     expect(d).toMatch(/dark:border-amber-500\/20 dark:bg-amber-500\/5/);
     expect(d).toMatch(/dark:border-slate-700 dark:bg-slate-800\/60 dark:text-slate-400/);
     expect(d).toMatch(/dark:border-emerald-500\/30 dark:bg-emerald-500\/10 dark:text-emerald-300/);

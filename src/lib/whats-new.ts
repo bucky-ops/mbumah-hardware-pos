@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.149.0',
+    title: 'The console fits the phone',
+    bullets: [
+      'The Organization Console no longer spills sideways on a phone — the branches table now scrolls inside its own panel while the page stays exactly one screen wide.',
+      'The branches table gains Export CSV, so the owner-level summary can be taken away just like the Store Intelligence Matrix always could.',
+      'The two timeline filter dropdowns on the Expert Console announce what they filter, and the store cards’ status chips and small print darken into comfortable legibility.',
+      'Amber highlights across the console (overdue counts, absence and expiry alerts) deepen one step so every one of them clears the contrast bar at its real size.',
+      'The welcome banner’s gradient deepens at its light corner — the white greeting now clears the contrast bar across the whole banner.',
+    ],
+  },
+  {
     version: '2.148.0',
     title: 'The shell meets the bar',
     bullets: [

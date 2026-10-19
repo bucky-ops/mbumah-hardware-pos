@@ -2,6 +2,28 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.149.0] The console fits the phone
+
+The acceptance sweep moved onto the unified console pair and the org surfaces with axe-core 4.12 at desktop and 390px. The Organization Console broke the spec's "No horizontal scroll" line at 390px (measured `scrollWidth` 1012), the Expert Console carried two unnamed filter comboboxes (axe `button-name`, critical) and a contrast cluster across its store cards, and the org console's own amber family passed only on large-text margins. Every finding is fixed at its root — the deepest one at the shared shell, so both consoles inherit it.
+
+### Fixed
+- **The 390px width contract holds on the org console** (`unified-console.tsx`, `org-console.tsx`): the branches table's ~978px intrinsic min-content propagated through the `overflow-x-auto` wrapper (a block scroll container does not zero its min-content contribution) into `<main>`, whose cross-axis auto margins (`mx-auto`) sized it to fit-content — the whole console rendered 1012px wide at a 390px viewport. The shell's `<main>` now carries `w-full min-w-0` (it stretches to the container; `max-w-7xl` still caps desktop), and both scroll wrappers carry `min-w-0` themselves. The table scrolls inside its panel; the page stays one screen wide.
+- **The HR drill-down table escapes horizontally** (`org-console.tsx`): its wrapper was `overflow-y-auto` only — a six-column table with no horizontal escape (carried defect). Now `min-w-0 overflow-x-auto overflow-y-auto`.
+- **The org console's amber family passes at cell size** (`org-console.tsx`, 5 mounts): `text-amber-600` measured 3.19:1 on the white card — the `text-xs` absence/expiry/low-stock cells need 4.5:1 (they are not large text), and the `text-xl` KPI value only cleared large-text 3:1 on a thin margin. All move to `text-amber-700` (4.52:1) with `dark:text-amber-400` preserved.
+- **The Expert Console's filter comboboxes have names** (`panels.tsx`): the Recent Activity Timeline's Action and Role triggers were the axe `button-name` critical pair — unlabeled Radix triggers (the v2.147.0 lesson: the name goes on the `SelectTrigger`, never the Select root). Now `aria-label="Filter timeline by action"` / `"Filter timeline by role"`.
+- **The store cards' chip and meta text clears the bar** (`console/page.tsx`): the 9px ACTIVE chip moved `text-emerald-600` → `text-emerald-700` (3.65 → 5.0:1), the inactive chip and the `KES 0 · 0 txns` meta line moved `text-slate-400` → `text-slate-500` (2.9 → 4.76:1).
+- **The light-surface slate family is swept** (`panels.tsx` ×19, `kpi-row.tsx` ×10, `store-matrix.tsx` ×6): the axe incomplete's biggest class — `text-slate-400` at 10–12px on white — moves to `text-slate-500` across the alerts/queue/timeline/chat/live-feed/desk-activity panels, the KPI row's sub-lines and trend-dial labels, and the matrix's store meta. `dark:text-slate-400` pairs are preserved verbatim (slate-400 is the correct bright token on dark). The matrix's data-zero placeholders move `text-slate-300` → `text-slate-500` (1.97:1 was a hard fail on real content).
+- **The Welcome banner clears 4.5:1 across its whole gradient** (`dashboard-tab.tsx`): the white h1's worst corner measured 2.54:1 over the gradient's `#10b981` light end — the end darkens one step to `#047857` (white on it computes 5.49:1), carried from v2.148.0's incomplete list.
+
+### Added
+- **The branches table leaves as CSV** (`org-console.tsx`, `lib/org/branches-csv.ts`): the org console's Branches section gains **Export CSV** — surface parity with the Store Intelligence Matrix's export. A pure builder (`buildBranchesCsv`) emits the documented column header, raw numbers (no thousands separators, so spreadsheets re-import them as numbers), RFC-4180 quoting (commas and quotes in branch names never break a row), and a generated-stamp header line; the download is a client-side blob named `branches_YYYY-MM-DD.csv` with a polite `aria-live` confirmation naming the file.
+- **Scroll regions are keyboard-reachable on the org console** (the v2.148.0 rule, applied where the wrappers now actually scroll): the branches table wrapper and the HR drill-down wrapper take `tabIndex={0}` with honest `aria-label`s and `focus-visible` rings.
+- **`docs/payroll-run-lifecycle.md`** seeds the v2.18.9 phase's landing pad with the four contracts that already ship: gate, accessibility (v2.147.0), shell (v2.148.0), width (v2.149.0), contrast.
+
+### Verified
+- axe re-runs on the audited renders: `/org/dashboard` 0 violations (was 0 + a 2-node incomplete whose family is now token-passing), `/console` 0 violations (was 2 — the critical button-name pair + the 10-node contrast cluster), `/org/desk-report` 0 violations.
+- 390px: `/org/dashboard` measures `scrollWidth` 390 (was 1012); `/console` and `/org/desk-report` hold at 390.
+
 ## [2.148.0] The shell meets the bar
 
 The acceptance sweep moved to the surface every user lands on — the authenticated org shell (sidebar, top bar, dashboard) — with axe-core 4.12 at desktop and 390px. The HR surfaces came back clean (the v2.147.0 header fix propagates from the shared layout; `/hr/reports` measured 0 violations, every input labeled, all ten report tabs visible at 390px), but the shell itself was carrying real debt: ten colour-contrast failures, two keyboard-unreachable scroll regions, and a family of names sitting on roles that may not carry them. Every finding is fixed at its root token, and two keyboard affordances join the shell.

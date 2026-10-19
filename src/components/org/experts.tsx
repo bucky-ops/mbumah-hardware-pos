@@ -18,7 +18,7 @@ import { authorizedFetchJson } from '@/lib/api';
 import { kes, num, timeAgo, type HealthBreakdownItem, type KpiSummaryData } from './primitives';
 
 const PCT = (v: number) => `${v}%`;
-const pctColor = (v: number) => (v >= 90 ? 'text-emerald-600' : v >= 70 ? 'text-amber-600' : 'text-red-600');
+const pctColor = (v: number) => (v >= 90 ? 'text-emerald-700' : v >= 70 ? 'text-amber-700' : 'text-red-600');
 
 interface LazyState<T> { data: T | null; error: string | null; loading: boolean }
 
@@ -91,7 +91,7 @@ function FinancialsExpert() {
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="space-y-2">
         <Tile label="Net profit basis" value={rows.length ? `${rows.length} accounts` : 'No journal rows'} sub={`as of ${state.data.asOfDate ? new Date(state.data.asOfDate).toLocaleDateString('en-KE') : 'today'}`} />
-        <Tile label="Trial balance" value={balanced ? 'Balanced' : 'Off'} tone={balanced ? 'text-emerald-600' : 'text-red-500'} sub={`${kes(totalDebit)} = ${kes(totalCredit)}`} />
+        <Tile label="Trial balance" value={balanced ? 'Balanced' : 'Off'} tone={balanced ? 'text-emerald-700' : 'text-red-500'} sub={`${kes(totalDebit)} = ${kes(totalCredit)}`} />
       </div>
       <div className="lg:col-span-2">
         <SubTitle>Chart of accounts - trial balance (double-entry)</SubTitle>
@@ -138,7 +138,7 @@ function AuditExpert() {
                 <TableCell className="text-xs text-slate-500">{timeAgo(a.createdAt)}</TableCell>
                 <TableCell className="text-xs">{a.user?.name ?? 'System'}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className={`text-[10px] ${a.severity === 'ERROR' ? 'border-red-200 text-red-600' : a.severity === 'WARN' ? 'border-amber-200 text-amber-600' : 'text-slate-500'}`}>{a.severity}</Badge>
+                  <Badge variant="outline" className={`text-[10px] ${a.severity === 'ERROR' ? 'border-red-200 text-red-600' : a.severity === 'WARN' ? 'border-amber-200 text-amber-700' : 'text-slate-500'}`}>{a.severity}</Badge>
                 </TableCell>
                 <TableCell className="text-xs font-medium text-slate-700">{a.action}</TableCell>
                 <TableCell className="max-w-[280px] truncate text-xs text-slate-500">{a.message}</TableCell>
@@ -166,7 +166,7 @@ function SystemExpert({ kpi }: { kpi: KpiSummaryData }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="space-y-2">
-        <Tile label="API status" value={state.loading ? 'checking' : state.data?.status ?? 'unknown'} tone={state.data?.status === 'healthy' ? 'text-emerald-600' : 'text-amber-600'} sub={state.data ? `version ${state.data.version ?? '?'}` : 'health endpoint unreachable'} />
+        <Tile label="API status" value={state.loading ? 'checking' : state.data?.status ?? 'unknown'} tone={state.data?.status === 'healthy' ? 'text-emerald-700' : 'text-amber-700'} sub={state.data ? `version ${state.data.version ?? '?'}` : 'health endpoint unreachable'} />
         <Tile label="Stores / users" value={`${kpi.system.stores} / ${kpi.system.activeUsers}`} sub="active rows in this organization" />
         <Tile label="Chat messages" value={num(kpi.system.chatMessages)} sub={`${kpi.system.notificationsUnread} unread notifications`} />
       </div>
@@ -175,7 +175,7 @@ function SystemExpert({ kpi }: { kpi: KpiSummaryData }) {
         <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {['database', 'database_stats'].map((key) => (
             <div key={key} className="rounded-xl border border-slate-100 p-2 text-center">
-              <p className={`text-sm font-bold ${checks[key]?.status === 'ok' ? 'text-emerald-600' : checks[key]?.status === 'warning' ? 'text-amber-600' : 'text-red-500'}`}>{checks[key]?.status ?? 'n/a'}</p>
+              <p className={`text-sm font-bold ${checks[key]?.status === 'ok' ? 'text-emerald-700' : checks[key]?.status === 'warning' ? 'text-amber-700' : 'text-red-500'}`}>{checks[key]?.status ?? 'n/a'}</p>
               <p className="text-[10px] font-medium text-slate-600">{key.replace('_', ' ')}</p>
               <p className="truncate text-[9px] text-slate-400" title={checks[key]?.detail ?? ''}>{checks[key]?.detail ?? ''}</p>
             </div>
@@ -187,7 +187,7 @@ function SystemExpert({ kpi }: { kpi: KpiSummaryData }) {
         <SubTitle>Environment variables</SubTitle>
         <div className="flex flex-wrap gap-1.5">
           {envChecks.map(([key, value]) => (
-            <Badge key={key} variant="outline" className={`font-mono text-[10px] ${value.status === 'ok' ? 'text-emerald-600' : 'text-red-500'}`}>
+            <Badge key={key} variant="outline" className={`font-mono text-[10px] ${value.status === 'ok' ? 'text-emerald-700' : 'text-red-500'}`}>
               {key.replace('env_', '')}: {value.status}
             </Badge>
           ))}
@@ -319,7 +319,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
           <div className="space-y-2">
             <Tile label="Suppliers" value={num(e.suppliers.count)} sub="active across stores" />
             <Tile label="Open POs" value={num(e.suppliers.openPOs)} sub="awaiting delivery" />
-            <Tile label="Delivery overdue" value={num(e.suppliers.overduePOs)} tone={e.suppliers.overduePOs ? 'text-amber-600' : 'text-emerald-600'} sub="past expected date" />
+            <Tile label="Delivery overdue" value={num(e.suppliers.overduePOs)} tone={e.suppliers.overduePOs ? 'text-amber-700' : 'text-emerald-700'} sub="past expected date" />
           </div>
           <div className="lg:col-span-2">
             <SubTitle>Purchase orders in flight (latest 8)</SubTitle>
@@ -346,10 +346,10 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
         {/* M-Pesa */}
         <TabsContent value="mpesa" className="mt-3 grid gap-4 lg:grid-cols-3">
           <div className="grid grid-cols-2 gap-2">
-            <Tile label="Completed" value={num(e.mpesa.today.completed)} tone="text-emerald-600" sub="recent STK pushes" />
+            <Tile label="Completed" value={num(e.mpesa.today.completed)} tone="text-emerald-700" sub="recent STK pushes" />
             <Tile label="Mismatch" value={num(e.mpesa.today.stale)} tone={e.mpesa.today.stale ? 'text-red-500' : ''} sub="pending > 10 min" />
             <Tile label="Pending" value={num(e.mpesa.today.pending)} sub="awaiting callback" />
-            <Tile label="Failed" value={num(e.mpesa.today.failed)} tone={e.mpesa.today.failed ? 'text-amber-600' : ''} sub="cancelled or failed" />
+            <Tile label="Failed" value={num(e.mpesa.today.failed)} tone={e.mpesa.today.failed ? 'text-amber-700' : ''} sub="cancelled or failed" />
           </div>
           <div className="lg:col-span-2">
             <SubTitle>Daraja STK push ledger (phones masked, no secrets)</SubTitle>
@@ -363,7 +363,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                       <TableCell className="text-xs">{m.phoneMasked ?? '-'}</TableCell>
                       <TableCell className="text-right text-xs tabular-nums">{kes(m.amount)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${m.status === 'COMPLETED' ? 'border-emerald-200 text-emerald-700' : m.status === 'PENDING' || m.status === 'PROCESSING' ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-600'}`}>{m.status}</Badge>
+                        <Badge variant="outline" className={`text-[10px] ${m.status === 'COMPLETED' ? 'border-emerald-200 text-emerald-700' : m.status === 'PENDING' || m.status === 'PROCESSING' ? 'border-amber-200 text-amber-700' : 'border-red-200 text-red-600'}`}>{m.status}</Badge>
                       </TableCell>
                       <TableCell className="font-mono text-[10px]">{m.mpesaReceipt ?? '-'}</TableCell>
                     </TableRow>
@@ -378,8 +378,8 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
         {/* eTIMS */}
         <TabsContent value="etims" className="mt-3 grid gap-4 lg:grid-cols-3">
           <div className="space-y-2">
-            <Tile label="Pending" value={num(e.etims.pending)} tone={e.etims.pending ? 'text-amber-600' : 'text-emerald-600'} sub="awaiting KRA" />
-            <Tile label="Issued" value={num(e.etims.issued)} tone="text-emerald-600" sub="transmitted invoices" />
+            <Tile label="Pending" value={num(e.etims.pending)} tone={e.etims.pending ? 'text-amber-700' : 'text-emerald-700'} sub="awaiting KRA" />
+            <Tile label="Issued" value={num(e.etims.issued)} tone="text-emerald-700" sub="transmitted invoices" />
             <Tile label="Per-store queue" value="Workspace" sub="eTIMS dashboard lives in each store workspace" />
           </div>
           <div className="lg:col-span-2">
@@ -399,7 +399,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
         {/* System */}
         <TabsContent value="system" className="mt-3 grid gap-4 lg:grid-cols-3">
           <div className="space-y-2">
-            <Tile label="Overall health" value={`${e.health.score}/100`} tone={e.health.score >= 80 ? 'text-emerald-600' : 'text-amber-600'} sub={e.health.label} />
+            <Tile label="Overall health" value={`${e.health.score}/100`} tone={e.health.score >= 80 ? 'text-emerald-700' : 'text-amber-700'} sub={e.health.label} />
             <Tile label="Low stock" value={num(e.inventory.lowStock)} sub="stock score driver" />
             <Tile label="Chat messages" value={num(e.system.chatMessages)} sub="engagement score driver" />
           </div>
@@ -408,7 +408,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
             <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {e.health.breakdown.map((b: HealthBreakdownItem) => (
                 <div key={b.key} className="rounded-xl border border-slate-100 p-2 text-center">
-                  <p className={`text-lg font-bold ${b.score >= 80 ? 'text-emerald-600' : b.score >= 40 ? 'text-amber-600' : 'text-red-500'}`}>{b.score}</p>
+                  <p className={`text-lg font-bold ${b.score >= 80 ? 'text-emerald-700' : b.score >= 40 ? 'text-amber-700' : 'text-red-500'}`}>{b.score}</p>
                   <p className="text-[10px] font-medium text-slate-600">{b.label}</p>
                   <p className="text-[9px] text-slate-400">{b.detail}</p>
                 </div>

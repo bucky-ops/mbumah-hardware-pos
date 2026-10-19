@@ -691,7 +691,7 @@ export function DeskReportView() {
               <div data-testid="desk-report-totals" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {([
                   ['visits', 'Visits', data.totals.visits, 'text-slate-800 dark:text-slate-100'],
-                  ['clears', 'Corrections answered', data.totals.clears, 'text-emerald-600 dark:text-emerald-400'],
+                  ['clears', 'Corrections answered', data.totals.clears, 'text-emerald-700 dark:text-emerald-400'],
                   ['reviewers', 'Reviewers', data.totals.reviewers, 'text-slate-800 dark:text-slate-100'],
                   ['requests', 'Requests touched', data.totals.requests, 'text-slate-800 dark:text-slate-100'],
                 ] as Array<[string, string, number, string]>).map(([id, label, value, tone]) => (
@@ -792,7 +792,7 @@ export function DeskReportView() {
                         <tr key={b.storeId} data-testid="desk-report-branch-row" className="border-b border-slate-50 transition-colors last:border-0 hover:bg-emerald-50/40 dark:border-slate-800/60 dark:hover:bg-emerald-500/5">
                           <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-200">{b.storeName}</td>
                           <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-800 dark:text-slate-100">{num(b.visits)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{num(b.clears)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{num(b.clears)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(b.reviewers)}</td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(b.requests)}</td>
                           <td className="px-3 py-2 text-right text-xs tabular-nums text-slate-400 dark:text-slate-500">{b.lastVisitAt ? `${timeAgo(b.lastVisitAt)} ago` : '—'}</td>

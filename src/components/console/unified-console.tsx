@@ -75,7 +75,7 @@ export function UnifiedConsoleShell({
         Skip to console content
       </a>
       {header}
-      <main id="unified-console-main" className={`flex-1 ${mainClassName ?? ''}`}>
+      <main id="unified-console-main" className={`w-full min-w-0 flex-1 ${mainClassName ?? ''}`}>
         {children}
       </main>
       {footer}
