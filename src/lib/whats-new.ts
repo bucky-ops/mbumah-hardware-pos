@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.125.0',
+    title: 'The desk starts hiring',
+    bullets: [
+      'Recruitment is now fully operable — a permission drift had quietly locked every role out of the desk. Open a job, register a candidate with consent, walk the pipeline, and hire; every step is audited.',
+      'Candidates that go nowhere can finally leave the pipeline: Reject… asks for a reason (it rides the audit log) and keeps their data 90 days before anonymisation.',
+      'Jobs no longer live forever — Close… stops intake on open jobs while keeping their history visible.',
+      'Offer terms are never invented: drafting an offer demands the real monthly salary and start date, with empty inputs.',
+      'Readers see an honest read strip and live counts (open jobs, in pipeline, hired) instead of buttons that would refuse them.',
+    ],
+  },
+  {
     version: '2.124.0',
     title: 'The broom answers the desk',
     bullets: [

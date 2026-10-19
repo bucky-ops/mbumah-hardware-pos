@@ -3,12 +3,11 @@
 
 import { hrGuard } from '@/lib/hr/guard';
 import { approveAndSendOffer, createOffer } from '@/lib/hr/recruitment-service';
+import { RECRUITMENT_WRITE_ROLES } from '@/lib/hr/recruitment-policy';
 
 export const dynamic = 'force-dynamic';
 
-const WRITE_ROLES = ['HR_MANAGER', 'STORE_OWNER'] as const;
-
-export const POST = hrGuard('hr.recruitment.manage', WRITE_ROLES)(
+export const POST = hrGuard('hr.recruitment.manage', RECRUITMENT_WRITE_ROLES)(
   async (request, session, context?: { params: Promise<{ id: string }> }) => {
     const { id } = (await context?.params) ?? { id: '' };
     let body: Record<string, unknown>;
@@ -51,7 +50,7 @@ export const POST = hrGuard('hr.recruitment.manage', WRITE_ROLES)(
   },
 );
 
-export const PATCH = hrGuard('hr.offer.approve', WRITE_ROLES)(
+export const PATCH = hrGuard('hr.offer.approve', RECRUITMENT_WRITE_ROLES)(
   async (request, session, context?: { params: Promise<{ id: string }> }) => {
     await context?.params;
     const offerId = new URL(request.url).searchParams.get('offerId');
