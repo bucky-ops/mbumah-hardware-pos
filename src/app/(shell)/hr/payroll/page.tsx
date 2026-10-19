@@ -29,7 +29,8 @@ import { gatePreviewChips, gatePreviewLine, type GatePreview } from '@/lib/hr/pa
 // kept each run's attempts; this read-back walks the SAME append-only rows
 // across every run, so the page can answer "how has the gate behaved" at a
 // glance. Types only here — the route does the building, the card renders.
-import type { GateTimelineRow, GateTimelineSummary } from '@/lib/hr/payroll/gate-timeline';
+import type { GateTimelineRow, GateTimelineSummary, GateTimelineCsvRow } from '@/lib/hr/payroll/gate-timeline';
+import { buildGateTimelineCsv, filterGateTimeline } from '@/lib/hr/payroll/gate-timeline';
 import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
@@ -414,6 +415,11 @@ export default function HrPayrollPage() {
   const [timeline, setTimeline] = useState<GateTimelinePayload | null>(null);
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [timelineShowAll, setTimelineShowAll] = useState(false);
+  // v2.142.0: the card's blocked-only lens — the desk's weekends-only lens
+  // pattern (a view preference, not a data change): the summary chip keeps
+  // speaking ALL attempts, the toggle composes BEFORE the render bound and
+  // BEFORE the export, and flipping it never touches the read itself.
+  const [timelineBlockedOnly, setTimelineBlockedOnly] = useState(false);
 
   const togglePeriod = useCallback((name: string) => {
     setCollapsedPeriods((prev) => {
@@ -577,6 +583,35 @@ export default function HrPayrollPage() {
     void Promise.resolve().then(() => loadTimeline());
   }, [loadTimeline]);
 
+  // v2.142.0: the card's export door — the RFC 4180 family's newest member.
+  // Exports the WHOLE window the read returned (never the 8-row viewport —
+  // a display bound must never silently truncate an audit artifact), with
+  // the lens applied: what the card shows is what prints. Client-side blob,
+  // the desk export's own pattern — the rows are already in memory.
+  const exportGateTimelineCsv = useCallback(() => {
+    if (!timeline || timeline.rows.length === 0) return;
+    const visible = filterGateTimeline(timeline.rows, timelineBlockedOnly);
+    const csv = buildGateTimelineCsv(
+      visible.map((row): GateTimelineCsvRow => ({
+        attemptedAt: row.atIso ?? '',
+        period: row.runLabel ?? '',
+        runStatus: row.runStatus ?? '',
+        outcome: row.outcome,
+        verdict: row.text,
+        actor: row.actorLabel ?? '',
+      })),
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gate-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [timeline, timelineBlockedOnly]);
+
   const stats = useMemo(() => {
     const list = runs ?? [];
     return [
@@ -640,6 +675,13 @@ export default function HrPayrollPage() {
   }, []);
   const allPeriodsOpen =
     periodGroups.length > 1 && periodGroups.every((g) => !collapsedPeriods.has(g.periodName));
+  // v2.142.0: the card's visible rows — the lens composes BEFORE the show-all
+  // bound, so "Show all N" speaks what the lens shows and a PASSED row can
+  // never smuggle into a blocked-only view (the desk lens's own rule).
+  const timelineFiltered = useMemo(
+    () => filterGateTimeline(timeline?.rows ?? [], timelineBlockedOnly),
+    [timeline, timelineBlockedOnly],
+  );
   const toggleAllPeriods = useCallback(() => {
     setCollapsedPeriods(allPeriodsOpen ? new Set(periodGroups.map((g) => g.periodName)) : new Set());
   }, [allPeriodsOpen, periodGroups]);
@@ -1148,17 +1190,53 @@ export default function HrPayrollPage() {
                     gate keeps, read across runs. A verdict&apos;s movement is marked where it changed.
                   </CardDescription>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring"
-                  aria-label="Refresh the gate activity read"
-                  data-testid="payroll-gate-timeline-refresh"
-                  onClick={() => void loadTimeline()}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                  <span className="hidden sm:inline">Refresh</span>
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  {/* v2.142.0: the blocked-only lens — aria-pressed speaks the
+                      state, rose when on (the BLOCKED outcome's own family,
+                      dark twins included), quiet outline when off. A view
+                      preference: the summary chip keeps speaking ALL attempts. */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`h-8 gap-1.5 rounded-full px-3 text-xs font-medium ${
+                      timelineBlockedOnly
+                        ? 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-900 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-950 dark:hover:text-rose-200'
+                        : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
+                    } focus-visible:ring-1 focus-visible:ring-ring`}
+                    aria-pressed={timelineBlockedOnly}
+                    aria-label="Show only the attempts the gate blocked"
+                    title="Filters the card to BLOCKED attempts — the summary chip still speaks every attempt, and the export follows the lens"
+                    data-testid="payroll-gate-timeline-blocked-only"
+                    onClick={() => setTimelineBlockedOnly((v) => !v)}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Blocked only</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring"
+                    aria-label="Export the gate activity as CSV"
+                    title="Downloads the whole window the read returned — every attempt the card read, not just the rows on screen. Counts and verdicts only, never pay data."
+                    data-testid="payroll-gate-timeline-export"
+                    disabled={timeline === null || timelineFiltered.length === 0}
+                    onClick={exportGateTimelineCsv}
+                  >
+                    <FileDown className="h-3.5 w-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Export CSV</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring"
+                    aria-label="Refresh the gate activity read"
+                    data-testid="payroll-gate-timeline-refresh"
+                    onClick={() => void loadTimeline()}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Refresh</span>
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
@@ -1195,10 +1273,18 @@ export default function HrPayrollPage() {
                   No gate attempts on record yet — the trail starts with the first prepare, and every
                   attempt after that keeps its row.
                 </p>
+              ) : timelineFiltered.length === 0 ? (
+                <p
+                  className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                  data-testid="payroll-gate-timeline-lens-empty"
+                >
+                  No blocked attempts in the window — every prepare got through. The full story stays
+                  one toggle away.
+                </p>
               ) : (
                 <div>
                   <ol className="divide-y rounded-md border">
-                    {(timelineShowAll ? timeline.rows : timeline.rows.slice(0, 8)).map((row, i) => (
+                    {(timelineShowAll ? timelineFiltered : timelineFiltered.slice(0, 8)).map((row, i) => (
                       <li
                         key={row.id}
                         data-testid={`payroll-gate-timeline-row-${i}`}
@@ -1253,7 +1339,7 @@ export default function HrPayrollPage() {
                       </li>
                     ))}
                   </ol>
-                  {timeline.rows.length > 8 && (
+                  {timelineFiltered.length > 8 && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1269,7 +1355,7 @@ export default function HrPayrollPage() {
                       ) : (
                         <>
                           <ChevronRight className="h-3.5 w-3.5" aria-hidden /> Show all{' '}
-                          {timeline.rows.length} attempts
+                          {timelineFiltered.length} attempts
                         </>
                       )}
                     </Button>
@@ -1347,6 +1433,7 @@ export default function HrPayrollPage() {
       <CreateRunDialog
         open={createRunOpen}
         periods={periods ?? []}
+        runs={runs ?? []}
         onOpenChange={setCreateRunOpen}
         onCreated={(id) => {
           setCreateRunOpen(false);
@@ -2702,12 +2789,16 @@ function PeriodJournalDrawer({
 function CreateRunDialog({
   open,
   periods,
+  runs,
   onOpenChange,
   onCreated,
   onOpenPeriods,
 }: {
   open: boolean;
   periods: PayrollPeriodDto[];
+  /** v2.142.0: the runs already in memory — the picker's last-run attempts
+   * chip reads them (the newest run of the selected period); ZERO new fetch. */
+  runs: PayrollRunDto[];
   onOpenChange: (v: boolean) => void;
   onCreated: (runId: string) => void;
   onOpenPeriods: () => void;
@@ -2809,9 +2900,21 @@ function CreateRunDialog({
               (() => {
                 const selected = periods.find((p) => p.id === periodId);
                 const door = (selected?.gatePreview?.unapprovedDays ?? 0) > 0;
+                // v2.142.0: the picker wears the last run's attempt chip — the
+                // SAME buildGateAttemptChip the runs table uses, over the runs
+                // the page already holds (the list is createdAt-desc, so the
+                // first match is the newest). Honest absence: a period with no
+                // runs, or a pre-v2.138 run with no trail, renders nothing —
+                // the chip never invents an attempt.
+                const lastRun = runs.find((r) => r.payrollPeriodId === periodId);
+                const attempts = buildGateAttemptChip({
+                  attemptCount: lastRun?.gateAttemptCount ?? null,
+                  lastOutcome: lastRun?.gateLastOutcome ?? null,
+                });
                 return (
-                  <p className="text-xs text-muted-foreground" data-testid="payroll-picker-gate-line">
-                    {gatePreviewLine(selected?.gatePreview)}{' '}
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground" data-testid="payroll-picker-gate-line">
+                      {gatePreviewLine(selected?.gatePreview)}{' '}
                     {door ? (
                       <a
                         href="/hr/timesheets"
@@ -2826,7 +2929,28 @@ function CreateRunDialog({
                         <ArrowUpRight className="h-3 w-3" aria-hidden />
                       </a>
                     ) : null}
-                  </p>
+                    </p>
+                    {attempts ? (
+                      <p
+                        className="flex items-center gap-1.5 text-xs tabular-nums text-muted-foreground"
+                        data-testid="payroll-picker-attempts-chip"
+                        title="The selected period's most recent run, and how many prepare attempts it took — the same chip the runs table wears"
+                      >
+                        <span>Last run:</span>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 font-mono text-[10px] font-medium ${
+                            attempts.tone === 'emerald'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                              : attempts.tone === 'amber'
+                                ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                : 'border-muted bg-muted/40 text-muted-foreground'
+                          }`}
+                        >
+                          {attempts.label}
+                        </span>
+                      </p>
+                    ) : null}
+                  </div>
                 );
               })()
             ) : null}

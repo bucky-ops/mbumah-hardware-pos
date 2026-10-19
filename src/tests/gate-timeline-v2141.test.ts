@@ -273,8 +273,10 @@ describe('the payroll page\'s Gate activity card', () => {
 
   it('renders newest-first rows with outcome testids, the moved pill, and run context', () => {
     // The route already hands the payload newest-first — the card renders it
-    // as-is (slice for the 8-row bound), never a second reversal.
-    expect(page).toContain('(timelineShowAll ? timeline.rows : timeline.rows.slice(0, 8)).map(');
+    // as-is (slice for the 8-row bound), never a second reversal. (Re-anchored
+    // for v2.142.0: the bound now composes AFTER the blocked-only lens via
+    // timelineFiltered — the render contract grew a view preference.)
+    expect(page).toContain('(timelineShowAll ? timelineFiltered : timelineFiltered.slice(0, 8)).map(');
     expect(page).toContain('payroll-gate-timeline-row-${i}');
     expect(page).toContain('payroll-gate-timeline-outcome-${i}');
     expect(page).toContain('payroll-gate-timeline-moved-${i}');
@@ -292,7 +294,7 @@ describe('the payroll page\'s Gate activity card', () => {
 
   it('the summary chip speaks attempts · runs · last — and the toggle bounds eight rows', () => {
     expect(page).toContain('payroll-gate-timeline-summary');
-    expect(page).toContain('timeline.rows.slice(0, 8)');
+    expect(page).toContain('timelineFiltered.slice(0, 8)');
     expect(page).toContain('payroll-gate-timeline-toggle');
     expect(page).toContain('aria-expanded={timelineShowAll}');
   });

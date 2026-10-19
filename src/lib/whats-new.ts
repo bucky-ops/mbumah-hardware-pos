@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.142.0',
+    title: 'The activity answers back',
+    bullets: [
+      'The Gate activity card gains a “Blocked only” lens — one toggle filters every attempt down to the stops, so “when did payroll last get held up?” is one glance, not a scan.',
+      'The lens is a view, not a rewrite: the summary chip still speaks every attempt, and “Show all” counts what the lens shows.',
+      'The card can now print itself — Export CSV downloads the whole window the read returned (counts and verdicts only, never pay data), with the lens applied.',
+      'The New-run picker wears the selected period’s last-run chip — “Last run: 3 attempts · last PASSED” — built from the runs the page already holds, no extra fetch.',
+      'A period with no runs, or one prepared before the trail existed, renders nothing guessed: the chip appears only when attempts actually exist.',
+    ],
+  },
+  {
     version: '2.141.0',
     title: 'The gate tells its story across runs',
     bullets: [
