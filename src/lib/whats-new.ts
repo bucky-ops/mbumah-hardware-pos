@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.128.0',
+    title: 'The record stands corrected',
+    bullets: [
+      'The audit-coverage inventory\u2019s one named gap was a false finding \u2014 portal-account linking has been audit-logged since v2.39.0; the doc now says so with evidence you can re-run.',
+      'The consent ledger shows its history: a consent that was withdrawn and re-granted wears an indigo \u201cre-granted \u00d7N\u201d marker on the Privacy tab.',
+      'Earlier consent records stay on file (append-only) \u2014 the marker\u2019s tooltip counts exactly how many.',
+      'Audit coverage now claims 98 audited call sites across 30 files with zero gaps \u2014 and the method that let a false gap claim slip through is written down.',
+    ],
+  },
+  {
     version: '2.127.0',
     title: 'The desk says goodbye',
     bullets: [
