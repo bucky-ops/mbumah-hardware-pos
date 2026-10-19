@@ -2,6 +2,25 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.135.0] The verdict leaves a paper trail
+
+The v2.133.0 gate door speaks the verdict live — but the verdict evaporated the moment it was spoken. Prepare's own gate evaluation left NO trace on the run it protected: a clear prepare proved nothing, and "what did the gate say when THIS run went through?" had only folklore for an answer. This release freezes the verdict onto the run record at prepare time, so the lifecycle's front door becomes auditable history.
+
+### Added
+- **The frozen gate verdict** (`PayrollRun.gateCheckedAt` + `gateSummary`, additive nullable columns): prepare's own loop now tallies the gate verdict it acted on — `{ total, clear, missingConsent, timesheetNotApproved, codes }` — and stamps it onto the run on BOTH paths. The blocked path freezes the stop alongside the persisted issues (`errorMessage`); the success path freezes the pass inside the re-prepare transaction (refreshed on every re-prepare). The snapshot is prepare itself — parity by construction, never a re-read; engine guardrails stay in `errorMessage`, the tally speaks only the gate's two words.
+- **The pure verdict module** (`src/lib/hr/payroll/gate-verdict.ts`): `parseGateVerdict` is the tolerant reader — null for pre-v2.135.0 rows, arrays, malformed shapes, tallies that do not add up, or unknown codes; a garbage `checkedAt` degrades to null while the summary survives. `buildGateVerdictText` speaks the live panel's own words in its own order ("N clear · N missing consent · N timesheet pending"; zero counts never speak, and an empty month says "0 clear" — the truth even when awkward). `gateVerdictTone` is the wardrobe switch the UI keys emerald/amber off.
+- **The remediation door** (gate panel): a `MISSING_CONSENT` blocked row now carries the door to where the fix lives — the Privacy tab's consent ledger (grant has lived there since v2.119.0). Own tab (`target="_blank"` `rel="noopener noreferrer"`), aria-labelled with the person it fixes, violet house styling with hover AND focus-visible affordances. A `TIMESHEET_NOT_APPROVED` block has no desk yet — it gets honest text, never a link that would 403 or 404.
+
+### Changed
+- The runs table wears each run's verdict under its status badge (the same slot the "waiting since" stamp speaks from): "5 clear · 19 Oct 12:30 EAT" in an emerald chip, block counts in amber — tabular numerals, dark twins, `ShieldCheck` mark. Runs prepared before v2.135.0 render NOTHING — honest absence, never a guessed history.
+- The run detail dialog speaks the same frozen strip ("Gate at prepare: 5 clear · 12:30 EAT") with the staleness honesty line ("the live gate may have moved since"), and a pre-v2.135.0 prepared run gets one plain dashed note that it predates the paper trail.
+- The runs list API exposes `gateCheckedAt`/`gateSummary` additively (null-safe for old rows); the detail API rides the whole-run payload unchanged.
+
+### Tests
+- `src/tests/payroll-gate-verdict-v2135.test.ts` (21): the tolerant parser (well-formed verdicts, pre-v2.135 nulls, arrays, impossible tallies, unknown/duplicate codes, garbage clocks), the verdict text (panel's words and order, honest zero, plurals), the tone switch, the freeze contract (both paths stamped, the tally's two-word vocabulary), the honesty contracts (UI parses through the builder, absence renders nothing, the dialog's strip + absence note), the remediation door (consent-branch only, own tab, aria family), and the styling contract (dark twins on both tones, tabular numerals, focus-visible rings).
+- `scripts/verify-v2-135-0.mjs` (11 checks, written fresh): schema columns inside PayrollRun, the freeze on both paths, the additive list exposure, the parser-not-guess UI pins, the consent-only door, and the release discipline.
+- `console-changelog` unread counters re-anchored for 2.135.0 joining the feed.
+
 ## [2.134.0] The gate opens onto empty months
 
 The v2.133.0 pre-flight gate door rode the runs table's period headers — and the runs table only renders periods that HAVE runs. A freshly opened month (zero runs — every month's starting state) rendered nowhere, so the lifecycle's front door was locked exactly when it matters most: before the FIRST run of the month is prepared. This release unlocks it from the outside.

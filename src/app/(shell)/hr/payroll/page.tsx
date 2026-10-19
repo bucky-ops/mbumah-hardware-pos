@@ -16,10 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
+import { parseGateVerdict, buildGateVerdictText, gateVerdictTone } from '@/lib/hr/payroll/gate-verdict';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { emptyPeriodRows, groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
 import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
@@ -51,6 +52,9 @@ export interface PayrollRunDto {
   /** v2.86.0: the handover's stamp — the runs table says how long a run has waited. */
   submittedAt: string | null;
   submittedById: string | null;
+  /** v2.135.0: the frozen gate verdict — what the gate said when this run was prepared (null = pre-v2.135, honest absence). */
+  gateCheckedAt: string | null;
+  gateSummary: unknown;
   journalEntryId: string | null;
   createdAt: string;
   payrollPeriod: { name: string; payDate: string | null; startDate: string; endDate: string };
@@ -284,6 +288,26 @@ function GatePanel({
                 <span className="text-[11px] text-muted-foreground" data-testid="payroll-gate-both-blocks">
                   (prepare would report {r.blocks[0]} first)
                 </span>
+              ) : null}
+              {/* v2.135.0: the remediation door — diagnosis joins its fix. The
+                  consent block's fix lives on the Privacy tab's consent ledger
+                  (grant lives there since v2.119.0), so a MISSING_CONSENT row
+                  carries the door straight to it, its own tab (the desk's gate
+                  state stays put). A timesheet block has NO desk yet — it gets
+                  honest text, never a link that would 403 or 404. */}
+              {r.gateState === 'MISSING_CONSENT' ? (
+                <a
+                  href="/hr/reports?tab=privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="payroll-gate-consent-door"
+                  aria-label={`Open the consent ledger to grant consent for ${r.employeeName}`}
+                  title="Grant lives on the Privacy tab's consent ledger — opens in its own tab"
+                  className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-700 hover:bg-violet-50 hover:text-violet-900 hover:ring-1 hover:ring-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200 dark:hover:ring-violet-800"
+                >
+                  Consent ledger
+                  <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden />
+                </a>
               ) : null}
             </div>
           ))}
@@ -844,6 +868,31 @@ export default function HrPayrollPage() {
                                         waiting since {formatEatStamp(new Date(run.submittedAt))}
                                       </p>
                                     )}
+                                    {/* v2.135.0: the frozen gate verdict — what the gate said
+                                        when prepare let this run through (or stopped it). Parses
+                                        through the tolerant pure builder; a pre-v2.135.0 run or a
+                                        malformed snapshot renders NOTHING (honest absence, never
+                                        a guess). */}
+                                    {(() => {
+                                      const verdict = parseGateVerdict(run.gateSummary, run.gateCheckedAt);
+                                      if (!verdict) return null;
+                                      const tone = gateVerdictTone(verdict.summary);
+                                      return (
+                                        <p
+                                          className={`mt-0.5 inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium tabular-nums ${
+                                            tone === 'clear'
+                                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                              : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                          }`}
+                                          data-testid="payroll-run-gate-verdict"
+                                          title={`The run gate's verdict when this run was prepared${verdict.checkedAt ? ` — checked ${formatEatStamp(new Date(verdict.checkedAt))}` : ''}`}
+                                        >
+                                          <ShieldCheck className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                                          {buildGateVerdictText(verdict.summary)}
+                                          {verdict.checkedAt ? ` · ${formatEatStamp(new Date(verdict.checkedAt))}` : ''}
+                                        </p>
+                                      );
+                                    })()}
                                   </TableCell>
                                   <TableCell className="text-right tabular-nums">{kes(run.totalGross)}</TableCell>
                                   <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">

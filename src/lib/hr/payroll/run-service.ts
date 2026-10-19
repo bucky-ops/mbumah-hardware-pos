@@ -346,8 +346,20 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
   };
   const computed: Computed[] = [];
 
+  // v2.135.0: the gate's paper trail. This loop IS the gate — its per-person
+  // verdicts are parity-by-construction with the pre-flight read (same where,
+  // same order), so the tally it accumulates is the honest snapshot of what
+  // the gate said when THIS run went through (or was stopped). Engine
+  // guardrails are a different door: they tally only consent + timesheets,
+  // exactly what the pre-flight gate speaks.
+  const gateTally = { total: 0, clear: 0, missingConsent: 0, timesheetNotApproved: 0, codes: [] as string[] };
+  const noteGateCode = (code: 'MISSING_CONSENT' | 'TIMESHEET_NOT_APPROVED') => {
+    if (!gateTally.codes.includes(code)) gateTally.codes.push(code);
+  };
+
   for (const employee of employees) {
     const label = `${employee.firstName} ${employee.lastName}`.trim();
+    gateTally.total += 1;
 
     // Consent gate (engine guardrail MISSING_CONSENT).
     const consent = await db.consentRecord.findFirst({
@@ -355,6 +367,8 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
       select: { id: true },
     });
     if (!consent) {
+      gateTally.missingConsent += 1;
+      noteGateCode('MISSING_CONSENT');
       issues.push({
         employeeId: employee.id,
         employeeName: label,
@@ -372,6 +386,8 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
       period.endDate,
     );
     if (unapproved) {
+      gateTally.timesheetNotApproved += 1;
+      noteGateCode('TIMESHEET_NOT_APPROVED');
       issues.push({
         employeeId: employee.id,
         employeeName: label,
@@ -380,6 +396,7 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
       });
       continue;
     }
+    gateTally.clear += 1;
 
     // Salary basis: employee basic + fixed/percent earnings components from
     // the salary structure effective at period end.
@@ -496,7 +513,14 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
   if (issues.length > 0) {
     await db.payrollRun.update({
       where: { id: run.id },
-      data: { errorMessage: JSON.stringify(issues) },
+      data: {
+        errorMessage: JSON.stringify(issues),
+        // v2.135.0: the blocked attempt freezes its verdict too — the gate's
+        // stop is as much history as its pass. Both paths stamp the same
+        // clock (gateCheckedAt) so the snapshot always has its moment.
+        gateCheckedAt: new Date(),
+        gateSummary: gateTally,
+      },
     });
     throw new PayrollLifecycleError(
       'PAYROLL_GATES_FAILED',
@@ -581,6 +605,11 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
           preparedByUserId: ctx.actorId,
           preparedAt: new Date(),
           errorMessage: null,
+          // v2.135.0: the verdict that LET THIS RUN THROUGH — frozen from
+          // prepare's own loop, refreshed on every re-prepare, so the run's
+          // front door is auditable history, not folklore.
+          gateCheckedAt: new Date(),
+          gateSummary: gateTally,
         },
       });
     });

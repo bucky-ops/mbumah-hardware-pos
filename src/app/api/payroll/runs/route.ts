@@ -71,6 +71,11 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(async (request, se
     submittedAt: r.submittedAt?.toISOString() ?? null,
     submittedById: r.submittedById,
     approvedByUserId: r.approvedByUserId,
+    // v2.135.0: the frozen gate verdict rides the list (additive) — the runs
+    // table can say what the gate said when this run was prepared, without a
+    // per-run detail fetch. Null for pre-v2.135.0 runs (honest absence).
+    gateCheckedAt: r.gateCheckedAt?.toISOString() ?? null,
+    gateSummary: r.gateSummary ?? null,
     periodName: r.payrollPeriod.name,
     periodStartDate: r.payrollPeriod.startDate.toISOString(),
     periodEndDate: r.payrollPeriod.endDate.toISOString(),
