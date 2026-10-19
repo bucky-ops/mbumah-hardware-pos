@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.138.0',
+    title: 'The verdict keeps its every attempt',
+    bullets: [
+      'The run dialog now carries a Gate trail: every prepare attempt appends one row \u2014 what the gate said, whether it passed or blocked, who ran it, and when.',
+      'When the verdict moves between attempts (a consent granted, a timesheet approved), the row wears a \u201cmoved\u201d marker \u2014 the story is history now, not folklore.',
+      'Blocked attempts join the trail too: a stopped prepare leaves its row, so the record shows the stop and the recovery, not just the success.',
+      'The run gate\u2019s snapshot and its trail row freeze the same moment, in the same transaction \u2014 parity by construction, never a re-read.',
+      'On the timesheet desk, weekend chips wear a sky tint \u2014 a Saturday punch stands out from the working week at a glance.',
+    ],
+  },
+  {
     version: '2.137.0',
     title: 'The picker sees the gate',
     bullets: [

@@ -203,9 +203,10 @@ describe('v2.84.0 run-history surface contracts', () => {
       expect(ROUTE).toContain(`run.${field}`);
     }
     // Additive: the pre-existing response shape is untouched.
-    expect(ROUTE).toContain('return Response.json({ success: true, data: run, can, disbursement, history });');
+    // v2.138.0: the additive gateTrail block rides the same payload.
+    expect(ROUTE).toContain('return Response.json({ success: true, data: run, can, disbursement, history, gateTrail });');
     // Best-effort: a history failure must never degrade the run view.
-    expect(ROUTE).toContain('} catch {\n      history = [];\n    }');
+    expect(ROUTE).toContain('} catch {\n      history = [];\n      gateTrail = [];\n    }');
   });
 
   it('the route hands the journal entry number to the builder', () => {

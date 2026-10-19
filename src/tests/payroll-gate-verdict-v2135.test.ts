@@ -119,17 +119,24 @@ describe('the freeze contract - prepare stamps both paths', () => {
     expect(s).toContain("gateTally.missingConsent += 1");
     expect(s).toContain("gateTally.timesheetNotApproved += 1");
     expect(s).toContain('gateTally.clear += 1');
-    expect(s).toContain('gateCheckedAt: new Date()');
+    // v2.138.0: the snapshot and the trail row share ONE clock per attempt
+    // (blockedAt / passedAt) — one moment, two records.
+    expect(s).toContain('const blockedAt = new Date();');
+    expect(s).toContain('gateCheckedAt: blockedAt');
     expect(s).toContain('gateSummary: gateTally');
     // The blocked path carries the snapshot WITH the issues it explains.
-    expect(s).toMatch(/errorMessage: JSON\.stringify\(issues\),[\s\S]{0,400}?gateCheckedAt: new Date\(\)/);
+    expect(s).toMatch(/errorMessage: JSON\.stringify\(issues\),[\s\S]{0,400}?gateCheckedAt: blockedAt/);
   });
 
   it('the SUCCESS path stamps the verdict inside the re-prepare transaction', () => {
     const s = service();
-    expect(s).toMatch(/errorMessage: null,[\s\S]{0,600}?gateCheckedAt: new Date\(\),[\s\S]{0,300}?gateSummary: gateTally/);
+    // v2.138.0: the pass path's shared clock (passedAt) freezes the snapshot
+    // AND appends the trail row in the same transaction.
+    expect(s).toMatch(/errorMessage: null,[\s\S]{0,600}?gateCheckedAt: passedAt,[\s\S]{0,300}?gateSummary: gateTally/);
     // ...and the stamp sits inside the tx update that also carries preparedAt.
     expect(s).toMatch(/preparedByUserId: ctx\.actorId,[\s\S]{0,900}?gateSummary: gateTally/);
+    expect(s).toContain("outcome: 'PASSED'");
+    expect(s).toContain('checkedAt: passedAt');
   });
 
   it('the tally speaks only the gate\'s two words — engine guardrails stay in errorMessage', () => {

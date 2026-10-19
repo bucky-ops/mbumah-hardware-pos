@@ -113,8 +113,23 @@ export function deskDayLabel(day: string): string | null {
 export interface DeskDayStrip {
   /** The first `max` valid labels, in ascending day order. */
   shown: string[];
+  /** The days behind `shown` (parallel array) — lets the UI tint weekends. */
+  shownDays: string[];
   /** Days beyond the strip (garbage days count here too — they exist). */
   hidden: number;
+}
+
+/**
+ * Saturday or Sunday, read through UTC parts — the desk tints weekend
+ * chips so a Saturday punch stands out from the working week (an honest
+ * anomaly spotlight, not a judgement). Garbage never reads as weekend.
+ */
+export function deskDayIsWeekend(day: string): boolean {
+  if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const date = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return false;
+  const weekday = date.getUTCDay();
+  return weekday === 0 || weekday === 6;
 }
 
 /**
@@ -125,12 +140,18 @@ export interface DeskDayStrip {
 export function deskDayStrip(days: readonly string[], max = 12): DeskDayStrip {
   const labels = days.map((day) => deskDayLabel(day));
   const shown: string[] = [];
+  const shownDays: string[] = [];
   let hidden = 0;
-  for (const label of labels) {
-    if (label !== null && shown.length < max) shown.push(label);
-    else hidden += 1;
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i];
+    if (label !== null && shown.length < max) {
+      shown.push(label);
+      shownDays.push(days[i]);
+    } else {
+      hidden += 1;
+    }
   }
-  return { shown, hidden };
+  return { shown, shownDays, hidden };
 }
 
 /**

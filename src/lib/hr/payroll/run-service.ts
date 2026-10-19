@@ -511,6 +511,11 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
   }
 
   if (issues.length > 0) {
+    // v2.138.0: the blocked attempt appends its trail row with the SAME
+    // clock the snapshot freezes — one moment, two records, parity by
+    // construction. Append-only: the trail is never updated, so re-prepare
+    // attempts stack up honestly.
+    const blockedAt = new Date();
     await db.payrollRun.update({
       where: { id: run.id },
       data: {
@@ -518,8 +523,18 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
         // v2.135.0: the blocked attempt freezes its verdict too — the gate's
         // stop is as much history as its pass. Both paths stamp the same
         // clock (gateCheckedAt) so the snapshot always has its moment.
-        gateCheckedAt: new Date(),
+        gateCheckedAt: blockedAt,
         gateSummary: gateTally,
+      },
+    });
+    await db.payrollRunGateEvent.create({
+      data: {
+        runId: run.id,
+        storeId: ctx.storeId,
+        outcome: 'BLOCKED',
+        checkedAt: blockedAt,
+        summary: gateTally,
+        actorId: ctx.actorId,
       },
     });
     throw new PayrollLifecycleError(
@@ -550,6 +565,9 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
   // PayrollDetail is a db-level IMMUTABLE model; re-preparing a DRAFT run is
   // the sanctioned pre-issuance replace flow (nothing is issued yet).
   await withImmutabilityBypass(async () => {
+    // v2.138.0: the passing attempt's shared clock — the snapshot and the
+    // trail row freeze the SAME moment (parity by construction).
+    const passedAt = new Date();
     await db.$transaction(async (tx) => {
     await tx.payrollDetail.deleteMany({ where: { payrollRunId: run.id } });
     for (const c of computed) {
@@ -608,8 +626,22 @@ export async function preparePayrollRun(ctx: RunActorContext, runId: string) {
           // v2.135.0: the verdict that LET THIS RUN THROUGH — frozen from
           // prepare's own loop, refreshed on every re-prepare, so the run's
           // front door is auditable history, not folklore.
-          gateCheckedAt: new Date(),
+          gateCheckedAt: passedAt,
           gateSummary: gateTally,
+        },
+      });
+      // v2.138.0: the passing attempt appends its trail row in the SAME
+      // transaction (parity with the freeze above) — one moment, two
+      // records, and the trail never loses an attempt to a crash between
+      // them.
+      await tx.payrollRunGateEvent.create({
+        data: {
+          runId: run.id,
+          storeId: ctx.storeId,
+          outcome: 'PASSED',
+          checkedAt: passedAt,
+          summary: gateTally,
+          actorId: ctx.actorId,
         },
       });
     });

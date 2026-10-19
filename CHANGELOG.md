@@ -2,6 +2,25 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.138.0] The verdict keeps its every attempt
+
+The v2.135.0 snapshot froze THE verdict on the run — but it refreshes in place, so "how did the verdict move between attempts" evaporated on every re-prepare. And on the timesheet desk, a Saturday punch wore the exact same chip as a Tuesday one. This release gives the verdict a memory and the weekend a tint.
+
+### Added
+- **The gate verdict trail** (`PayrollRunGateEvent`, append-only): every prepare attempt appends ONE row — outcome (`PASSED`/`BLOCKED`), the SAME clock the run's snapshot froze (`blockedAt`/`passedAt` shared between snapshot and trail row), prepare's own tally (`gateTally`, parity by construction), and the actor. The blocked path appends alongside its snapshot update; the passing path appends INSIDE the re-prepare transaction (one moment, two records, nothing lost to a crash between them). Rows are never updated or deleted — re-prepare attempts stack up honestly.
+- **The trail in the run dialog**: a "Gate trail" block under Run history, oldest first — outcome chip (emerald PASSED / amber BLOCKED / muted UNKNOWN), the frozen strip's own words via the v2.135.0 parser, the EAT stamp, the actor, and a sky **"moved"** marker on the row where the verdict text differs from the attempt before it (the whole point, surfaced). Honest absence twice over: no trail renders nothing; a PRE-v2.138.0 PREPARED run gets one dashed note that it predates the trail.
+- **The pure trail builder** (`src/lib/hr/payroll/gate-trail.ts`): `buildGateTrail` never dedupes (two identical attempts are two rows — that IS the history), tolerates garbage (an unreadable summary still speaks, muted, "Verdict unreadable"; an unreadable clock says so; unknown outcomes wear UNKNOWN; junk ids drop), and marks movement by comparing consecutive verdict texts.
+- **The weekend tint** (timesheet desk): `deskDayIsWeekend` (Sat/Sun through UTC parts) + `deskDayStrip` grows a parallel `shownDays` array (additive — labels and days stay aligned), and weekend chips wear the sky family with an honest title ("Sat 17 — weekend day") — an anomaly spotlight, not a judgement.
+
+### Changed
+- `GET /api/payroll/runs/[id]` grows the additive `gateTrail` block: one read, store-scoped, oldest-first, capped at 50, actor labels resolved in the SAME one-query actor map, best-effort (a trail failure empties the block, never the run view).
+- The v2.135.0 freeze tests re-anchor to the shared-clock spelling (`blockedAt`/`passedAt`) — the contract they pin (both paths stamp the snapshot) is unchanged; v2.138.0 just gives each stamp its trail sibling.
+
+### Tests
+- `src/tests/gate-trail-v2138.test.ts` (22): the builder (order, movement marking, no-dedupe, garbage degradation, clock honesty, UNKNOWN outcomes, junk-id drops), the schema + both append points (shared clocks, in-tx pass, append-only pin), the detail route (oldest-first/cap/store scope, best-effort catch, pure builder + actor labels), the dialog (trail block, sky moved chip, outcome icons, absence note, additive prop), and the weekend tint (UTC correctness, parallel arrays, garbage exclusion, sky dark twins).
+- `scripts/verify-v2-138-0.mjs` (13 checks, written fresh).
+- `console-changelog` unread counters re-anchored for 2.138.0 joining the feed.
+
 ## [2.137.0] The picker sees the gate
 
 The gate's pre-flight lived on the desks — the gate panel, the timesheet desk — but the prepare INTENT itself was blind: the "Start a payroll run" dialog listed periods with no hint of what the gate would later say. And the timesheet desk's pending list had no export door while its ledger siblings (case list v2.115.0, access ledger v2.118.0) both print. This release closes both gaps.

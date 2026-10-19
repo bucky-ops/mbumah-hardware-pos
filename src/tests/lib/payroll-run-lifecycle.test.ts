@@ -56,6 +56,8 @@ const db = vi.hoisted(() => {
     leaveRequest,
     account,
     payrollCorrection,
+    // v2.138.0: the verdict trail — prepare appends one row per attempt.
+    payrollRunGateEvent: model(),
   };
   // $transaction receives the same shape so tx.* assertions observe the calls.
   Object.assign(base, {

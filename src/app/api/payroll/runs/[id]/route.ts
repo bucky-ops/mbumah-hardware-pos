@@ -10,12 +10,17 @@
 // v2.85.0: the walk gains its missing step — submittedAt/submittedById join
 // the actor map and the builder input, and `can.isPreparer` covers the
 // handover boundary (prepared OR submitted ⇒ maker-checker).
+// v2.138.0: additive `gateTrail` block — the run's append-only verdict
+// trail (one PayrollRunGateEvent per prepare attempt), actor labels
+// resolved in the SAME one-query actor map, shaped by the pure builder.
+// Best-effort: a trail read failure must never degrade the run view.
 
 import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
 import { hasHrPermission } from '@/lib/hr/permissions';
 import { summariseRunB2CState } from '@/lib/hr/payroll/disbursement-service';
 import { buildRunHistory } from '@/lib/hr/payroll/run-history';
+import { buildGateTrail, type GateTrailRow } from '@/lib/hr/payroll/gate-trail';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +64,15 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(
     // the pure builder shape the ordered timeline. Best-effort: a name
     // lookup failure must never degrade the run view.
     let history: ReturnType<typeof buildRunHistory> = [];
+    // v2.138.0: the verdict trail rides the same best-effort block — one
+    // read, one actor map, zero additional failure modes for the run view.
+    let gateTrail: GateTrailRow[] = [];
     try {
+      const gateRows = await db.payrollRunGateEvent.findMany({
+        where: { runId: id, storeId: session.storeId || '' },
+        orderBy: { checkedAt: 'asc' },
+        take: 50,
+      });
       const actorIds = [
         run.initiatedBy,
         run.preparedByUserId,
@@ -68,6 +81,7 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(
         run.rejectedByUserId,
         run.postedByUserId,
         run.lockedByUserId,
+        ...gateRows.map((e) => e.actorId).filter((v): v is string => typeof v === 'string' && v.length > 0),
       ].filter((v): v is string => typeof v === 'string' && v.length > 0);
       const actorUsers = actorIds.length
         ? await db.user.findMany({
@@ -100,9 +114,19 @@ export const GET = hrGuard('hr.payroll.read.all', READ_ROLES)(
         },
         actors,
       );
+      gateTrail = buildGateTrail(
+        gateRows.map((e) => ({
+          id: e.id,
+          outcome: e.outcome,
+          checkedAt: e.checkedAt,
+          summary: e.summary,
+          actorLabel: e.actorId ? actors[e.actorId] ?? 'Unknown user' : null,
+        })),
+      );
     } catch {
       history = [];
+      gateTrail = [];
     }
-    return Response.json({ success: true, data: run, can, disbursement, history });
+    return Response.json({ success: true, data: run, can, disbursement, history, gateTrail });
   },
 );
