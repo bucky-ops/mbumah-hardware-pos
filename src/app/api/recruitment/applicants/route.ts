@@ -24,7 +24,14 @@ export const GET = hrGuard('hr.recruitment.read.branch', RECRUITMENT_READ_ROLES)
         // v2.125.0: the pending DRAFT offer rides along so the desk can render
         // "Approve & send" (the PATCH that moves the applicant to OFFER)
         // instead of offering to draft a second one.
-        offers: { where: { status: 'DRAFT' }, take: 1, select: { id: true, status: true } },
+        // v2.126.0: the LATEST offer of any status rides instead — the desk
+        // shows the terms it sent (sent date, KES) as a chip on the row, and
+        // the approve hinge keys on the DRAFT specifically.
+        offers: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, status: true, proposedSalaryCents: true, sentAt: true, createdAt: true },
+        },
       },
     });
     return Response.json({ success: true, data: applicants });

@@ -8,9 +8,8 @@
 
 import { db } from '@/lib/db';
 import { hrAudit, HrEntityType } from './audit';
+import { PIPELINE_STAGES, REJECTION_RETENTION_DAYS } from './recruitment-policy';
 import type { HrEmployeeSummary } from './types';
-
-const REJECTION_RETENTION_DAYS = 90;
 
 export interface CreateJobInput {
   storeId: string | null;
@@ -108,7 +107,7 @@ export interface RecordStageInput {
   data: { stage: string; outcome: 'PENDING' | 'PASS' | 'FAIL'; notes?: string };
 }
 
-const STAGES = ['SCREENING', 'INTERVIEW_ONE', 'INTERVIEW_TWO', 'TASK', 'REFERENCE', 'OFFER'] as const;
+const STAGES = PIPELINE_STAGES;
 
 export async function recordStage(input: RecordStageInput) {
   const applicant = await db.applicant.findFirst({
@@ -172,6 +171,17 @@ export async function createOffer(input: CreateOfferInput) {
   if (!applicant) throw new Error('Applicant not found.');
   if (!Number.isInteger(input.data.proposedSalaryCents) || input.data.proposedSalaryCents <= 0) {
     throw new Error('proposedSalaryCents must be a positive integer (money is integer cents).');
+  }
+
+  // v2.126.0: one live draft per candidate — the PATCH approves offers[0],
+  // so a stacked second DRAFT would silently orphan the first. The desk
+  // hides "Draft offer…" while a draft pends; the API refuses it outright.
+  const pendingDraft = await db.offer.findFirst({
+    where: { applicantId: input.applicantId, status: 'DRAFT' },
+    select: { id: true },
+  });
+  if (pendingDraft) {
+    throw new Error('A DRAFT offer is already pending for this applicant — approve and send it before drafting another (DUPLICATE_DRAFT).');
   }
 
   const offer = await db.offer.create({
