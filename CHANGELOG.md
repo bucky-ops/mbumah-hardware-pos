@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.133.0] The gate speaks first
+
+The run's guardrails (consent, timesheets) always enforced themselves inside `preparePayrollRun` — but their verdict only surfaced AFTER a failed prepare attempt, as an amber card of issues. This release asks the SAME gates the SAME question BEFORE anyone tries: a pre-flight, read-only gate read per payroll period — the EMS spec Phase 4.6 lifecycle's front door.
+
+### Added
+- **The pre-flight gate read** (`src/lib/hr/payroll/run-gate.ts` + `GET /api/payroll/runs/gate?periodId=`): for one period, every active employee's gate verdict — consent gate (`withdrawnAt: null`), timesheet gate (`hasUnapprovedTimesheet`), evaluated independently, reported in prepare's own block order (`MISSING_CONSENT` first, then `TIMESHEET_NOT_APPROVED`). `deriveGateState` is pure: the first block in prepare's loop order is the state; an employee failing both gates carries both codes with nothing hidden, only ordered. The read mirrors prepare line for line — same employee where and order (`ACTIVE`, store-scoped, `employeeCode asc`), same consent where, same timesheet helper — and the parity is pinned by tests: if prepare's gates ever change, the pins fail and the desk must be re-mirrored. Read-only by construction (no create/update/delete, no run created, no payslip computed); an unknown or cross-branch period is an honest 404; a voided period is REPORTED as voided, not checked.
+- **The Gate door on the period header** (`src/app/(shell)/hr/payroll/page.tsx`): a `ShieldCheck` "Gate" pill on the period header's right rail — beside the Ledger door, never inside the fold (the v2.100.0 rail rule). One loader, a fresh fetch per open (the consent drawer's openHistory pattern); the toggle closes the same door; Retry reuses the door's period. The verdict renders as an inset panel row under the header: counts speak first (`N clear · N missing consent · N timesheet pending · checked EAT`), a voided period gets its own amber strip ("This period is voided — runs are closed; the gate has nothing to gate."), a clear gate gets an emerald strip ("The gate is clear — prepare would proceed for all N active employees."), and blocked employees speak per-person in prepare's own words with a rose/amber mono badge, both codes visible when both fail ("prepare would report MISSING_CONSENT first"). A failed read renders an honest rose strip with a period-scoped Retry — never a silent spinner.
+
+### Changed
+- The runs route family gains a read-only sibling: the gate route rides the runs list's own read-right quartet (`hr.payroll.read.all` × HR_MANAGER / BRANCH_MANAGER / STORE_OWNER / ACCOUNTANT) — seeing the gate is part of reading the desk, not part of running payroll.
+
 ## [2.132.0] The columns bend, the branch files itself
 
 Two beats, one desk: the consent ledger's export-honesty theme reaches its fourth door — the WHOLE branch files itself, every in-scope employee's consent cycles in one flat CSV built by the drawer's own serializer — and the reports tables learn to bend, closing the EMS spec Phase 4.8 acceptance's last unsatisfied table affordance (sticky headers, column visibility, CSV export and print PDF already shipped).

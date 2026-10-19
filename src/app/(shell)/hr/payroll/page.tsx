@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
@@ -166,6 +166,133 @@ export interface ApiIssue {
   message: string;
 }
 
+// v2.133.0: the pre-flight run gate's payload — the service's own shape.
+export interface RunGateRowDto {
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  consentOk: boolean;
+  timesheetOk: boolean;
+  blocks: string[];
+  gateState: string;
+}
+export interface RunGateReportDto {
+  period: { id: string; name: string; startDate: string; endDate: string; status: string };
+  rows: RunGateRowDto[];
+  summary: { clear: number; missingConsent: number; timesheetNotApproved: number };
+  checkedAt: string;
+}
+
+// v2.133.0: the gate panel — the pre-flight verdict read off the run's own
+// guardrails. Counts speak first; blocked employees speak per-person in
+// prepare's own words; the clear strip says what the desk may now do; a
+// voided period says the runs are closed. Failure speaks (rose strip +
+// Retry), loading spins a skeleton — never a silent spinner.
+function GatePanel({
+  periodName,
+  report,
+  loading,
+  error,
+  onRetry,
+}: {
+  periodName: string;
+  report: RunGateReportDto | null;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-2" data-testid="payroll-gate-panel" aria-busy>
+        <Skeleton className="h-6 w-64" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="space-y-2" data-testid="payroll-gate-panel">
+        <div
+          role="status"
+          data-testid="payroll-gate-error"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40"
+        >
+          <p className="flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden /> The gate read for {periodName} failed — the desk stays dark rather than guess. {error}
+          </p>
+          <Button variant="outline" size="sm" onClick={onRetry} aria-label={`Retry the ${periodName} gate read`}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (!report) return null;
+  const blocked = report.rows.filter((r) => r.gateState !== 'CLEAR');
+  return (
+    <div className="space-y-2" data-testid="payroll-gate-panel">
+      <p className="text-xs font-medium text-muted-foreground" data-testid="payroll-gate-counts">
+        <ShieldCheck className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+        {`${report.summary.clear} clear`}
+        {report.summary.missingConsent > 0 ? ` · ${report.summary.missingConsent} missing consent` : ''}
+        {report.summary.timesheetNotApproved > 0 ? ` · ${report.summary.timesheetNotApproved} timesheet pending` : ''}
+        {` · checked ${formatEatStamp(new Date(report.checkedAt))}`}
+      </p>
+      {report.period.status === 'VOIDED' ? (
+        <p
+          role="status"
+          data-testid="payroll-gate-voided"
+          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+        >
+          This period is voided — runs are closed; the gate has nothing to gate.
+        </p>
+      ) : blocked.length === 0 ? (
+        <p
+          role="status"
+          data-testid="payroll-gate-clear"
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+        >
+          The gate is clear — prepare would proceed for all {report.summary.clear} active employees.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {blocked.map((r) => (
+            <div
+              key={r.employeeId}
+              data-testid="payroll-gate-blocked-row"
+              className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <Badge
+                variant="outline"
+                className={`font-mono text-[11px] ${
+                  r.gateState === 'MISSING_CONSENT'
+                    ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300'
+                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                }`}
+              >
+                {r.gateState}
+              </Badge>
+              <span className="font-medium">{r.employeeCode}</span>
+              <span>{r.employeeName}</span>
+              <span className="text-muted-foreground">
+                {r.gateState === 'MISSING_CONSENT'
+                  ? 'No active data-processing consent on file; payroll blocked.'
+                  : 'Attendance for this period has unapproved timesheet days.'}
+              </span>
+              {r.blocks.length > 1 ? (
+                <span className="text-[11px] text-muted-foreground" data-testid="payroll-gate-both-blocks">
+                  (prepare would report {r.blocks[0]} first)
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HrPayrollPage() {
   const [periods, setPeriods] = useState<PayrollPeriodDto[] | null>(null);
   const [runs, setRuns] = useState<PayrollRunDto[] | null>(null);
@@ -199,6 +326,13 @@ export default function HrPayrollPage() {
   const [createRunOpen, setCreateRunOpen] = useState(false);
   const [createPeriodOpen, setCreatePeriodOpen] = useState(false);
   const [gateIssues, setGateIssues] = useState<ApiIssue[] | null>(null);
+  // v2.133.0: the gate speaks FIRST — one pre-flight panel per period, opened
+  // from the period header's rail (beside the Ledger door), fetched fresh on
+  // every open (openGate is the single loader, like the consent drawer).
+  const [gatePanel, setGatePanel] = useState<{ periodId: string; periodName: string } | null>(null);
+  const [gateReport, setGateReport] = useState<RunGateReportDto | null>(null);
+  const [gateLoading, setGateLoading] = useState(false);
+  const [gateError, setGateError] = useState<string | null>(null);
   // v2.53.0: per-row digest CSV export — the filing file for one run, without
   // opening the dialog. Tracks which row's download is in flight.
   const [digestRowId, setDigestRowId] = useState<string | null>(null);
@@ -216,6 +350,42 @@ export default function HrPayrollPage() {
       return next;
     });
   }, []);
+
+  // v2.133.0: the gate speaks FIRST — one loader, a fresh fetch per open
+  // (the consent drawer's openHistory pattern), Retry reuses the door's
+  // period. The verdict rides the run's OWN guardrails read read-only: the
+  // same gates prepare enforces, asked before anyone tries.
+  const loadGate = useCallback(async (periodId: string, periodName: string) => {
+    setGatePanel({ periodId, periodName });
+    setGateReport(null);
+    setGateError(null);
+    setGateLoading(true);
+    try {
+      const res = await fetch(`/api/payroll/runs/gate?periodId=${encodeURIComponent(periodId)}`, {
+        credentials: 'include',
+      });
+      const j = (await res.json().catch(() => ({}))) as { success?: boolean; data?: RunGateReportDto; error?: string };
+      if (!res.ok || !j.success || !j.data) throw new Error(j.error || `The gate read failed (${res.status}).`);
+      setGateReport(j.data);
+    } catch (e: unknown) {
+      setGateError(e instanceof Error ? e.message : 'The gate read failed.');
+    } finally {
+      setGateLoading(false);
+    }
+  }, []);
+
+  const toggleGate = useCallback(
+    (periodId: string, periodName: string) => {
+      if (gatePanel?.periodId === periodId) {
+        setGatePanel(null);
+        setGateReport(null);
+        setGateError(null);
+        return;
+      }
+      void loadGate(periodId, periodName);
+    },
+    [gatePanel?.periodId, loadGate],
+  );
 
   // v2.100.0: the period opens its ledger — one fetch per open (money must
   // be current), dialog-scoped state, no global churn.
@@ -593,6 +763,22 @@ export default function HrPayrollPage() {
                                   </span>
                                   </button>
                                   <div className="flex items-center border-l border-border/70 pr-2">
+                                    {/* v2.133.0: the gate speaks FIRST — a pre-flight
+                                        read of the run's own guardrails, before anyone
+                                        tries. Beside the Ledger door, never inside the
+                                        fold (the v2.100.0 rail rule). */}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border"
+                                      aria-label={`Check the ${group.periodName} run gate`}
+                                      title="Who the run gate would block, before anyone tries — the same gates prepare enforces, read-only"
+                                      data-testid="payroll-period-gate"
+                                      onClick={() => toggleGate(group.runs[0]?.payrollPeriodId ?? '', group.periodName)}
+                                    >
+                                      <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+                                      <span className="hidden sm:inline">Gate</span>
+                                    </Button>
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -609,6 +795,19 @@ export default function HrPayrollPage() {
                                 </div>
                               </TableCell>
                             </TableRow>
+                            {open && gatePanel && gatePanel.periodId === (group.runs[0]?.payrollPeriodId ?? '') && (
+                              <TableRow className="hover:bg-transparent" data-testid="payroll-gate-panel-row">
+                                <TableCell colSpan={7} className="border-b bg-muted/30 px-4 py-3">
+                                  <GatePanel
+                                    periodName={gatePanel.periodName}
+                                    report={gateReport}
+                                    loading={gateLoading}
+                                    error={gateError}
+                                    onRetry={() => gatePanel && void loadGate(gatePanel.periodId, gatePanel.periodName)}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            )}
                             {open &&
                               group.runs.map((run) => (
                                 <TableRow key={run.id} className="group transition-colors hover:bg-muted/40">

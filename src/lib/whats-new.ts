@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.133.0',
+    title: 'The gate speaks first',
+    bullets: [
+      'The payroll desk can now ask the run gate who it would block BEFORE anyone tries — a pre-flight read per period, on the period header beside the Ledger door.',
+      'The verdict mirrors the run\u2019s own guardrails line for line: same consent gate, same timesheet gate, same order \u2014 pinned by tests so the gate can never drift from the run it protects.',
+      'Counts speak first (clear / missing consent / timesheet pending), blocked employees speak in prepare\u2019s own words, and an employee failing both gates says which one prepare would report first.',
+      'A voided period says runs are closed instead of pretending to check; a failed read renders an honest rose strip with a Retry.',
+      'Read-only by construction: no run is created, no payslip computed \u2014 seeing the gate is part of reading the desk.',
+    ],
+  },
+  {
     version: '2.132.0',
     title: 'The columns bend, the branch files itself',
     bullets: [
