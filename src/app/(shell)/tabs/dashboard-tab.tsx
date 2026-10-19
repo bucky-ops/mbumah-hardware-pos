@@ -733,11 +733,14 @@ function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, spa
   valueClass?: string;
 }) {
   const interactive = typeof onClick === 'function';
+  // v2.148.0: a non-interactive card is a GROUP (a container that accepts a
+  // name) — a bare div with aria-label is a prohibited pairing (axe
+  // aria-prohibited-attr); the interactive variant keeps its button role.
   return (
     <div
       {...(interactive
         ? { role: 'button', tabIndex: 0, onClick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } }
-        : {})}
+        : { role: 'group' })}
       className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow ${
         interactive ? 'cursor-pointer hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40' : ''
       }`}
@@ -787,7 +790,8 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
     <span
       title="No sales yet today - start selling!"
       aria-label="No sales yet today - start selling!"
-      className="inline-flex cursor-help items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400"
+      role="note"
+      className="inline-flex cursor-help items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600"
     >
       <Minus className="h-3 w-3" aria-hidden="true" />
       {`${Math.abs(revenueChange).toFixed(1)}%`}
@@ -853,7 +857,7 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
               <span className={lowStock > 0 ? 'font-semibold text-amber-600' : ''}>{lowStock} low</span>
             </span>
           ) : (
-            <span className="text-emerald-600">All stock healthy</span>
+            <span className="text-emerald-700">All stock healthy</span>
           )
         }
         onClick={() => onTab('inventory')}
@@ -944,7 +948,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
                 <span className={low > 0 ? 'font-semibold text-amber-600' : ''}>{low} low</span>
               </span>
             ) : (
-              <span className="text-emerald-600">All stock healthy</span>
+              <span className="text-emerald-700">All stock healthy</span>
             )
           }
         />
@@ -1004,7 +1008,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
                     <span className="text-sm font-bold tabular-nums text-slate-900">
                       {formatKES(num(sale.totalAmount))}
                     </span>
-                    <span className="w-16 text-right text-[11px] text-slate-400" title={new Date(sale.createdAt).toLocaleString()}>
+                    <span className="w-16 text-right text-[11px] text-slate-500" title={new Date(sale.createdAt).toLocaleString()}>
                       {timeAgo(new Date(sale.createdAt))}
                     </span>
                   </div>
@@ -1070,12 +1074,12 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
             <BarChart3 className="h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="text-sm text-slate-500">No sales recorded yet today</p>
-            <p className="text-xs text-slate-400">Bars appear as soon as the first sale lands</p>
+            <p className="text-xs text-slate-500">Bars appear as soon as the first sale lands</p>
           </div>
         ) : (
           <div className="flex gap-2">
             {/* Y axis - compact K labels */}
-            <div className="flex h-40 w-10 shrink-0 flex-col justify-between pb-0 text-right text-[9px] tabular-nums text-slate-400">
+            <div className="flex h-40 w-10 shrink-0 flex-col justify-between pb-0 text-right text-[9px] tabular-nums text-slate-500">
               {yTicks.map((t, i) => (
                 <span key={`${t}-${i}`}>{formatCompact(t)}</span>
               ))}
@@ -1127,7 +1131,7 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
         {/* X labels */}
         <div className="mt-1.5 flex gap-1 pl-12 sm:gap-1.5">
           {hours.map((h) => (
-            <span key={h.hour} className="flex-1 text-center text-[9px] text-slate-400">
+            <span key={h.hour} className="flex-1 text-center text-[9px] text-slate-500">
               {labelEvery.has(parseInt(h.hour, 10)) ? formatHour(parseInt(h.hour, 10)).replace(' ', '') : ''}
             </span>
           ))}
@@ -1197,7 +1201,7 @@ function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
                 <span className="max-w-full truncate px-1 text-[11px] font-bold tabular-nums text-slate-900" title={formatKES(total)}>
                   {formatCompact(total)}
                 </span>
-                <span className="text-[9px] uppercase tracking-wide text-slate-400">today</span>
+                <span className="text-[9px] uppercase tracking-wide text-slate-500">today</span>
               </div>
             </div>
             <ul className="w-full flex-1 space-y-2.5">
@@ -1209,11 +1213,11 @@ function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.color }} aria-hidden="true" />
                         <span className="truncate font-medium text-slate-700">{r.label}</span>
-                        <span className="shrink-0 text-[10px] text-slate-400">({r.count})</span>
+                        <span className="shrink-0 text-[10px] text-slate-500">({r.count})</span>
                       </span>
                       <span className="shrink-0 tabular-nums">
                         <span className="font-semibold text-slate-700">{pct.toFixed(1)}%</span>
-                        <span className="ml-1.5 text-slate-400">{formatKES(r.amount)}</span>
+                        <span className="ml-1.5 text-slate-500">{formatKES(r.amount)}</span>
                       </span>
                     </div>
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -1419,10 +1423,13 @@ function RecentActivityCard({ data }: { data: DashboardData | null }) {
             <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
               <Receipt className="h-8 w-8 text-slate-300" aria-hidden="true" />
               <p className="text-sm text-slate-500">No sales yet</p>
-              <p className="text-xs text-slate-400">Your latest receipts will appear here</p>
+              <p className="text-xs text-slate-500">Your latest receipts will appear here</p>
             </div>
           ) : (
-            <ul className="max-h-72 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
+            <ul className="max-h-72 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300" tabIndex={0} aria-label="Recent sales">
+              {/* v2.148.0: every scroller is focusable — a list whose rows are
+                  plain <li>s has no focusable child, so keyboard users could
+                  never scroll it (axe scrollable-region-focusable, x4). */}
               {sales.map((tx, i) => {
                 const method = String(tx?.paymentMethod ?? '');
                 return (
@@ -1448,10 +1455,10 @@ function RecentActivityCard({ data }: { data: DashboardData | null }) {
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
             <Activity className="h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="text-sm text-slate-500">No system activity yet</p>
-            <p className="text-xs text-slate-400">Actions like logins and product updates show up here</p>
+            <p className="text-xs text-slate-500">Actions like logins and product updates show up here</p>
           </div>
         ) : (
-          <ul className="max-h-72 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
+          <ul className="max-h-72 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300" tabIndex={0} aria-label="System activity">
             {activities.map((a, i) => (
               <li key={String(a?.id ?? i)} className="flex items-start gap-2.5 border-b border-slate-100 py-2.5 last:border-0">
                 <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${severityTone(a?.severity)}`} aria-hidden="true" />
@@ -1459,7 +1466,7 @@ function RecentActivityCard({ data }: { data: DashboardData | null }) {
                   <p className="truncate text-xs font-medium text-slate-800" title={a?.displayMessage ?? ''}>
                     {a?.displayMessage || a?.action || 'System event'}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-slate-400">
+                  <p className="mt-0.5 text-[10px] text-slate-500">
                     {a?.actorName || a?.user?.name || 'System'} · {timeAgo(a?.createdAt)}
                   </p>
                 </div>
@@ -1546,7 +1553,7 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="font-medium text-slate-700">
                         {item?.label ?? '-'}
-                        <span className="ml-1.5 text-[10px] text-slate-400">{weight}% weight</span>
+                        <span className="ml-1.5 text-[10px] text-slate-500">{weight}% weight</span>
                       </span>
                       <span className="font-semibold tabular-nums" style={{ color }}>
                         {score}
@@ -1558,13 +1565,13 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
                         style={{ width: `${score}%`, backgroundColor: color }}
                       />
                     </div>
-                    {item?.detail ? <p className="mt-0.5 text-[10px] leading-relaxed text-slate-400">{item.detail}</p> : null}
+                    {item?.detail ? <p className="mt-0.5 text-[10px] leading-relaxed text-slate-500">{item.detail}</p> : null}
                   </li>
                 );
               })}
             </ul>
 
-            <p className="mt-3 border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+            <p className="mt-3 border-t border-slate-100 pt-2 text-[10px] text-slate-500">
               {`Weighted: Revenue ${num(health?.weights?.revenue)}% + Stock ${num(health?.weights?.stock)}% + Debt ${num(health?.weights?.debt)}% + Engagement ${num(health?.weights?.engagement)}%`}
             </p>
           </>
@@ -1631,24 +1638,24 @@ function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
             </div>
             <div className="grid grid-cols-[repeat(16,minmax(0,1fr))] gap-1">
               {hours.map((h) => (
-                <span key={h.hour} className="text-center text-[8px] leading-tight text-slate-400">
+                <span key={h.hour} className="text-center text-[8px] leading-tight text-slate-500">
                   {h.hour % 2 === 0 ? (h.hour < 12 ? `${h.hour}a` : h.hour === 12 ? '12p' : `${h.hour - 12}p`) : ''}
                 </span>
               ))}
             </div>
             <dl className="grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-center">
               <div>
-                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Peak hour</dt>
+                <dt className="text-[10px] uppercase tracking-wide text-slate-500">Peak hour</dt>
                 <dd className="mt-0.5 text-xs font-bold text-emerald-700">{formatHour(peak.hour)}</dd>
                 <dd className="text-[10px] tabular-nums text-slate-500">{formatKES(peak.amount)}</dd>
               </div>
               <div>
-                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Quietest</dt>
+                <dt className="text-[10px] uppercase tracking-wide text-slate-500">Quietest</dt>
                 <dd className="mt-0.5 text-xs font-bold text-slate-600">{formatHour(quiet.hour)}</dd>
                 <dd className="text-[10px] tabular-nums text-slate-500">{formatKES(quiet.amount)}</dd>
               </div>
               <div>
-                <dt className="text-[10px] uppercase tracking-wide text-slate-400">Total today</dt>
+                <dt className="text-[10px] uppercase tracking-wide text-slate-500">Total today</dt>
                 <dd className="mt-0.5 text-xs font-bold text-slate-900">{formatCompact(total)}</dd>
                 <dd className="text-[10px] tabular-nums text-slate-500">Ksh collected</dd>
               </div>
@@ -1711,10 +1718,10 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
             <Users className="h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="text-sm text-slate-500">No customers yet</p>
-            <p className="text-xs text-slate-400">Customer spend rankings appear after your first sales</p>
+            <p className="text-xs text-slate-500">Customer spend rankings appear after your first sales</p>
           </div>
         ) : (
-          <ul className="max-h-80 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+          <ul className="max-h-80 space-y-2 overflow-y-auto pr-1 custom-scrollbar focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300" tabIndex={0} aria-label="Customer spend rankings">
             {customers.map((c, i) => {
               const spend = num(c?.lifetimeSpend);
               const owes = num(c?.owes);
@@ -1726,7 +1733,7 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
                   className={`rounded-xl border p-2.5 ${highRisk ? 'border-red-300 bg-red-50' : 'border-slate-100 bg-white'}`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="w-5 shrink-0 text-center text-xs font-bold text-slate-400">#{i + 1}</span>
+                    <span className="w-5 shrink-0 text-center text-xs font-bold text-slate-500">#{i + 1}</span>
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${highRisk ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
                       {initialsOf(String(c?.name ?? ''))}
                     </span>
@@ -1796,7 +1803,7 @@ function TopProductsCard({ data }: { data: DashboardData | null }) {
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
             <Package className="h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="text-sm text-slate-500">No sales yet today</p>
-            <p className="text-xs text-slate-400">Your best sellers will rank here</p>
+            <p className="text-xs text-slate-500">Your best sellers will rank here</p>
           </div>
         ) : (
           <ol className="space-y-2.5">
@@ -1806,7 +1813,7 @@ function TopProductsCard({ data }: { data: DashboardData | null }) {
               const share = Math.min(100, (revenue / maxRevenue) * 100);
               return (
                 <li key={String(p?.productId ?? i)} className="grid grid-cols-[1.25rem_1fr_auto] items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400">{i + 1}</span>
+                  <span className="text-xs font-bold text-slate-500">{i + 1}</span>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-slate-900" title={String(p?.productName ?? '')}>
                       {p?.productName ?? 'Unknown product'}
@@ -1817,7 +1824,7 @@ function TopProductsCard({ data }: { data: DashboardData | null }) {
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold tabular-nums text-slate-900">{formatKES(revenue)}</p>
-                    <p className="text-[10px] text-slate-400">{qty} sold</p>
+                    <p className="text-[10px] text-slate-500">{qty} sold</p>
                   </div>
                 </li>
               );
@@ -1870,7 +1877,7 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
           <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
             <TrendingUp className="h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="text-sm text-slate-500">Not enough history yet</p>
-            <p className="text-xs text-slate-400">The 7-day trend appears after a couple of trading days</p>
+            <p className="text-xs text-slate-500">The 7-day trend appears after a couple of trading days</p>
           </div>
         ) : (
           <>
@@ -1916,7 +1923,7 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
                 );
               })}
             </svg>
-            <div className="flex justify-between px-0.5 text-[9px] text-slate-400">
+            <div className="flex justify-between px-0.5 text-[9px] text-slate-500">
               {days.map((d, i) => (
                 <span key={d?.date ?? i} className={d?.isToday ? 'font-semibold text-emerald-600' : ''}>
                   {d?.label ?? ''}
@@ -1943,7 +1950,7 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
             <Sparkles className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
             Top 3 growing products
           </p>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+          <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
             Not enough history yet - check back after a few more days of sales.
           </p>
         </div>
@@ -1996,10 +2003,10 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
         ) : (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-1">
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Total outstanding</p>
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Total outstanding</p>
               <p className="text-lg font-bold tabular-nums text-rose-600">{formatKES(total)}</p>
             </div>
-            {count > 0 && <p className="-mt-2 text-[11px] text-slate-400">{count} outstanding bill{count === 1 ? '' : 's'}</p>}
+            {count > 0 && <p className="-mt-2 text-[11px] text-slate-500">{count} outstanding bill{count === 1 ? '' : 's'}</p>}
 
             {buckets && (
               <>
@@ -2028,7 +2035,7 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
                 </div>
 
                 {sumsReconcile && (
-                  <p className="flex items-center gap-1 text-[10px] text-slate-400">
+                  <p className="flex items-center gap-1 text-[10px] text-slate-500">
                     <CheckCircle className="h-3 w-3 text-emerald-500" aria-hidden="true" />
                     Ages sum to the total outstanding
                   </p>
@@ -2101,10 +2108,10 @@ function AlertsCard({ data, onTab }: { data: DashboardData | null; onTab: (tab: 
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
             <CheckCircle className="h-8 w-8 text-emerald-400" aria-hidden="true" />
             <p className="text-sm font-medium text-slate-700">All clear</p>
-            <p className="text-xs text-slate-400">No overdue rentals, debts or stock emergencies</p>
+            <p className="text-xs text-slate-500">No overdue rentals, debts or stock emergencies</p>
           </div>
         ) : (
-          <ul className="max-h-80 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
+          <ul className="max-h-80 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-300" tabIndex={0} aria-label="Urgent alerts">
             {alerts.map((alert, i) => {
               const style = alertSeverityStyle(String(alert?.severity ?? 'info'));
               const Icon = style.icon;
@@ -2146,7 +2153,7 @@ function AlertsCard({ data, onTab }: { data: DashboardData | null; onTab: (tab: 
             })}
           </ul>
         )}
-        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-2.5 text-[10px] text-slate-400">
+        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-2.5 text-[10px] text-slate-500">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
           <span>System healthy</span>
           <span aria-hidden="true">·</span>
@@ -2274,7 +2281,7 @@ export default function DashboardTab() {
       <div className="-m-4 min-h-full space-y-4 bg-slate-50 p-4 sm:space-y-6 sm:p-5">
         <DashboardHero onTab={onTab} limited />
         <LimitedDashboard data={view} />
-        <p className="pb-1 text-center text-[10px] text-slate-400">
+        <p className="pb-1 text-center text-[10px] text-slate-500">
           Live data · auto-refreshes every 30s{user?.name ? ` · signed in as ${user.name}` : ''} · last sync {lastSyncLabel}
         </p>
       </div>
@@ -2327,7 +2334,7 @@ export default function DashboardTab() {
       </div>
 
       {/* Footer meta - live data confirmation */}
-      <p className="pb-1 text-center text-[10px] text-slate-400">
+      <p className="pb-1 text-center text-[10px] text-slate-500">
         Live data · auto-refreshes every 30s{user?.name ? ` · signed in as ${user.name}` : ''} · last sync {lastSyncLabel}
       </p>
     </div>

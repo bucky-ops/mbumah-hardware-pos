@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.148.0',
+    title: 'The shell meets the bar',
+    bullets: [
+      'An accessibility audit of the workspace shell found the small stuff failing the contrast bar — notification badges, sidebar labels, chart axis text — and every one now passes, without losing its look.',
+      'Notification count badges stop blinking at half strength; the critical red is deeper and the warning badge reads dark-on-amber, so the number is legible the whole time it is on screen.',
+      'The dashboard’s long lists (recent sales, activity, customers, alerts) can now be scrolled with the keyboard alone — Tab onto a list and use the arrow keys.',
+      'A “Skip to main content” link is the first thing Tab reaches — one Enter jumps past the sidebar and top bar straight into the page.',
+      'The New Payroll Run dialog’s “Last run” chip wears the same green/amber outcome dot the runs table and gate activity card already speak.',
+    ],
+  },
+  {
     version: '2.147.0',
     title: 'The gate passes the keyboard',
     bullets: [

@@ -3167,6 +3167,23 @@ function CreateRunDialog({
                                 : 'border-muted bg-muted/40 text-muted-foreground'
                           }`}
                         >
+                          {/* v2.148.0: the chip wears the outcome dot — the same
+                              dot language the runs-table headers (v2.146.0) and
+                              the gate card's period picker (v2.144.0) speak, so
+                              the eye answers "what did the gate last say?" the
+                              same way on every surface. aria-hidden: the chip's
+                              own words carry the outcome. */}
+                          <span
+                            aria-hidden
+                            data-testid="payroll-picker-attempts-dot"
+                            className={`mr-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                              attempts.tone === 'emerald'
+                                ? 'bg-emerald-500 dark:bg-emerald-400'
+                                : attempts.tone === 'amber'
+                                  ? 'bg-amber-500 dark:bg-amber-400'
+                                  : 'bg-muted-foreground/40'
+                            }`}
+                          />
                           {attempts.label}
                         </span>
                       </p>
