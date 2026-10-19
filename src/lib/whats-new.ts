@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.147.0',
+    title: 'The gate passes the keyboard',
+    bullets: [
+      'The HR header now wraps on phones — the ten workspace links stop pushing the page sideways, and every link stays visible and tappable instead of hiding past the screen edge.',
+      'The timesheets desk controls wrap into tidy rows on small screens, and the approval table scrolls inside its own strip rather than dragging the whole page.',
+      'The period picker on the desk finally says what it is for — screen readers now announce “scope the desk to a payroll period” instead of a bare month name.',
+      'The desk’s weekday/weekend split line reads cleanly to assistive tech after an accessibility audit pass over the workspace.',
+      'The full keyboard path is verified end to end: tab to any control, open the period picker with Enter, arrow to a period, Enter to commit — no mouse required.',
+    ],
+  },
+  {
     version: '2.146.0',
     title: 'The table wears the same dots',
     bullets: [

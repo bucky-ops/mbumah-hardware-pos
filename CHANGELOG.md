@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.147.0] The gate passes the keyboard
+
+The EMS spec's acceptance lines name two things every surface must hold: "No horizontal scroll on supported viewports" and "Accessibility passes". A scoped sweep over the HR workspace (axe-core 4.12 on the desk and the payroll page, plus a manual keyboard-only walk) found the ten-link header nav was the single unclipped element pushing every HR page to 1141px at 390px width, the desk's period picker read to assistive tech as an unnamed button, and the split line's `aria-label` sat on a role that may not carry one. All three are fixed at their root; nothing else moved.
+
+### Added
+- **The header wraps instead of the page scrolling** (`(shell)/hr/layout.tsx`): the header row swaps its fixed `h-14` for `min-h-14 flex-wrap`, and the nav itself wraps (`flex-wrap justify-end`) — at 390px the links drop to their own row with every item visible and tappable (no hidden overflow, no scrollbar affordance to discover), and desktop is untouched. Nav links compact slightly on phones (`text-[13px] px-2.5`) and keep their desktop size from `sm:` up.
+- **The desk's controls wrap** (`hr-timesheet` toolbar): the picker, batch door, lens trio, CSV and refresh held one 726px row that only fit a desktop; `flex-wrap` lets them settle into tidy rows on phones.
+- **The desk's approval table gains the shadcn scroll wrapper**: the table measured 398px against a 390px phone — an 8px creep from `whitespace-nowrap` cells that scrolled the PAGE. Inside `relative w-full overflow-x-auto` the creep scrolls the table's own strip, and the page never does (the payroll runs table already had this wrapper).
+
+### Fixed
+- **The desk's period picker is named** (axe `button-name`, critical): the `aria-label` sat on the `Select` root, which Radix never forwards to the trigger button — axe read `hr-timesheet-scope-picker` as an unnamed button and a screen reader announced "October 2026" with no idea what the choice was for. The label moves onto the `SelectTrigger` itself ("Scope the timesheet desk to a payroll period"); the dead root attribute is removed. The payroll page's own triggers were already label-associated and stay untouched.
+- **The split line may carry its name** (axe `aria-prohibited-attr`, serious): `aria-label` on a plain `<span>` is prohibited by the ARIA `generic` role, and axe's support matrix additionally wants an explicit role before trusting a label on a `p` ("not well supported on a p with no valid role attribute"). The `hr-timesheet-split` element becomes `<p role="note">` (`m-0 inline-flex`) — `note` is the section role for content ancillary to its neighbours, which is exactly what the split is beside the total chip, and it accepts author naming — so the full words ("2 pending days — 1 weekday · 1 weekend") reach assistive tech through the front door.
+
+### Verified
+- Keyboard-only path on the desk, live: Tab reaches every control in DOM order; Enter toggles the lens trio; the scope picker opens with Enter, arrows through periods, and commits with Enter (the scope line re-speaks honestly); the approve buttons are reachable and focus-visible rings read on every control (`:focus-visible` confirmed matching by probe).
+- axe-core full-page re-run: the critical `button-name` and serious `aria-prohibited-attr` findings clear; the remaining `color-contrast` incompletes were probed numerically and pass (the design system's `muted-foreground` on card computes ≥ 4.5:1 — axe could only not resolve the alpha backgrounds).
+
 ## [2.146.0] The table wears the same dots
 
 The picker's period dots (v2.144.0) and the desk's day-kind counts lived on different pages than the questions they answer: the runs table's collapsed header said nothing about what the gate last said, and the desk's count chip hid the weekday/weekend shape the lenses imply. Both answers move onto the surfaces where the questions arise. Pure layer + two pages + one docs line: no new fetch, no new endpoint.
