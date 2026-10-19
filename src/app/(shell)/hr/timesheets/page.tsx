@@ -18,8 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, CalendarCheck, CalendarDays, CheckCircle2, CheckCheck, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
-import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, deskWeekendDays, buildBulkApproveSummary, readDeskLensPref, writeDeskLensPref, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary } from '@/lib/hr/attendance-desk';
+import { AlertTriangle, Briefcase, CalendarCheck, CalendarDays, CheckCircle2, CheckCheck, FileDown, Loader2, RefreshCw, Sun, X } from 'lucide-react';
+import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, deskWeekendDays, deskWeekdayDays, buildBulkApproveSummary, readDeskLensPref, writeDeskLensPref, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary, type DeskLensPref } from '@/lib/hr/attendance-desk';
 import { buildTimesheetDeskCsv } from '@/lib/hr/timesheet-desk-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 
@@ -92,16 +92,17 @@ export default function HrTimesheetsPage() {
   // rendered false, and React never patches stale hydration ATTRIBUTES:
   // the strip's children got fixed while the toggle's aria-pressed stayed
   // stale — a franken-state caught live in E2E and not allowed to ship.
-  const [weekendsOnly, setWeekendsOnly] = useState<boolean>(false);
+  // v2.145.0: the lens learns weekdays — the boolean grows into the
+  // three-way day-kind lens (the gate card's outcome trio's own shape), and
+  // the persisted read maps the legacy '1' to 'weekends' so an old browser's
+  // choice survives the upgrade (readDeskLensPref's own rule).
+  const [lens, setLens] = useState<DeskLensPref>('all');
   useEffect(() => {
-    void Promise.resolve().then(() => setWeekendsOnly(readDeskLensPref(window.localStorage)));
+    void Promise.resolve().then(() => setLens(readDeskLensPref(window.localStorage)));
   }, []);
-  const toggleWeekendsOnly = useCallback(() => {
-    setWeekendsOnly((v) => {
-      const next = !v;
-      writeDeskLensPref(window.localStorage, next);
-      return next;
-    });
+  const setLensPref = useCallback((next: DeskLensPref) => {
+    setLens(next);
+    writeDeskLensPref(window.localStorage, next);
   }, []);
 
   const loadPeriods = useCallback(async () => {
@@ -357,28 +358,75 @@ export default function HrTimesheetsPage() {
               </>
             )}
           </Button>
-          {/* v2.140.0: the weekends-only lens — aria-pressed speaks the
-              state; sky when on (the weekend chips' own family), quiet
-              outline when off. A view preference: disabled only while the
-              read is in flight, never cleared by scopes or receipts. */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleWeekendsOnly}
-            disabled={loading}
-            aria-pressed={weekendsOnly}
-            aria-label="Show only weekend days on the pending strips"
-            title="Filters the day strips to Saturdays and Sundays — the count chip still speaks every pending day, and the lens keeps its setting in this browser"
-            data-testid="hr-timesheet-weekends-only"
-            className={
-              weekendsOnly
-                ? 'border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300 dark:hover:bg-sky-950 dark:hover:text-sky-200'
-                : ''
-            }
+          {/* v2.145.0: the day-kind lens trio — the weekends-only toggle
+              (v2.140.0) completes the pair as a joined segmented control
+              (the gate card's outcome trio's own shape, v2.144.0). Each
+              member dresses as the chips it keeps: ALL neutral, WEEKENDS
+              sky (the weekend chips' own tint), WEEKDAYS amber (the weekday
+              chips' own tint). aria-pressed speaks every state; the count
+              chip keeps speaking every pending day; the persisted read maps
+              the legacy '1' to 'weekends' so no old choice resets. */}
+          <div
+            className="inline-flex h-8 items-center gap-0.5 rounded-full border border-input bg-background p-0.5"
+            role="group"
+            aria-label="Day-kind lens for the pending strips"
+            data-testid="hr-timesheet-lens"
           >
-            <CalendarDays className="mr-1 h-3.5 w-3.5" aria-hidden />
-            Weekends only
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLensPref('all')}
+              disabled={loading}
+              aria-pressed={lens === 'all'}
+              aria-label="Show every pending day on the strips"
+              title="The unfiltered view — every pending day, weekends and weekdays. The count chip always speaks this total."
+              data-testid="hr-timesheet-lens-all"
+              className={`h-7 gap-1 rounded-full px-2.5 text-xs font-medium ${
+                lens === 'all'
+                  ? 'bg-muted text-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
+              } focus-visible:ring-1 focus-visible:ring-ring`}
+            >
+              <CalendarDays className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden sm:inline">All days</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLensPref('weekends')}
+              disabled={loading}
+              aria-pressed={lens === 'weekends'}
+              aria-label="Show only weekend days on the pending strips"
+              title="Filters the strips to Saturdays and Sundays — the count chip still speaks every pending day, and the lens keeps its setting in this browser"
+              data-testid="hr-timesheet-lens-weekends"
+              className={`h-7 gap-1 rounded-full px-2.5 text-xs font-medium ${
+                lens === 'weekends'
+                  ? 'border border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300 dark:hover:bg-sky-950 dark:hover:text-sky-200'
+                  : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
+              } focus-visible:ring-1 focus-visible:ring-ring`}
+            >
+              <Sun className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden sm:inline">Weekends only</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLensPref('weekdays')}
+              disabled={loading}
+              aria-pressed={lens === 'weekdays'}
+              aria-label="Show only weekday days on the pending strips"
+              title="Filters the strips to Mondays through Fridays — the count chip still speaks every pending day, and the lens keeps its setting in this browser"
+              data-testid="hr-timesheet-lens-weekdays"
+              className={`h-7 gap-1 rounded-full px-2.5 text-xs font-medium ${
+                lens === 'weekdays'
+                  ? 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950 dark:hover:text-amber-200'
+                  : 'text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border'
+              } focus-visible:ring-1 focus-visible:ring-ring`}
+            >
+              <Briefcase className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden sm:inline">Weekdays only</span>
+            </Button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -524,9 +572,17 @@ export default function HrTimesheetsPage() {
                 {payload.rows.map((row) => {
                   // v2.140.0: the lens composes BEFORE the strip builder, so
                   // the +N overflow stays honest about exactly what the lens
-                  // is showing (hidden weekend days beyond max — never a
-                  // weekday smuggled into the count).
-                  const strip = deskDayStrip(weekendsOnly ? deskWeekendDays(row.days) : row.days);
+                  // is showing. v2.145.0: three ways — weekends keep real
+                  // Sat/Sun, weekdays keep valid non-weekend days, garbage
+                  // survives only under All (an unreadable day is honestly
+                  // neither) — the hidden count stays honest on every path.
+                  const strip = deskDayStrip(
+                    lens === 'weekends'
+                      ? deskWeekendDays(row.days)
+                      : lens === 'weekdays'
+                        ? deskWeekdayDays(row.days)
+                        : row.days,
+                  );
                   const focused = row.employeeId === focusId;
                   return (
                     <TableRow
@@ -559,14 +615,14 @@ export default function HrTimesheetsPage() {
                         <span
                           className="flex flex-wrap items-center gap-1"
                           data-testid="hr-timesheet-day-strip"
-                          data-lens={weekendsOnly ? 'weekends' : undefined}
+                          data-lens={lens !== 'all' ? lens : undefined}
                         >
-                          {strip.shown.length === 0 && weekendsOnly && row.days.length > 0 ? (
+                          {strip.shown.length === 0 && lens !== 'all' && row.days.length > 0 ? (
                             <span
                               className="rounded px-1 py-0.5 text-[10px] italic text-muted-foreground"
                               data-testid="hr-timesheet-strip-empty"
                             >
-                              no weekend days
+                              {lens === 'weekends' ? 'no weekend days' : 'no weekday days'}
                             </span>
                           ) : null}
                           {strip.shownDays.map((day, idx) => {
