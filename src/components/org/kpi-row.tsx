@@ -90,7 +90,7 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
         <div className="mt-1.5 flex flex-wrap gap-1 text-[9px]">
           <Badge variant="outline" className="px-1 py-0 text-slate-500">C {kShort(k.debt.aging.current)}</Badge>
           <Badge variant="outline" className="px-1 py-0 text-amber-700">30d {kShort(k.debt.aging.d30)}</Badge>
-          <Badge variant="outline" className="px-1 py-0 text-orange-600">60d {kShort(k.debt.aging.d60)}</Badge>
+          <Badge variant="outline" className="px-1 py-0 text-orange-800">60d {kShort(k.debt.aging.d60)}</Badge>
           <Badge variant="outline" className="px-1 py-0 text-red-600">90d+ {kShort(k.debt.aging.d90plus)}</Badge>
         </div>
       </div>
