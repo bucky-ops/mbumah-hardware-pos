@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.134.0',
+    title: 'The gate opens onto empty months',
+    bullets: [
+      'A period with no runs yet now renders on the payroll desk as a pre-flight row — it used to render nowhere, so the run gate\u2019s front door was locked exactly before the first run of the month.',
+      'Each pre-flight row carries the SAME Gate door the period headers carry: who would be blocked, before anyone tries \u2014 read-only, no run created.',
+      'The row speaks the month\u2019s own words: its lifecycle chip (OPEN emerald, VOIDED amber), its date range, and an honest \u201cpay date not set\u201d when no pay date exists.',
+      'Newest month leads; the verdict is the same mirror-of-prepare report v2.133.0 pinned \u2014 one gate, two doors.',
+      'Read-only by construction: the read never prepares, posts, or computes \u2014 it only asks who the gate would stop.',
+    ],
+  },
+  {
     version: '2.133.0',
     title: 'The gate speaks first',
     bullets: [
