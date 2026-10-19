@@ -1688,7 +1688,8 @@
 @keyframes console-pop-in {0%{transform:scale(.8);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes console-drop {0%{transform:translateY(-8px) scale(.5); opacity:0}60%{opacity:1}100%{transform:translateY(0) scale(1); opacity:1}}
 @keyframes console-count-glow {0%{text-shadow:0 0 0 rgba(255,140,0,0)}50%{text-shadow:0 0 12px rgba(255,140,0,.35)}100%{text-shadow:0 0 0 rgba(255,140,0,0)}}
-@keyframes console-slide-fade {from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:translateY(0)}}
+/* v2.152.0: the opacity ramp is gone — polled re-renders replayed the fade and axe kept catching low-opacity frames (red-600 at 3.36:1 mid-fade). The slide-in still reads; contrast is now measurable at every frame. */
+@keyframes console-slide-fade {from{transform:translateY(8px)} to{transform:translateY(0)}}
 @keyframes console-live-pulse {0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.55)}70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}}
 .anim-pulse-dot { animation: console-pulse-dot 2s ease-in-out infinite; }
 .anim-shake { animation: console-shake 0.5s ease-in-out infinite; }
