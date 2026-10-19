@@ -23,19 +23,25 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:px-6">
+        {/* v2.147.0: the header wraps instead of the page scrolling — the
+            10-link nav was the only unclipped pusher past 390px, which broke
+            the spec's "no horizontal scroll on supported viewports" line on
+            every HR page. min-h instead of h lets the nav drop to its own
+            row on phones; every link stays visible and tappable (no hidden
+            overflow, no scrollbar affordance to discover). */}
+        <div className="mx-auto flex min-h-14 max-w-7xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold text-foreground">
             HR Workspace
             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
               EMS
             </span>
           </Link>
-          <nav aria-label="HR navigation" className="ml-auto flex items-center gap-1">
+          <nav aria-label="HR navigation" className="ml-auto flex flex-wrap items-center justify-end gap-1">
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="whitespace-nowrap rounded-md px-2.5 py-1 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:px-3 sm:py-1.5 sm:text-sm"
               >
                 {item.label}
               </Link>

@@ -309,7 +309,11 @@ export default function HrTimesheetsPage() {
             the Shift system stays the source of truth, and payroll re-checks the gate on prepare.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* v2.147.0: the controls wrap on phones — the picker, batch door,
+            lens trio, csv and refresh held one 726px row that only fit a
+            desktop. Wrapping keeps every control on the page without the
+            page itself scrolling sideways. */}
+        <div className="flex flex-wrap items-center gap-2">
           <Select
             value={scopeId}
             onValueChange={(value) => {
@@ -319,9 +323,17 @@ export default function HrTimesheetsPage() {
               setBulkNote(null);
               setScopeId(value || '__all__');
             }}
-            aria-label="Scope the timesheet desk to a payroll period"
           >
-            <SelectTrigger className="w-56" data-testid="hr-timesheet-scope-picker">
+            {/* v2.147.0: the label moves onto the TRIGGER. It sat on the
+                Select root before, which Radix never forwards to the button —
+                axe read the trigger as an unnamed button (critical), and a
+                screen reader announced "October 2026" with no idea what the
+                choice was FOR. */}
+            <SelectTrigger
+              className="w-56"
+              data-testid="hr-timesheet-scope-picker"
+              aria-label="Scope the timesheet desk to a payroll period"
+            >
               <SelectValue placeholder="Pick a period" />
             </SelectTrigger>
             <SelectContent>
@@ -559,7 +571,12 @@ export default function HrTimesheetsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table data-testid="hr-timesheet-desk">
+            {/* v2.147.0: the shadcn scroll wrapper — the desk table measured
+                398px against a 390px phone, an 8px creep from nowrap cells
+                that scrolled the PAGE. Inside the wrapper the creep scrolls
+                the table's own strip, and the page never does. */}
+            <div className="relative w-full overflow-x-auto">
+              <Table data-testid="hr-timesheet-desk">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Employee</TableHead>
@@ -623,8 +640,9 @@ export default function HrTimesheetsPage() {
                               no honest split and renders none; the words are
                               in the aria-label so the icons stay decoration. */}
                           {splitLabel ? (
-                            <span
-                              className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground"
+                            <p
+                              role="note"
+                              className="m-0 inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground"
                               data-testid="hr-timesheet-split"
                               aria-label={`${row.days.length} pending ${row.days.length === 1 ? 'day' : 'days'} — ${splitLabel}`}
                               title="Pending days by kind — the lens trio filters to either kind; an unreadable day counts in neither"
@@ -644,7 +662,7 @@ export default function HrTimesheetsPage() {
                                   {split.weekend}
                                 </span>
                               ) : null}
-                            </span>
+                            </p>
                           ) : null}
                         </div>
                       </TableCell>
@@ -714,7 +732,8 @@ export default function HrTimesheetsPage() {
                   );
                 })}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
