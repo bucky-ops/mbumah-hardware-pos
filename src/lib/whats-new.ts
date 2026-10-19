@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.144.0',
+    title: 'The lens learns the other outcome',
+    bullets: [
+      'The Gate activity card’s Blocked-only toggle grows a third way — Passed only shows the times the gate said YES, so a clean streak is one click, not an eyeball scan.',
+      'The lens is a true outcome filter: unreadable attempts stay in All, never claimed by either side — garbage is honestly neither passed nor blocked.',
+      'The period picker now wears each period’s last outcome as a colour dot — green, amber, or grey — straight from the same clock-based “last” the card already speaks.',
+      'The lens joins the export for free: a Passed-only CSV is the audit artifact, filtered by the same rules the card shows.',
+      'The summary chip keeps speaking every attempt — the lens is a view, never a rewrite of the story.',
+    ],
+  },
+  {
     version: '2.143.0',
     title: 'The story scopes itself',
     bullets: [

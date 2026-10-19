@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.144.0] The lens learns the other outcome
+
+"Show me the stops" got a lens (v2.142.0); the mirror question — "show me the times the gate said YES" — still had to be scanned by eye. The blocked-only boolean becomes a three-way outcome lens, and the period picker's items wear each period's newest attempt's outcome as a tone dot. Pure-layer only plus the card: no new fetch, no new endpoint.
+
+### Added
+- **The outcome lens trio** (`GateTimelineLens` + `gateTimelineLensFilter` in `gate-timeline.ts`, `payroll-gate-timeline-lens{-all,-blocked,-passed}` on the card): the joined segmented control in the card's rounded-full quiet-control family — ALL is the neutral unfiltered view, BLOCKED wears its own rose family, PASSED its own emerald family (the row badges' own tones — the lens dresses as the rows it keeps). Each member speaks `aria-pressed` and its own label; the header chip keeps speaking the route-built ALL count.
+- **The picker's outcome dots** (`payroll-gate-timeline-period-outcome`): each period item wears its newest attempt's outcome as a tone dot — emerald PASSED, amber BLOCKED, muted otherwise — with the word in the `title` (the dot is `aria-hidden` decoration; the option's text still announces the period and its attempt count).
+- **Per-period last outcome** (`GateTimelinePeriod.lastOutcome`/`lastAtIso`): computed through `summarizeGateTimeline` itself — ONE definition of "last outcome" everywhere on the card, clock-based, ties falling back to the route's deterministic array order.
+
+### Changed
+- `scopeGateTimeline`'s lens option is now `lens: 'all' | 'blocked' | 'passed'` (was `blockedOnly: boolean`); `filterGateTimeline` is superseded by `gateTimelineLensFilter`. The UNKNOWN rows survive ONLY under `all` — an unreadable outcome is honestly neither passed nor blocked, so neither lens may claim it. A garbage lens degrades to the unfiltered view, never a guessed filter.
+- **The lens-empty note speaks the PASSED voice**: "No passed attempts in this period/window — the attempts on record were stopped or unreadable." The scope-empty (amber) guard now reads the lens state explicitly (`timelineLens === 'all'`).
+- Both composition sites (the card memo and the export) read `lens: timelineLens` — one state, one truth; a Passed-only CSV is the audit artifact, filtered by the same rules the card shows.
+
 ## [2.143.0] The story scopes itself
 
 The lens (v2.142.0) answered "show me the stops"; it could not answer "what did the gate do in OCTOBER". The read (v2.141.0) already carries each run's payroll period name, so this release makes the story scope itself — no new fetch, no new endpoint: a pure period list, a pure period ∩ lens filter, and an export filename that says when the story is scoped.

@@ -169,6 +169,19 @@ export function summarizeGateTimeline(rows: readonly GateTimelineRow[]): GateTim
 // rules unchanged: order preserved, nothing guessed, "All periods" is a
 // real option — unlabeled runs never vanish from the view, they only step
 // aside when a period is picked.
+//
+// ── v2.144.0: the lens learns the other outcome ───────────────────────
+// "Show me the stops" got a lens (v2.142.0); the mirror question — "show me
+// the times the gate said YES" — had to be scanned by eye. The lens becomes
+// a three-way outcome filter: ALL / BLOCKED / PASSED. The UNKNOWN rows
+// (unreadable outcomes) survive ONLY under ALL — garbage is honestly
+// neither passed nor blocked, so neither lens may claim it. The period
+// picker's items wear each period's last outcome as a tone dot (the same
+// clock-based "last" the card's scoped line speaks — one definition,
+// computed through summarizeGateTimeline itself, never a second parser).
+// The v2.142.0 boolean (filterGateTimeline) is superseded: the lens is now
+// a parameter on gateTimelineLensFilter/scopeGateTimeline — still ONE
+// composition point on the card.
 
 export interface GateTimelineCsvRow {
   /** ISO string or '' — an unreadable clock exports empty, never guessed. */
@@ -224,17 +237,23 @@ export function buildGateTimelineCsv(rows: readonly GateTimelineCsvRow[]): strin
 }
 
 /**
- * The card's blocked-only lens. A view preference, not a data change: order
- * preserved, garbage never passes (an UNKNOWN outcome is not BLOCKED), and
- * the summary chip keeps speaking the row set's TOTAL. Non-array → [].
+ * The card's outcome lens (v2.144.0): 'blocked' keeps every BLOCKED row,
+ * 'passed' keeps every PASSED row, 'all' (and anything unrecognized — a
+ * garbage lens degrades, never guesses a filter) keeps every row. The
+ * UNKNOWN rows survive only under 'all': an unreadable outcome is honestly
+ * neither passed nor blocked, so neither lens may claim it. A view
+ * preference, not a data change: order preserved, non-array → [].
  */
-export function filterGateTimeline(
+export type GateTimelineLens = 'all' | 'blocked' | 'passed';
+
+export function gateTimelineLensFilter(
   rows: readonly GateTimelineRow[],
-  blockedOnly: boolean,
+  lens: GateTimelineLens | undefined,
 ): GateTimelineRow[] {
   if (!Array.isArray(rows)) return [];
-  if (!blockedOnly) return [...rows];
-  return rows.filter((r) => r && r.outcome === 'BLOCKED');
+  if (lens === 'blocked') return rows.filter((r) => r && r.outcome === 'BLOCKED');
+  if (lens === 'passed') return rows.filter((r) => r && r.outcome === 'PASSED');
+  return [...rows];
 }
 
 /** One period present in the timeline read, with its own honest counts. */
@@ -244,6 +263,10 @@ export interface GateTimelinePeriod {
   attempts: number;
   /** Distinct runs inside the period — a period prepared twice in one run counts one run. */
   runs: number;
+  /** The period's newest attempt's outcome (clock-based; ties fall back to array order). */
+  lastOutcome: 'PASSED' | 'BLOCKED' | 'UNKNOWN' | null;
+  /** ISO string or null — the newest attempt's clock, as the card speaks it. */
+  lastAtIso: string | null;
 }
 
 /**
@@ -255,34 +278,45 @@ export interface GateTimelinePeriod {
  */
 export function listTimelinePeriods(rows: readonly GateTimelineRow[]): GateTimelinePeriod[] {
   if (!Array.isArray(rows)) return [];
-  const seen = new Map<string, { attempts: number; runs: Set<string> }>();
+  const seen = new Map<string, GateTimelineRow[]>();
   for (const row of rows) {
     if (!row || typeof row.runLabel !== 'string' || !row.runLabel.trim()) continue;
-    const entry = seen.get(row.runLabel) ?? { attempts: 0, runs: new Set<string>() };
-    entry.attempts += 1;
-    entry.runs.add(row.runId);
-    seen.set(row.runLabel, entry);
+    const bucket = seen.get(row.runLabel);
+    if (bucket) bucket.push(row);
+    else seen.set(row.runLabel, [row]);
   }
-  return Array.from(seen.entries()).map(([label, v]) => ({
-    label,
-    attempts: v.attempts,
-    runs: v.runs.size,
-  }));
+  // One definition of "last outcome" everywhere: the per-period group runs
+  // through the SAME summarizer the scoped line uses (clock-based, ties
+  // fall back to array order — which the route has made deterministic).
+  return Array.from(seen.entries()).map(([label, group]) => {
+    const summary = summarizeGateTimeline(group);
+    return {
+      label,
+      attempts: summary.attempts,
+      runs: summary.runs,
+      lastOutcome: summary.lastOutcome,
+      lastAtIso: summary.lastAtIso,
+    };
+  });
 }
 
 export interface GateScopeOptions {
-  /** The lens: BLOCKED attempts only. Undefined/false keeps every outcome. */
-  blockedOnly?: boolean;
+  /** The outcome lens (v2.144.0): 'blocked' | 'passed' | 'all'. Undefined
+   * or an unrecognized value keeps every outcome — a garbage lens degrades
+   * to the unfiltered view, never to a guessed filter. UNKNOWN rows
+   * survive only under 'all'. */
+  lens?: GateTimelineLens;
   /** The period scope: a run label from listTimelinePeriods. Null/'' = all. */
   periodLabel?: string | null;
 }
 
 /**
- * The card's one composition point: period scope ∩ lens. Order preserved,
- * intersection is the filter (either dimension alone narrows the same way),
- * and with both dimensions off this is a COPY — the caller's array is never
- * mutated. Non-array → []; an unknown period → [] (an empty scope is an
- * honest empty, never a silent unscoped view).
+ * The card's one composition point: period scope ∩ outcome lens. Order
+ * preserved, intersection is the filter (either dimension alone narrows the
+ * same way), and with both dimensions off this is a COPY — the caller's
+ * array is never mutated. Non-array → []; an unknown period → [] (an empty
+ * scope is an honest empty, never a silent unscoped view). A garbage lens
+ * degrades to 'all' — never a guessed filter.
  */
 export function scopeGateTimeline(
   rows: readonly GateTimelineRow[],
@@ -292,7 +326,8 @@ export function scopeGateTimeline(
   const period =
     typeof opts?.periodLabel === 'string' && opts.periodLabel ? opts.periodLabel : null;
   let out = period ? rows.filter((r) => r && r.runLabel === period) : [...rows];
-  if (opts?.blockedOnly) out = out.filter((r) => r && r.outcome === 'BLOCKED');
+  if (opts?.lens === 'blocked') out = out.filter((r) => r && r.outcome === 'BLOCKED');
+  else if (opts?.lens === 'passed') out = out.filter((r) => r && r.outcome === 'PASSED');
   return out;
 }
 

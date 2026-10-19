@@ -66,8 +66,10 @@ describe('listTimelinePeriods - the periods the window actually holds', () => {
       row({ id: 'e1', runLabel: 'October 2026' }),
     ];
     expect(listTimelinePeriods(rows)).toEqual([
-      { label: 'October 2026', attempts: 2, runs: 1 },
-      { label: 'September 2026', attempts: 1, runs: 1 },
+      // v2.144.0 re-anchor: each period now speaks its newest attempt's
+      // outcome (clock-based) + its clock — the picker dot's data.
+      { label: 'October 2026', attempts: 2, runs: 1, lastOutcome: 'PASSED', lastAtIso: '2026-10-19T14:45:00.000Z' },
+      { label: 'September 2026', attempts: 1, runs: 1, lastOutcome: 'PASSED', lastAtIso: '2026-10-19T14:45:00.000Z' },
     ]);
   });
 
@@ -77,14 +79,14 @@ describe('listTimelinePeriods - the periods the window actually holds', () => {
       row({ id: 'e1', runId: 'run-a', runLabel: 'October 2026' }),
     ];
     expect(listTimelinePeriods(rows)).toEqual([
-      { label: 'October 2026', attempts: 2, runs: 2 },
+      { label: 'October 2026', attempts: 2, runs: 2, lastOutcome: 'PASSED', lastAtIso: '2026-10-19T14:45:00.000Z' },
     ]);
   });
 
   it('unlabeled rows never invent a period entry — they only live under All periods', () => {
     const rows = [row({ runLabel: null }), row({ runLabel: '   ' }), row({ runLabel: 'October 2026' })];
     expect(listTimelinePeriods(rows)).toEqual([
-      { label: 'October 2026', attempts: 1, runs: 1 },
+      { label: 'October 2026', attempts: 1, runs: 1, lastOutcome: 'PASSED', lastAtIso: '2026-10-19T14:45:00.000Z' },
     ]);
   });
 
@@ -114,13 +116,13 @@ describe('scopeGateTimeline - period ∩ lens, one composition point', () => {
     expect(scoped.map((r) => r.id)).toEqual(['e4', 'e3']);
   });
 
-  it('lens alone matches filterGateTimeline semantics', () => {
-    const scoped = scopeGateTimeline(window, { blockedOnly: true });
+  it('lens alone matches gateTimelineLensFilter semantics (v2.144.0 re-anchor)', () => {
+    const scoped = scopeGateTimeline(window, { lens: 'blocked' });
     expect(scoped.map((r) => r.id)).toEqual(['e4', 'e2']);
   });
 
   it('both dimensions intersect — a PASSED row can never smuggle into a scoped blocked view', () => {
-    const scoped = scopeGateTimeline(window, { blockedOnly: true, periodLabel: 'September 2026' });
+    const scoped = scopeGateTimeline(window, { lens: 'blocked', periodLabel: 'September 2026' });
     expect(scoped.map((r) => r.id)).toEqual(['e2']);
   });
 
@@ -193,7 +195,7 @@ describe("the payroll page's card period scope", () => {
   it('the scope composes with the lens at ONE point; the show-all bound reads the scoped set', () => {
     const src = page();
     expect(src).toContain(
-      'scopeGateTimeline(timeline?.rows ?? [], {\n        blockedOnly: timelineBlockedOnly,\n        periodLabel: timelinePeriod,\n      })',
+      'scopeGateTimeline(timeline?.rows ?? [], {\n        lens: timelineLens,\n        periodLabel: timelinePeriod,\n      })',
     );
     expect(src).toContain('timelineShowAll ? timelineFiltered : timelineFiltered.slice(0, 8)');
   });
@@ -201,7 +203,7 @@ describe("the payroll page's card period scope", () => {
   it('the export maps the scoped set and the filename says when it is scoped', () => {
     const src = page();
     expect(src).toContain(
-      'scopeGateTimeline(timeline.rows, {\n      blockedOnly: timelineBlockedOnly,\n      periodLabel: timelinePeriod,\n    })',
+      'scopeGateTimeline(timeline.rows, {\n      lens: timelineLens,\n      periodLabel: timelinePeriod,\n    })',
     );
     expect(src).toContain('gateTimelineCsvFilename(timelinePeriod)');
     expect(src).toContain('filtered to the current period and lens');
