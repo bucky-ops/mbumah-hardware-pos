@@ -168,7 +168,9 @@ describe("the payroll page's card lens + export door", () => {
   });
 
   it('the lens composes BEFORE the show-all bound — a PASSED row can never smuggle in', () => {
-    expect(page).toContain('filterGateTimeline(timeline?.rows ?? [], timelineBlockedOnly)');
+    // v2.143.0 re-anchor: the lens composes with the period scope inside the
+    // ONE scopeGateTimeline memo; the bound still reads that scoped set.
+    expect(page).toContain('scopeGateTimeline(timeline?.rows ?? [],');
     expect(page).toContain('(timelineShowAll ? timelineFiltered : timelineFiltered.slice(0, 8)).map(');
     expect(page).toContain('timelineFiltered.length > 8');
     expect(page).not.toContain('timelineShowAll ? timeline.rows : timeline.rows.slice(0, 8)');
@@ -191,8 +193,12 @@ describe("the payroll page's card lens + export door", () => {
   it('the export door: whole window, lens applied, disabled when empty', () => {
     expect(page).toContain('payroll-gate-timeline-export');
     expect(page).toContain('exportGateTimelineCsv');
-    expect(page).toContain('filterGateTimeline(timeline.rows, timelineBlockedOnly)');
-    expect(page).toContain('gate-activity-${new Date().toISOString().slice(0, 10)}.csv');
+    // v2.143.0 re-anchor: the export maps the SCOPED set (period ∩ lens via
+    // scopeGateTimeline) and the filename comes from gateTimelineCsvFilename
+    // — which keeps this shape for the unscoped case and slugs the period
+    // when the story is scoped.
+    expect(page).toContain('scopeGateTimeline(timeline.rows,');
+    expect(page).toContain('gateTimelineCsvFilename(timelinePeriod)');
     expect(page).toContain('disabled={timeline === null || timelineFiltered.length === 0}');
     // The window-not-viewport honesty lives in the button's own title.
     expect(page).toContain('not just the rows on screen');
@@ -204,7 +210,15 @@ describe("the payroll page's card lens + export door", () => {
     expect(pure).toContain('export function filterGateTimeline');
     expect(pure).toContain("export function escapeGateCsvCell");
     const code = pure.replace(/^\s*\/\/.*$/gm, '');
-    expect(!/@prisma\/client|node-fetch|axios|fetch\(|new Date\(\)|window\./.test(code)).toBe(true);
+    // v2.143.0 re-anchor: the no-clock ban scopes to the trail/lens builders.
+    // gateTimelineCsvFilename takes the clock BY INJECTION
+    // (when: Date = new Date() — the consent filenames' own pattern): a
+    // default parameter is an injection point, not an internal clock read —
+    // feed a Date and the filename is deterministic.
+    const clockUses = code.match(/new Date\(\)/g) ?? [];
+    expect(clockUses.length).toBe(1);
+    expect(code).toContain('when: Date = new Date()');
+    expect(!/@prisma\/client|node-fetch|axios|fetch\(|window\./.test(code)).toBe(true);
   });
 });
 

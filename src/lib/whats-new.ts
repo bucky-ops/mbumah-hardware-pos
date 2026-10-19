@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.143.0',
+    title: 'The story scopes itself',
+    bullets: [
+      'The Gate activity card gains a period picker — “what did the gate do in October?” is now one pick away, built from the read the card already holds, no extra fetch.',
+      'The scope is a view, not a rewrite: the summary chip still speaks every attempt, and the scoped counts wear their own line — attempts, runs, and the last outcome.',
+      'Any row’s period label scopes the card on click — the story narrows itself from the row you are reading.',
+      'Export CSV follows the scope and the lens, and the filename says it — a scoped export never looks like the full-window export in your downloads folder.',
+      'A period with no labeled runs renders no picker at all: the card never wears a dead control.',
+    ],
+  },
+  {
     version: '2.142.0',
     title: 'The activity answers back',
     bullets: [
