@@ -253,7 +253,7 @@ export default function OrgConsolePage() {
           aria-label="Console sections"
           className={`no-print sticky top-20 hidden h-fit flex-col gap-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition-all duration-300 md:flex ${railExpanded ? 'w-[210px]' : 'w-16 items-center'}`}
         >
-          <button onClick={() => setRailPinned((p) => !p)} className="focus-ring mb-1 flex h-8 w-full items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50" aria-label={railPinned ? 'Unpin navigation' : 'Pin navigation'}>
+          <button onClick={() => setRailPinned((p) => !p)} className="focus-ring mb-1 flex h-8 w-full items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50" aria-label={railPinned ? 'Unpin navigation' : 'Pin navigation'}>
             <Menu className="h-4 w-4" />
           </button>
           {SECTIONS.map((s) => (
@@ -266,7 +266,7 @@ export default function OrgConsolePage() {
           {railExpanded && (
             <div className="mt-2 border-t border-slate-100 px-2 pt-2">
               <Landmark className="mb-1 h-3 w-3 text-slate-300" />
-              <p className="text-[10px] leading-snug text-slate-400">Org roles only · every endpoint re-verifies the session server-side</p>
+              <p className="text-[10px] leading-snug text-slate-500">Org roles only · every endpoint re-verifies the session server-side</p>
             </div>
           )}
         </nav>
@@ -299,10 +299,13 @@ export default function OrgConsolePage() {
                   <span className="flex h-7 w-11 items-center justify-center rounded-md text-[10px] font-bold text-white transition-transform hover:scale-105" style={{ background: s.brandingColor ?? '#12243D' }}>
                     {storeCodeOf(s).slice(0, 3).toUpperCase()}
                   </span>
-                  <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${s.status === 'ACTIVE' ? 'border-emerald-200 text-emerald-600' : 'border-slate-200 text-slate-400'}`}>{s.status}</span>
+                  {/* v2.149.0: emerald-700/slate-500 — the 9px chip at emerald-600
+                      measured 3.65:1 on white (fails 4.5:1 for normal text);
+                      slate-400 meta on white was 2.9:1. Both clear now. */}
+                  <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${s.status === 'ACTIVE' ? 'border-emerald-200 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>{s.status}</span>
                 </div>
                 <p className="mt-1.5 truncate text-[12px] font-semibold text-slate-800">{s.name}</p>
-                <p className="text-[10px] text-slate-400">{kes(s.todayRevenue)} · {s.todayTransactions} txns</p>
+                <p className="text-[10px] text-slate-500">{kes(s.todayRevenue)} · {s.todayTransactions} txns</p>
               </button>
             ))}
             {summaryError && (
@@ -322,8 +325,8 @@ export default function OrgConsolePage() {
             <section aria-label="Overview" className="grid grid-cols-1 gap-4 xl:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h2 className="mb-1 text-sm font-semibold text-slate-800">Health - {kpi?.health.label ?? 'unknown'}</h2>
-                <p className="mb-2 text-[11px] text-slate-400">Composite: revenue attainment, stock, debt and engagement</p>
-                {stores.length > 0 ? <KenyaMap stores={stores} /> : <p className="p-6 text-center text-xs text-slate-400">Store map needs /api/org/summary access.</p>}
+                <p className="mb-2 text-[11px] text-slate-500">Composite: revenue attainment, stock, debt and engagement</p>
+                {stores.length > 0 ? <KenyaMap stores={stores} /> : <p className="p-6 text-center text-xs text-slate-500">Store map needs /api/org/summary access.</p>}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2">
                 <h2 className="mb-2 text-sm font-semibold text-slate-800">Today at a glance</h2>
@@ -338,9 +341,9 @@ export default function OrgConsolePage() {
                       ['Rentals', `${kpi.rentals.active} active`, `${kpi.rentals.overdue} overdue`],
                     ].map(([label, value, sub]) => (
                       <div key={label} className="rounded-xl border border-slate-100 p-3">
-                        <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
                         <p className="text-sm font-bold text-slate-800">{value}</p>
-                        <p className="text-[10px] text-slate-400">{sub}</p>
+                        <p className="text-[10px] text-slate-500">{sub}</p>
                       </div>
                     ))}
                   </div>

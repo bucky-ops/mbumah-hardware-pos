@@ -31,20 +31,20 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
         <span className="absolute inset-y-0 left-0 w-1 bg-orange-500" />
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-            <Banknote className="h-3.5 w-3.5 text-emerald-600" /> Revenue
+            <Banknote className="h-3.5 w-3.5 text-emerald-700" /> Revenue
           </span>
           <span className="h-2 w-2 rounded-full bg-orange-500 anim-pulse-dot" />
         </div>
         <div className="mt-1 flex items-baseline gap-2">
-          <CountUp value={k.revenue.today} format={(v) => num(v)} className="anim-count-glow text-2xl font-bold text-emerald-600" />
-          <span className={`flex items-center text-xs font-semibold ${k.revenue.variancePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+          <CountUp value={k.revenue.today} format={(v) => num(v)} className="anim-count-glow text-2xl font-bold text-emerald-700" />
+          <span className={`flex items-center text-xs font-semibold ${k.revenue.variancePct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
             {k.revenue.variancePct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
             {k.revenue.variancePct >= 0 ? '+' : ''}{k.revenue.variancePct}%
           </span>
         </div>
         <div className="mt-2 flex items-end justify-between">
           <Sparkline data={k.revenue.spark} />
-          <span className="text-[10px] text-slate-400">{kes(k.revenue.weekTotal)} · 7d</span>
+          <span className="text-[10px] text-slate-500">{kes(k.revenue.weekTotal)} · 7d</span>
         </div>
       </button>
 
@@ -53,12 +53,12 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
         <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><CalendarCheck2 className="h-3.5 w-3.5 text-blue-500" /> Transactions</div>
         <div className="mt-1 flex items-baseline gap-2">
           <CountUp value={k.transactions.today} className="text-2xl font-bold text-blue-600" />
-          <span className={`flex items-center text-xs font-semibold ${k.transactions.variancePct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+          <span className={`flex items-center text-xs font-semibold ${k.transactions.variancePct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
             {k.transactions.variancePct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
             {k.transactions.variancePct >= 0 ? '+' : ''}{k.transactions.variancePct}%
           </span>
         </div>
-        <p className="mt-2 text-[10px] text-slate-400">today · 7d {num(k.transactions.weekTotal)} vs prior {num(k.transactions.priorWeekTotal)}</p>
+        <p className="mt-2 text-[10px] text-slate-500">today · 7d {num(k.transactions.weekTotal)} vs prior {num(k.transactions.priorWeekTotal)}</p>
       </div>
 
       {/* Low stock */}
@@ -68,7 +68,7 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
           <CountUp value={k.lowStock.count} className={`text-2xl font-bold ${k.lowStock.count > 0 ? 'text-orange-500' : 'text-slate-700'}`} />
           {k.lowStock.count > 0 && <span className="h-2 w-2 rounded-full bg-orange-500 anim-pulse-dot" />}
         </div>
-        <p className="mt-2 text-[10px] text-slate-400">at/below reorder level · org-wide</p>
+        <p className="mt-2 text-[10px] text-slate-500">at/below reorder level · org-wide</p>
       </div>
 
       {/* Overdue rentals */}
@@ -78,7 +78,7 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
           <CountUp value={k.overdueRentals.count} className={`text-2xl font-bold ${k.overdueRentals.count > 0 ? 'text-red-500' : 'text-slate-700'}`} />
           {k.overdueRentals.count > 0 && <span className="h-2 w-2 rounded-full bg-red-500 anim-pulse-dot" />}
         </div>
-        <p className="mt-2 text-[10px] text-slate-400">rentals past return</p>
+        <p className="mt-2 text-[10px] text-slate-500">rentals past return</p>
       </div>
 
       {/* Debt */}
@@ -89,7 +89,7 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1 text-[9px]">
           <Badge variant="outline" className="px-1 py-0 text-slate-500">C {kShort(k.debt.aging.current)}</Badge>
-          <Badge variant="outline" className="px-1 py-0 text-amber-600">30d {kShort(k.debt.aging.d30)}</Badge>
+          <Badge variant="outline" className="px-1 py-0 text-amber-700">30d {kShort(k.debt.aging.d30)}</Badge>
           <Badge variant="outline" className="px-1 py-0 text-orange-600">60d {kShort(k.debt.aging.d60)}</Badge>
           <Badge variant="outline" className="px-1 py-0 text-red-600">90d+ {kShort(k.debt.aging.d90plus)}</Badge>
         </div>
@@ -97,24 +97,24 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
 
       {/* Pending actions */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><ShoppingCart className="h-3.5 w-3.5 text-slate-400" /> Pending</div>
+        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><ShoppingCart className="h-3.5 w-3.5 text-slate-500" /> Pending</div>
         <div className="mt-1"><CountUp value={pendingTotal} className="text-2xl font-bold text-slate-600" /></div>
-        <p className="mt-2 text-[10px] text-slate-400">POs {k.pending.purchaseOrders} · shifts {k.pending.openShifts} · expenses {k.pending.expenses}</p>
+        <p className="mt-2 text-[10px] text-slate-500">POs {k.pending.purchaseOrders} · shifts {k.pending.openShifts} · expenses {k.pending.expenses}</p>
       </div>
 
       {/* Revenue trend drill-down modal (real 7d series only) */}
       <Dialog open={trendOpen} onOpenChange={setTrendOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-600" /> Revenue trend (net of VAT)</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-700" /> Revenue trend (net of VAT)</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
             <Sparkline data={k.revenue.spark} width={380} height={80} />
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              <div><span className="text-slate-400">Today</span><p className="font-bold text-slate-800">{kes(k.revenue.today)}</p></div>
-              <div><span className="text-slate-400">7d total</span><p className="font-bold text-slate-800">{kes(k.revenue.weekTotal)}</p></div>
-              <div><span className="text-slate-400">Prior 7d</span><p className="font-bold text-slate-800">{kes(k.revenue.priorWeekTotal)}</p></div>
-              <div><span className="text-slate-400">Avg / day (7d)</span><p className="font-bold text-slate-800">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
+              <div><span className="text-slate-500">Today</span><p className="font-bold text-slate-800">{kes(k.revenue.today)}</p></div>
+              <div><span className="text-slate-500">7d total</span><p className="font-bold text-slate-800">{kes(k.revenue.weekTotal)}</p></div>
+              <div><span className="text-slate-500">Prior 7d</span><p className="font-bold text-slate-800">{kes(k.revenue.priorWeekTotal)}</p></div>
+              <div><span className="text-slate-500">Avg / day (7d)</span><p className="font-bold text-slate-800">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
             </div>
           </div>
         </DialogContent>

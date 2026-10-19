@@ -23,7 +23,7 @@ const SEV: Record<string, string> = {
   warning: 'border-amber-200 bg-amber-50',
   info: 'border-blue-200 bg-blue-50',
 };
-const SEV_TEXT: Record<string, string> = { critical: 'text-red-600', warning: 'text-amber-600', info: 'text-blue-600' };
+const SEV_TEXT: Record<string, string> = { critical: 'text-red-600', warning: 'text-amber-700', info: 'text-blue-600' };
 
 // ── Decision Support - Action Center + alerts ────────────────────────────────
 export function DecisionSupport({ data, onToast }: {
@@ -55,7 +55,7 @@ export function DecisionSupport({ data, onToast }: {
               </div>
             </div>
           ))}
-          {data.alerts.length === 0 && <p className="text-xs text-slate-400">No active alerts - all clear.</p>}
+          {data.alerts.length === 0 && <p className="text-xs text-slate-500">No active alerts - all clear.</p>}
         </div>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -65,7 +65,7 @@ export function DecisionSupport({ data, onToast }: {
           <QueueRow label="Purchase orders awaiting release" value={q.pendingPOs} onToast={onToast} />
           <QueueRow label="Open shifts" value={q.openShifts} onToast={onToast} />
         </ul>
-        <p className="mt-3 rounded-lg bg-slate-50 p-2 text-[10px] text-slate-400">
+        <p className="mt-3 rounded-lg bg-slate-50 p-2 text-[10px] text-slate-500">
           Follow-up actions run in the branch workspace that owns the record; every authorization there is audit-logged.
         </p>
       </div>
@@ -80,7 +80,7 @@ function QueueRow({ label, value, onToast }: {
     <li className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
       <span className="text-slate-600">{label}</span>
       <span className="flex items-center gap-2">
-        <Badge variant="outline" className={value > 0 ? 'border-orange-200 text-orange-600' : 'text-slate-400'}>{value}</Badge>
+        <Badge variant="outline" className={value > 0 ? 'border-orange-200 text-orange-600' : 'text-slate-500'}>{value}</Badge>
         <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => onToast(`${label}: ${value} - drill down from the branch workspace`)}>View</Button>
       </span>
     </li>
@@ -115,15 +115,17 @@ export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <Activity className="h-4 w-4 text-emerald-500" /> Recent Activity Timeline
-          <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
+          <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
         </h2>
         <div className="flex gap-2">
           <Select value={fAction} onValueChange={setFAction}>
-            <SelectTrigger className="h-7 w-28 text-[11px]"><SelectValue placeholder="Action" /></SelectTrigger>
+            {/* v2.149.0: label the TRIGGER, never the root (v2.147.0's Radix
+                Select lesson — the root never forwards a name to the button). */}
+            <SelectTrigger aria-label="Filter timeline by action" className="h-7 w-28 text-[11px]"><SelectValue placeholder="Action" /></SelectTrigger>
             <SelectContent>{['all', ...actions].map((a) => <SelectItem key={a} value={a} className="text-xs">{a === 'all' ? 'All actions' : a}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={fRole} onValueChange={setFRole}>
-            <SelectTrigger className="h-7 w-32 text-[11px]"><SelectValue placeholder="Role" /></SelectTrigger>
+            <SelectTrigger aria-label="Filter timeline by role" className="h-7 w-32 text-[11px]"><SelectValue placeholder="Role" /></SelectTrigger>
             <SelectContent>{['all', ...roles].map((r) => <SelectItem key={r} value={r} className="text-xs">{r === 'all' ? 'All roles' : r}</SelectItem>)}</SelectContent>
           </Select>
         </div>
@@ -135,13 +137,13 @@ export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
               <span aria-hidden className="relative -left-3 top-[11px] mr-1 inline-block h-2 w-2 rounded-full bg-orange-400 anim-pop-in" />
               <div className="flex flex-wrap items-center justify-between gap-1">
                 <p className="text-xs font-medium text-slate-700">{a.displayMessage}</p>
-                <span className="text-[10px] text-slate-400">{timeAgo(a.createdAt)}</span>
+                <span className="text-[10px] text-slate-500">{timeAgo(a.createdAt)}</span>
               </div>
-              <p className="text-[10px] text-slate-400">{a.userName} · {a.role}</p>
+              <p className="text-[10px] text-slate-500">{a.userName} · {a.role}</p>
             </button>
           </li>
         ))}
-        {filtered.length === 0 && <li className="p-2 text-xs text-slate-400">No activity yet in this window.</li>}
+        {filtered.length === 0 && <li className="p-2 text-xs text-slate-500">No activity yet in this window.</li>}
       </ol>
 
       <Dialog open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
@@ -163,7 +165,7 @@ export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
   );
 }
 function Row({ k, v }: { k: string; v: string }) {
-  return <div className="flex justify-between border-b border-slate-50 pb-1"><dt className="text-slate-400">{k}</dt><dd className="font-medium text-slate-700">{v}</dd></div>;
+  return <div className="flex justify-between border-b border-slate-50 pb-1"><dt className="text-slate-500">{k}</dt><dd className="font-medium text-slate-700">{v}</dd></div>;
 }
 
 // ── Global Chat drawer (main-lineage channel API) ────────────────────────────
@@ -267,12 +269,12 @@ export function ChatDrawer({ open, onOpenChange, unread, signedIn, onRequireSign
                 <div key={m.id} className={`anim-slide-fade max-w-[85%] rounded-xl p-2 shadow-sm ${m.isOwn ? 'ml-auto bg-orange-50' : 'bg-white'}`}>
                   <p className="text-[10px] font-semibold text-slate-600">
                     {m.isOwn ? 'You' : m.sender.name}
-                    <span className="font-normal text-slate-400"> · {m.sender.role}{m.originStoreName ? ` · ${m.originStoreName}` : ''} · {timeAgo(m.sentAt)}</span>
+                    <span className="font-normal text-slate-500"> · {m.sender.role}{m.originStoreName ? ` · ${m.originStoreName}` : ''} · {timeAgo(m.sentAt)}</span>
                   </p>
                   <p className="text-xs text-slate-700">{m.content}</p>
                 </div>
               ))}
-              {messages.length === 0 && <p className="p-2 text-center text-xs text-slate-400">No messages yet - say hello to the org.</p>}
+              {messages.length === 0 && <p className="p-2 text-center text-xs text-slate-500">No messages yet - say hello to the org.</p>}
               <div ref={endRef} />
             </div>
             <div className="flex gap-2 border-t border-slate-100 p-3">
@@ -331,14 +333,14 @@ export function LiveFeed({ refreshKey, signedIn, onRequireSignIn }: {
   }, [refreshKey, signedIn]);
 
   const filtered = logs.filter((l) => filter === 'ALL' || l.severity === filter);
-  const levelColor: Record<string, string> = { INFO: 'text-emerald-600', WARN: 'text-amber-600', ERROR: 'text-red-500', CRITICAL: 'text-red-500' };
+  const levelColor: Record<string, string> = { INFO: 'text-emerald-700', WARN: 'text-amber-700', ERROR: 'text-red-500', CRITICAL: 'text-red-500' };
 
   return (
     <section aria-label="Live Feed" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <RadioTower className="h-4 w-4 text-orange-500" /> Live Feed
-          {signedIn && !error && <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> streaming</span>}
+          {signedIn && !error && <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> streaming</span>}
         </h2>
         <div className="flex gap-1">
           {['ALL', 'INFO', 'WARN', 'ERROR'].map((l) => (
@@ -358,15 +360,15 @@ export function LiveFeed({ refreshKey, signedIn, onRequireSignIn }: {
           {filtered.map((l) => (
             <p key={l.id} className={`rounded px-2 py-0.5 ${flashIds.has(l.id) ? 'bg-emerald-50' : ''}`}>
               <span className={`${levelColor[l.severity] ?? ''} font-bold`}>[{l.severity}]</span>{' '}
-              <span className="text-slate-400">{new Date(l.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</span>{' '}
+              <span className="text-slate-500">{new Date(l.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</span>{' '}
               <span className="text-slate-700">{l.message}</span>
               <span className="text-slate-300"> · {l.component}</span>
             </p>
           ))}
-          {filtered.length === 0 && <p className="p-2 text-slate-400">No events at this level.</p>}
+          {filtered.length === 0 && <p className="p-2 text-slate-500">No events at this level.</p>}
         </div>
       )}
-      <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-400"><BellRing className="h-3 w-3" /> Notifications mirror critical events in each workspace.</p>
+      <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-500"><BellRing className="h-3 w-3" /> Notifications mirror critical events in each workspace.</p>
     </section>
   );
 }
@@ -418,7 +420,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <History className="h-4 w-4 text-emerald-500" /> Desk activity — leave review ledger
-          <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
+          <span className="flex items-center gap-1 text-[10px] font-normal text-emerald-700 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 anim-live" /> live</span>
         </h2>
         {/* v2.69.0 — the desk files its report: the printable per-branch
             roll-up lives at /org/desk-report; this door opens it. */}
@@ -430,7 +432,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
         >
           <FileText className="h-3 w-3" aria-hidden /> Report
         </Link>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500">Every desk visit on record, newest first · syncs every 30s</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-500">Every desk visit on record, newest first · syncs every 30s</p>
       </div>
 
       {/* v2.67.0 — the desk's morning note. Yesterday's ledger summarized in
@@ -449,7 +451,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
         <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
           <p data-testid="desk-digest-heading" className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-100">
             <Sunrise className="h-3.5 w-3.5 text-amber-500" /> Yesterday at the desk
-            <span data-testid="desk-digest-label" className="text-[10px] font-normal tabular-nums text-slate-400 dark:text-slate-500">· {yesterday.label}</span>
+            <span data-testid="desk-digest-label" className="text-[10px] font-normal tabular-nums text-slate-500 dark:text-slate-500">· {yesterday.label}</span>
           </p>
           {yesterday.visits > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -478,19 +480,19 @@ export function DeskActivity({ data, filter, onFilterChange }: {
           <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
             <div data-testid="desk-digest-visits">
               <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.visits)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">visit{yesterday.visits === 1 ? '' : 's'}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">visit{yesterday.visits === 1 ? '' : 's'}</p>
             </div>
             <div data-testid="desk-digest-clears">
-              <p className="text-lg font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">{num(yesterday.clears)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">correction{yesterday.clears === 1 ? '' : 's'} answered</p>
+              <p className="text-lg font-bold leading-none tabular-nums text-emerald-700 dark:text-emerald-400">{num(yesterday.clears)}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">correction{yesterday.clears === 1 ? '' : 's'} answered</p>
             </div>
             <div data-testid="desk-digest-reviewers">
               <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.reviewers)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">reviewer{yesterday.reviewers === 1 ? '' : 's'} on the desk</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">reviewer{yesterday.reviewers === 1 ? '' : 's'} on the desk</p>
             </div>
             <div data-testid="desk-digest-requests">
               <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.requests)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">request{yesterday.requests === 1 ? '' : 's'} touched</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">request{yesterday.requests === 1 ? '' : 's'} touched</p>
             </div>
             {yesterday.branches.length > 1 ? (
               <div data-testid="desk-digest-branches" className="ml-auto flex flex-wrap items-center gap-1">
@@ -518,7 +520,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
           ['On record', stats.total],
         ] as Array<[string, number]>).map(([label, value]) => (
           <div key={label} className="rounded-xl border border-slate-100 p-3 dark:border-slate-800">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">{label}</p>
             <p className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">{num(value)}</p>
           </div>
         ))}
@@ -558,7 +560,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
             onClick={clearReviewer}
             aria-label="Back to all reviewers"
             data-testid="desk-drilldown-clear"
-            className="rounded-full p-1 text-emerald-600 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
+            className="rounded-full p-1 text-emerald-700 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
           >
             <X className="h-3.5 w-3.5" aria-hidden />
           </button>
@@ -628,7 +630,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
                     <span className="font-semibold">{v.visitedByName}</span>
                     {' '}opened {v.employeeName}&apos;s {v.leaveTypeName} request
                   </span>
-                  <span className="block text-[10px] text-slate-400 dark:text-slate-500">
+                  <span className="block text-[10px] text-slate-500 dark:text-slate-500">
                     {v.storeName ? `${v.storeName} · ` : ''}{timeAgo(v.visitedAt)} ago
                   </span>
                 </span>
@@ -647,7 +649,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
           ))}
         </ul>
       )}
-      <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+      <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-500">
         Ledger keeps every visit since v2.63.0 — {num(stats.total)} on record. Click a row to review that person&apos;s desk visits; click a branch to narrow the trail.
       </p>
     </section>

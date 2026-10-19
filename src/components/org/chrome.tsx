@@ -231,7 +231,7 @@ export function ConsoleFooter({ kpi, stores, online, onOpenShortcuts, onOpenChan
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span>Health <strong className={kpi && kpi.health.score >= 80 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>{kpi ? `${kpi.health.score}/100` : '-'}</strong></span>
+          <span>Health <strong className={kpi && kpi.health.score >= 80 ? 'text-emerald-400 dark:text-emerald-400' : 'text-amber-400 dark:text-amber-400'}>{kpi ? `${kpi.health.score}/100` : '-'}</strong></span>
           <span>Stores <strong className="text-slate-700 dark:text-slate-200">{stores.length}</strong></span>
           <span>Debt <strong className="text-slate-700 dark:text-slate-200">{kpi ? kes(kpi.kpis.debt.total) : '-'}</strong></span>
           <span>Last sync <strong className="text-slate-700 dark:text-slate-200">{lastSync}</strong></span>
@@ -378,7 +378,7 @@ export function CommandPalette({ open, onOpenChange, stores, actions, onJumpToRe
                     <span
                       data-testid={`palette-release-state-${r.version}`}
                       title={`v${r.version} arrived after you last read the notes`}
-                      className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-600 dark:border-emerald-500/30 dark:text-emerald-400"
+                      className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-400 dark:border-emerald-500/30 dark:text-emerald-400"
                     >
                       new
                     </span>

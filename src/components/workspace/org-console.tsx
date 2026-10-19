@@ -19,6 +19,7 @@ import {
   ChevronDown,
   CircleDollarSign,
   Clock,
+  Download,
   LayoutDashboard,
   MessagesSquare,
   PackageOpen,
@@ -45,6 +46,7 @@ import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
+import { buildBranchesCsv } from '@/lib/org/branches-csv';
 // Type-only import: erased at compile time, so the server-only diagnostics
 // data layer never enters the client bundle.
 import type { BranchDiagnostic } from '@/lib/org/diagnostics';
@@ -199,10 +201,13 @@ function StatCard({
   const body = (
     <>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className={tone === 'warn' ? 'text-amber-600' : 'text-muted-foreground'}>{icon}</span>
+        {/* v2.149.0: amber-700 — amber-600 measured 3.19:1 on the white card,
+            under the 4.5:1 the small label cells need (the text-xl value only
+            cleared large-text 3:1 on a thin margin). amber-700 is 4.52:1. */}
+        <span className={tone === 'warn' ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}>{icon}</span>
         {label}
       </div>
-      <p className={`mt-2 text-xl font-semibold tabular-nums ${tone === 'warn' ? 'text-amber-600' : ''}`}>{value}</p>
+      <p className={`mt-2 text-xl font-semibold tabular-nums ${tone === 'warn' ? 'text-amber-700 dark:text-amber-400' : ''}`}>{value}</p>
     </>
   );
   if (href) {
@@ -242,6 +247,9 @@ export function OrgConsole() {
   const [expertError, setExpertError] = useState('');
   const [expertList, setExpertList] = useState<BranchDiagnostic[] | null>(null);
   const [copyConfirmation, setCopyConfirmation] = useState('');
+  // v2.149.0: the branches table's CSV export — same honest take-away the
+  // Store Intelligence Matrix has; the note is the polite confirmation.
+  const [exportNote, setExportNote] = useState('');
   // v2.23.0: per-branch HR drill-down visibility (collapsed until asked for —
   // the console opens with the summary tiles; the table is one click away).
   const [hrPerStoreOpen, setHrPerStoreOpen] = useState(false);
@@ -251,6 +259,38 @@ export function OrgConsole() {
     store: OrgSummaryStore,
   ): BranchDiagnostic | null {
     return list.find((b) => b.storeId === store.id) ?? null;
+  }
+
+  // v2.149.0: take the branches table away as CSV — client-side blob, the
+  // same shape store-matrix's export uses; numbers export RAW (no thousands
+  // separators) so a spreadsheet re-reads them as numbers, and the polite
+  // note names the file that just landed.
+  function exportBranchesCsv(): void {
+    if (!summary) return;
+    const csv = buildBranchesCsv(
+      summary.stores.map((s) => ({
+        name: s.name,
+        code: s.code ?? '',
+        location: s.location ?? '',
+        status: s.status,
+        todayRevenue: s.todayRevenue,
+        todayTransactions: s.todayTransactions,
+        lowStockCount: s.lowStockCount,
+        overdueRentals: s.overdueRentals,
+        debtOutstanding: s.debtOutstanding,
+        pendingMpesa: s.pendingMpesa,
+      })),
+    );
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename = `branches_${stamp}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportNote(`Exported ${filename}`);
   }
 
   async function fetchDiagnostics(force: boolean): Promise<BranchDiagnostic[] | null> {
@@ -530,7 +570,17 @@ export function OrgConsole() {
                   />
                 </button>
                 {hrPerStoreOpen ? (
-                  <div className="max-h-96 overflow-y-auto">
+                  // v2.149.0: min-w-0 + overflow-x — the six-column table's
+                  // intrinsic min-content used to propagate straight through
+                  // this wrapper (block scroll containers do NOT zero their
+                  // min-content contribution) and push the whole console wide;
+                  // overflow-x alone fixed the size, tabIndex makes the
+                  // scrolling region keyboard-reachable (the v2.148 rule).
+                  <div
+                    className="max-h-96 min-w-0 overflow-x-auto overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    tabIndex={0}
+                    aria-label="People and payroll by branch, scrollable table"
+                  >
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-card">
                         <tr className="border-b text-left text-xs text-muted-foreground">
@@ -558,7 +608,7 @@ export function OrgConsole() {
                               </td>
                               <td className="px-3 py-2 text-right tabular-nums">{row.headcountActive}</td>
                               <td className="px-3 py-2 text-right tabular-nums">{formatKES(row.monthEmploymentCost)}</td>
-                              <td className={`px-3 py-2 text-right tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-medium text-amber-600 dark:text-amber-400' : ''}`}>
+                              <td className={`px-3 py-2 text-right tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
                                 {row.monthAbsenceRatePct}%
                               </td>
                               <td className="px-3 py-2">
@@ -581,7 +631,7 @@ export function OrgConsole() {
                                   <span className="text-xs text-muted-foreground">no runs yet</span>
                                 )}
                               </td>
-                              <td className={`px-3 py-2 text-right tabular-nums ${alerts > 0 ? 'font-medium text-amber-600 dark:text-amber-400' : ''}`}>
+                              <td className={`px-3 py-2 text-right tabular-nums ${alerts > 0 ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
                                 {alerts}
                               </td>
                             </tr>
@@ -598,11 +648,34 @@ export function OrgConsole() {
 
         {/* Store performance table */}
         <section aria-label="Store performance" className="border rounded-lg bg-card overflow-hidden">
-          <div className="px-4 py-3 border-b flex items-center justify-between">
+          <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">Branches ({summary.stores.length})</h2>
-            <p className="text-xs text-muted-foreground">Opening a branch workspace keeps this console tab available</p>
+            <div className="flex items-center gap-2">
+              <p aria-live="polite" data-testid="org-console-export-note" className="text-xs text-muted-foreground">
+                {exportNote}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px]"
+                data-testid="org-console-export-csv"
+                onClick={exportBranchesCsv}
+              >
+                <Download className="mr-1 h-3 w-3" aria-hidden="true" />
+                Export CSV
+              </Button>
+              <p className="hidden text-xs text-muted-foreground sm:block">Opening a branch workspace keeps this console tab available</p>
+            </div>
           </div>
-          <div className="overflow-x-auto">
+          {/* v2.149.0: min-w-0 — same intrinsic-min-content propagation as the
+              drill-down above (measured: the table's 978px min-content pushed
+              the console to 1012px at 390 viewport); tabIndex names + focuses
+              the scrolling region once it actually scrolls on a phone. */}
+          <div
+            className="min-w-0 overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            tabIndex={0}
+            aria-label="Branches, scrollable table"
+          >
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
@@ -663,7 +736,7 @@ export function OrgConsole() {
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.todayRevenue)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{store.todayTransactions}</td>
-                      <td className={`px-4 py-3 text-right tabular-nums ${store.lowStockCount > 0 ? 'text-amber-600 font-medium' : ''}`}>{store.lowStockCount}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${store.lowStockCount > 0 ? 'text-amber-700 font-medium dark:text-amber-400' : ''}`}>{store.lowStockCount}</td>
                       <td className={`px-4 py-3 text-right tabular-nums ${store.overdueRentals > 0 ? 'text-red-600 font-medium' : ''}`}>{store.overdueRentals}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.debtOutstanding)}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{store.pendingMpesa}</td>

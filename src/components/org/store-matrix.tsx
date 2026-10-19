@@ -52,20 +52,20 @@ export function StoreMatrix({ stores, onToast }: { stores: StoreRow[]; onToast: 
             </button>
             <div>
               <p className="text-[13px] font-semibold text-slate-800">{s.name}</p>
-              <p className="text-[10px] text-slate-400">{s.location ?? ''} {s.subdomain ? `· ${s.subdomain}` : ''}</p>
+              <p className="text-[10px] text-slate-500">{s.location ?? ''} {s.subdomain ? `· ${s.subdomain}` : ''}</p>
             </div>
           </div>
         ), export: (s) => storeCode(s) },
       { key: 'status', label: 'Status', width: 84, min: 72, render: (s) => (
-          <Badge variant="outline" className={s.status === 'ACTIVE' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'text-slate-400'}>{s.status}</Badge>
+          <Badge variant="outline" className={s.status === 'ACTIVE' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'text-slate-500'}>{s.status}</Badge>
         ), export: (s) => s.status },
       { key: 'revenue', label: 'Revenue', width: 104, min: 84, align: 'right', render: (s) => <span className="font-semibold text-slate-800">{num(s.todayRevenue)}</span>, export: (s) => s.todayRevenue },
       { key: 'txns', label: 'Txns', width: 62, min: 52, align: 'right', render: (s) => <span className="tabular-nums">{s.todayTransactions}</span>, export: (s) => s.todayTransactions },
-      { key: 'low', label: 'Low Stock', width: 86, min: 72, align: 'right', render: (s) => (s.lowStockCount > 0 ? <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">{s.lowStockCount}</Badge> : <span className="text-slate-300">0</span>), export: (s) => s.lowStockCount },
-      { key: 'overdue', label: 'Overdue Rentals', width: 110, min: 90, align: 'right', render: (s) => (s.overdueRentals > 0 ? <Badge className="bg-red-100 text-red-700 hover:bg-red-100">{s.overdueRentals}</Badge> : <span className="text-slate-300">0</span>), export: (s) => s.overdueRentals },
+      { key: 'low', label: 'Low Stock', width: 86, min: 72, align: 'right', render: (s) => (s.lowStockCount > 0 ? <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">{s.lowStockCount}</Badge> : <span className="text-slate-500">0</span>), export: (s) => s.lowStockCount },
+      { key: 'overdue', label: 'Overdue Rentals', width: 110, min: 90, align: 'right', render: (s) => (s.overdueRentals > 0 ? <Badge className="bg-red-100 text-red-700 hover:bg-red-100">{s.overdueRentals}</Badge> : <span className="text-slate-500">0</span>), export: (s) => s.overdueRentals },
       { key: 'debt', label: 'Debt Total', width: 112, min: 92, align: 'right', render: (s) => <span className={s.debtOutstanding > 150_000 ? 'font-semibold text-red-600' : 'text-slate-700'}>{kes(s.debtOutstanding)}</span>, export: (s) => s.debtOutstanding },
       { key: 'debtcount', label: 'Debt Accts', width: 88, min: 76, align: 'right', render: (s) => <span className="tabular-nums text-slate-500">{s.debtCount}</span>, export: (s) => s.debtCount },
-      { key: 'mpesa', label: 'M-Pesa Pending', width: 110, min: 90, align: 'right', render: (s) => (s.pendingMpesa > 0 ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">{s.pendingMpesa}</Badge> : <span className="text-slate-300">0</span>), export: (s) => s.pendingMpesa },
+      { key: 'mpesa', label: 'M-Pesa Pending', width: 110, min: 90, align: 'right', render: (s) => (s.pendingMpesa > 0 ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">{s.pendingMpesa}</Badge> : <span className="text-slate-500">0</span>), export: (s) => s.pendingMpesa },
       { key: 'actions', label: 'Actions', width: 220, min: 190, render: (s) => (
           <div className="flex flex-wrap gap-1">
             <Button size="sm" variant="outline" className="h-6 px-2 text-[10px]" onClick={() => setWsStore(s)}><ExternalLink className="mr-1 h-3 w-3" /> Open Workspace</Button>
@@ -115,7 +115,7 @@ export function StoreMatrix({ stores, onToast }: { stores: StoreRow[]; onToast: 
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <LayoutGrid className="h-4 w-4 text-orange-500" /> Store Intelligence Matrix
-          <Badge variant="outline" className="text-[10px] text-slate-400">{stores.length} stores</Badge>
+          <Badge variant="outline" className="text-[10px] text-slate-500">{stores.length} stores</Badge>
         </h2>
         <div className="flex items-center gap-2">
           <DropdownMenu>
@@ -167,7 +167,7 @@ export function StoreMatrix({ stores, onToast }: { stores: StoreRow[]; onToast: 
               </TableRow>
             ))}
             {stores.length === 0 && (
-              <TableRow><TableCell colSpan={shown.length} className="py-8 text-center text-xs text-slate-400">No stores returned by /api/org/summary for this role.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={shown.length} className="py-8 text-center text-xs text-slate-500">No stores returned by /api/org/summary for this role.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -184,7 +184,7 @@ export function StoreMatrix({ stores, onToast }: { stores: StoreRow[]; onToast: 
                     {storeCode(wsStore).slice(0, 3).toUpperCase()}
                   </span>
                   {wsStore.name} workspace
-                  <Badge variant="outline" className="text-[10px] text-slate-400">{wsStore.subdomain ?? wsStore.slug ?? wsStore.id}</Badge>
+                  <Badge variant="outline" className="text-[10px] text-slate-500">{wsStore.subdomain ?? wsStore.slug ?? wsStore.id}</Badge>
                 </DialogTitle>
               </DialogHeader>
               <Tabs defaultValue="pos" className="mt-1">
@@ -235,7 +235,7 @@ export function StoreMatrix({ stores, onToast }: { stores: StoreRow[]; onToast: 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-100 bg-white p-3">
-      <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
       <p className="text-sm font-bold text-slate-800">{value}</p>
     </div>
   );
