@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.131.0] The reports speak their failures
+
+v2.130.0 taught the Privacy tab's three desks to speak; the other eight report loaders still caught into the shared null state — an eternal skeleton, with (at best) a generic note ABOVE the tab that actually went dark and no retry anywhere near it. This release closes the loop: every load on the reports surface either speaks on its own tab or carries its own note, and every success leaves a stamp saying WHEN the numbers were fetched.
+
+### Added
+- **Failure strips on all eight report tabs** (`src/app/(shell)/hr/reports/page.tsx`): the six aggregate desks (headcount / employment cost / absence / turnover / time-to-hire / statutory — one `Promise.all`), P10 and leave-utilisation each catch into their own `failed` flag (set true in the catch, cleared on success) and render an honest rose strip with a Retry on the tab itself: "The headcount desk could not be loaded — the numbers stay dark rather than guess." (and the seven siblings). A failed load nulls its data first, so the strip replaces the skeleton — never live data.
+- **One strip family**: the three v2.130.0 privacy strips and the eight new ones share a single `ReportFailureStrip` component — same rose frame with dark twins, now with a warning glyph (AlertTriangle) and an in-flight retry spinner (Loader2). The strip carries `role="status"`, a `data-testid` per desk, and a distinct retry `aria-label`.
+- **The honesty stamp**: every successfully loaded report renders "Updated HH:MM" (24-hour clock, tabular, muted) — on the six aggregate tabs and leave/P10 as a caption above the numbers, on the privacy desks beside their counts. No stamp means not fetched yet; a dark desk shows the strip, never a stamp.
+- **In-flight refresh feedback**: `loadConsent` / `loadErasure` / `loadRetention` (and the P10 / leave loaders) own busy flags; the consent Refresh button and every Retry disable and spin while the fetch runs — a slow or dead API can never read as a dead button.
+
+### Changed
+- **Loads leave the shared error alone**: `load()` / `loadP10` / `loadLeaveUtil` no longer write into the page-level ErrorNote — that surface is reserved for actions (adjustments, sweeps, holds, drill-downs), where it always belonged. Loader failures speak through their own strips.
+- The v2.130.0 test contract re-anchors to the family component: the same testids and retry labels now ride `ReportFailureStrip` props, and the rose frame lives exactly once (11 new + re-anchored assertions in `src/tests/reports-speak-failures-v2131.test.ts`).
+
 ## [2.130.0] The timeline files its copy
 
 The consent timeline drawer (v2.129.0) grew an Export CSV door — the export-honesty theme's third beat (v2.115 case list → v2.118 access ledger → now the consent timeline). The same round fixes the Privacy tab's honesty gap this work exposed: a card whose ledger fails to load used to spin "Loading…" forever (the catch folded a failure into the same null state that "not yet answered" renders as); every card now speaks its failure with a rose strip and a retry.

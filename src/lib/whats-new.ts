@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.131.0',
+    title: 'The reports speak their failures',
+    bullets: [
+      'Every report desk learned what the Privacy tab knew last release: a failed load shows a rose error strip with a Retry \u2014 never an eternal skeleton.',
+      'One strip family across the whole reports surface: the privacy desks and the eight report tabs share the same honest frame, warning glyph included.',
+      'Refresh and Retry buttons spin while the fetch runs \u2014 a slow or dead API can never read as a dead button.',
+      'Every loaded report stamps WHEN its numbers were fetched (Updated HH:MM) \u2014 no stamp means not fetched yet.',
+    ],
+  },
+  {
     version: '2.130.0',
     title: 'The timeline files its copy',
     bullets: [

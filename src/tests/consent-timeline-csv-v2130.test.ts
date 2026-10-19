@@ -166,17 +166,20 @@ describe('the Privacy tab speaks its failures — no more Loading-forever', () =
 
   it('each card has its own error strip with a retry', () => {
     const s = page();
-    expect(s).toContain('data-testid="hr-privacy-consent-error"');
-    expect(s).toContain('data-testid="hr-privacy-erasure-error"');
-    expect(s).toContain('data-testid="hr-privacy-retention-error"');
-    expect(s).toContain('aria-label="Retry loading consent records"');
-    expect(s).toContain('aria-label="Retry loading erasure requests"');
-    expect(s).toContain('aria-label="Retry loading the retention desk"');
+    // v2.131.0: the strips became ONE family component (ReportFailureStrip) —
+    // the testids and retry labels ride the props now, same contract.
+    expect(s).toContain('testId="hr-privacy-consent-error"');
+    expect(s).toContain('testId="hr-privacy-erasure-error"');
+    expect(s).toContain('testId="hr-privacy-retention-error"');
+    expect(s).toContain('retryLabel="Retry loading consent records"');
+    expect(s).toContain('retryLabel="Retry loading erasure requests"');
+    expect(s).toContain('retryLabel="Retry loading the retention desk"');
   });
 
   it('the strips are rose-tinted with dark twins and say the desk stays dark', () => {
     const s = page();
-    expect(s.match(/border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950\/40/g)?.length).toBe(3);
+    // v2.131.0: the rose frame lives ONCE — inside the shared family component.
+    expect(s.match(/border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950\/40/g)?.length).toBe(1);
     expect(s.match(/the desk stays dark rather than guess\./g)?.length).toBe(3);
   });
 

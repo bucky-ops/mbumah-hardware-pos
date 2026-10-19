@@ -28,7 +28,7 @@ datasource db {
   // scripts/setup-prisma-provider.mjs during postinstall when DATABASE_URL
   // starts with "file:" (local dev). Do not edit manually.
   provider = "postgresql"
-  url       = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
