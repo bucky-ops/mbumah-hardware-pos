@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.140.0',
+    title: 'The desk finds its weekends',
+    bullets: [
+      'The timesheet desk gains a “Weekends only” lens — one toggle filters every day strip to its Saturday and Sunday chips, so “who worked the weekend?” no longer needs counting amber bits by eye.',
+      'The lens is a view, not a data change: the count chip still speaks every pending day, and a row with no weekend days says so instead of vanishing.',
+      'The run dialog’s frozen verdict now wears the same attempts chip the runs table has — “3 attempts · last PASSED” — built from the trail the dialog already holds.',
+      'A run with no gate trail still renders nothing guessed: the chip appears only when attempts actually exist.',
+      'The payroll lifecycle doc now names all six gate contracts in one place — frozen verdict, trail, attempt chip, desk, batch receipt, and the lens.',
+    ],
+  },
+  {
     version: '2.139.0',
     title: 'The table counts the attempts',
     bullets: [

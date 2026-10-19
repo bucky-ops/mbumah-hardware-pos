@@ -70,6 +70,46 @@ logging). Branch context always resolves from the session, never the client.
 Blocked runs stay in `DRAFT` with the issue list persisted to
 `PayrollRun.errorMessage`; the UI renders the codes verbatim.
 
+### Gate surfaces and contracts (v2.135.0 → v2.140.0)
+
+The gate's verdict is not a transient — every surface below reads the same
+frozen facts and follows the same honesty rules:
+
+- **Frozen verdict (v2.135.0).** Prepare freezes a snapshot of what the gate
+  said — the per-lane counts and the employee codes it acted on — stamped
+  with the same clock moment on both the passing and the blocked path. The
+  strip never refreshes in place: what prepare said is what the strip says,
+  and the live panel speaks for "now". A run with no snapshot (prepared
+  before v2.135.0) renders one honest dashed note, never a guessed verdict.
+- **Gate trail (v2.138.0).** Every prepare attempt appends one immutable
+  `PayrollRunGateEvent` row — outcome (`PASSED`/`BLOCKED`), the attempt's
+  own verdict summary, the SAME clock the snapshot froze, and the actor.
+  Append-only: no update or delete path exists. The run dialog tells the
+  story oldest-first and marks where the verdict text moved between
+  attempts; pre-trail prepared runs wear the dashed absence note.
+- **Attempt chip (v2.139.0/v2.140.0).** `buildGateAttemptChip` reduces the
+  trail to "N attempts · last PASSED/BLOCKED" — pluralized honestly, tone
+  following the last outcome, `null` for zero/garbage (the chip NEVER
+  invents an attempt). It rides the runs table row beside the frozen
+  verdict AND the run dialog's frozen-verdict strip (built from the trail
+  the dialog already holds — no extra fetch).
+- **Timesheet desk (v2.136.0).** `/hr/timesheets` is the
+  `TIMESHEET_NOT_APPROVED` block's remediation door: the pending read
+  mirrors the gate's own where/order (parity-pinned), each row approves
+  that employee's pending day range through the ONE audited
+  `approveTimesheet` service.
+- **Batch receipt (v2.139.0).** "Approve all" is a client-side walk of that
+  same per-employee service — never a new bulk write path. Failures never
+  abort the walk; the end-of-batch receipt (`buildBulkApproveSummary`)
+  names every loser with its reason, and a batch that raced the desk says
+  "nothing left to approve" instead of wearing a hollow green.
+- **Weekends-only lens (v2.140.0).** The desk's day strips carry a view
+  lens (`deskWeekendDays`): "Weekends only" filters the chips to real
+  Sat/Sun date-onlys, in order, garbage never passing. It is a preference,
+  not a data change — the count chip keeps speaking the row's total, the
+  `+N` overflow stays honest about what the lens shows, and a row with no
+  weekend days says "no weekend days" rather than vanishing.
+
 ## Posting (spec acceptance #1–#4)
 
 `POST /api/payroll/runs/[id]/post` (from `APPROVED`):

@@ -154,6 +154,25 @@ export function deskDayStrip(days: readonly string[], max = 12): DeskDayStrip {
   return { shown, shownDays, hidden };
 }
 
+// ── v2.140.0: the weekends-only lens ────────────────────────────────────────
+// The weekend TINT (v2.138) made a Saturday punch stand out; a long strip
+// still buries it. The lens is the desk's second reading: keep only the
+// weekend days, in the same ascending order, so a Monday-morning review can
+// ask "who worked the weekend?" without counting amber chips. Pure and
+// additive — the strip builder never learns about weekends; the page
+// composes. Garbage never passes (deskDayIsWeekend is false for it), and a
+// row with no weekend days lenses to an honest empty, not to silence about
+// the whole row (the count chip still speaks the total).
+
+/**
+ * The weekend subset of a row's pending days, order preserved. Garbage and
+ * weekday days drop; the result only ever contains real Sat/Sun date-onlys.
+ */
+export function deskWeekendDays(days: readonly string[]): string[] {
+  if (!Array.isArray(days)) return [];
+  return days.filter((day) => deskDayIsWeekend(day));
+}
+
 /**
  * '1 Oct – 31 Oct 2026' — the scope line under the picker. UTC again; the
  * year prints once when both days share it, twice when they do not.

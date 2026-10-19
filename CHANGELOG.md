@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.140.0] The desk finds its weekends
+
+The weekend tint (v2.138.0) made a Saturday punch stand out, but a long strip still buried it — a Monday-morning review asking "who worked the weekend?" had to count sky chips by eye. And the run dialog's frozen-verdict strip (the dialog's counterpart of the table's verdict chip) went without the compact attempts surface the table has worn since v2.139.0. This release gives the desk a lens and the strip its chip.
+
+### Added
+- **The weekends-only lens** (`deskWeekendDays` + `hr-timesheet-weekends-only`): one toggle filters every desk day strip to its real Sat/Sun date-onlys, in order, garbage never passing (`deskDayIsWeekend` is the only gate). The lens composes BEFORE `deskDayStrip`, so the `+N` overflow stays honest about exactly what the lens shows — a hidden weekday can never smuggle into the count. A row with no weekend days renders an honest "no weekend days" note (`hr-timesheet-strip-empty`) rather than vanishing; the amber count chip keeps speaking the row's total, because the lens is a view preference, not a data change. The toggle speaks `aria-pressed`, wears the sky family when on (the weekend chips' own family, dark twins included), and is disabled only while the pending read is in flight — scopes and receipts never clear it.
+- **The attempt chip on the dialog's frozen-verdict strip** (`payroll-run-gate-attempts-dialog`): the same `buildGateAttemptChip` surface the runs table wears, now beside the frozen verdict it belongs to — built from the `gateTrail` the dialog already holds (no extra fetch). Tone follows the last outcome (emerald/amber/muted); a run with no trail renders nothing (the chip never invents an attempt); the History icon + title point at the full Gate trail directly below.
+- **The gate contract section** (`docs/hr/payroll-run-lifecycle.md`): all six gate surfaces named in one place — frozen verdict (v2.135.0), gate trail (v2.138.0), attempt chip (v2.139.0/v2.140.0), timesheet desk (v2.136.0), batch receipt (v2.139.0), weekends-only lens (v2.140.0) — each with its honesty rule (append-only, same clock, never a bulk write path, never a guessed count).
+
+### Tests
+- `src/tests/desk-lens-v2140.test.ts` (14): the lens's pure half (order, garbage exclusion, junk-input degradation ×3), the lens-over-strip composition (off = v2.136.0 behavior untouched, on = weekends only with honest overflow, weekend-heavy rows, no-weekend honesty ×4), the dialog chip (trail-built, inside the strip, honest absence, trail-pointer title ×4), the desk UI contract (aria-pressed + sky family, composition pin, lens marker + empty note, loading-only disable ×4), and the docs contract pins (six surfaces + the trail's core promises ×2).
+- `scripts/verify-v2-140-0.mjs` (11 checks, written fresh).
+- `console-changelog` unread counters re-anchored for 2.140.0 joining the feed.
+
 ## [2.139.0] The table counts the attempts
 
 The v2.138.0 trail lived only inside the run dialog — the runs TABLE (the surface managers actually stare at) still answered "what did the gate say" without "how many tries did it take". And on the desk, a Monday-morning backlog meant one click-wait per employee. This release puts the count on the table and gives the desk a batch door.
