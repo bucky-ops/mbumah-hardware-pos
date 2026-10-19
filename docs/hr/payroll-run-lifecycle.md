@@ -70,7 +70,7 @@ logging). Branch context always resolves from the session, never the client.
 Blocked runs stay in `DRAFT` with the issue list persisted to
 `PayrollRun.errorMessage`; the UI renders the codes verbatim.
 
-### Gate surfaces and contracts (v2.135.0 → v2.140.0)
+### Gate surfaces and contracts (v2.135.0 → v2.141.0)
 
 The gate's verdict is not a transient — every surface below reads the same
 frozen facts and follows the same honesty rules:
@@ -103,12 +103,26 @@ frozen facts and follows the same honesty rules:
   abort the walk; the end-of-batch receipt (`buildBulkApproveSummary`)
   names every loser with its reason, and a batch that raced the desk says
   "nothing left to approve" instead of wearing a hollow green.
-- **Weekends-only lens (v2.140.0).** The desk's day strips carry a view
-  lens (`deskWeekendDays`): "Weekends only" filters the chips to real
+- **Weekends-only lens (v2.140.0/v2.141.0).** The desk's day strips carry a
+  view lens (`deskWeekendDays`): "Weekends only" filters the chips to real
   Sat/Sun date-onlys, in order, garbage never passing. It is a preference,
   not a data change — the count chip keeps speaking the row's total, the
   `+N` overflow stays honest about what the lens shows, and a row with no
-  weekend days says "no weekend days" rather than vanishing.
+  weekend days says "no weekend days" rather than vanishing. Since v2.141.0
+  the preference persists per browser (`readDeskLensPref`/`writeDeskLensPref`
+  over localStorage): a dead storage degrades to OFF, never a crash, and the
+  stored key is removed on turn-off rather than littered with a stale `0`.
+- **Store gate timeline (v2.141.0).** `GET /api/payroll/gate-timeline` reads
+  the SAME append-only `PayrollRunGateEvent` rows ACROSS runs — newest 120
+  (the payload says `window` and `totalEvents`, so the card never pretends
+  it saw more), with run period/status context attached and movement
+  computed CHRONOLOGICALLY by `buildGateTimeline` (a verdict moves from the
+  attempt before it, whatever run each belonged to — a run boundary does not
+  reset the comparison). The card renders newest-first, best-effort by
+  design (a timeline failure wears the card's rose error, never the page's),
+  honest empty for a store that has never prepared, and a "Show all"
+  toggle past eight rows. Same vocabulary everywhere: outcome verbatim,
+  `Verdict unreadable` for garbage, movement marked with the sky pill.
 
 ## Posting (spec acceptance #1–#4)
 

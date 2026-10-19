@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.141.0',
+    title: 'The gate tells its story across runs',
+    bullets: [
+      'Payroll gains a “Gate activity” card — every prepare attempt across every run, newest first, so “how has the gate behaved?” no longer means opening run after run.',
+      'Movement is still marked honestly: the sky “moved” pill lands where the verdict changed from the attempt before it — chronologically, whatever run each belonged to.',
+      'The read is bounded and says so: when the trail outgrows the newest 120 attempts, the card names its window instead of pretending it saw everything.',
+      'The desk’s “Weekends only” lens now keeps its setting in this browser — an anomaly hunt survives navigation, and a dead storage just reads OFF, never a crash.',
+      'Every attempt speaks the frozen strip’s exact words; a run with no attempts, a failed read, and an empty trail each get their own honest line.',
+    ],
+  },
+  {
     version: '2.140.0',
     title: 'The desk finds its weekends',
     bullets: [

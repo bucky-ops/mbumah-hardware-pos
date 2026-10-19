@@ -163,8 +163,11 @@ describe('the desk\'s weekends-only lens', () => {
     const toggleIdx = src.indexOf('hr-timesheet-weekends-only');
     const block = src.slice(toggleIdx - 900, toggleIdx + 200);
     expect(block.includes('disabled={loading}')).toBe(true);
-    // Scope change clears notes, never the lens.
-    expect(src.includes("setWeekendsOnly((v) => !v)")).toBe(true);
+    // Scope change clears notes, never the lens. (Re-anchored for v2.141.0:
+    // the flip moved into the persisted toggleWeekendsOnly handler — same
+    // view-preference contract, now with a memory across navigation.)
+    expect(src.includes('onClick={toggleWeekendsOnly}')).toBe(true);
+    expect(src.includes('const toggleWeekendsOnly = useCallback')).toBe(true);
   });
 });
 
@@ -181,7 +184,9 @@ describe('payroll-run-lifecycle.md keeps the gate contract honest', () => {
     expect(src.includes('**Attempt chip (v2.139.0/v2.140.0).**')).toBe(true);
     expect(src.includes('**Timesheet desk (v2.136.0).**')).toBe(true);
     expect(src.includes('**Batch receipt (v2.139.0).**')).toBe(true);
-    expect(src.includes('**Weekends-only lens (v2.140.0).**')).toBe(true);
+    // Re-anchored for v2.141.0: the lens gained its persistence half (and the
+    // doc gained the store gate timeline surface beside it).
+    expect(src.includes('**Weekends-only lens (v2.140.0/v2.141.0).**')).toBe(true);
   });
 
   it('pins the trail\u2019s core promises: append-only, same clock, no bulk path', () => {
