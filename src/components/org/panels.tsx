@@ -530,7 +530,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
       {/* v2.65.0 drill-down bar — who the desk is looking at right now */}
       {reviewer ? (
         <div data-testid="desk-drilldown-bar" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
             {reviewer.trim().charAt(0).toUpperCase()}
           </span>
           <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">

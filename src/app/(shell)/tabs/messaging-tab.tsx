@@ -698,7 +698,7 @@ export default function MessagingTab() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">WhatsApp Sent</CardTitle>
-                <Phone className="h-4 w-4 text-green-600" />
+                <Phone className="h-4 w-4 text-green-700" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-700 dark:text-green-400">
@@ -864,7 +864,7 @@ export default function MessagingTab() {
                             href={msg.waLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-green-600 hover:text-green-700 text-xs underline shrink-0"
+                            className="text-green-700 hover:text-green-700 text-xs underline shrink-0"
                           >
                             Open WhatsApp
                           </a>
@@ -1346,7 +1346,7 @@ export default function MessagingTab() {
                     href={lastWaLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-green-600 hover:text-green-700 underline break-all"
+                    className="text-sm text-green-700 hover:text-green-700 underline break-all"
                   >
                     {lastWaLink}
                   </a>
@@ -1527,7 +1527,7 @@ export default function MessagingTab() {
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <CheckCircle className="h-5 w-5 text-green-700" />
                     Broadcast Results
                   </CardTitle>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -1825,7 +1825,7 @@ export default function MessagingTab() {
                                     href={msg.waLink}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-green-600 hover:text-green-700 underline"
+                                    className="inline-flex items-center gap-1 text-xs text-green-700 hover:text-green-700 underline"
                                   >
                                     <Phone className="h-3 w-3" />
                                     wa.me
@@ -2073,7 +2073,7 @@ export default function MessagingTab() {
                   href={lastWaLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-green-600 hover:text-green-700 underline break-all"
+                  className="text-sm text-green-700 hover:text-green-700 underline break-all"
                 >
                   {lastWaLink}
                 </a>

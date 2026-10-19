@@ -50,6 +50,13 @@ import { GET as paymentsSweeperGET } from '@/app/api/cron/payments-sweeper/route
 // into this endpoint and keep the routes live for external schedulers.
 import { GET as etimsRetryGET } from '@/app/api/cron/etims-retry/route';
 import { GET as debtRemindersGET } from '@/app/api/cron/debt-reminders/route';
+// v2.155.0: the payroll B2C auto-recovery sweep joins the dispatcher - the
+// same fold pattern as etims-retry/debt-reminders (Vercel Hobby's two-cron
+// limit keeps every new scheduled job out of vercel.json). The sweep is
+// self-rate-limiting: the v2.33.0 retry gate (backoff + ceiling) decides
+// which payslips may re-send, and initiation is idempotent, so overlapping
+// ticks cannot double-pay.
+import { GET as b2cRecoveryGET } from '@/app/api/cron/b2c-recovery/route';
 
 export const dynamic = 'force-dynamic';
 // Both sub-routes declare maxDuration 60; running them in parallel keeps the
@@ -137,6 +144,11 @@ async function hourlyCronHandler(...args: unknown[]): Promise<Response> {
     // a dedicated cron entry. Runs at the dispatcher's 03:00 UTC tick
     // (06:00 EAT) - statement times shift with the schedule, not the code.
     { name: 'debt-reminders', run: () => debtRemindersGET(request) },
+    // v2.155.0: B2C auto-recovery - re-sends gate-allowed FAILED disbursements
+    // and re-queries stuck PROCESSING transfers across unsettled posted/locked
+    // runs (backoff + ceiling respected; early-outs in production when Daraja
+    // is unconfigured and mock is not opted in).
+    { name: 'b2c-recovery', run: () => b2cRecoveryGET(request) },
   ]);
 
   const allOk = results.every((r) => r.ok);

@@ -937,7 +937,7 @@ export default function HrReportsPage() {
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p
         className={`mt-1 text-xl font-bold tabular-nums ${
-          tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : ''
+          tone === 'warn' ? 'text-amber-600 dark:text-amber-400' : tone === 'good' ? 'text-emerald-700 dark:text-emerald-400' : ''
         }`}
       >
         {value}
@@ -1888,7 +1888,7 @@ export default function HrReportsPage() {
               </div>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-sm"><Landmark className="h-4 w-4 text-emerald-600" aria-hidden /> Monthly statutory figures</CardTitle>
+                  <CardTitle className="flex items-center gap-2 text-sm"><Landmark className="h-4 w-4 text-emerald-700" aria-hidden /> Monthly statutory figures</CardTitle>
                   <CardDescription>From posted payroll lines — the journal entries already carry these.</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -2017,7 +2017,7 @@ export default function HrReportsPage() {
           <Card data-testid="hr-privacy-consent">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <FileCheck2 className="h-4 w-4 text-emerald-600" aria-hidden /> Consent records (Data Protection Act posture)
+                <FileCheck2 className="h-4 w-4 text-emerald-700" aria-hidden /> Consent records (Data Protection Act posture)
               </CardTitle>
               <CardDescription>
                 Payroll runs on consent: an employee without an active data-processing consent is reported MISSING_CONSENT by the run check. Grant and withdraw are decisions reserved to settings managers, and both are audit-logged.
@@ -2176,7 +2176,7 @@ export default function HrReportsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" aria-hidden /> Erasure requests (Data Protection Act posture)
+                <ShieldCheck className="h-4 w-4 text-emerald-700" aria-hidden /> Erasure requests (Data Protection Act posture)
               </CardTitle>
               <CardDescription>
                 Non-statutory personal data is erased; payroll and audit records stay under statutory retention with the decision and legal basis recorded.
@@ -2391,7 +2391,7 @@ export default function HrReportsPage() {
                 <p
                   data-testid="hr-retention-note"
                   role="status"
-                  className={`mt-2 text-xs ${retentionNote.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
+                  className={`mt-2 text-xs ${retentionNote.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}
                 >
                   {retentionNote.text}
                 </p>

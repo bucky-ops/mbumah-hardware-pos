@@ -394,7 +394,7 @@ export function EditScheduleDialog({
                       className={cn(
                         'h-4 w-4',
                         scheduleType === 'recurring'
-                          ? 'text-emerald-600'
+                          ? 'text-emerald-700'
                           : 'text-muted-foreground',
                       )}
                     />
@@ -418,7 +418,7 @@ export function EditScheduleDialog({
                       className={cn(
                         'h-4 w-4',
                         scheduleType === 'one-off'
-                          ? 'text-emerald-600'
+                          ? 'text-emerald-700'
                           : 'text-muted-foreground',
                       )}
                     />
@@ -557,7 +557,7 @@ export function EditScheduleDialog({
               {/* Live preview */}
               <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <Sparkles className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                   <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                     Schedule Preview
                   </span>

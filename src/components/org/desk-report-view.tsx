@@ -986,7 +986,7 @@ export function DeskReportView() {
                           data-desk-row-label={`${r.employeeName}'s ${r.leaveTypeName}`}
                           className="-mx-1 flex w-full flex-wrap items-center gap-2 rounded-lg border border-transparent px-1 py-2 text-left transition-colors hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:hover:bg-emerald-500/5"
                         >
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-[9px] font-bold text-white dark:bg-emerald-500" aria-hidden="true">
                             {r.visits}
                           </span>
                           <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">

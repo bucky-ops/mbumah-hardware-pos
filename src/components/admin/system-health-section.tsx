@@ -84,7 +84,7 @@ async function authedJson<T>(input: string, init: RequestInit = {}): Promise<T> 
 function statusIcon(status: PostCheckStatus) {
   switch (status) {
     case 'PASS':
-      return <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 dark:text-green-500" aria-hidden="true" />;
+      return <CheckCircle2 className="h-4 w-4 shrink-0 text-green-700 dark:text-green-500" aria-hidden="true" />;
     case 'WARN':
       return <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" aria-hidden="true" />;
     default:
@@ -99,7 +99,7 @@ const STATUS_BADGE_CLASS: Record<PostOverallStatus, string> = {
 };
 
 const STATUS_TEXT_CLASS: Record<PostCheckStatus, string> = {
-  PASS: 'text-green-600 dark:text-green-500',
+  PASS: 'text-green-700 dark:text-green-500',
   WARN: 'text-amber-600 dark:text-amber-500',
   FAIL: 'text-red-600 dark:text-red-500',
 };

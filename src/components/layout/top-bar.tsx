@@ -151,7 +151,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
               height={24}
               className="h-6 w-6 shrink-0 rounded-md ring-1 ring-slate-200 dark:ring-slate-800 object-cover"
             />
-            <TabIcon className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+            <TabIcon className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
             <h2 className="truncate font-semibold text-base sm:text-lg text-slate-900 dark:text-slate-100">{currentTab?.label || 'Dashboard'}</h2>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -215,7 +215,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                   All keyboard shortcuts
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setActiveTab('pos')}>
-                  <ShoppingCart className="mr-2 h-4 w-4 text-green-600" />
+                  <ShoppingCart className="mr-2 h-4 w-4 text-green-700" />
                   Start a new sale
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => toast.info('Call support: 0795 191 909\nEmail: info@mbumahhardware.co.ke')}>
@@ -328,10 +328,10 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
               className="hidden sm:flex items-center gap-1.5 border-slate-200 bg-white/60 font-mono tabular-nums text-slate-600"
               aria-label="Current date and time"
             >
-              <CalendarDays className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+              <CalendarDays className="h-3 w-3 text-emerald-700" aria-hidden="true" />
               {`${now.toLocaleDateString('en-KE', { weekday: 'short' })} ${now.getDate()} ${now.toLocaleDateString('en-KE', { month: 'short' })}`}
               <span className="text-slate-300" aria-hidden="true">·</span>
-              <Clock className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+              <Clock className="h-3 w-3 text-emerald-700" aria-hidden="true" />
               {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </Badge>
           </div>

@@ -224,7 +224,7 @@ export function TopCustomersWidget({ storeId, onSeeMore, onTabSwitch }: TopCusto
                   {/* Total spend */}
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-bold tabular-nums">{formatKES(customer.totalSpend)}</p>
-                    <div className="flex items-center justify-end gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400">
+                    <div className="flex items-center justify-end gap-0.5 text-[10px] text-emerald-700 dark:text-emerald-400">
                       <TrendingUp className="h-2.5 w-2.5" />
                       <span>{customer.loyaltyPoints} pts</span>
                     </div>

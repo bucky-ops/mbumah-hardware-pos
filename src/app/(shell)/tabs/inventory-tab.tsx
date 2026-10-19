@@ -914,7 +914,7 @@ export default function InventoryTab() {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={() => handleSendInventoryReport()}>
+              <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 text-green-700 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={() => handleSendInventoryReport()}>
                 <MessageCircle className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
@@ -1036,7 +1036,7 @@ export default function InventoryTab() {
                     <span className="text-xs text-muted-foreground">Profit Margin</span>
                     <span className={`text-xs font-semibold ${
                       ((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100) >= 30
-                        ? 'text-green-600' : ((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100) >= 15
+                        ? 'text-green-700' : ((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100) >= 15
                         ? 'text-amber-600' : 'text-red-600'
                     }`}>
                       {((Number(newProduct.pricePerUnit) - Number(newProduct.costPrice)) / Number(newProduct.pricePerUnit) * 100).toFixed(1)}%
@@ -1406,7 +1406,7 @@ export default function InventoryTab() {
                                   }}
                                   disabled={quickAdjustMutation.isPending}
                                 >
-                                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                                  <CheckCircle className="h-3.5 w-3.5 text-green-700" />
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -1594,7 +1594,7 @@ export default function InventoryTab() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <span className={`text-sm font-mono font-medium ${movement.quantity > 0 ? 'text-green-600' : movement.quantity < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                            <span className={`text-sm font-mono font-medium ${movement.quantity > 0 ? 'text-green-700' : movement.quantity < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
                               {movement.quantity > 0 ? '+' : ''}{movement.quantity}
                             </span>
                           </TableCell>
@@ -1681,7 +1681,7 @@ export default function InventoryTab() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Selling Price</p>
-                    <p className="text-lg font-bold text-green-600">{formatKES(detailProduct.pricePerUnit)}</p>
+                    <p className="text-lg font-bold text-green-700">{formatKES(detailProduct.pricePerUnit)}</p>
                   </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">Cost Price</p>
@@ -1800,7 +1800,7 @@ export default function InventoryTab() {
                               <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${badge.className}`}>{badge.label}</Badge>
                               <span className="text-muted-foreground">{formatDate(m.createdAt)}</span>
                             </div>
-                            <span className={`font-mono font-medium ${m.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <span className={`font-mono font-medium ${m.quantity > 0 ? 'text-green-700' : 'text-red-600'}`}>
                               {m.quantity > 0 ? '+' : ''}{m.quantity}
                             </span>
                           </div>
@@ -1953,7 +1953,7 @@ export default function InventoryTab() {
                   <span className="text-xs text-muted-foreground">Profit Margin</span>
                   <span className={`text-xs font-semibold ${
                     ((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100) >= 30
-                      ? 'text-green-600'
+                      ? 'text-green-700'
                       : ((editProduct.pricePerUnit - editProduct.costPrice) / editProduct.pricePerUnit * 100) >= 15
                         ? 'text-amber-600'
                         : 'text-red-600'
@@ -2065,7 +2065,7 @@ export default function InventoryTab() {
                 <div className="rounded-lg border bg-muted/30 p-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">New Stock</span>
-                    <span className={`text-sm font-bold ${adjustStockProduct.quantityInStock + stockAdjustAmount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    <span className={`text-sm font-bold ${adjustStockProduct.quantityInStock + stockAdjustAmount < 0 ? 'text-red-600' : 'text-green-700'}`}>
                       {formatQtyWithUnit(adjustStockProduct.quantityInStock + stockAdjustAmount, adjustStockProduct.unitType)}
                     </span>
                   </div>

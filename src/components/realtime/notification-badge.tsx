@@ -157,7 +157,7 @@ export function NotificationBadge({ storeId, userId, onNotificationClick }: Noti
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold">Live Notifications</span>
                 {isConnected ? (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-green-600 border-green-300">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-green-700 border-green-300">
                     <Wifi className="h-3 w-3 mr-0.5" /> Live
                   </Badge>
                 ) : (

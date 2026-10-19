@@ -80,7 +80,7 @@ function getDeliveryBarColor(rate: number): string {
 }
 
 function TrendIcon({ trend }: { trend: 'up' | 'down' | 'stable' }) {
-  if (trend === 'up') return <TrendingUp className="h-4 w-4 text-emerald-600" />;
+  if (trend === 'up') return <TrendingUp className="h-4 w-4 text-emerald-700" />;
   if (trend === 'down') return <TrendingDown className="h-4 w-4 text-red-500" />;
   return <Minus className="h-4 w-4 text-muted-foreground" />;
 }
@@ -126,7 +126,7 @@ export function SupplierPerformanceCard({ data, onClick, rank }: SupplierPerform
             </Avatar>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-sm group-hover:text-emerald-600 transition-colors">
+                <h3 className="font-semibold text-sm group-hover:text-emerald-700 transition-colors">
                   {data.supplierName}
                 </h3>
                 {rank && (
@@ -145,7 +145,7 @@ export function SupplierPerformanceCard({ data, onClick, rank }: SupplierPerform
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <Package className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <Package className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground">Orders</p>
@@ -169,7 +169,7 @@ export function SupplierPerformanceCard({ data, onClick, rank }: SupplierPerform
         <div className="mb-3">
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground">On-Time Delivery</span>
-            <span className={`text-xs font-bold ${metrics.onTimeDeliveryRate >= 90 ? 'text-emerald-600' : metrics.onTimeDeliveryRate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>
+            <span className={`text-xs font-bold ${metrics.onTimeDeliveryRate >= 90 ? 'text-emerald-700' : metrics.onTimeDeliveryRate >= 70 ? 'text-amber-600' : 'text-red-600'}`}>
               {metrics.onTimeDeliveryRate}%
             </span>
           </div>

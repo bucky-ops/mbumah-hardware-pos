@@ -94,7 +94,7 @@ export function QrCodeDisplay({
           >
             {copied ? (
               <>
-                <Check className="h-3 w-3 mr-1 text-emerald-600" />
+                <Check className="h-3 w-3 mr-1 text-emerald-700" />
                 Copied
               </>
             ) : (

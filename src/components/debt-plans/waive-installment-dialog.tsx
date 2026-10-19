@@ -121,7 +121,7 @@ export function WaiveInstallmentDialog({
             {isPartial && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Already collected</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
                   {formatKES(installment?.amountPaid ?? 0)}
                 </span>
               </div>

@@ -137,7 +137,7 @@ export function RedeemDialog({
           <div className="space-y-4 py-2">
             <div className="flex flex-col items-center text-center gap-2 py-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+                <CheckCircle2 className="h-8 w-8 text-green-700 dark:text-green-400" />
               </div>
               <h3 className="text-lg font-bold text-green-700 dark:text-green-400">
                 Redemption Successful!
@@ -162,7 +162,7 @@ export function RedeemDialog({
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   Discount Value
                 </div>
-                <div className="text-xl font-bold tabular-nums text-green-600 dark:text-green-400">
+                <div className="text-xl font-bold tabular-nums text-green-700 dark:text-green-400">
                   {formatKES(successResult.discountAmount)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">applied at checkout</div>

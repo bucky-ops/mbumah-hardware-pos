@@ -166,7 +166,7 @@ function POStatusTimeline({ status }: { status: string }) {
                     stepStatus === 'current'
                       ? 'text-primary font-bold'
                       : stepStatus === 'completed'
-                        ? 'text-green-600 font-medium'
+                        ? 'text-green-700 font-medium'
                         : 'text-muted-foreground/40'
                   }`}
                 >
@@ -633,7 +633,7 @@ function ReceiveItemsDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <PackageCheck className="h-5 w-5 text-emerald-600" />
+            <PackageCheck className="h-5 w-5 text-emerald-700" />
             Receive Items - {purchaseOrder.poNumber}
           </DialogTitle>
           <DialogDescription>
@@ -660,7 +660,7 @@ function ReceiveItemsDialog({
                     <span className="mx-1">&middot;</span>
                     <span>Received: {formatQtyWithUnit(item.receivedQty, product?.unitType)}</span>
                     <span className="mx-1">&middot;</span>
-                    <span className={remaining > 0 ? 'text-amber-600 font-medium' : 'text-green-600'}>
+                    <span className={remaining > 0 ? 'text-amber-600 font-medium' : 'text-green-700'}>
                       Remaining: {formatQtyWithUnit(remaining, product?.unitType)}
                     </span>
                   </p>
@@ -1083,7 +1083,7 @@ function PODetailView({
                             : 'Pending';
                       const itemStatusColor =
                         itemStatus === 'Received'
-                          ? 'text-emerald-600'
+                          ? 'text-emerald-700'
                           : itemStatus === 'Partial'
                             ? 'text-amber-600'
                             : 'text-muted-foreground';
@@ -1457,7 +1457,7 @@ export default function PurchaseOrdersTab() {
           label="Received (Month)"
           value={stats.receivedThisMonth}
           iconBg="bg-emerald-100 dark:bg-emerald-900/30"
-          iconColor="text-emerald-600 dark:text-emerald-400"
+          iconColor="text-emerald-700 dark:text-emerald-400"
           borderLeftColor="border-l-emerald-500"
         />
         <SummaryCard

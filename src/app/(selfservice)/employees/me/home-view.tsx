@@ -92,7 +92,7 @@ export function HomeView({ data, payslipNotices = [] }: { data: HomeDashboardDto
                     className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10 ${
                       i === 0
                         ? paid
-                          ? 'bg-gradient-to-br from-emerald-500/15 to-green-500/15 text-emerald-600 dark:text-emerald-400'
+                          ? 'bg-gradient-to-br from-emerald-500/15 to-green-500/15 text-emerald-700 dark:text-emerald-400'
                           : 'bg-gradient-to-br from-teal-500/15 to-emerald-500/15 text-teal-600 dark:text-teal-400'
                         : 'bg-muted text-muted-foreground'
                     }`}
@@ -124,7 +124,7 @@ export function HomeView({ data, payslipNotices = [] }: { data: HomeDashboardDto
                     <Link
                       href={notice.actionUrl}
                       className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-white shadow-sm transition-colors ${
-                        paid ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-teal-600 hover:bg-teal-700'
+                        paid ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-teal-600 hover:bg-teal-700'
                       }`}
                     >
                       {notice.actionLabel ?? 'View'}
@@ -234,7 +234,7 @@ export function HomeView({ data, payslipNotices = [] }: { data: HomeDashboardDto
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <Target className="h-4 w-4 text-violet-500" aria-hidden /> My goals
           </h2>
-          <Link href="/employees/me/goals" className="flex items-center gap-1 text-xs font-medium text-sky-600 hover:underline dark:text-sky-400">
+          <Link href="/employees/me/goals" className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline dark:text-sky-400">
             All goals <ArrowRight className="h-3 w-3" aria-hidden />
           </Link>
         </div>

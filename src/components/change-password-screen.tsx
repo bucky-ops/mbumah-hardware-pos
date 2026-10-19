@@ -34,8 +34,8 @@ const SEGMENT_STYLES = [
 const SEGMENT_LABEL_STYLES = [
   'text-rose-600 dark:text-rose-400',
   'text-amber-600 dark:text-amber-400',
-  'text-sky-600 dark:text-sky-400',
-  'text-emerald-600 dark:text-emerald-400',
+  'text-sky-700 dark:text-sky-400',
+  'text-emerald-700 dark:text-emerald-400',
 ] as const;
 
 export function ChangePasswordScreen() {
@@ -150,7 +150,7 @@ export function ChangePasswordScreen() {
           {succeeded ? (
             <div className="mt-6 flex flex-col items-center gap-3" role="status">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/15">
-                <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                <ShieldCheck className="h-5 w-5 text-emerald-700 dark:text-emerald-400" aria-hidden />
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className={`h-3.5 w-3.5 animate-spin ${rotating ? 'opacity-100' : 'opacity-0'}`} aria-hidden />
@@ -237,7 +237,7 @@ export function ChangePasswordScreen() {
                       {strength.rules.map((rule) => (
                         <li key={rule.label} className="flex items-center gap-1.5 text-[11px]">
                           {rule.ok ? (
-                            <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                            <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" aria-hidden />
                           ) : (
                             <X className="h-3 w-3 text-muted-foreground/60" aria-hidden />
                           )}

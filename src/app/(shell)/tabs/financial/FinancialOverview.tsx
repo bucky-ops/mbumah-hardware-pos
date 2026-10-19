@@ -216,11 +216,11 @@ export function FinancialOverview({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30">
-                <TrendingUp className="h-5 w-5 text-green-600" />
+                <TrendingUp className="h-5 w-5 text-green-700" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Today Revenue</p>
-                <p className="text-xl font-bold text-green-600">
+                <p className="text-xl font-bold text-green-700">
                   <AnimatedCounter value={stats?.todayRevenue || 0} />
                 </p>
                 <div className="flex items-center gap-1 mt-0.5">

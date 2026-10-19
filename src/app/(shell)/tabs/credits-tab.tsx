@@ -113,7 +113,7 @@ function getAmountColor(creditType: string): string {
   switch (creditType) {
     case 'CREDIT':
     case 'REFUND':
-      return 'text-green-600 dark:text-green-400';
+      return 'text-green-700 dark:text-green-400';
     case 'DEBIT':
     case 'ADJUSTMENT':
       return 'text-red-600 dark:text-red-400';
@@ -631,12 +631,12 @@ export default function CreditsTab() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Credits</p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                <p className="text-2xl font-bold text-green-700 dark:text-green-400">
                   {formatKES(stats.totalCredits)}
                 </p>
               </div>
               <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <ArrowUpRight className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <ArrowUpRight className="h-5 w-5 text-green-700 dark:text-green-400" />
               </div>
             </div>
           </CardContent>
@@ -663,12 +663,12 @@ export default function CreditsTab() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Net Balance</p>
-                <p className={`text-2xl font-bold ${stats.netBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <p className={`text-2xl font-bold ${stats.netBalance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   {stats.netBalance >= 0 ? '+' : ''}{formatKES(stats.netBalance)}
                 </p>
               </div>
               <div className={`h-10 w-10 rounded-full flex items-center justify-center ${stats.netBalance >= 0 ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
-                <Scale className={`h-5 w-5 ${stats.netBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
+                <Scale className={`h-5 w-5 ${stats.netBalance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
               </div>
             </div>
           </CardContent>
@@ -888,7 +888,7 @@ export default function CreditsTab() {
                             <TableCell className="hidden lg:table-cell text-sm text-muted-foreground max-w-[200px] truncate">
                               {entry.description || '-'}
                             </TableCell>
-                            <TableCell className={`text-right font-semibold text-sm ${isVoided ? 'text-muted-foreground' : entry.runningBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            <TableCell className={`text-right font-semibold text-sm ${isVoided ? 'text-muted-foreground' : entry.runningBalance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                               {formatKES(Math.abs(entry.runningBalance))}
                               {entry.runningBalance < 0 && <span className="text-xs ml-0.5">DR</span>}
                               {entry.runningBalance > 0 && <span className="text-xs ml-0.5">CR</span>}
@@ -910,7 +910,7 @@ export default function CreditsTab() {
                                   )}
                                   <DropdownMenuItem
                                     onClick={() => handleSendCreditWhatsApp(entry)}
-                                    className="gap-2 text-green-600 dark:text-green-400 focus:text-green-600 focus:bg-green-50 dark:focus:bg-green-950/30"
+                                    className="gap-2 text-green-700 dark:text-green-400 focus:text-green-700 focus:bg-green-50 dark:focus:bg-green-950/30"
                                     onSelect={(e) => e.preventDefault()}
                                   >
                                     <MessageCircle className="h-4 w-4" />
@@ -918,7 +918,7 @@ export default function CreditsTab() {
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => handleSendCreditSms(entry)}
-                                    className="gap-2 text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
+                                    className="gap-2 text-emerald-700 dark:text-emerald-400 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
                                     onSelect={(e) => e.preventDefault()}
                                   >
                                     <MessageSquare className="h-4 w-4" />
@@ -1009,7 +1009,7 @@ export default function CreditsTab() {
                             <p className="text-xs text-muted-foreground">{cb.entries} entries</p>
                           </div>
                           <div className="text-right">
-                            <p className={`font-bold text-sm ${cb.balance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            <p className={`font-bold text-sm ${cb.balance >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                               {formatKES(Math.abs(cb.balance))}
                             </p>
                             <p className={`text-[10px] font-medium ${cb.balance >= 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -1022,7 +1022,7 @@ export default function CreditsTab() {
                           className={`h-1.5 ${cb.balance >= 0 ? '[&>div]:bg-green-500' : '[&>div]:bg-red-500'}`}
                         />
                         <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground">
-                          <span className="text-green-600 dark:text-green-400">Credits: {formatKES(cb.credits)}</span>
+                          <span className="text-green-700 dark:text-green-400">Credits: {formatKES(cb.credits)}</span>
                           <span className="text-red-600 dark:text-red-400">Debits: {formatKES(cb.debits)}</span>
                         </div>
                       </div>
@@ -1109,7 +1109,7 @@ export default function CreditsTab() {
                 <SelectContent>
                   <SelectItem value="CREDIT">
                     <div className="flex items-center gap-2">
-                      <ArrowUpRight className="h-3 w-3 text-green-600" />
+                      <ArrowUpRight className="h-3 w-3 text-green-700" />
                       Credit (Add to account)
                     </div>
                   </SelectItem>
@@ -1276,7 +1276,7 @@ export default function CreditsTab() {
                   <SelectContent>
                     <SelectItem value="CREDIT">
                       <div className="flex items-center gap-2">
-                        <ArrowUpRight className="h-3 w-3 text-green-600" />
+                        <ArrowUpRight className="h-3 w-3 text-green-700" />
                         Credit
                       </div>
                     </SelectItem>

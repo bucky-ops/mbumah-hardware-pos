@@ -416,10 +416,10 @@ function ReceiptModal({
             <Button variant="outline" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30" onClick={handleStartEmail} disabled={distributing !== null}>
               <Mail className="h-4 w-4 mr-1.5" /> Email
             </Button>
-            <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={handleStartWhatsApp} disabled={distributing !== null}>
+            <Button variant="outline" size="sm" className="text-green-700 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={handleStartWhatsApp} disabled={distributing !== null}>
               <MessageCircle className="h-4 w-4 mr-1.5" /> WhatsApp
             </Button>
-            <Button variant="outline" size="sm" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" onClick={handleStartSms} disabled={distributing !== null} title="Send receipt via SMS" aria-label="Send receipt via SMS">
+            <Button variant="outline" size="sm" className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" onClick={handleStartSms} disabled={distributing !== null} title="Send receipt via SMS" aria-label="Send receipt via SMS">
               <MessageSquare className="h-4 w-4 mr-1.5" /> SMS
             </Button>
             <Button size="sm" onClick={() => onOpenChange(false)}>Close</Button>
@@ -592,7 +592,7 @@ function TransactionRow({
                 <div className="flex gap-2"><span className="text-muted-foreground">Subtotal:</span><span className="font-medium">{formatKES(transaction.subtotal)}</span></div>
                 <div className="flex gap-2"><span className="text-muted-foreground">VAT:</span><span className="font-medium">{formatKES(transaction.taxAmount)}</span></div>
                 {transaction.discountAmount > 0 && (
-                  <div className="flex gap-2"><span className="text-muted-foreground">Discount:</span><span className="font-medium text-green-600">-{formatKES(transaction.discountAmount)}</span></div>
+                  <div className="flex gap-2"><span className="text-muted-foreground">Discount:</span><span className="font-medium text-green-700">-{formatKES(transaction.discountAmount)}</span></div>
                 )}
                 <div className="flex gap-2"><span className="text-muted-foreground font-semibold">Total:</span><span className="font-bold">{formatKES(transaction.totalAmount)}</span></div>
               </div>
@@ -617,7 +617,7 @@ function TransactionRow({
                     <Ban className="h-3 w-3 mr-1" /> Void
                   </Button>
                 )}
-                <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={(e) => { e.stopPropagation(); onSendWhatsApp(); }}>
+                <Button variant="outline" size="sm" className="h-7 text-xs text-green-700 hover:text-green-800 hover:bg-green-50 dark:hover:bg-green-950/30" onClick={(e) => { e.stopPropagation(); onSendWhatsApp(); }}>
                   <MessageCircle className="h-3 w-3 mr-1" /> WhatsApp
                 </Button>
               </div>
@@ -896,11 +896,11 @@ export default function TransactionsTab() {
         <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-3 flex items-center gap-3">
             <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/40 dark:to-green-900/20">
-              <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <TrendingUp className="h-4 w-4 text-green-700 dark:text-green-400" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-muted-foreground">Total Sales</p>
-              <p className="text-sm sm:text-base font-bold text-green-600 dark:text-green-400 whitespace-nowrap">{formatKES(summaryStats.totalSales)}</p>
+              <p className="text-sm sm:text-base font-bold text-green-700 dark:text-green-400 whitespace-nowrap">{formatKES(summaryStats.totalSales)}</p>
             </div>
           </CardContent>
         </Card>
@@ -918,11 +918,11 @@ export default function TransactionsTab() {
         <Card className="border-l-4 border-l-emerald-500 backdrop-blur-sm bg-card/80">
           <CardContent className="p-3 flex items-center gap-3">
             <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/40 dark:to-emerald-900/20">
-              <Hash className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <Hash className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] sm:text-xs text-muted-foreground">Net Revenue</p>
-              <p className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatKES(summaryStats.netRevenue)}</p>
+              <p className="text-sm sm:text-base font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{formatKES(summaryStats.netRevenue)}</p>
             </div>
           </CardContent>
         </Card>

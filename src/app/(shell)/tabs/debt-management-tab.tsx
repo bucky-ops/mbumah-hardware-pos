@@ -494,7 +494,7 @@ function PipelineSection({ storeId }: { storeId: string }) {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <Send className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <Send className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
               </div>
               Step 2: Process Pending
             </CardTitle>
@@ -552,7 +552,7 @@ function PipelineSection({ storeId }: { storeId: string }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatusTile label="Pending" value={pendingCount} icon={Clock} color="text-slate-600 dark:text-slate-300" bg="bg-slate-100 dark:bg-slate-900/40" />
             <StatusTile label="Sent" value={sentCount} icon={CheckCircle} color="text-blue-600 dark:text-blue-400" bg="bg-blue-100 dark:bg-blue-900/30" />
-            <StatusTile label="Delivered" value={deliveredCount} icon={CheckCircle} color="text-emerald-600 dark:text-emerald-400" bg="bg-emerald-100 dark:bg-emerald-900/30" />
+            <StatusTile label="Delivered" value={deliveredCount} icon={CheckCircle} color="text-emerald-700 dark:text-emerald-400" bg="bg-emerald-100 dark:bg-emerald-900/30" />
             <StatusTile label="Failed" value={failedCount} icon={XCircle} color="text-rose-600 dark:text-rose-400" bg="bg-rose-100 dark:bg-rose-900/30" />
           </div>
 
@@ -599,7 +599,7 @@ function PipelineSection({ storeId }: { storeId: string }) {
         <DialogContent className="sm:max-w-[525px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
+              <CheckCircle className="h-5 w-5 text-emerald-700" />
               Scheduling Complete
             </DialogTitle>
             <DialogDescription>
@@ -610,7 +610,7 @@ function PipelineSection({ storeId }: { storeId: string }) {
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 text-center">
-                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{scheduleResult.scheduled}</p>
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{scheduleResult.scheduled}</p>
                   <p className="text-xs text-muted-foreground">Scheduled</p>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/20 border text-center">
@@ -628,7 +628,7 @@ function PipelineSection({ storeId }: { storeId: string }) {
                     {scheduleResult.details.map((d, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs p-2 rounded border">
                         {d.scheduled ? (
-                          <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          <CheckCircle className="h-3.5 w-3.5 text-emerald-700 shrink-0" />
                         ) : (
                           <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         )}

@@ -60,7 +60,7 @@ export function balanceTone(usedDays: number, allocatedDays: number, carryForwar
   }
   return {
     bar: 'bg-emerald-500 dark:bg-emerald-500',
-    text: 'text-emerald-600 dark:text-emerald-400',
+    text: 'text-emerald-700 dark:text-emerald-400',
   };
 }
 

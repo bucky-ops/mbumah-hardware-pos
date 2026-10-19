@@ -615,7 +615,7 @@ export function ReceiptDocument({
               {transaction.paymentMethod === 'MPESA' && mpesaReference && (
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">M-Pesa Ref</span>
-                  <span className="font-mono font-semibold text-green-600 dark:text-green-400">
+                  <span className="font-mono font-semibold text-green-700 dark:text-green-400">
                     {mpesaReference}
                   </span>
                 </div>

@@ -65,7 +65,7 @@ function trendBadge(trend: TopProductRow['trend']) {
       return {
         icon: TrendingUp,
         label: 'Rising',
-        className: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300',
+        className: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300',
       };
     case 'down':
       return {

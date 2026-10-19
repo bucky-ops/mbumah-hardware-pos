@@ -223,7 +223,7 @@ function RecordPaymentDialog({ debt, open, onOpenChange, onRecordPayment }: {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Banknote className="h-5 w-5 text-green-600" /> Record Payment
+            <Banknote className="h-5 w-5 text-green-700" /> Record Payment
           </DialogTitle>
           <DialogDescription>Record a payment for {debt.customer?.name || 'this customer'}</DialogDescription>
         </DialogHeader>
@@ -239,7 +239,7 @@ function RecordPaymentDialog({ debt, open, onOpenChange, onRecordPayment }: {
             </div>
             <div className="flex justify-between text-sm mt-1">
               <span className="text-muted-foreground">Already Paid</span>
-              <span className="font-medium text-green-600">{formatKES(debt.amountPaid)}</span>
+              <span className="font-medium text-green-700">{formatKES(debt.amountPaid)}</span>
             </div>
           </div>
           <div className="space-y-2">
@@ -1248,11 +1248,11 @@ export default function FinancialTab() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30">
-                <TrendingUp className="h-5 w-5 text-green-600" />
+                <TrendingUp className="h-5 w-5 text-green-700" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Today Revenue</p>
-                <p className="text-xl font-bold text-green-600">
+                <p className="text-xl font-bold text-green-700">
                   <AnimatedCounter value={stats?.todayRevenue || 0} />
                 </p>
                 <div className="flex items-center gap-1 mt-0.5">
@@ -1554,7 +1554,7 @@ export default function FinancialTab() {
               <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t">
                 <div className="text-center">
                   <p className="text-[10px] text-muted-foreground uppercase">Avg Daily</p>
-                  <p className="text-xs font-bold text-green-600">{formatKES(revenueSummary.avgDailyRevenue)}</p>
+                  <p className="text-xs font-bold text-green-700">{formatKES(revenueSummary.avgDailyRevenue)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-[10px] text-muted-foreground uppercase">Peak Day</p>
@@ -1562,7 +1562,7 @@ export default function FinancialTab() {
                 </div>
                 <div className="text-center">
                   <p className="text-[10px] text-muted-foreground uppercase">{revenuePeriod}D Total</p>
-                  <p className="text-xs font-bold text-emerald-600">{formatKES(revenueSummary.totalRevenue)}</p>
+                  <p className="text-xs font-bold text-emerald-700">{formatKES(revenueSummary.totalRevenue)}</p>
                 </div>
               </div>
             )}
@@ -2160,7 +2160,7 @@ export default function FinancialTab() {
                                   </span>
                                 )}
                                 {accountCredit > 0 && (
-                                  <span className="text-green-600 dark:text-green-400 font-mono" title="Credit">
+                                  <span className="text-green-700 dark:text-green-400 font-mono" title="Credit">
                                     Cr: {formatKES(accountCredit)}
                                   </span>
                                 )}
@@ -2209,7 +2209,7 @@ export default function FinancialTab() {
                                           data: { isActive: true, updatedByUserId: authUser.id },
                                         });
                                       }}
-                                      className="gap-2 cursor-pointer text-green-600 focus:text-green-600"
+                                      className="gap-2 cursor-pointer text-green-700 focus:text-green-700"
                                     >
                                       <PowerOff className="h-4 w-4" /> Reactivate
                                     </DropdownMenuItem>
@@ -2257,7 +2257,7 @@ export default function FinancialTab() {
                 </div>
                 <div className="text-center flex-1">
                   <p className="text-[10px] text-muted-foreground uppercase">Total Credits</p>
-                  <p className="font-bold text-green-600 dark:text-green-400 font-mono">{formatKES(trialBalance.totalCredits)}</p>
+                  <p className="font-bold text-green-700 dark:text-green-400 font-mono">{formatKES(trialBalance.totalCredits)}</p>
                 </div>
               </div>
               {!trialBalance.isBalanced && (
@@ -2288,7 +2288,7 @@ export default function FinancialTab() {
                 <div className="flex items-center gap-1 text-[10px]">
                   <span className="text-blue-600 font-mono">Dr: {formatKES(journalTotalDebit)}</span>
                   <span className="text-muted-foreground">|</span>
-                  <span className="text-green-600 font-mono">Cr: {formatKES(journalTotalCredit)}</span>
+                  <span className="text-green-700 font-mono">Cr: {formatKES(journalTotalCredit)}</span>
                 </div>
               )}
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => exportToCSV(prepareFinancialCSV(), 'journal_entries')}>
@@ -2349,7 +2349,7 @@ export default function FinancialTab() {
                         <TableCell className="text-right font-medium text-sm font-mono text-blue-600 dark:text-blue-400">
                           {formatKES(je.totalDebit)}
                         </TableCell>
-                        <TableCell className="text-right font-medium text-sm font-mono text-green-600 dark:text-green-400">
+                        <TableCell className="text-right font-medium text-sm font-mono text-green-700 dark:text-green-400">
                           {formatKES(je.totalCredit)}
                         </TableCell>
                         <TableCell>
@@ -2422,7 +2422,7 @@ export default function FinancialTab() {
                                   <span className="w-28 text-right font-mono text-blue-600 dark:text-blue-400">
                                     {line.debit > 0 ? formatKES(line.debit) : ''}
                                   </span>
-                                  <span className="w-28 text-right font-mono text-green-600 dark:text-green-400">
+                                  <span className="w-28 text-right font-mono text-green-700 dark:text-green-400">
                                     {line.credit > 0 ? formatKES(line.credit) : ''}
                                   </span>
                                 </div>
@@ -2433,7 +2433,7 @@ export default function FinancialTab() {
                                 <span className="w-28 text-right font-mono font-bold text-blue-600 dark:text-blue-400">
                                   {formatKES(je.totalDebit)}
                                 </span>
-                                <span className="w-28 text-right font-mono font-bold text-green-600 dark:text-green-400">
+                                <span className="w-28 text-right font-mono font-bold text-green-700 dark:text-green-400">
                                   {formatKES(je.totalCredit)}
                                 </span>
                               </div>
@@ -2489,7 +2489,7 @@ export default function FinancialTab() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" /> Revenue Breakdown
+              <TrendingUp className="h-5 w-5 text-green-700" /> Revenue Breakdown
             </DialogTitle>
             <DialogDescription>Daily revenue for the selected period</DialogDescription>
           </DialogHeader>
@@ -2499,7 +2499,7 @@ export default function FinancialTab() {
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-center">
                     <p className="text-[10px] text-muted-foreground uppercase">Total</p>
-                    <p className="text-sm font-bold text-green-600">{formatKES(revenueTrendData.reduce((s, d) => s + d.revenue, 0))}</p>
+                    <p className="text-sm font-bold text-green-700">{formatKES(revenueTrendData.reduce((s, d) => s + d.revenue, 0))}</p>
                   </div>
                   <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-center">
                     <p className="text-[10px] text-muted-foreground uppercase">Average</p>
@@ -2547,7 +2547,7 @@ export default function FinancialTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                 <p className="text-xs text-muted-foreground">Current (0 days)</p>
-                <p className="text-lg font-bold text-green-600">{formatKES(agingSummary.current)}</p>
+                <p className="text-lg font-bold text-green-700">{formatKES(agingSummary.current)}</p>
                 <p className="text-[10px] text-muted-foreground">{debts.filter(d => d.agingBucket === 'CURRENT').length} invoices</p>
               </div>
               <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
@@ -2664,7 +2664,7 @@ export default function FinancialTab() {
                       <TableCell className="text-right font-mono text-sm text-blue-600 dark:text-blue-400">
                         {line.debit > 0 ? formatKES(line.debit) : ''}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-green-600 dark:text-green-400">
+                      <TableCell className="text-right font-mono text-sm text-green-700 dark:text-green-400">
                         {line.credit > 0 ? formatKES(line.credit) : ''}
                       </TableCell>
                       {li === 0 ? (
@@ -2774,7 +2774,7 @@ export default function FinancialTab() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5 text-green-600" /> Add Journal Entry
+              <Plus className="h-5 w-5 text-green-700" /> Add Journal Entry
             </DialogTitle>
             <DialogDescription>Create a new manual journal entry. Debits must equal credits.</DialogDescription>
           </DialogHeader>
@@ -2929,7 +2929,7 @@ export default function FinancialTab() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {editAccountTarget ? <Edit2 className="h-5 w-5 text-orange-600" /> : <Plus className="h-5 w-5 text-green-600" />}
+              {editAccountTarget ? <Edit2 className="h-5 w-5 text-orange-600" /> : <Plus className="h-5 w-5 text-green-700" />}
               {editAccountTarget ? 'Edit Account' : 'Add Account'}
             </DialogTitle>
             <DialogDescription>

@@ -65,7 +65,7 @@ export function JournalEntriesTable({
               <div className="flex items-center gap-1 text-[10px]">
                 <span className="text-blue-600 font-mono">Dr: {formatKES(journalTotalDebit)}</span>
                 <span className="text-muted-foreground">|</span>
-                <span className="text-green-600 font-mono">Cr: {formatKES(journalTotalCredit)}</span>
+                <span className="text-green-700 font-mono">Cr: {formatKES(journalTotalCredit)}</span>
               </div>
             )}
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onExport}>
@@ -126,7 +126,7 @@ export function JournalEntriesTable({
                       <TableCell className="text-right font-medium text-sm font-mono text-blue-600 dark:text-blue-400">
                         {formatKES(je.totalDebit)}
                       </TableCell>
-                      <TableCell className="text-right font-medium text-sm font-mono text-green-600 dark:text-green-400">
+                      <TableCell className="text-right font-medium text-sm font-mono text-green-700 dark:text-green-400">
                         {formatKES(je.totalCredit)}
                       </TableCell>
                       <TableCell>
@@ -183,7 +183,7 @@ export function JournalEntriesTable({
                                 <span className="w-28 text-right font-mono text-blue-600 dark:text-blue-400">
                                   {line.debit > 0 ? formatKES(line.debit) : ''}
                                 </span>
-                                <span className="w-28 text-right font-mono text-green-600 dark:text-green-400">
+                                <span className="w-28 text-right font-mono text-green-700 dark:text-green-400">
                                   {line.credit > 0 ? formatKES(line.credit) : ''}
                                 </span>
                               </div>
@@ -194,7 +194,7 @@ export function JournalEntriesTable({
                               <span className="w-28 text-right font-mono font-bold text-blue-600 dark:text-blue-400">
                                 {formatKES(je.totalDebit)}
                               </span>
-                              <span className="w-28 text-right font-mono font-bold text-green-600 dark:text-green-400">
+                              <span className="w-28 text-right font-mono font-bold text-green-700 dark:text-green-400">
                                 {formatKES(je.totalCredit)}
                               </span>
                             </div>

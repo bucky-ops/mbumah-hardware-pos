@@ -1166,7 +1166,7 @@ export default function CatalogTab() {
               <div className="mt-2 rounded-lg border bg-muted/30 p-2 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Profit Margin</span>
                 <span className={`text-xs font-semibold ${
-                  editorMargin >= 30 ? 'text-green-600' : editorMargin >= 15 ? 'text-amber-600' : 'text-red-600'
+                  editorMargin >= 30 ? 'text-green-700' : editorMargin >= 15 ? 'text-amber-600' : 'text-red-600'
                 }`}>
                   {editorMargin.toFixed(1)}%
                 </span>
@@ -1293,7 +1293,7 @@ export default function CatalogTab() {
             </Button>
             <Button
               onClick={handleSendCatalogSms}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
               title="Send catalog via SMS"
               aria-label="Send catalog via SMS"
             >

@@ -33,7 +33,7 @@ export interface ExportTypeMeta {
   icon: LucideIcon;
   /** Tailwind gradient stops, e.g. 'from-emerald-500 to-emerald-600'. */
   gradient: string;
-  /** Text colour for the icon when not on the gradient chip, e.g. 'text-emerald-600'. */
+  /** Text colour for the icon when not on the gradient chip, e.g. 'text-emerald-700'. */
   iconColor: string;
   /** Subtle background tint for the card hover state. */
   hoverRing: string;
@@ -48,7 +48,7 @@ export const EXPORT_TYPES: ExportTypeMeta[] = [
     description: 'Catalog with prices, stock, categories, eTIMS codes.',
     icon: Package,
     gradient: 'from-emerald-500 to-emerald-600',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    iconColor: 'text-emerald-700 dark:text-emerald-400',
     hoverRing: 'hover:ring-emerald-300/60 dark:hover:ring-emerald-700/50',
     supportsDateRange: false,
   },
@@ -138,7 +138,7 @@ export const EXPORT_TYPES: ExportTypeMeta[] = [
     description: 'Daily aggregated revenue, tax, payment-method breakdown.',
     icon: TrendingUp,
     gradient: 'from-green-500 to-green-600',
-    iconColor: 'text-green-600 dark:text-green-400',
+    iconColor: 'text-green-700 dark:text-green-400',
     hoverRing: 'hover:ring-green-300/60 dark:hover:ring-green-700/50',
     supportsDateRange: true,
   },

@@ -100,7 +100,7 @@ export function DocumentQrBadge({
           aria-label="Copy verification code"
         >
           {copied ? (
-            <Check className="h-3 w-3 text-emerald-600" />
+            <Check className="h-3 w-3 text-emerald-700" />
           ) : (
             <Copy className="h-3 w-3" />
           )}

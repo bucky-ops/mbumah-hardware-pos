@@ -47,7 +47,7 @@ const ACCOUNT_TYPE_BADGE: Record<string, { label: string; color: string }> = {
 };
 
 const TX_TYPE_BADGE: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  DEPOSIT: { label: 'Deposit', icon: ArrowDownRight, color: 'text-emerald-600' },
+  DEPOSIT: { label: 'Deposit', icon: ArrowDownRight, color: 'text-emerald-700' },
   WITHDRAWAL: { label: 'Withdrawal', icon: ArrowUpRight, color: 'text-red-600' },
   TRANSFER: { label: 'Transfer', icon: RefreshCw, color: 'text-blue-600' },
   FEE: { label: 'Fee', icon: Minus, color: 'text-orange-600' },
@@ -357,7 +357,7 @@ export default function BankingTab() {
             title: 'Total Bank Balance',
             value: formatKES(totalBalance),
             icon: Wallet,
-            color: 'text-emerald-600',
+            color: 'text-emerald-700',
             bg: 'bg-emerald-50 dark:bg-emerald-950/30',
           },
           {
@@ -378,7 +378,7 @@ export default function BankingTab() {
             title: 'M-Pesa Pending',
             value: String(mpesaPending),
             icon: Phone,
-            color: 'text-green-600',
+            color: 'text-green-700',
             bg: 'bg-green-50 dark:bg-green-950/30',
           },
         ].map((stat) => (
@@ -669,7 +669,7 @@ export default function BankingTab() {
                             <span className="text-xs">{info.label}</span>
                           </div>
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <TableCell className={`text-right font-semibold ${isCredit ? 'text-emerald-700' : 'text-red-600'}`}>
                           {isCredit ? '+' : '-'}{formatKES(tx.amount)}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground font-mono">
@@ -757,7 +757,7 @@ export default function BankingTab() {
                           </Button>
                           {(recon.status === 'DRAFT' || recon.status === 'IN_PROGRESS' || recon.status === 'COMPLETED') && (
                             <Button
-                              variant="ghost" size="icon" className="h-7 w-7 text-emerald-600"
+                              variant="ghost" size="icon" className="h-7 w-7 text-emerald-700"
                               onClick={() => { setReconToApprove(recon); setShowApproveRecon(true); }}
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -777,7 +777,7 @@ export default function BankingTab() {
                         </div>
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Difference</p>
-                          <p className={`text-sm font-semibold ${isZeroDiff ? 'text-emerald-600' : 'text-red-600'}`}>
+                          <p className={`text-sm font-semibold ${isZeroDiff ? 'text-emerald-700' : 'text-red-600'}`}>
                             {isZeroDiff ? '✓ Balanced' : formatKES(diff)}
                           </p>
                         </div>
@@ -858,7 +858,7 @@ export default function BankingTab() {
                         <TableCell className="text-xs font-mono text-muted-foreground">
                           {tx.reference || '-'}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <TableCell className={`text-right font-semibold ${isCredit ? 'text-emerald-700' : 'text-red-600'}`}>
                           {isCredit ? '+' : '-'}{formatKES(tx.amount)}
                         </TableCell>
                         <TableCell className="text-right text-sm">{formatKES(tx.balanceAfter)}</TableCell>
@@ -1099,7 +1099,7 @@ export default function BankingTab() {
                   </span>
                   <span className="text-sm">
                     {(newTx.transactionType === 'DEPOSIT' || newTx.transactionType === 'INTEREST') ? (
-                      <span className="text-emerald-600">+{formatKES(newTx.amount)}</span>
+                      <span className="text-emerald-700">+{formatKES(newTx.amount)}</span>
                     ) : (
                       <span className="text-red-600">-{formatKES(newTx.amount)}</span>
                     )}
@@ -1197,7 +1197,7 @@ export default function BankingTab() {
               <div className="rounded-lg border p-3 bg-muted/30">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Difference</span>
-                  <span className={`text-sm font-semibold ${Math.abs(newRecon.statementBalance - newRecon.bookBalance) < 0.01 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <span className={`text-sm font-semibold ${Math.abs(newRecon.statementBalance - newRecon.bookBalance) < 0.01 ? 'text-emerald-700' : 'text-red-600'}`}>
                     {formatKES(newRecon.statementBalance - newRecon.bookBalance)}
                   </span>
                 </div>
@@ -1264,7 +1264,7 @@ export default function BankingTab() {
                 <Separator />
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Difference</span>
-                  <span className={`font-semibold ${Math.abs(reconToApprove.difference) < 0.01 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <span className={`font-semibold ${Math.abs(reconToApprove.difference) < 0.01 ? 'text-emerald-700' : 'text-red-600'}`}>
                     {formatKES(reconToApprove.difference)}
                   </span>
                 </div>
@@ -1282,7 +1282,7 @@ export default function BankingTab() {
           <DialogFooter>
             <Button variant="outline" className="h-9" onClick={() => setShowApproveRecon(false)}>Cancel</Button>
             <Button
-              className="h-9 bg-emerald-600 hover:bg-emerald-700"
+              className="h-9 bg-emerald-700 hover:bg-emerald-800"
               disabled={approveReconMut.isPending}
               onClick={() => {
                 if (reconToApprove) approveReconMut.mutate(reconToApprove);
@@ -1339,7 +1339,7 @@ export default function BankingTab() {
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Difference</p>
-                  <p className={`text-sm font-semibold mt-1 ${Math.abs(reconToView.difference) < 0.01 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <p className={`text-sm font-semibold mt-1 ${Math.abs(reconToView.difference) < 0.01 ? 'text-emerald-700' : 'text-red-600'}`}>
                     {Math.abs(reconToView.difference) < 0.01 ? '✓ Balanced' : formatKES(reconToView.difference)}
                   </p>
                 </div>
@@ -1355,7 +1355,7 @@ export default function BankingTab() {
               )}
               {reconToView.approvedBy && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />
                   Approved by {reconToView.approvedBy}
                 </div>
               )}

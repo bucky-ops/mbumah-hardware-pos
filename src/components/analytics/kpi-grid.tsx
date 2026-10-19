@@ -176,9 +176,9 @@ function KpiCard({ config, index }: { config: KpiCardConfig; index: number }) {
 
   const trendColor =
     positive === null
-      ? 'text-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300'
+      ? 'text-sky-700 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300'
       : positive
-        ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300'
+        ? 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300'
         : 'text-rose-600 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300';
 
   const pctLabel =

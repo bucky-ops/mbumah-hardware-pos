@@ -158,7 +158,7 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
       animatedValue: animatedRevenue,
       format: 'kes' as const,
       icon: TrendingUp,
-      color: 'text-green-600 dark:text-green-400',
+      color: 'text-green-700 dark:text-green-400',
       iconBg: 'bg-green-100 dark:bg-green-900/40',
       gradient: 'from-green-50/80 to-emerald-50/50 dark:from-green-950/30 dark:to-emerald-950/20',
       borderColor: 'border-l-green-500',
@@ -173,7 +173,7 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
       animatedValue: animatedTransactions,
       format: 'number' as const,
       icon: ShoppingCart,
-      color: 'text-emerald-600 dark:text-emerald-400',
+      color: 'text-emerald-700 dark:text-emerald-400',
       iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
       gradient: 'from-emerald-50/80 to-teal-50/50 dark:from-emerald-950/30 dark:to-teal-950/20',
       borderColor: 'border-l-emerald-500',
@@ -298,7 +298,7 @@ export function DashboardStats({ storeId, onCardClick }: DashboardStatsProps) {
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <div className={`flex items-center gap-0.5 text-xs font-medium ${
-                      kpi.trendUp ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                      kpi.trendUp ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                     }`}>
                       {kpi.trendUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                       {kpi.trend}

@@ -404,7 +404,7 @@ export default function AssetsPage() {
                   <>
                     <div className="space-y-1.5">
                       <Label className="flex items-center gap-1.5">
-                        <ShieldCheck className="h-4 w-4 text-emerald-600" aria-hidden /> Recovery authorizer (required)
+                        <ShieldCheck className="h-4 w-4 text-emerald-700" aria-hidden /> Recovery authorizer (required)
                       </Label>
                       <Select value={authorizerId} onValueChange={setAuthorizerId}>
                         <SelectTrigger aria-label="Recovery authorizer"><SelectValue placeholder="Choose HR manager / store owner" /></SelectTrigger>

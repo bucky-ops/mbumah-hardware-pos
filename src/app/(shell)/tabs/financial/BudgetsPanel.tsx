@@ -61,7 +61,7 @@ function varianceClass(budget: BudgetItem): string {
     : budget.account?.type === 'EXPENSE'
     ? budget.variance > 0   // expense under budget
     : true;                  // neutral positive variance for asset/liability/equity
-  return favorable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+  return favorable ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 }
 
 export default function BudgetsPanel() {
@@ -295,7 +295,7 @@ export default function BudgetsPanel() {
             </div>
             <div className="p-3 rounded-lg bg-muted/30 border">
               <p className="text-[10px] text-muted-foreground uppercase">Total Variance</p>
-              <p className={`text-sm font-bold font-mono ${totals.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-sm font-bold font-mono ${totals.variance >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                 {formatKES(Math.abs(totals.variance))} {totals.variance >= 0 ? '↗' : '↘'}
               </p>
             </div>
@@ -406,7 +406,7 @@ export default function BudgetsPanel() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5 text-green-600" /> Set Budget
+              <Plus className="h-5 w-5 text-green-700" /> Set Budget
             </DialogTitle>
             <DialogDescription>
               Allocate a budgeted amount for an account in the selected period.

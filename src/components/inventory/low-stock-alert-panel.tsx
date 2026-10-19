@@ -254,7 +254,7 @@ export function LowStockAlertPanel({
         ) : products.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60">
-              <Package className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              <Package className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
             </div>
             <p className="text-sm font-medium">All products are well stocked!</p>
             <p className="text-xs text-muted-foreground">

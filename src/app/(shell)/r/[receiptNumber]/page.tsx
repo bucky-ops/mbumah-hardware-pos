@@ -279,7 +279,7 @@ export default async function DigitalReceiptPage({
         {/* Trust footer */}
         <div className="mt-4 space-y-1 text-center text-[11px] text-stone-500">
           <p className="flex items-center justify-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" aria-hidden />
             Verified digital record of a genuine MBUMAH HARDWARE sale
           </p>
           <p className="flex items-center justify-center gap-1.5">

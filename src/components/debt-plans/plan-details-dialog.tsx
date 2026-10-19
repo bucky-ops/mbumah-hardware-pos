@@ -270,7 +270,7 @@ export function PlanDetailsDialog({
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-[10px] text-muted-foreground">Collected</p>
-                  <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                  <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
                     {formatKES(current.amountPaid)}
                   </p>
                 </div>
@@ -422,7 +422,7 @@ export function PlanDetailsDialog({
                               </TableCell>
                               <TableCell className="text-right">
                                 {inst.amountPaid > 0 ? (
-                                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                                  <span className="text-emerald-700 dark:text-emerald-400 font-medium">
                                     {formatKES(inst.amountPaid)}
                                   </span>
                                 ) : (
@@ -443,7 +443,7 @@ export function PlanDetailsDialog({
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      className="h-7 px-2 text-emerald-600 hover:text-emerald-700"
+                                      className="h-7 px-2 text-emerald-700 hover:text-emerald-700"
                                       onClick={() => setPayInstallment(inst)}
                                     >
                                       <Receipt className="h-3 w-3 mr-0.5" />
@@ -463,7 +463,7 @@ export function PlanDetailsDialog({
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="h-7 px-2 text-emerald-600 hover:text-emerald-700"
+                                    className="h-7 px-2 text-emerald-700 hover:text-emerald-700"
                                     onClick={() => setPayInstallment(inst)}
                                   >
                                     <Receipt className="h-3 w-3 mr-0.5" />
@@ -520,7 +520,7 @@ export function PlanDetailsDialog({
                               )}
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              <p className="font-semibold text-emerald-700 dark:text-emerald-400">
                                 {formatKES(inst.amountPaid)}
                               </p>
                               {inst.lateFeeApplied > 0 && (
@@ -586,7 +586,7 @@ export function PlanDetailsDialog({
 
                       {nextDue && canActOnInstallments && (
                         <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-3 flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <Clock className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                           <span className="text-sm">
                             Next installment due{' '}
                             <strong>{formatDate(nextDue.dueDate)}</strong> -{' '}

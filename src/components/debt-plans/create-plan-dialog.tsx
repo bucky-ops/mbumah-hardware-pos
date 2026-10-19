@@ -405,7 +405,7 @@ export function CreatePlanDialog({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="installment-count">Installment Count</Label>
-                <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
                   {installmentCount} × {formatKES(preview.installmentAmount)}
                 </span>
               </div>
@@ -501,7 +501,7 @@ export function CreatePlanDialog({
             {/* Live preview */}
             <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-3">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <Sparkles className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                 <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                   Plan Preview
                 </span>

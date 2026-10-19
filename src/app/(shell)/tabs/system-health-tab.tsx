@@ -569,7 +569,7 @@ export default function SystemHealthTab() {
                     <CheckCircle className="h-8 w-8 text-emerald-500" />
                     <div>
                       <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{status.circuitBreakers.closed}</p>
-                      <p className="text-xs text-emerald-600 dark:text-emerald-500">Closed (Healthy)</p>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-500">Closed (Healthy)</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -634,7 +634,7 @@ export default function SystemHealthTab() {
                                 <Icon className={`h-4 w-4 ${
                                   breaker.state === 'OPEN' ? 'text-red-600 dark:text-red-400' :
                                   breaker.state === 'HALF_OPEN' ? 'text-amber-600 dark:text-amber-400' :
-                                  'text-emerald-600 dark:text-emerald-400'
+                                  'text-emerald-700 dark:text-emerald-400'
                                 }`} />
                               </div>
                               <div>
@@ -650,7 +650,7 @@ export default function SystemHealthTab() {
                                 <p className={`font-mono text-sm font-medium ${
                                   breaker.failureRate > 0.5 ? 'text-red-600' :
                                   breaker.failureRate > 0.2 ? 'text-amber-600' :
-                                  'text-emerald-600'
+                                  'text-emerald-700'
                                 }`}>
                                   {(breaker.failureRate * 100).toFixed(1)}%
                                 </p>
@@ -718,7 +718,7 @@ export default function SystemHealthTab() {
                                   onConfirm={() => breakerAction.mutate({ action: 'forceClose', name: breaker.name })}
                                   loading={breakerAction.isPending}
                                 >
-                                  <Button variant="outline" size="sm" className="gap-1 text-xs text-emerald-600 hover:text-emerald-700">
+                                  <Button variant="outline" size="sm" className="gap-1 text-xs text-emerald-700 hover:text-emerald-700">
                                     <Lock className="h-3 w-3" /> Force Close
                                   </Button>
                                 </ConfirmDialog>
@@ -917,7 +917,7 @@ export default function SystemHealthTab() {
                   <CardContent className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Score</span>
-                      <span className="text-2xl font-bold text-emerald-600">{status.compliance.iso27001Score}%</span>
+                      <span className="text-2xl font-bold text-emerald-700">{status.compliance.iso27001Score}%</span>
                     </div>
                     <Progress value={status.compliance.iso27001Score} className="h-2 [&>div]:bg-emerald-500" />
                     <div className="space-y-1.5">

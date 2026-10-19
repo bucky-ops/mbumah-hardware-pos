@@ -183,11 +183,11 @@ function normalizeHistoryEntry(raw: CustomerHistoryTimelineEntry): HistoryEntry 
 
 function getTypeMeta(type: HistoryEntry['type']): { label: string; icon: React.ElementType; color: string; bg: string } {
   switch (type) {
-    case 'sale': return { label: 'Sale', icon: ShoppingBag, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
+    case 'sale': return { label: 'Sale', icon: ShoppingBag, color: 'text-green-700 dark:text-green-400', bg: 'bg-green-100 dark:bg-green-900/30' };
     case 'invoice': return { label: 'Invoice', icon: FileText, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/30' };
     case 'credit': return { label: 'Credit Note', icon: FileCheck, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-900/30' };
     case 'gift_card': return { label: 'Gift Card', icon: Gift, color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-100 dark:bg-pink-900/30' };
-    case 'voucher': return { label: 'Voucher', icon: Tag, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
+    case 'voucher': return { label: 'Voucher', icon: Tag, color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
     case 'payment': return { label: 'Payment', icon: HandCoins, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/30' };
     case 'delivery_note': return { label: 'Delivery', icon: Truck, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-100 dark:bg-cyan-900/30' };
     default: return { label: type, icon: Receipt, color: 'text-muted-foreground', bg: 'bg-muted' };
@@ -379,8 +379,8 @@ function CustomerHistoryDialog({
 
             {/* Summary stats grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              <SummaryStat label="Total Spent" value={summary ? formatKES(summary.totalSpent) : '-'} accent="text-green-600 dark:text-green-400" />
-              <SummaryStat label="Outstanding Debt" value={summary ? formatKES(summary.outstandingDebt) : formatKES(customer.currentDebtBalance)} accent={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-600'} />
+              <SummaryStat label="Total Spent" value={summary ? formatKES(summary.totalSpent) : '-'} accent="text-green-700 dark:text-green-400" />
+              <SummaryStat label="Outstanding Debt" value={summary ? formatKES(summary.outstandingDebt) : formatKES(customer.currentDebtBalance)} accent={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-700'} />
               <SummaryStat label="Loyalty Points" value={`${customer.loyaltyPoints} pts`} />
               <SummaryStat label="Avg Order Value" value={summary && summary.transactionCount > 0 ? formatKES(summary.avgOrderValue) : '-'} />
               <SummaryStat label="Last Visit" value={summary?.lastVisit ? formatDate(summary.lastVisit) : '-'} />
@@ -461,7 +461,7 @@ function CustomerHistoryDialog({
                       )}
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {entry.amount !== 0 && (
-                          <span className={`text-sm font-semibold ${entry.type === 'payment' || entry.type === 'credit' ? 'text-green-600' : 'text-foreground'}`}>
+                          <span className={`text-sm font-semibold ${entry.type === 'payment' || entry.type === 'credit' ? 'text-green-700' : 'text-foreground'}`}>
                             {entry.type === 'payment' || entry.type === 'credit' ? '+' : ''}{formatKES(entry.amount)}
                           </span>
                         )}
@@ -1195,7 +1195,7 @@ export default function CustomersTab() {
                         </TableCell>
                         <TableCell className="text-sm">{customer.phone || '-'}</TableCell>
                         <TableCell className="text-right font-medium">
-                          <span className={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-600'}>
+                          <span className={customer.currentDebtBalance > 0 ? 'text-red-600' : 'text-green-700'}>
                             {formatKES(customer.currentDebtBalance)}
                           </span>
                         </TableCell>
@@ -1374,7 +1374,7 @@ export default function CustomersTab() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">New Balance</span>
-                  <span className={`text-sm font-bold ${newBalancePreview === 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`text-sm font-bold ${newBalancePreview === 0 ? 'text-green-700' : 'text-red-600'}`}>
                     {formatKES(newBalancePreview)}
                   </span>
                 </div>
