@@ -413,6 +413,57 @@ export async function rejectApplicant(
 }
 
 /**
+ * Withdraw a candidate from the pipeline (v2.127.0).
+ * Withdrawal is the candidate's own act — the desk records it, it never
+ * decides it. Leaving the process, whichever direction, starts the SAME
+ * retention clock as a rejection: their personal data rides the 90-day
+ * window the sweep already reads (REJECTION_RETENTION_DAYS, single-sourced).
+ * The optional note is the candidate's words, kept in the audit log only —
+ * no schema column, no second surface to police. A pending DRAFT offer
+ * stays DRAFT: the approve hinge never renders for a terminal candidate.
+ */
+export async function withdrawApplicant(
+  applicantId: string,
+  actorId: string,
+  actorRole: string,
+  note?: string,
+) {
+  const applicant = await db.applicant.findFirst({
+    where: { id: applicantId, deletedAt: null },
+    select: { id: true, storeId: true, status: true },
+  });
+  if (!applicant) throw new Error('Applicant not found.');
+  if (applicant.status === 'HIRED') {
+    throw new Error('A hired applicant cannot be withdrawn — use the employee offboarding flow.');
+  }
+  if (applicant.status === 'REJECTED' || applicant.status === 'WITHDRAWN') {
+    throw new Error('Applicant has already left the pipeline.');
+  }
+
+  const retentionUntil = new Date();
+  retentionUntil.setDate(retentionUntil.getDate() + REJECTION_RETENTION_DAYS);
+
+  await db.applicant.update({
+    where: { id: applicantId },
+    data: { status: 'WITHDRAWN', dataRetentionUntil: retentionUntil },
+  });
+
+  await hrAudit({
+    actorId,
+    actorRole,
+    action: 'UPDATE',
+    resourceType: HrEntityType.APPLICANT,
+    resourceId: applicantId,
+    storeId: applicant.storeId,
+    reason: note
+      ? `Applicant withdrew from the pipeline. Note: ${note} Data retention until ${retentionUntil.toISOString().slice(0, 10)}.`
+      : `Applicant withdrew from the pipeline. Data retention until ${retentionUntil.toISOString().slice(0, 10)}.`,
+    metadata: { retentionDays: REJECTION_RETENTION_DAYS },
+  });
+  return { retentionUntil };
+}
+
+/**
  * Close an OPEN job to new applicants (v2.125.0).
  * Closing is the desk's way of stopping intake without rewriting history:
  * the job stays listed (its pipeline remains visible), createApplicant
