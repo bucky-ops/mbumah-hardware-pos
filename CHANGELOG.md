@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.150.0] The header wraps too
+
+The v2.149.0 re-audit's follow-up pass (lesson 64 in its purest form: the fix round's first live audit found what the pre-release audit could not, because the bigger failure had masked it).
+
+### Fixed
+- **The org console header wraps at 390px** (`org-console.tsx`): the right group — the `Mbumah Hardware Owner - STORE_OWNER` Badge plus the Global Chat button — was a no-wrap flex row whose min-content measured 419px, pushing the page to `scrollWidth` 435 at a 390 viewport. At v2.148.0 the branches table's 1012px had dominated and hidden it; the shell fix unmasked it. The group now carries `flex-wrap max-w-full min-w-0` and the long role Badge wraps inside itself (`whitespace-normal`), so the page measures 390 with the chip and button on their own lines.
+- **The named scrollers carry their names legally** (`org-console.tsx`): both scroll wrappers took `aria-label` on a bare `<div>` — axe `aria-prohibited-attr` (the generic role may not be named). Both are now `role="region"` (the v2.148.0 pattern), so "Branches, scrollable table" and "People and payroll by branch, scrollable table" are announced instead of flagged.
+
+### Verified
+- 390px: `/org/dashboard` measures `scrollWidth` 390 (was 435 after the v2.149.0 shell fix, 1012 before it).
+- axe: the org console's aria-prohibited-attr incomplete is gone; the contrast incomplete's remaining node is the known short-content family on data-dependent text.
+
 ## [2.149.0] The console fits the phone
 
 The acceptance sweep moved onto the unified console pair and the org surfaces with axe-core 4.12 at desktop and 390px. The Organization Console broke the spec's "No horizontal scroll" line at 390px (measured `scrollWidth` 1012), the Expert Console carried two unnamed filter comboboxes (axe `button-name`, critical) and a contrast cluster across its store cards, and the org console's own amber family passed only on large-text margins. Every finding is fixed at its root — the deepest one at the shared shell, so both consoles inherit it.
