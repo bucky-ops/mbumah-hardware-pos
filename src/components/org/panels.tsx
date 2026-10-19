@@ -23,7 +23,7 @@ const SEV: Record<string, string> = {
   warning: 'border-amber-200 bg-amber-50',
   info: 'border-blue-200 bg-blue-50',
 };
-const SEV_TEXT: Record<string, string> = { critical: 'text-red-600', warning: 'text-amber-700', info: 'text-blue-600' };
+const SEV_TEXT: Record<string, string> = { critical: 'text-red-700', warning: 'text-amber-700', info: 'text-blue-700' };
 
 // ── Decision Support - Action Center + alerts ────────────────────────────────
 export function DecisionSupport({ data, onToast }: {
@@ -42,7 +42,8 @@ export function DecisionSupport({ data, onToast }: {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className={`text-[13px] font-semibold ${SEV_TEXT[a.severity] ?? 'text-slate-700'}`}>{a.title}</p>
-                  <p className="text-xs text-slate-500">{a.detail}</p>
+                  {/* v2.152.0: slate-600 — the tinted rows (bg-red-50/amber-50/blue-50) measured slate-500 at 4.27-4.55:1, under or on the 4.5 edge; slate-600 clears ~6.9:1 on every tint. */}
+                  <p className="text-xs text-slate-600">{a.detail}</p>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {a.actions.map((act) => (
@@ -344,7 +345,7 @@ export function LiveFeed({ refreshKey, signedIn, onRequireSignIn }: {
         </h2>
         <div className="flex gap-1">
           {['ALL', 'INFO', 'WARN', 'ERROR'].map((l) => (
-            <Button key={l} size="sm" variant={filter === l ? 'default' : 'outline'} className={`h-6 px-2 text-[10px] ${filter === l ? 'bg-orange-500 hover:bg-orange-600' : ''}`} onClick={() => setFilter(l)}>{l}</Button>
+            <Button key={l} size="sm" variant={filter === l ? 'default' : 'outline'} className={`h-6 px-2 text-[10px] ${filter === l ? 'bg-orange-500 text-slate-950 hover:bg-orange-400' : ''}`} onClick={() => setFilter(l)}>{l}</Button>
           ))}
         </div>
       </div>

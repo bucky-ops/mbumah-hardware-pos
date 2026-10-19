@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.153.0] The tinted cards tell the truth
+
+The v2.152.0 re-audit's six nodes, probed with the lesson-65 discipline — check the PARENT background, never assume white. The alert cards' own tints were the missing variable.
+
+### Fixed
+- **The alert-card titles clear their tints** (`panels.tsx`): the Decision Support rows sit on `bg-red-50` / `bg-blue-50`, where `text-red-600` measured 4.41:1 and `text-blue-600` 4.75:1 (on the knife edge). `SEV_TEXT` moves to red-700 / blue-700 (5.9:1 / ~6.6:1); warning already spoke amber-700.
+- **The alert detail line clears every tint** (`panels.tsx`): `text-slate-500` measured 4.27–4.55:1 across the three tints (under or on the 4.5 edge depending on tint) — `text-slate-600` computes ~6.9:1 on all of them.
+- **The Live Feed's active filter keeps its dark text** (`panels.tsx`): the active chip wore white (the Button default `text-primary-foreground`) on `bg-orange-500` — 2.15:1, the same failure the v2.148.0 amber pill fixed. It now wears `text-slate-950` (8+:1) with the fill unchanged.
+- **The 60d debt-aging badge clears** (`kpi-row.tsx`): `text-orange-600` measured 3.2:1 — `text-orange-800` (7.0:1); the 90d+ badge's red-600 already cleared 4.83:1.
+- **The People & payroll module finishes its pass** (`people-payroll-by-branch.tsx`): the `— headcount, cost, absence…` hint line moves slate-400 → slate-500 (dark:slate-400 kept), and the five amber-600 links move to amber-700 (3.19 → 4.52:1) with hover tones deepened to match.
+
 ## [2.152.0] Counts that read
 
 The v2.151.0 re-audit's six contrast nodes, each probed numerically and fixed at its true root — three were animation frames, not rest states.

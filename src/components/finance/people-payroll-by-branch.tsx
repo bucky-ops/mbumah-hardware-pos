@@ -105,7 +105,7 @@ function LatestRunCell({ run, storeName }: { run: HrPerStoreRow['latestPayroll']
         data-testid="people-payroll-run-door"
         aria-label={`Open the payroll run detail for ${run.periodName} — ${storeName}`}
         title={`Open the ${run.periodName} run detail (recorded ${new Date(run.createdAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })})`}
-        className="inline-flex flex-wrap items-center gap-1.5 rounded-md text-xs text-slate-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-slate-300 dark:hover:text-orange-400"
+        className="inline-flex flex-wrap items-center gap-1.5 rounded-md text-xs text-slate-600 underline-offset-2 transition-colors hover:text-orange-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-slate-300 dark:hover:text-orange-400"
       >
         <span>{run.periodName}</span>
         {statusBadge}
@@ -142,7 +142,7 @@ function ExpiryCell({ row }: { row: HrPerStoreRow }) {
   const docTitlePlain = `Documents expiring within 90 days: ${docs}`;
   const assetsTitle = `Overdue asset assignments: ${assets} — open the branch's assets list pre-filtered`;
   const doorClass =
-    'inline-flex items-center gap-1 rounded-md font-semibold text-amber-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400';
+    'inline-flex items-center gap-1 rounded-md font-semibold text-amber-700 underline-offset-2 transition-colors hover:text-orange-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400';
   if (docs > 0 && canOpenDocs) {
     return (
       <span className="inline-flex items-center justify-end gap-1.5 tabular-nums">
@@ -162,7 +162,7 @@ function ExpiryCell({ row }: { row: HrPerStoreRow }) {
             data-testid="people-payroll-assets-door"
             aria-label={`${assets} overdue asset assignment${assets === 1 ? '' : 's'} at ${row.storeName} — open the pre-filtered assets list`}
             title={assetsTitle}
-            className="inline-flex items-center gap-1 rounded-md text-xs font-semibold text-amber-600 underline-offset-2 transition-colors hover:text-orange-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400"
+            className="inline-flex items-center gap-1 rounded-md text-xs font-semibold text-amber-700 underline-offset-2 transition-colors hover:text-orange-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400"
           >
             +{assets}
             <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -211,7 +211,7 @@ function ExpiryCell({ row }: { row: HrPerStoreRow }) {
   return (
     <span
       className={`inline-flex items-center justify-end gap-1 tabular-nums ${
-        assets > 0 ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
+        assets > 0 ? 'font-semibold text-amber-700 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'
       }`}
       title={title}
     >
@@ -269,7 +269,7 @@ export function PeoplePayrollByBranch({
         <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
           <Users className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
           People &amp; payroll by branch ({rows.length})
-          <span className="hidden text-xs font-normal text-slate-400 sm:inline">
+          <span className="hidden text-xs font-normal text-slate-500 dark:text-slate-400 sm:inline">
             &mdash; headcount, cost, absence, latest run, expiry alerts per branch
           </span>
         </span>
@@ -345,7 +345,7 @@ export function PeoplePayrollByBranch({
                       <a
                         href={`/hr/reports?tab=headcount&storeId=${row.storeId}`}
                         title={`Open the headcount report narrowed to ${row.storeName}`}
-                        className="font-medium text-slate-700 underline-offset-2 hover:text-orange-600 hover:underline dark:text-slate-200 dark:hover:text-orange-400"
+                        className="font-medium text-slate-700 underline-offset-2 hover:text-orange-800 hover:underline dark:text-slate-200 dark:hover:text-orange-400"
                       >
                         {row.storeName}
                       </a>
@@ -355,7 +355,7 @@ export function PeoplePayrollByBranch({
                     <td
                       className={`px-3 py-2 text-right tabular-nums ${
                         row.monthAbsenceRatePct >= 10
-                          ? 'font-semibold text-amber-600 dark:text-amber-400'
+                          ? 'font-semibold text-amber-700 dark:text-amber-400'
                           : 'text-slate-700 dark:text-slate-300'
                       }`}
                       title="Absence rate: ABSENT days over all recorded days this month"
@@ -389,7 +389,7 @@ export function PeoplePayrollByBranch({
                 >
                   <a
                     href={`/hr/reports?tab=headcount&storeId=${row.storeId}`}
-                    className="text-sm font-semibold text-slate-800 underline-offset-2 hover:text-orange-600 hover:underline dark:text-slate-100 dark:hover:text-orange-400"
+                    className="text-sm font-semibold text-slate-800 underline-offset-2 hover:text-orange-800 hover:underline dark:text-slate-100 dark:hover:text-orange-400"
                   >
                     {row.storeName}
                   </a>
@@ -404,7 +404,7 @@ export function PeoplePayrollByBranch({
                     </div>
                     <div>
                       <dt className="text-[10px] uppercase tracking-wide text-slate-400">Absence</dt>
-                      <dd className={`tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                      <dd className={`tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-semibold text-amber-700 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
                         {row.monthAbsenceRatePct}%
                       </dd>
                     </div>

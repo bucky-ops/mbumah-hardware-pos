@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.153.0',
+    title: 'The tinted cards tell the truth',
+    bullets: [
+      'The Decision Support cards’ titles and details deepen a shade so they read on their own tinted backgrounds — red on red-tint, blue on blue-tint, grey on every tint.',
+      'The Live Feed’s active filter chip now keeps its dark text on the orange fill instead of white.',
+      'The debt-aging 60d chip and the People & payroll module’s links and hint line finish their contrast pass.',
+    ],
+  },
+  {
     version: '2.152.0',
     title: 'Counts that read',
     bullets: [
