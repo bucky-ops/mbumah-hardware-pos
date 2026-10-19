@@ -18,8 +18,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertTriangle, CalendarCheck, CheckCircle2, CheckCheck, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
-import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, buildBulkApproveSummary, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary } from '@/lib/hr/attendance-desk';
+import { AlertTriangle, CalendarCheck, CalendarDays, CheckCircle2, CheckCheck, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
+import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, deskWeekendDays, buildBulkApproveSummary, type AttendanceDeskRow, type DeskBulkAttemptResult, type DeskBulkSummary } from '@/lib/hr/attendance-desk';
 import { buildTimesheetDeskCsv } from '@/lib/hr/timesheet-desk-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 
@@ -82,6 +82,11 @@ export default function HrTimesheetsPage() {
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const [bulkNote, setBulkNote] = useState<DeskBulkSummary | null>(null);
+  // v2.140.0: the weekends-only lens — the strip's second reading. The tint
+  // (v2.138) made a Saturday punch stand out; a long strip still buries it.
+  // A view preference, not a data change: the count chip keeps speaking the
+  // row's total, and flipping the lens never touches notes or scope.
+  const [weekendsOnly, setWeekendsOnly] = useState(false);
 
   const loadPeriods = useCallback(async () => {
     try {
@@ -336,6 +341,28 @@ export default function HrTimesheetsPage() {
               </>
             )}
           </Button>
+          {/* v2.140.0: the weekends-only lens — aria-pressed speaks the
+              state; sky when on (the weekend chips' own family), quiet
+              outline when off. A view preference: disabled only while the
+              read is in flight, never cleared by scopes or receipts. */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setWeekendsOnly((v) => !v)}
+            disabled={loading}
+            aria-pressed={weekendsOnly}
+            aria-label="Show only weekend days on the pending strips"
+            title="Filters the day strips to Saturdays and Sundays — the count chip still speaks every pending day"
+            data-testid="hr-timesheet-weekends-only"
+            className={
+              weekendsOnly
+                ? 'border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300 dark:hover:bg-sky-950 dark:hover:text-sky-200'
+                : ''
+            }
+          >
+            <CalendarDays className="mr-1 h-3.5 w-3.5" aria-hidden />
+            Weekends only
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -479,7 +506,11 @@ export default function HrTimesheetsPage() {
               </TableHeader>
               <TableBody>
                 {payload.rows.map((row) => {
-                  const strip = deskDayStrip(row.days);
+                  // v2.140.0: the lens composes BEFORE the strip builder, so
+                  // the +N overflow stays honest about exactly what the lens
+                  // is showing (hidden weekend days beyond max — never a
+                  // weekday smuggled into the count).
+                  const strip = deskDayStrip(weekendsOnly ? deskWeekendDays(row.days) : row.days);
                   const focused = row.employeeId === focusId;
                   return (
                     <TableRow
@@ -509,7 +540,19 @@ export default function HrTimesheetsPage() {
                         {/* v2.138.0: weekend chips wear the sky tint — a
                             Saturday punch stands out from the working week
                             (an anomaly spotlight, not a judgement). */}
-                        <span className="flex flex-wrap items-center gap-1" data-testid="hr-timesheet-day-strip">
+                        <span
+                          className="flex flex-wrap items-center gap-1"
+                          data-testid="hr-timesheet-day-strip"
+                          data-lens={weekendsOnly ? 'weekends' : undefined}
+                        >
+                          {strip.shown.length === 0 && weekendsOnly && row.days.length > 0 ? (
+                            <span
+                              className="rounded px-1 py-0.5 text-[10px] italic text-muted-foreground"
+                              data-testid="hr-timesheet-strip-empty"
+                            >
+                              no weekend days
+                            </span>
+                          ) : null}
                           {strip.shownDays.map((day, idx) => {
                             const weekend = deskDayIsWeekend(day);
                             return (

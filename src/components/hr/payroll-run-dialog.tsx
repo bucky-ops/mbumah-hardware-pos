@@ -17,6 +17,7 @@ import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { downloadPayrollBundle } from '@/components/hr/payslip-bundle-download';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { parseGateVerdict, buildGateVerdictText, gateVerdictTone } from '@/lib/hr/payroll/gate-verdict';
+import { buildGateAttemptChip } from '@/lib/hr/payroll/gate-trail';
 import type { RunHistoryEvent } from '@/lib/hr/payroll/run-history';
 import type { GateTrailRow } from '@/lib/hr/payroll/gate-trail';
 import { ShieldAlert } from 'lucide-react';
@@ -1019,6 +1020,36 @@ export function PayrollRunDialog({
                           · {formatEatStamp(new Date(verdict.checkedAt))}
                         </span>
                       ) : null}
+                      {/* v2.140.0: the attempt chip rides the verdict strip —
+                          the same compact surface the runs table wears
+                          (v2.139.0), now beside the frozen verdict it
+                          belongs to. Built from the trail the dialog already
+                          holds (no new fetch); a run with no trail renders
+                          nothing (honest absence — the chip never invents
+                          an attempt). */}
+                      {(() => {
+                        const chip = buildGateAttemptChip({
+                          attemptCount: gateTrail.length,
+                          lastOutcome: gateTrail[gateTrail.length - 1]?.outcome,
+                        });
+                        if (!chip) return null;
+                        return (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium tabular-nums ${
+                              chip.tone === 'emerald'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                : chip.tone === 'amber'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                  : 'border-border bg-muted/60 text-muted-foreground dark:bg-muted/40'
+                            }`}
+                            data-testid="payroll-run-gate-attempts-dialog"
+                            title="Every prepare attempt on record — the full story sits in the Gate trail below"
+                          >
+                            <History className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                            {chip.label}
+                          </span>
+                        );
+                      })()}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       Frozen from prepare&apos;s own gate loop when this run was prepared{verdict.summary.codes.length ? ` — it acted on ${verdict.summary.codes.join(', ')}` : ''}; the live gate may have moved since.
