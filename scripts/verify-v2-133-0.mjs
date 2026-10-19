@@ -134,7 +134,24 @@ check('panel: counts, clear strip, voided strip, blocked rows, both-blocks hint,
   assert(s.includes("credentials: 'include'"), 'fetch does not ride the cookie');
 });
 
-// ── tests + counters ───────────────────────────────────────────────────────
+// ── tests + counters ────────────────────────────────────────────────────────────────────────────────
+check('csv door: the verdict files itself — serializer, button, honesty, filename', () => {
+  assert(existsSync(join(process.cwd(), 'src/lib/hr/payroll/run-gate-csv.ts')), 'serializer missing');
+  const csvRaw = read('src/lib/hr/payroll/run-gate-csv.ts');
+  // lesson 49: strip comments first — the honesty contract itself says "amounts".
+  const csv = csvRaw.replace(/\/\/.*$/gm, '');
+  assert(csv.includes("'prepare_would_report'"), 'honest column set drifted');
+  assert(!/\bamount\b|\bnet_pay\b|\bgross\b/i.test(csv), 'money column proposed');
+  const s = read(PAGE);
+  assert(s.includes('data-testid="payroll-gate-csv"'), 'no CSV button');
+  assert(s.includes('Never payslip amounts.'), 'no honesty title');
+  assert(s.includes('`run-gate-${new Date().toISOString().slice(0, 10)}.csv`'), 'wrong filename');
+  assert(s.includes('buildRunGateCsv(rows)'), 'export is not built locally');
+  assert(s.includes('disabled={report.rows.length === 0}'), 'no empty-report guard');
+  const t = read('src/tests/run-gate-csv-v2133.test.ts');
+  assert(t.includes('escapeRunGateCsvCell'), 'serializer tests missing');
+});
+
 check('tests: the v2.133.0 test file exists with the parity pins', () => {
   const p = 'src/tests/run-gate-v2133.test.ts';
   assert(existsSync(join(process.cwd(), p)), 'test file missing');

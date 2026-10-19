@@ -25,8 +25,12 @@ The run's guardrails (consent, timesheets) always enforced themselves inside pre
 - The verdict renders as an inset panel row: counts speak first (\`N clear · N missing consent · N timesheet pending · checked EAT\`), a voided period gets its amber strip, a clear gate gets the emerald "prepare would proceed for all N active employees." strip, and blocked employees speak per-person in prepare's own words with rose/amber mono badges — both codes visible when both fail ("prepare would report MISSING_CONSENT first").
 - A failed read renders an honest rose strip with a period-scoped Retry — never a silent spinner.
 
+**The gate's CSV door (feature + styling, this round's extension)**
+- \`src/lib/hr/payroll/run-gate-csv.ts\` + a violet CSV button on the gate panel: the verdict files itself — one row per employee, the panel's own columns (\`period, checked_at_iso, employee_code, employee_name, gate_state, prepare_would_report\`), RFC 4180 discipline (quote-on-need, doubled embedded quotes, CRLF, header first, honest empty cells), filename \`run-gate-YYYY-MM-DD.csv\`, built locally by the serializer. The row type has no field for money — an export can never carry payslip amounts.
+- Styling details: the counts line speaks in color (clear emerald, missing consent rose, timesheet pending amber, checked stamp tabular-nums); blocked rows wear a state-colored left accent (rose/amber) so the verdict is scannable before the words are read; employee codes set in mono tabular-nums.
+
 ### Gates
-vitest **2776/2776** (138 files, +17/+1) · lint **0 errors / 421 warnings** (= baseline) · tsc **424** source-only (= invariant) · verify-v2-133-0 **13/13** (fresh script) · build green (webpack@2048, page-chunk served = disk).
+vitest **2787/2787** (139 files, +28/+2) · lint **0 errors / 421 warnings** (= baseline) · tsc **424** source-only (= invariant) · verify-v2-133-0 **14/14** (fresh script + csv-door check) · build green (webpack@2048).
 
 ### Security
 - Read-only GET behind the runs list's existing guard quartet; no mutation path anywhere in the feature (the write-verb ban is test-pinned); the gate's verdicts leak nothing an employee row does not already show — employeeCode/name and the same gate codes prepare already reports on attempt.

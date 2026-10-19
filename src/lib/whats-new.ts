@@ -87,6 +87,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       'The verdict mirrors the run\u2019s own guardrails line for line: same consent gate, same timesheet gate, same order \u2014 pinned by tests so the gate can never drift from the run it protects.',
       'Counts speak first (clear / missing consent / timesheet pending), blocked employees speak in prepare\u2019s own words, and an employee failing both gates says which one prepare would report first.',
       'A voided period says runs are closed instead of pretending to check; a failed read renders an honest rose strip with a Retry.',
+      'The verdict files itself: a violet CSV door on the panel exports the gate\u2019s own words (who, their state, which gate prepare would report first) — never payslip amounts.',
       'Read-only by construction: no run is created, no payslip computed \u2014 seeing the gate is part of reading the desk.',
     ],
   },

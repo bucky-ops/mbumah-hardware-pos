@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, Download, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
+import { buildRunGateCsv, type RunGateCsvRow } from '@/lib/hr/payroll/run-gate-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
@@ -230,15 +231,57 @@ function GatePanel({
   }
   if (!report) return null;
   const blocked = report.rows.filter((r) => r.gateState !== 'CLEAR');
+  // v2.133.0: the gate's CSV door — the panel's own verdict, filed. The same
+  // export-honesty discipline as every CSV door before it: the serializer's
+  // column set is the panel's column set (who, their state, which gate
+  // prepare would report first — never money, never payslip content).
+  const exportGateCsv = () => {
+    const rows: RunGateCsvRow[] = report.rows.map((r) => ({
+      period: report.period.name,
+      checkedAtIso: report.checkedAt,
+      employeeCode: r.employeeCode,
+      employeeName: r.employeeName,
+      gateState: r.gateState,
+      prepareWouldReport: r.blocks.length > 0 ? r.blocks[0] : '',
+    }));
+    const csv = buildRunGateCsv(rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `run-gate-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
   return (
     <div className="space-y-2" data-testid="payroll-gate-panel">
-      <p className="text-xs font-medium text-muted-foreground" data-testid="payroll-gate-counts">
-        <ShieldCheck className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-        {`${report.summary.clear} clear`}
-        {report.summary.missingConsent > 0 ? ` · ${report.summary.missingConsent} missing consent` : ''}
-        {report.summary.timesheetNotApproved > 0 ? ` · ${report.summary.timesheetNotApproved} timesheet pending` : ''}
-        {` · checked ${formatEatStamp(new Date(report.checkedAt))}`}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground" data-testid="payroll-gate-counts">
+          <ShieldCheck className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+          <span className="text-emerald-700 dark:text-emerald-300">{`${report.summary.clear} clear`}</span>
+          {report.summary.missingConsent > 0 ? (
+            <span className="text-rose-700 dark:text-rose-300">{` · ${report.summary.missingConsent} missing consent`}</span>
+          ) : null}
+          {report.summary.timesheetNotApproved > 0 ? (
+            <span className="text-amber-700 dark:text-amber-300">{` · ${report.summary.timesheetNotApproved} timesheet pending`}</span>
+          ) : null}
+          <span className="tabular-nums">{` · checked ${formatEatStamp(new Date(report.checkedAt))}`}</span>
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1 border-violet-300 px-2 text-[11px] text-violet-700 hover:bg-violet-50 hover:text-violet-800 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/40 dark:hover:text-violet-200"
+          disabled={report.rows.length === 0}
+          aria-label={`Export the ${periodName} gate verdict as CSV`}
+          data-testid="payroll-gate-csv"
+          title="The gate's own verdict is exported — who would be blocked, and which gate. Never payslip amounts."
+          onClick={exportGateCsv}
+        >
+          <Download className="h-3 w-3" aria-hidden /> CSV
+        </Button>
+      </div>
       {report.period.status === 'VOIDED' ? (
         <p
           role="status"
@@ -261,7 +304,11 @@ function GatePanel({
             <div
               key={r.employeeId}
               data-testid="payroll-gate-blocked-row"
-              className="flex flex-wrap items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm"
+              className={`flex flex-wrap items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm ${
+                r.gateState === 'MISSING_CONSENT'
+                  ? 'border-l-4 border-l-rose-400 dark:border-l-rose-700'
+                  : 'border-l-4 border-l-amber-400 dark:border-l-amber-700'
+              }`}
             >
               <Badge
                 variant="outline"
@@ -273,8 +320,8 @@ function GatePanel({
               >
                 {r.gateState}
               </Badge>
-              <span className="font-medium">{r.employeeCode}</span>
-              <span>{r.employeeName}</span>
+              <span className="font-medium font-mono text-xs tabular-nums">{r.employeeCode}</span>
+              <span className="font-medium">{r.employeeName}</span>
               <span className="text-muted-foreground">
                 {r.gateState === 'MISSING_CONSENT'
                   ? 'No active data-processing consent on file; payroll blocked.'
