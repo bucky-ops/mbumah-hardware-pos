@@ -4,13 +4,11 @@
 import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
 import { createApplicant } from '@/lib/hr/recruitment-service';
+import { RECRUITMENT_READ_ROLES, RECRUITMENT_WRITE_ROLES } from '@/lib/hr/recruitment-policy';
 
 export const dynamic = 'force-dynamic';
 
-const READ_ROLES = ['HR_MANAGER', 'BRANCH_MANAGER', 'STORE_OWNER'] as const;
-const WRITE_ROLES = ['HR_MANAGER', 'STORE_OWNER'] as const;
-
-export const GET = hrGuard('hr.recruitment.read.branch', READ_ROLES)(
+export const GET = hrGuard('hr.recruitment.read.branch', RECRUITMENT_READ_ROLES)(
   async (request, session) => {
     const status = new URL(request.url).searchParams.get('status');
     const applicants = await db.applicant.findMany({
@@ -23,13 +21,17 @@ export const GET = hrGuard('hr.recruitment.read.branch', READ_ROLES)(
       include: {
         job: { select: { title: true } },
         stages: { orderBy: { createdAt: 'desc' }, take: 1, select: { stage: true, outcome: true } },
+        // v2.125.0: the pending DRAFT offer rides along so the desk can render
+        // "Approve & send" (the PATCH that moves the applicant to OFFER)
+        // instead of offering to draft a second one.
+        offers: { where: { status: 'DRAFT' }, take: 1, select: { id: true, status: true } },
       },
     });
     return Response.json({ success: true, data: applicants });
   },
 );
 
-export const POST = hrGuard('hr.recruitment.manage', WRITE_ROLES)(
+export const POST = hrGuard('hr.recruitment.manage', RECRUITMENT_WRITE_ROLES)(
   async (request, session) => {
     let body: Record<string, unknown>;
     try {

@@ -25,7 +25,11 @@ export const HR_PERMISSIONS: Record<string, readonly PlatformRole[]> = {
   'hr.employee.unmask.pii': ['HR_MANAGER', 'STORE_OWNER'],
 
   // Recruitment and onboarding
-  'hr.recruitment.read.branch': ['HR_MANAGER', 'BRANCH_MANAGER'],
+  // v2.125.0: read.branch gains STORE_OWNER — the RBAC matrix documents the
+  // owner as "all" on recruitment, the routes' READ_ROLES always included the
+  // owner, and the drift 403'd EVERY living user (no HR_MANAGER exists in the
+  // seeded org), leaving /hr/recruitment a dead surface no one could open.
+  'hr.recruitment.read.branch': ['HR_MANAGER', 'BRANCH_MANAGER', 'STORE_OWNER'],
   'hr.recruitment.read.all': ['HR_MANAGER', 'STORE_OWNER'],
   'hr.recruitment.manage': ['HR_MANAGER', 'STORE_OWNER'],
   'hr.offer.approve': ['HR_MANAGER', 'STORE_OWNER'],

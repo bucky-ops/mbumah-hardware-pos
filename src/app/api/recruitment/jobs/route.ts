@@ -4,13 +4,11 @@
 import { hrGuard } from '@/lib/hr/guard';
 import { db } from '@/lib/db';
 import { createJob } from '@/lib/hr/recruitment-service';
+import { RECRUITMENT_READ_ROLES, RECRUITMENT_WRITE_ROLES } from '@/lib/hr/recruitment-policy';
 
 export const dynamic = 'force-dynamic';
 
-const READ_ROLES = ['HR_MANAGER', 'BRANCH_MANAGER', 'STORE_OWNER'] as const;
-const WRITE_ROLES = ['HR_MANAGER', 'STORE_OWNER'] as const;
-
-export const GET = hrGuard('hr.recruitment.read.branch', READ_ROLES)(
+export const GET = hrGuard('hr.recruitment.read.branch', RECRUITMENT_READ_ROLES)(
   async (_request, session) => {
     const jobs = await db.recruitmentJob.findMany({
       where: { storeId: session.storeId, deletedAt: null },
@@ -20,11 +18,17 @@ export const GET = hrGuard('hr.recruitment.read.branch', READ_ROLES)(
         _count: { select: { applicants: true } },
       },
     });
-    return Response.json({ success: true, data: jobs });
+    // canWrite rides the envelope so the desk renders an honest read-only
+    // posture for readers (BRANCH_MANAGER) instead of buttons that 403.
+    return Response.json({
+      success: true,
+      data: jobs,
+      canWrite: (RECRUITMENT_WRITE_ROLES as readonly string[]).includes(session.role),
+    });
   },
 );
 
-export const POST = hrGuard('hr.recruitment.manage', WRITE_ROLES)(
+export const POST = hrGuard('hr.recruitment.manage', RECRUITMENT_WRITE_ROLES)(
   async (request, session) => {
     let body: Record<string, unknown>;
     try {

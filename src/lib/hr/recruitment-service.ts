@@ -377,6 +377,9 @@ export async function rejectApplicant(
   });
   if (!applicant) throw new Error('Applicant not found.');
   if (applicant.status === 'HIRED') throw new Error('A hired applicant cannot be rejected.');
+  if (applicant.status === 'REJECTED' || applicant.status === 'WITHDRAWN') {
+    throw new Error('Applicant has already left the pipeline.');
+  }
 
   const retentionUntil = new Date();
   retentionUntil.setDate(retentionUntil.getDate() + REJECTION_RETENTION_DAYS);
@@ -397,6 +400,42 @@ export async function rejectApplicant(
     metadata: { retentionDays: REJECTION_RETENTION_DAYS },
   });
   return { retentionUntil };
+}
+
+/**
+ * Close an OPEN job to new applicants (v2.125.0).
+ * Closing is the desk's way of stopping intake without rewriting history:
+ * the job stays listed (its pipeline remains visible), createApplicant
+ * refuses CLOSED jobs by its own status check, and the closure is audited.
+ */
+export async function closeJob(input: {
+  jobId: string;
+  actorId: string;
+  actorRole: string;
+}) {
+  const job = await db.recruitmentJob.findFirst({
+    where: { id: input.jobId, deletedAt: null },
+    select: { id: true, title: true, status: true, storeId: true },
+  });
+  if (!job) throw new Error('Job not found.');
+  if (job.status !== 'OPEN') throw new Error(`Job is ${job.status}; only OPEN jobs can be closed.`);
+
+  const closed = await db.recruitmentJob.update({
+    where: { id: job.id },
+    data: { status: 'CLOSED', closedAt: new Date() },
+  });
+
+  await hrAudit({
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    action: 'UPDATE',
+    resourceType: HrEntityType.RECRUITMENT_JOB,
+    resourceId: job.id,
+    storeId: job.storeId,
+    reason: 'Job closed to new applicants.',
+    metadata: { title: job.title },
+  });
+  return closed;
 }
 
 async function ensureOnboardingPlan(employeeId: string, storeId: string, actorId: string): Promise<string> {
