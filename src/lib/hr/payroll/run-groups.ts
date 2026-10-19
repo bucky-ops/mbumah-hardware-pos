@@ -175,3 +175,88 @@ export function groupRunsByPeriod<T extends RunGroupSource>(runs: T[]): PayrollP
     return b.runCount - a.runCount;
   });
 }
+
+// ── v2.134.0: the gate opens onto empty months ──────────────────────────────
+//
+// The v2.133.0 pre-flight gate door rode the runs table's period headers —
+// and `groupRunsByPeriod` only groups periods that HAVE runs. A freshly
+// opened period (the common case: a new month, zero runs) rendered nowhere,
+// so the lifecycle's front door was locked exactly when it matters most:
+// before the FIRST run of the month is prepared. `emptyPeriodRows` closes
+// that gap at the data layer: given the periods the API knows and the
+// groups the runs built, it names the periods the runs table will never
+// render — the pre-flight rows.
+//
+// HONESTY CONTRACT:
+//   • Matching is by period NAME — the same key `groupRunsByPeriod` groups
+//     by (the run DTO's payrollPeriod carries name/dates but no id, and
+//     "period names are unique among payroll periods" is the house rule the
+//     grouping already stands on). A period whose name appears in ANY group
+//     has runs; it never appears here, no matter how few.
+//   • A period here carries its REAL id — the gate door needs
+//     `GET /api/payroll/runs/gate?periodId=` and a run-less period has no
+//     run to borrow an id from (the header door's `runs[0]?.payrollPeriodId`
+//     trick has nothing to borrow from).
+//   • Order is deterministic and honest for a pre-flight list: newest month
+//     first (startDate descending — the month you're ABOUT to run leads),
+//     ties broken by name ascending so equal stamps never flicker.
+//   • VOIDED periods are NOT filtered out — the gate has an honest verdict
+//     for them ("runs are closed") and the row's status chip says why.
+//   • Pure: no db, no network, no env. Corrupt/missing stamps degrade in
+//     the sort (string compare), never throw.
+
+/** Structural subset of the periods the page already fetches from
+ *  `/api/payroll/periods` — the empty-row builder reads only what it needs,
+ *  so the page's full PayrollPeriodDto flows through UNNARROWED. */
+export interface EmptyPeriodSource {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  payDate: string | null;
+  /** The period's lifecycle word (OPEN / CLOSED / VOIDED …) — the row's
+   *  chip speaks it verbatim; the gate has an honest verdict for each. */
+  status?: string;
+}
+
+/** One run-less period: the minimum the pre-flight row and its gate door
+ *  need. The period's real id rides every row — the gate is period-keyed,
+ *  not run-keyed. */
+export interface EmptyPeriodRow {
+  periodId: string;
+  periodName: string;
+  startDate: string;
+  endDate: string;
+  payDate: string | null;
+  /** The period's lifecycle word, passed through verbatim (an unknown or
+   *  missing status degrades to '' — the chip renders UNKNOWN, never a
+   *  guessed state). */
+  status: string;
+}
+
+/**
+ * Name the periods the runs table will never render: every period the API
+ * knows whose name appears in NO run group. Empty periods in → empty rows
+ * out; a fully-run month list in → an empty array (nothing is pre-flight).
+ */
+export function emptyPeriodRows(
+  periods: readonly EmptyPeriodSource[],
+  groups: readonly { periodName: string }[],
+): EmptyPeriodRow[] {
+  const withRuns = new Set(groups.map((g) => g.periodName));
+  return periods
+    .filter((p) => !withRuns.has(p.name))
+    .map((p) => ({
+      periodId: p.id,
+      periodName: p.name,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      payDate: p.payDate,
+      status: p.status ?? '',
+    }))
+    .sort((a, b) => {
+      const byStart = String(b.startDate ?? '').localeCompare(String(a.startDate ?? ''));
+      if (byStart !== 0) return byStart;
+      return String(a.periodName ?? '').localeCompare(String(b.periodName ?? ''));
+    });
+}

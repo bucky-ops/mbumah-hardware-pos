@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.134.0] The gate opens onto empty months
+
+The v2.133.0 pre-flight gate door rode the runs table's period headers — and the runs table only renders periods that HAVE runs. A freshly opened month (zero runs — every month's starting state) rendered nowhere, so the lifecycle's front door was locked exactly when it matters most: before the FIRST run of the month is prepared. This release unlocks it from the outside.
+
+### Added
+- **The pure empty-month builder** (`emptyPeriodRows` in `src/lib/hr/payroll/run-groups.ts`): given the periods the API knows and the groups the runs built, it names the periods the runs table will never render. Matching is by period NAME — the same key `groupRunsByPeriod` groups by (the house rule the grouping already stands on). Every row carries the period's REAL id (a run-less period has no run to borrow `payrollPeriodId` from — the header door's `runs[0]` trick has nothing to borrow from), its lifecycle status verbatim (an unknown or missing status degrades to `''` — the chip renders UNKNOWN, never a guessed state), and a deterministic newest-month-first order (startDate descending, name-ascending tie-break). VOIDED periods are NOT filtered out — the gate has an honest verdict for them. Pure: no db, no network, no env; wide DTOs flow through unnarrowed.
+- **The pre-flight months section** (`src/app/(shell)/hr/payroll/page.tsx`): renders on the Runs tab only when a run-less period exists, below the runs ledger so the money table's story stays intact. Each row speaks the month's own words — name, a mono lifecycle chip (OPEN emerald / VOIDED amber / everything else muted ink), the date range and pay date in tabular numerals with an honest "pay date not set" fallback — and carries the SAME Gate door the period headers carry: same `ShieldCheck` affordance, same aria family (`Check the {period} run gate`), same single loader (`toggleGate` → `loadGate`), same `GatePanel` verdict with its clear/blocked/voided/failed states. The gate stays open under the row that opened it, keyed by the period's real id.
+
+### Changed
+- The gate is now one gate with two doors: the header rail door (periods with runs) and the pre-flight row door (periods without). Both share the loader, the panel, and the v2.133.0 parity-pinned verdict — no third implementation to drift.
+
+### Tests
+- `src/tests/payroll-preflight-empty-v2134.test.ts` (16): the pure builder (name-keyed filtering against the run groups, real period ids, verbatim status pass-through with honest degradation, newest-first ordering with the tie-break pinned, both empties honest — no periods → no rows, fully-run months → no rows, wide DTO unnarrowed) and the page contract (section renders only when a run-less period exists, the shared door rides `toggleGate(row.periodId, …)` — never the borrow trick, the honesty copy, the stable testid family, the UNKNOWN-not-guessed chip, the pay-date fallback) plus the styling contract (dark twins on every colored surface, tabular stamps, hover + focus-within affordances, the header-rail door letterform, and the inset panel's testid distinct from the table's).
+- `console-changelog` unread counters re-anchored for 2.134.0 joining the feed.
+
 ## [2.133.0] The gate speaks first
 
 The run's guardrails (consent, timesheets) always enforced themselves inside `preparePayrollRun` — but their verdict only surfaced AFTER a failed prepare attempt, as an amber card of issues. This release asks the SAME gates the SAME question BEFORE anyone tries: a pre-flight, read-only gate read per payroll period — the EMS spec Phase 4.6 lifecycle's front door.

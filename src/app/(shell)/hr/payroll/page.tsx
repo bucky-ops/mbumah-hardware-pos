@@ -21,7 +21,7 @@ import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
-import { groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
+import { emptyPeriodRows, groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
 import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
@@ -520,6 +520,24 @@ export default function HrPayrollPage() {
   // v2.98.0: runs read as periods — the pure builder folds the flat list
   // and does the honest settled-money arithmetic (posted/locked only).
   const periodGroups = useMemo(() => groupRunsByPeriod(runs ?? []), [runs]);
+  // v2.134.0: the gate opens onto empty months — the periods the runs table
+  // will never render (zero runs) become pre-flight rows, each with the
+  // same Gate door the header rail carries, so the front door is reachable
+  // BEFORE the first run of the month is prepared.
+  const emptyPeriods = useMemo(() => emptyPeriodRows(periods ?? [], periodGroups), [periods, periodGroups]);
+  // The row status chip's tone: OPEN months are alive (emerald), everything
+  // else speaks its own word in muted ink — a voided month is a closed door,
+  // not an error.
+  const preflightChipTone = useCallback((status: string) => {
+    switch (status) {
+      case 'OPEN':
+        return 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300';
+      case 'VOIDED':
+        return 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
+      default:
+        return 'border-border bg-muted text-muted-foreground';
+    }
+  }, []);
   const allPeriodsOpen =
     periodGroups.length > 1 && periodGroups.every((g) => !collapsedPeriods.has(g.periodName));
   const toggleAllPeriods = useCallback(() => {
@@ -869,6 +887,79 @@ export default function HrPayrollPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* v2.134.0: the gate opens onto empty months — a run-less period
+              renders here, not nowhere. Each row carries the SAME gate door
+              the header rail carries (same loader, same panel, same aria
+              family), so the pre-flight read is reachable before the first
+              run of the month is prepared — the front door unlocks from
+              the outside. */}
+          {emptyPeriods.length > 0 && (
+            <Card data-testid="payroll-preflight-section">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShieldCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" aria-hidden />
+                  Pre-flight months
+                </CardTitle>
+                <CardDescription>
+                  Periods with no runs yet — check the run gate before preparing the first run. The
+                  door reads the same guardrails prepare enforces, read-only; no run is created.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <ul className="overflow-hidden rounded-md border" data-testid="payroll-preflight-list">
+                  {emptyPeriods.map((row) => (
+                    <li
+                      key={row.periodId}
+                      data-testid={`payroll-preflight-row-${row.periodId}`}
+                      className="px-3 py-2.5 transition-colors hover:bg-muted/40 focus-within:bg-muted/40"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                            <span className="truncate">{row.periodName}</span>
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide ${preflightChipTone(row.status)}`}
+                              data-testid={`payroll-preflight-status-${row.periodId}`}
+                            >
+                              {row.status ? row.status.toUpperCase() : 'UNKNOWN'}
+                            </span>
+                          </p>
+                          <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                            {formatEatStamp(new Date(row.startDate))} → {formatEatStamp(new Date(row.endDate))}
+                            {row.payDate ? ` · pays ${formatEatStamp(new Date(row.payDate))}` : ' · pay date not set'}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring"
+                          aria-label={`Check the ${row.periodName} run gate`}
+                          title="Who the run gate would block, before anyone tries — the same gates prepare enforces, read-only"
+                          data-testid="payroll-preflight-gate"
+                          onClick={() => toggleGate(row.periodId, row.periodName)}
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+                          <span className="hidden sm:inline">Gate</span>
+                        </Button>
+                      </div>
+                      {gatePanel?.periodId === row.periodId && (
+                        <div className="mt-2 rounded-md bg-muted/30 px-3 py-2" data-testid="payroll-preflight-gate-panel">
+                          <GatePanel
+                            periodName={gatePanel.periodName}
+                            report={gateReport}
+                            loading={gateLoading}
+                            error={gateError}
+                            onRetry={() => gatePanel && void loadGate(gatePanel.periodId, gatePanel.periodName)}
+                          />
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
 
           {/* v2.53.0: inline note for the row-level digest CSV download. */}
           {digestNote && (
