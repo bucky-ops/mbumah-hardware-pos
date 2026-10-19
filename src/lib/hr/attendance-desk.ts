@@ -171,3 +171,81 @@ export function deskRangeLabel(from: string, to: string): string {
   const by = b.slice(0, 4);
   return ay === by ? `${label(a)} – ${label(b)} ${by}` : `${label(a)} ${ay} – ${label(b)} ${by}`;
 }
+
+// ── v2.139.0: the batch's honest receipt ───────────────────────────────────
+// "Approve all" loops the ONE per-employee approve service on the client —
+// never a new bulk write path. Each attempt lands in a result; this builder
+// turns the results into the strip the desk shows when the batch ends. It
+// never smooths: partial batches say exactly who failed and why, and a
+// batch that raced the desk (every day already approved) says so instead
+// of wearing a hollow green.
+
+export interface DeskBulkAttemptResult {
+  employeeId: string;
+  employeeCode: string;
+  employeeName: string;
+  ok: boolean;
+  approved: number;
+  error?: string | null;
+}
+
+export interface DeskBulkSummary {
+  tone: 'ok' | 'partial' | 'err';
+  /** The strip's first line — counts pluralized honestly. */
+  text: string;
+  /** One line per failed employee: 'MBH-1-001 John Mwangi — the reason'. */
+  failures: string[];
+}
+
+/**
+ * Shape the batch receipt from the per-employee results, in the order the
+ * desk attempted them. Null only when the batch never ran (no rows) —
+ * the strip renders nothing rather than an empty promise.
+ */
+export function buildBulkApproveSummary(
+  results: readonly DeskBulkAttemptResult[],
+): DeskBulkSummary | null {
+  if (!results || results.length === 0) return null;
+  const failures = results
+    .filter((r) => !r || !r.ok)
+    .map(
+      (r) =>
+        `${r.employeeCode || '—'} ${r.employeeName || ''}`.trim() +
+        ` — ${r.error && r.error.trim() ? r.error.trim() : 'approval failed'}`,
+    );
+  const okRows = results.filter((r) => r && r.ok);
+  const days = okRows.reduce((sum, r) => sum + (Number.isFinite(r.approved) ? r.approved : 0), 0);
+  const employees = okRows.length;
+  const dayWord = days === 1 ? 'day' : 'days';
+  const employeeWord = employees === 1 ? 'employee' : 'employees';
+  if (failures.length === results.length) {
+    return {
+      tone: 'err',
+      text: `No approvals landed — all ${results.length} ${
+        results.length === 1 ? 'attempt' : 'attempts'
+      } failed. Nothing was approved; retry from their rows.`,
+      failures,
+    };
+  }
+  if (failures.length > 0) {
+    return {
+      tone: 'partial',
+      text: `Approved ${days} ${dayWord} for ${employees} of ${results.length} ${
+        results.length === 1 ? 'employee' : 'employees'
+      } — ${failures.length} ${failures.length === 1 ? 'approval' : 'approvals'} failed; retry from their rows.`,
+      failures,
+    };
+  }
+  if (days === 0) {
+    return {
+      tone: 'ok',
+      text: 'Nothing left to approve — every listed day was already approved.',
+      failures: [],
+    };
+  }
+  return {
+    tone: 'ok',
+    text: `Approved ${days} ${dayWord} across ${employees} ${employeeWord}.`,
+    failures: [],
+  };
+}

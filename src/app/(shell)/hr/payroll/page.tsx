@@ -16,11 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, ArrowUpRight, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, History, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
 import { parseGateVerdict, buildGateVerdictText, gateVerdictTone } from '@/lib/hr/payroll/gate-verdict';
+import { buildGateAttemptChip } from '@/lib/hr/payroll/gate-trail';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { emptyPeriodRows, groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
 import { gatePreviewChips, gatePreviewLine, type GatePreview } from '@/lib/hr/payroll/gate-preview';
@@ -60,6 +61,9 @@ export interface PayrollRunDto {
   /** v2.135.0: the frozen gate verdict — what the gate said when this run was prepared (null = pre-v2.135, honest absence). */
   gateCheckedAt: string | null;
   gateSummary: unknown;
+  /** v2.139.0: the trail's compact surface — attempt count + last outcome (zero/null = pre-v2.138, honest absence). */
+  gateAttemptCount?: number | null;
+  gateLastOutcome?: string | null;
   journalEntryId: string | null;
   createdAt: string;
   payrollPeriod: { name: string; payDate: string | null; startDate: string; endDate: string };
@@ -890,29 +894,57 @@ export default function HrPayrollPage() {
                                         waiting since {formatEatStamp(new Date(run.submittedAt))}
                                       </p>
                                     )}
-                                    {/* v2.135.0: the frozen gate verdict — what the gate said
-                                        when prepare let this run through (or stopped it). Parses
-                                        through the tolerant pure builder; a pre-v2.135.0 run or a
-                                        malformed snapshot renders NOTHING (honest absence, never
-                                        a guess). */}
+                                    {/* v2.135.0 + v2.139.0: the frozen verdict AND the
+                                        trail's compact surface — what the gate said
+                                        when prepare let this run through (or stopped
+                                        it), plus how many attempts it took to get
+                                        there. Both parse through the tolerant pure
+                                        builders; a pre-v2.135.0 run or a malformed
+                                        snapshot renders NOTHING (honest absence,
+                                        never a guess). The pair wraps as one row on
+                                        narrow screens instead of colliding. */}
                                     {(() => {
                                       const verdict = parseGateVerdict(run.gateSummary, run.gateCheckedAt);
-                                      if (!verdict) return null;
-                                      const tone = gateVerdictTone(verdict.summary);
+                                      const attempts = buildGateAttemptChip({
+                                        attemptCount: run.gateAttemptCount,
+                                        lastOutcome: run.gateLastOutcome,
+                                      });
+                                      if (!verdict && !attempts) return null;
+                                      const tone = verdict ? gateVerdictTone(verdict.summary) : null;
                                       return (
-                                        <p
-                                          className={`mt-0.5 inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium tabular-nums ${
-                                            tone === 'clear'
-                                              ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
-                                              : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
-                                          }`}
-                                          data-testid="payroll-run-gate-verdict"
-                                          title={`The run gate's verdict when this run was prepared${verdict.checkedAt ? ` — checked ${formatEatStamp(new Date(verdict.checkedAt))}` : ''}`}
-                                        >
-                                          <ShieldCheck className="h-2.5 w-2.5 shrink-0" aria-hidden />
-                                          {buildGateVerdictText(verdict.summary)}
-                                          {verdict.checkedAt ? ` · ${formatEatStamp(new Date(verdict.checkedAt))}` : ''}
-                                        </p>
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                                          {verdict ? (
+                                            <p
+                                              className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium tabular-nums ${
+                                                tone === 'clear'
+                                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                                  : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                              }`}
+                                              data-testid="payroll-run-gate-verdict"
+                                              title={`The run gate's verdict when this run was prepared${verdict.checkedAt ? ` — checked ${formatEatStamp(new Date(verdict.checkedAt))}` : ''}`}
+                                            >
+                                              <ShieldCheck className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                                              {buildGateVerdictText(verdict.summary)}
+                                              {verdict.checkedAt ? ` · ${formatEatStamp(new Date(verdict.checkedAt))}` : ''}
+                                            </p>
+                                          ) : null}
+                                          {attempts ? (
+                                            <p
+                                              className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium tabular-nums ${
+                                                attempts.tone === 'emerald'
+                                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                                  : attempts.tone === 'amber'
+                                                    ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                                    : 'border-border bg-muted/60 text-muted-foreground dark:bg-muted/40'
+                                              }`}
+                                              data-testid="payroll-run-gate-attempts"
+                                              title="Every prepare attempt on record — the run dialog's Gate trail keeps the full story"
+                                            >
+                                              <History className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                                              {attempts.label}
+                                            </p>
+                                          ) : null}
+                                        </div>
                                       );
                                     })()}
                                   </TableCell>

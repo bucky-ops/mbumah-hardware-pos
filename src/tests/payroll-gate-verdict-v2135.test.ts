@@ -155,7 +155,10 @@ describe('the honesty contracts - the UI never guesses', () => {
   it('the runs table renders the verdict through the pure parser (no ad-hoc JSON reads)', () => {
     const p = pageSrc();
     expect(p).toContain("parseGateVerdict(run.gateSummary, run.gateCheckedAt)");
-    expect(p).toContain("if (!verdict) return null;");
+    // v2.139.0: the guard widened for the attempts chip (both chips parse
+    // through pure builders and BOTH render nothing when absent) — the
+    // pinned contract (honest absence, never a guess) is unchanged.
+    expect(p).toContain("if (!verdict && !attempts) return null;");
     expect(p).toContain('data-testid="payroll-run-gate-verdict"');
   });
 

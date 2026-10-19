@@ -51,6 +51,50 @@ const toIso = (value: Date | string | null | undefined): string | null => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 
+// ── v2.139.0: the table's compact surface ──────────────────────────────────
+// The dialog keeps the full story; the runs TABLE should answer "how did
+// this run get here" at a glance. One chip: how many attempts are on record
+// and what the LAST one said. Honest absence by construction — a run with
+// no trail rows (pre-v2.138.0, or garbage) renders NOTHING, never a guessed
+// "1 attempt". The count comes from the route's own _count; the outcome is
+// verbatim PASSED/BLOCKED or the muted UNKNOWN (same vocabulary as the
+// trail chips — one gate, one story, every surface speaks the same words).
+
+export interface GateAttemptChipInput {
+  attemptCount: number | string | null | undefined;
+  lastOutcome: string | null | undefined;
+}
+
+export interface GateAttemptChip {
+  count: number;
+  /** '1 attempt · last PASSED' — pluralized honestly, outcome verbatim. */
+  label: string;
+  outcome: 'PASSED' | 'BLOCKED' | 'UNKNOWN';
+  tone: 'emerald' | 'amber' | 'muted';
+}
+
+/**
+ * Shape the compact attempt chip for the runs table. Null = render nothing
+ * (no trail on record, or a count that is not a positive whole number —
+ * the chip never invents an attempt). Tolerant of numeric strings because
+ * the payload crosses JSON, strict about everything else.
+ */
+export function buildGateAttemptChip(input: GateAttemptChipInput): GateAttemptChip | null {
+  const raw = input?.attemptCount;
+  const count = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+  if (!Number.isInteger(count) || count <= 0) return null;
+  const outcome =
+    input?.lastOutcome === 'PASSED' || input?.lastOutcome === 'BLOCKED' ? input.lastOutcome : 'UNKNOWN';
+  const tone: GateAttemptChip['tone'] =
+    outcome === 'PASSED' ? 'emerald' : outcome === 'BLOCKED' ? 'amber' : 'muted';
+  return {
+    count,
+    label: `${count} ${count === 1 ? 'attempt' : 'attempts'} · last ${outcome}`,
+    outcome,
+    tone,
+  };
+}
+
 /**
  * Shape the run's gate events (caller passes them ordered oldest-first —
  * the trail reads as a story). Tolerant by construction: an event with an

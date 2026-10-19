@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.139.0] The table counts the attempts
+
+The v2.138.0 trail lived only inside the run dialog — the runs TABLE (the surface managers actually stare at) still answered "what did the gate say" without "how many tries did it take". And on the desk, a Monday-morning backlog meant one click-wait per employee. This release puts the count on the table and gives the desk a batch door.
+
+### Added
+- **The attempts chip on the runs table** (`payroll-run-gate-attempts`): beside the frozen verdict, `buildGateAttemptChip` speaks `1 attempt · last PASSED` / `N attempts · last BLOCKED` from the run's own trail — count via the list route's `_count.gateEvents` (one query, no per-run fetch), outcome via the newest-clock row (createdAt breaks ties). Tone follows the outcome (emerald/amber/muted UNKNOWN); honest absence: zero rows, null, or a non-positive/garbage count renders NOTHING, never a guessed attempt. The chip and the verdict sit in one flex-wrap row (no collision on narrow screens), the History icon + title point at the dialog's full trail.
+- **The desk's "Approve all"** (`hr-timesheet-approve-all`): walks EVERY pending row through the ONE audited per-employee approve service — client-side sequential loop, same URL, same body shape, NEVER a new bulk write path. Failures never abort the walk; the label keeps an honest count ("Approving 2/6…"); single-flight both directions (the batch rides `approvingId`, so every single button and the batch itself disable while anything is in flight).
+- **The batch receipt** (`buildBulkApproveSummary` in the desk's pure module): one strip, three tones — full success ("Approved 3 days across 2 employees."), partial ("Approved 2 days for 1 of 3 employees — 2 approvals failed; retry from their rows." with a line per loser: code, name, reason), total failure ("No approvals landed — nothing was approved."), and the raced-batch honesty ("Nothing left to approve — every listed day was already approved."). Null when the batch never ran.
+
+### Changed
+- `GET /api/payroll/runs` grows the additive trail surface: `gateAttemptCount` + `gateLastOutcome` per run (the read stays read-only and store-scoped); the page's `PayrollRunDto` carries both optional/null-safe.
+- The desk clears BOTH notes on a scope change — an old receipt never describes new data.
+
+### Tests
+- `src/tests/run-attempts-v2139.test.ts` (24): the chip builder (singular/plural, UNKNOWN degradation, honest absence ×6, numeric strings, purity), the receipt builder (full/partial/total/raced/empty), the runs route (count + newest-clock outcome pins, read-only pin), the table chip (beside-the-verdict wrap, tone families + dark twins, dialog-pointer title, additive DTO), and the desk batch (exact single-approve contract ×2, single-flight, honest progress label, receipt testids, notes cleared on scope change, end-of-batch refetch).
+
 ## [2.138.0] The verdict keeps its every attempt
 
 The v2.135.0 snapshot froze THE verdict on the run — but it refreshes in place, so "how did the verdict move between attempts" evaporated on every re-prepare. And on the timesheet desk, a Saturday punch wore the exact same chip as a Tuesday one. This release gives the verdict a memory and the weekend a tint.

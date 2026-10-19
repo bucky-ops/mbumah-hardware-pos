@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.139.0',
+    title: 'The table counts the attempts',
+    bullets: [
+      'Runs table rows now wear an attempts chip beside the frozen verdict — “2 attempts · last PASSED” — so “how did this run get here” needs no dialog.',
+      'The chip’s tone follows the last attempt: emerald passed, amber blocked, muted unknown — and a run with no trail stays silent, never a guessed count.',
+      'The timesheet desk gains “Approve all”: every pending row cleared through the same audited per-employee approval, walked one at a time — never a bulk write.',
+      'The batch keeps an honest count (“Approving 2/6…”) and ends with a receipt that names every failure, so a partial batch is never mistaken for a clean one.',
+      'The full per-attempt story still lives in the run dialog’s Gate trail — the chip points there; the table just answers first.',
+    ],
+  },
+  {
     version: '2.138.0',
     title: 'The verdict keeps its every attempt',
     bullets: [
