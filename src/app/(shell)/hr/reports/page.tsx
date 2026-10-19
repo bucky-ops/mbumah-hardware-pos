@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  AlertTriangle,
   BarChart3,
   Building2,
   Coins,
@@ -31,6 +32,7 @@ import {
   Hourglass,
   Landmark,
   History,
+  Loader2,
   ChevronRight,
   FileSpreadsheet,
   Printer,
@@ -400,6 +402,28 @@ export default function HrReportsPage() {
   const [consentFailed, setConsentFailed] = useState(false);
   const [retention, setRetention] = useState<RetentionDto | null>(null);
   const [retentionFailed, setRetentionFailed] = useState(false);
+  // v2.131.0: the WHOLE reports surface speaks its failures — every loader
+  // that used to catch into the shared null (an eternal skeleton, a generic
+  // note above the tabs) now owns an honest per-report strip with a retry,
+  // and every success leaves a stamp saying WHEN the numbers were fetched.
+  // The shared page-level ErrorNote stays reserved for actions.
+  const [aggregateFailed, setAggregateFailed] = useState(false);
+  const [aggregateLoadedAt, setAggregateLoadedAt] = useState<Date | null>(null);
+  const [p10Failed, setP10Failed] = useState(false);
+  const [p10LoadedAt, setP10LoadedAt] = useState<Date | null>(null);
+  const [p10Busy, setP10Busy] = useState(false);
+  const [leaveFailed, setLeaveFailed] = useState(false);
+  const [leaveLoadedAt, setLeaveLoadedAt] = useState<Date | null>(null);
+  const [leaveBusy, setLeaveBusy] = useState(false);
+  // v2.131.0: the refresh path speaks too — the Privacy tab's three loaders
+  // disable + spin their Refresh/Retry buttons while the fetch is in flight,
+  // so a slow or dead API can never read as a dead button.
+  const [consentBusy, setConsentBusy] = useState(false);
+  const [erasureBusy, setErasureBusy] = useState(false);
+  const [retentionBusy, setRetentionBusy] = useState(false);
+  const [consentLoadedAt, setConsentLoadedAt] = useState<Date | null>(null);
+  const [erasureLoadedAt, setErasureLoadedAt] = useState<Date | null>(null);
+  const [retentionLoadedAt, setRetentionLoadedAt] = useState<Date | null>(null);
   // v2.129.0: the consent timeline drawer — one door, per-employee payload.
   // All four reset on close (the stale-state hygiene: one employee's history
   // must never greet the next open).
@@ -435,7 +459,6 @@ export default function HrReportsPage() {
 
   const load = useCallback(async () => {
     setBusy(true);
-    setError('');
     try {
       const qs = `from=${new Date(from).toISOString()}&to=${new Date(`${to}T23:59:59.999Z`).toISOString()}${storeId ? `&storeId=${encodeURIComponent(storeId)}` : ''}`;
       const [h, c, a, t, g, s] = await Promise.all([
@@ -452,30 +475,48 @@ export default function HrReportsPage() {
       setTurnover(t);
       setTth(g);
       setStatutory(s);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load reports.');
+      setAggregateFailed(false);
+      setAggregateLoadedAt(new Date());
+    } catch {
+      // v2.131.0: speak the failure on the tab itself — all six desks go dark
+      // together (they share one Promise.all), and each tab offers the retry.
+      setHeadcount(null);
+      setCost(null);
+      setAbsence(null);
+      setTurnover(null);
+      setTth(null);
+      setStatutory(null);
+      setAggregateFailed(true);
     } finally {
       setBusy(false);
     }
   }, [from, to, storeId]);
 
   const loadP10 = useCallback(async (year: string) => {
-    setError('');
+    setP10Busy(true);
     try {
       setP10(await apiGet<P10Dto>(`/api/hr/reports/p10?year=${year}`));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load P10.');
+      setP10Failed(false);
+      setP10LoadedAt(new Date());
+    } catch {
       setP10(null);
+      setP10Failed(true); // v2.131.0: speak the failure on the tab itself
+    } finally {
+      setP10Busy(false);
     }
   }, []);
 
   const loadErasure = useCallback(async () => {
+    setErasureBusy(true);
     try {
       setErasure(await apiGet<ErasureDto>('/api/hr/privacy/erasure-requests'));
       setErasureFailed(false);
+      setErasureLoadedAt(new Date());
     } catch {
       setErasure(null);
       setErasureFailed(true); // v2.130.0: speak the failure, offer the retry
+    } finally {
+      setErasureBusy(false); // v2.131.0: the retry path spins while it runs
     }
   }, []);
 
@@ -527,23 +568,31 @@ export default function HrReportsPage() {
 
   // v2.119.0: the consent ledger loads with the Privacy tab.
   const loadConsent = useCallback(async () => {
+    setConsentBusy(true);
     try {
       setConsent(await apiGet<ConsentDto>('/api/hr/privacy/consent'));
       setConsentFailed(false);
+      setConsentLoadedAt(new Date());
     } catch {
       setConsent(null);
       setConsentFailed(true); // v2.130.0: speak the failure, offer the retry
+    } finally {
+      setConsentBusy(false); // v2.131.0: the refresh path spins while it runs
     }
   }, []);
 
   // v2.122.0: the retention desk loads with the Privacy tab.
   const loadRetention = useCallback(async () => {
+    setRetentionBusy(true);
     try {
       setRetention(await apiGet<RetentionDto>('/api/hr/privacy/retention'));
       setRetentionFailed(false);
+      setRetentionLoadedAt(new Date());
     } catch {
       setRetention(null);
       setRetentionFailed(true); // v2.130.0: speak the failure, offer the retry
+    } finally {
+      setRetentionBusy(false); // v2.131.0: the retry path spins while it runs
     }
   }, []);
 
@@ -551,13 +600,17 @@ export default function HrReportsPage() {
   // global reporting period — loaded independently so the year picker only
   // refetches this report.
   const loadLeaveUtil = useCallback(async () => {
-    setError('');
+    setLeaveBusy(true);
     try {
       const qs = `year=${encodeURIComponent(leaveYear)}${storeId ? `&storeId=${encodeURIComponent(storeId)}` : ''}`;
       setLeaveUtil(await apiGet<LeaveUtilDto>(`/api/hr/reports/leave-utilisation?${qs}`));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load leave balances.');
+      setLeaveFailed(false);
+      setLeaveLoadedAt(new Date());
+    } catch {
       setLeaveUtil(null);
+      setLeaveFailed(true); // v2.131.0: speak the failure on the tab itself
+    } finally {
+      setLeaveBusy(false);
     }
   }, [leaveYear, storeId]);
 
@@ -785,6 +838,34 @@ export default function HrReportsPage() {
     }
   }, [from, to, leaveYear, storeId, tableBusy]);
 
+  // v2.131.0: ONE strip family for the whole reports surface — the rose frame
+  // the Privacy tab earned in v2.130.0, now shared by every report tab, with
+  // a warning glyph and an in-flight retry. Loads speak here; the shared
+  // ErrorNote above the tabs stays reserved for actions.
+  const ReportFailureStrip = ({ testId, copy, retryLabel, onRetry, busy }: { testId: string; copy: string; retryLabel: string; onRetry: () => void; busy?: boolean }) => (
+    <div
+      data-testid={testId}
+      role="status"
+      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40"
+    >
+      <p className="flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden /> {copy}
+      </p>
+      <Button variant="outline" size="sm" onClick={onRetry} disabled={busy} aria-label={retryLabel}>
+        {busy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+        Retry
+      </Button>
+    </div>
+  );
+
+  // v2.131.0: the honesty stamp — a loaded report says WHEN its numbers were
+  // fetched (tabular, muted, 24-hour clock). No stamp = not fetched yet.
+  const formatStamp = (d: Date) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const UpdatedStamp = ({ testId, at }: { testId: string; at: Date | null }) =>
+    at ? (
+      <p data-testid={testId} className="text-[11px] tabular-nums text-muted-foreground">Updated {formatStamp(at)}</p>
+    ) : null;
+
   const Stat = ({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'warn' | 'good' }) => (
     <div className="rounded-xl border bg-card p-3.5 shadow-sm print:shadow-none">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -952,9 +1033,20 @@ export default function HrReportsPage() {
         {/* ── Headcount ── */}
         <TabsContent value="headcount" className="space-y-4">
           {!headcount ? (
-            <Skeleton className="h-40 w-full" />
+            aggregateFailed ? (
+              <ReportFailureStrip
+                testId="hr-reports-headcount-error"
+                copy="The headcount desk could not be loaded — the numbers stay dark rather than guess."
+                retryLabel="Retry loading the headcount report"
+                onRetry={() => void load()}
+                busy={busy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <>
+              <UpdatedStamp testId="hr-reports-updated-headcount" at={aggregateLoadedAt} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
                 <Stat label="Active" value={String(headcount.active)} tone="good" />
                 <Stat label="On leave" value={String(headcount.onLeave)} />
@@ -998,9 +1090,20 @@ export default function HrReportsPage() {
         {/* ── Employment cost ── */}
         <TabsContent value="cost" className="space-y-4">
           {!cost ? (
-            <Skeleton className="h-40 w-full" />
+            aggregateFailed ? (
+              <ReportFailureStrip
+                testId="hr-reports-cost-error"
+                copy="The employment-cost desk could not be loaded — the numbers stay dark rather than guess."
+                retryLabel="Retry loading the employment cost report"
+                onRetry={() => void load()}
+                busy={busy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <>
+              <UpdatedStamp testId="hr-reports-updated-cost" at={aggregateLoadedAt} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Stat label="Total gross" value={formatKes(cost.totalGross)} />
                 <Stat label="Employer statutory" value={formatKes(cost.totalEmployerStatutory)} hint="NSSF + AHL employer match" />
@@ -1057,9 +1160,20 @@ export default function HrReportsPage() {
         {/* ── Absence ── */}
         <TabsContent value="absence" className="space-y-4">
           {!absence ? (
-            <Skeleton className="h-40 w-full" />
+            aggregateFailed ? (
+              <ReportFailureStrip
+                testId="hr-reports-absence-error"
+                copy="The absence desk could not be loaded — the numbers stay dark rather than guess."
+                retryLabel="Retry loading the absence report"
+                onRetry={() => void load()}
+                busy={busy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <>
+              <UpdatedStamp testId="hr-reports-updated-absence" at={aggregateLoadedAt} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
                 <Stat label="Absence rate" value={`${absence.absenceRatePct}%`} tone={absence.absenceRatePct >= 10 ? 'warn' : 'good'} hint="unscheduled, all recorded days" />
                 <Stat label="Leave rate" value={`${absence.leaveRatePct}%`} />
@@ -1102,9 +1216,20 @@ export default function HrReportsPage() {
         {/* ── Leave entitlement utilisation (v2.35.0) ── */}
         <TabsContent value="leave" className="space-y-4">
           {!leaveUtil ? (
-            <Skeleton className="h-40 w-full" />
+            leaveFailed ? (
+              <ReportFailureStrip
+                testId="hr-reports-leave-error"
+                copy="The leave balances could not be loaded — the balances stay dark rather than guess."
+                retryLabel="Retry loading the leave balances"
+                onRetry={() => void loadLeaveUtil()}
+                busy={leaveBusy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <>
+              <UpdatedStamp testId="hr-reports-updated-leave" at={leaveLoadedAt} />
               <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
                 <p className="text-xs text-muted-foreground">
                   Leave year {leaveUtil.year} — balances are year-keyed (calendar year), independent of the reporting period above.
@@ -1457,9 +1582,20 @@ export default function HrReportsPage() {
         {/* ── Turnover ── */}
         <TabsContent value="turnover" className="space-y-4">
           {!turnover ? (
-            <Skeleton className="h-40 w-full" />
+            aggregateFailed ? (
+              <ReportFailureStrip
+                testId="hr-reports-turnover-error"
+                copy="The turnover desk could not be loaded — the numbers stay dark rather than guess."
+                retryLabel="Retry loading the turnover report"
+                onRetry={() => void load()}
+                busy={busy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <>
+              <UpdatedStamp testId="hr-reports-updated-turnover" at={aggregateLoadedAt} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Stat label="Exits in period" value={String(turnover.exits)} tone={turnover.exits ? 'warn' : 'good'} />
                 <Stat label="Hires in period" value={String(turnover.hires)} />
@@ -1517,9 +1653,20 @@ export default function HrReportsPage() {
         {/* ── Time to hire ── */}
         <TabsContent value="tth" className="space-y-4">
           {!tth ? (
-            <Skeleton className="h-40 w-full" />
+            aggregateFailed ? (
+              <ReportFailureStrip
+                testId="hr-reports-tth-error"
+                copy="The time-to-hire desk could not be loaded — the numbers stay dark rather than guess."
+                retryLabel="Retry loading the time to hire report"
+                onRetry={() => void load()}
+                busy={busy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <>
+              <UpdatedStamp testId="hr-reports-updated-tth" at={aggregateLoadedAt} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                 <Stat label="Converted hires" value={String(tth.convertedCount)} tone="good" />
                 <Stat label="Median days to hire" value={`${tth.medianDaysToHire}d`} />
@@ -1568,9 +1715,20 @@ export default function HrReportsPage() {
         {/* ── Statutory liability ── */}
         <TabsContent value="statutory" className="space-y-4">
           {!statutory ? (
-            <Skeleton className="h-40 w-full" />
+            aggregateFailed ? (
+              <ReportFailureStrip
+                testId="hr-reports-statutory-error"
+                copy="The statutory desk could not be loaded — the numbers stay dark rather than guess."
+                retryLabel="Retry loading the statutory report"
+                onRetry={() => void load()}
+                busy={busy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <>
+              <UpdatedStamp testId="hr-reports-updated-statutory" at={aggregateLoadedAt} />
               <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
                 <Stat label="PAYE" value={formatKes(statutory.totals.paye)} />
                 <Stat label="NSSF" value={formatKes(statutory.totals.nssf)} />
@@ -1644,8 +1802,19 @@ export default function HrReportsPage() {
               <Printer className="h-3.5 w-3.5" aria-hidden /> Print PDF
             </Button>
           </div>
+          <UpdatedStamp testId="hr-reports-updated-p10" at={p10LoadedAt} />
           {!p10 ? (
-            <Skeleton className="h-40 w-full" />
+            p10Failed ? (
+              <ReportFailureStrip
+                testId="hr-reports-p10-error"
+                copy="The P10 register could not be loaded — the schedule stays dark rather than guess."
+                retryLabel="Retry loading the P10 register"
+                onRetry={() => void loadP10(p10Year)}
+                busy={p10Busy}
+              />
+            ) : (
+              <Skeleton className="h-40 w-full" />
+            )
           ) : (
             <Card>
               <CardHeader className="pb-2">
@@ -1723,20 +1892,24 @@ export default function HrReportsPage() {
                     )}
                   </>
                 )}
+                {consentLoadedAt ? <span aria-hidden> · updated {formatStamp(consentLoadedAt)}</span> : null}
               </p>
             </CardHeader>
             <CardContent>
               <div className="mb-3 flex justify-end">
-                <Button variant="outline" size="sm" onClick={() => void loadConsent()} aria-label="Refresh consent records">
-                  <History className="h-4 w-4" aria-hidden /> Refresh
+                <Button variant="outline" size="sm" onClick={() => void loadConsent()} disabled={consentBusy} aria-label="Refresh consent records">
+                  {consentBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <History className="h-4 w-4" aria-hidden />} Refresh
                 </Button>
               </div>
               {!consent ? (
                 consentFailed ? (
-                  <div data-testid="hr-privacy-consent-error" role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40">
-                    <p className="text-xs text-rose-700 dark:text-rose-300">The consent ledger could not be loaded — the desk stays dark rather than guess.</p>
-                    <Button variant="outline" size="sm" onClick={() => void loadConsent()} aria-label="Retry loading consent records">Retry</Button>
-                  </div>
+                  <ReportFailureStrip
+                    testId="hr-privacy-consent-error"
+                    copy="The consent ledger could not be loaded — the desk stays dark rather than guess."
+                    retryLabel="Retry loading consent records"
+                    onRetry={() => void loadConsent()}
+                    busy={consentBusy}
+                  />
                 ) : (
                   <Skeleton className="h-28 w-full" />
                 )
@@ -1835,14 +2008,20 @@ export default function HrReportsPage() {
               <CardDescription>
                 Non-statutory personal data is erased; payroll and audit records stay under statutory retention with the decision and legal basis recorded.
               </CardDescription>
+              {erasureLoadedAt ? (
+                <p data-testid="hr-privacy-updated-erasure" className="mt-1 text-[11px] tabular-nums text-muted-foreground">Updated {formatStamp(erasureLoadedAt)}</p>
+              ) : null}
             </CardHeader>
             <CardContent>
               {!erasure ? (
                 erasureFailed ? (
-                  <div data-testid="hr-privacy-erasure-error" role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40">
-                    <p className="text-xs text-rose-700 dark:text-rose-300">The erasure queue could not be loaded — the desk stays dark rather than guess.</p>
-                    <Button variant="outline" size="sm" onClick={() => void loadErasure()} aria-label="Retry loading erasure requests">Retry</Button>
-                  </div>
+                  <ReportFailureStrip
+                    testId="hr-privacy-erasure-error"
+                    copy="The erasure queue could not be loaded — the desk stays dark rather than guess."
+                    retryLabel="Retry loading erasure requests"
+                    onRetry={() => void loadErasure()}
+                    busy={erasureBusy}
+                  />
                 ) : (
                   <Skeleton className="h-28 w-full" />
                 )
@@ -1896,6 +2075,9 @@ export default function HrReportsPage() {
               <CardDescription>
                 The nightly sweep anonymises expired personal data scope by scope — reviewable windows, never legal advice. A legal hold pauses one scope until a settings manager releases it; setting and releasing are both audit-logged. The Next sweep column is a dry run: it counts what each run would anonymise, changing nothing.
               </CardDescription>
+              {retentionLoadedAt ? (
+                <p data-testid="hr-privacy-updated-retention" className="mt-1 text-[11px] tabular-nums text-muted-foreground">Updated {formatStamp(retentionLoadedAt)}</p>
+              ) : null}
               <p data-testid="hr-privacy-retention-hold-count" className="mt-1 text-xs tabular-nums text-muted-foreground">
                 {retention === null ? (
                   'Loading holds…'
@@ -1947,10 +2129,13 @@ export default function HrReportsPage() {
             <CardContent>
               {!retention ? (
                 retentionFailed ? (
-                  <div data-testid="hr-privacy-retention-error" role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 dark:border-rose-900 dark:bg-rose-950/40">
-                    <p className="text-xs text-rose-700 dark:text-rose-300">The retention desk could not be loaded — the desk stays dark rather than guess.</p>
-                    <Button variant="outline" size="sm" onClick={() => void loadRetention()} aria-label="Retry loading the retention desk">Retry</Button>
-                  </div>
+                  <ReportFailureStrip
+                    testId="hr-privacy-retention-error"
+                    copy="The retention desk could not be loaded — the desk stays dark rather than guess."
+                    retryLabel="Retry loading the retention desk"
+                    onRetry={() => void loadRetention()}
+                    busy={retentionBusy}
+                  />
                 ) : (
                   <Skeleton className="h-28 w-full" />
                 )
