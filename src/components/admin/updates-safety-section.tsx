@@ -234,7 +234,7 @@ export function UpdatesSafetySection() {
                 ? `Last backup: ${data.lastBackup.action === 'CRASH_BACKUP' ? 'automatic (crash-safe)' : 'manual'} · ${formatDateTime(data.lastBackup.at)}`
                 : 'No backup recorded yet on this installation.'}
             </p>
-            <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+            <p className="text-[10px] text-muted-foreground mt-0.5">
               Laptop kits additionally back up every night at 02:30 to
               Desktop\MbumahBackups; cloud databases use Neon PITR.
             </p>

@@ -280,7 +280,7 @@ export function ProductCard({
         {product.category && (
           <div className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: categoryColor }} aria-hidden />
-            <p className="text-[11px] text-muted-foreground/80 truncate">{product.category.name}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{product.category.name}</p>
           </div>
         )}
         <div className="flex items-end justify-between mt-1 gap-1.5">

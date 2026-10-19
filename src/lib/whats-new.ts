@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.157.0',
+    title: 'The last alphas go home',
+    bullets: [
+      'The remaining translucent helper labels — product-card stock lines, the currency switcher — drop to full-strength grey.',
+      'Two emerald status fills deepen so their white text reads (debt-plan status, export history).',
+      'The contrast treadmill ends where it started: every audited tab re-audited clean.',
+    ],
+  },
+  {
     version: '2.156.0',
     title: 'The amber family settles',
     bullets: [

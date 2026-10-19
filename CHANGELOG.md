@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.157.0] The last alphas go home
+
+The fifth consecutive lesson-64 re-audit layer — and the last: the remaining muted-alpha tokens and two emerald fills.
+
+### Fixed
+- **The remaining muted alphas reach full strength** (3 sites): `text-muted-foreground/80` → bare `text-muted-foreground` in the POS product-card stock line (the axe-flagged 3.82:1 node), the currency switcher, and the admin updates-safety note. With /60 and /70 gone in v2.156.0, the codebase now carries NO alpha-muted muted-foreground text tokens.
+- **Two white-on-emerald-500 fills deepen** (2.47:1 → 5.49:1): the debt-plan status fill and the export-history status fill move to `bg-emerald-700 border-emerald-700` — the same standing family as v2.155.0's button fills.
+
+### Tests
+- Full suite 3149/3149 (160 files); verify-v2-157-0 pinning the zero-alpha invariant and the emerald fills.
+
 ## [2.156.0] The amber family settles
 
 The lesson-64 re-audit on the shipped v2.155.0 build surfaced the next render-state layer: the amber text family and the muted-alpha helper lines. Same standing fix, ridden to the end in-round.
