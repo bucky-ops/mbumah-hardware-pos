@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.130.0',
+    title: 'The timeline files its copy',
+    bullets: [
+      'The consent timeline drawer grew an Export CSV door \u2014 the ledger\u2019s own columns (who, when, what purpose, which policy, how long it stood), never more.',
+      'A standing consent files as STANDING with empty withdrawn/stood cells \u2014 an open consent has no honest day count to write down.',
+      'The Privacy tab speaks its failures: a card whose ledger fails to load now shows a rose error strip with a Retry button \u2014 never an eternal \u201cLoading\u2026\u201d spin.',
+      'Exports stay content-free by construction: the row type has no field for anything the card does not already show.',
+    ],
+  },
+  {
     version: '2.129.0',
     title: 'The ledger shows its timeline',
     bullets: [

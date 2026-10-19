@@ -365,16 +365,16 @@ describe('whatsNewReadState - one flag, one truth (v2.75.0)', () => {
 
 describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
   it('counts the releases that arrived after the flag', () => {
-    // The feed leads 2.129.0 (latest — counted separately), then 2.128.0,
-    // 2.127.0, 2.126.0, 2.125.0, 2.124.0, 2.123.0, 2.122.0, 2.121.0, 2.120.0, 2.119.0, 2.118.0 — a
-    // 2.110.0 flag means 2.111.0 … 2.128.0 sit strictly between (the head
-    // 2.129.0 reads "latest", NOT 'new'), so the honest count is 18; a
-    // 2.77.0 flag counts 2.78.0 … 2.128.0 (the head never joins this count).
-    // Re-anchored for 2.129.0 "the ledger shows its timeline" joining the feed.
-    expect(whatsNewUnreadCount('2.110.0')).toBe(18);
-    expect(whatsNewUnreadCount('2.109.0')).toBe(19);
-    expect(whatsNewUnreadCount('2.108.0')).toBe(20);
-    expect(whatsNewUnreadCount('2.77.0')).toBe(51);
+    // The feed leads 2.130.0 (latest — counted separately), then 2.129.0,
+    // 2.128.0, 2.127.0, 2.126.0, 2.125.0, 2.124.0, 2.123.0, 2.122.0, 2.121.0, 2.120.0, 2.119.0 — a
+    // 2.110.0 flag means 2.111.0 … 2.129.0 sit strictly between (the head
+    // 2.130.0 reads "latest", NOT 'new'), so the honest count is 19; a
+    // 2.77.0 flag counts 2.78.0 … 2.129.0 (the head never joins this count).
+    // Re-anchored for 2.130.0 "the timeline files its copy" joining the feed.
+    expect(whatsNewUnreadCount('2.110.0')).toBe(19);
+    expect(whatsNewUnreadCount('2.109.0')).toBe(20);
+    expect(whatsNewUnreadCount('2.108.0')).toBe(21);
+    expect(whatsNewUnreadCount('2.77.0')).toBe(52);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(10);
   });
 
