@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertTriangle, CalendarCheck, CheckCircle2, FileDown, Loader2, RefreshCw, X } from 'lucide-react';
-import { deskRangeLabel, deskDayStrip, type AttendanceDeskRow } from '@/lib/hr/attendance-desk';
+import { deskRangeLabel, deskDayStrip, deskDayIsWeekend, type AttendanceDeskRow } from '@/lib/hr/attendance-desk';
 import { buildTimesheetDeskCsv } from '@/lib/hr/timesheet-desk-csv';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 
@@ -371,15 +371,27 @@ export default function HrTimesheetsPage() {
                         </span>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
+                        {/* v2.138.0: weekend chips wear the sky tint — a
+                            Saturday punch stands out from the working week
+                            (an anomaly spotlight, not a judgement). */}
                         <span className="flex flex-wrap items-center gap-1" data-testid="hr-timesheet-day-strip">
-                          {strip.shown.map((label) => (
-                            <span
-                              key={label}
-                              className="rounded border border-amber-200 bg-amber-50/70 px-1 py-0.5 font-mono text-[10px] tabular-nums text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
-                            >
-                              {label}
-                            </span>
-                          ))}
+                          {strip.shownDays.map((day, idx) => {
+                            const weekend = deskDayIsWeekend(day);
+                            return (
+                              <span
+                                key={`${day}-${idx}`}
+                                className={`rounded border px-1 py-0.5 font-mono text-[10px] tabular-nums ${
+                                  weekend
+                                    ? 'border-sky-200 bg-sky-50/80 text-sky-800 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-300'
+                                    : 'border-amber-200 bg-amber-50/70 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                                }`}
+                                title={weekend ? `${strip.shown[idx]} — weekend day` : undefined}
+                                data-weekend={weekend ? 'true' : undefined}
+                              >
+                                {strip.shown[idx]}
+                              </span>
+                            );
+                          })}
                           {strip.hidden > 0 ? (
                             <span
                               className="rounded px-1 py-0.5 text-[10px] font-medium text-muted-foreground"

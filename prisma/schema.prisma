@@ -1656,6 +1656,11 @@ model PayrollRun {
   details       PayrollDetail[]
   corrections             PayrollCorrection[] @relation("CorrectionTargetRun")
   replacementCorrections  PayrollCorrection[] @relation("CorrectionReplacementRun")
+  // v2.138.0: the verdict trail — every prepare attempt appends ONE row
+  // (append-only, never updated), so "how did the verdict move between
+  // attempts" is history, not folklore. Pre-v2.138.0 runs have no trail by
+  // design; the UI says so honestly.
+  gateEvents  PayrollRunGateEvent[]
 
   @@index([payrollPeriodId])
   @@index([storeId])
@@ -1664,6 +1669,29 @@ model PayrollRun {
   @@index([storeId, status])
   @@index([payrollPeriodId, status])
   @@map("payroll_runs")
+}
+
+/// v2.138.0: the gate verdict trail — one append-only row per prepare
+/// attempt (both paths: the blocked stop AND the clear pass ride the SAME
+/// clock as the run's frozen snapshot). Rows are never updated or deleted,
+/// so the dialog can show how the verdict moved between attempts. The
+/// summary is the SAME tally prepare's loop accumulates (parity by
+/// construction). Pre-v2.138.0 runs carry no trail; the UI says so.
+model PayrollRunGateEvent {
+  id        String   @id @default(cuid())
+  runId     String
+  storeId   String // Denormalised for tenant-scoping
+  outcome   String // 'PASSED' | 'BLOCKED' — what the gate DID to this attempt
+  checkedAt DateTime // the SAME clock the run's snapshot froze
+  summary   Json // { total, clear, missingConsent, timesheetNotApproved, codes }
+  actorId   String? // who ran prepare (null for system-seeded rows)
+  createdAt DateTime @default(now())
+
+  run PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, checkedAt])
+  @@index([storeId])
+  @@map("payroll_run_gate_events")
 }
 
 /// An individual payslip line within a PayrollRun. One row per employee per

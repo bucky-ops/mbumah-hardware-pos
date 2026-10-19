@@ -18,6 +18,8 @@ import { downloadPayrollBundle } from '@/components/hr/payslip-bundle-download';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { parseGateVerdict, buildGateVerdictText, gateVerdictTone } from '@/lib/hr/payroll/gate-verdict';
 import type { RunHistoryEvent } from '@/lib/hr/payroll/run-history';
+import type { GateTrailRow } from '@/lib/hr/payroll/gate-trail';
+import { ShieldAlert } from 'lucide-react';
 import { RUN_STATUS_STYLES, StatusBadge, kes, type ApiIssue } from '@/app/(shell)/hr/payroll/page';
 
 /** Colored payment status chips (v2.21.0 styling pass). */
@@ -143,6 +145,8 @@ interface RunDetailResponse {
   disbursement?: B2CDisbursementState | null;
   /** v2.84.0: the run's lifecycle as who-did-what (server-resolved names). */
   history?: RunHistoryEvent[];
+  /** v2.138.0: the append-only gate verdict trail (additive, null-safe). */
+  gateTrail?: GateTrailRow[];
 }
 
 interface PayslipRow {
@@ -439,6 +443,7 @@ export function PayrollRunDialog({
   const status = run?.status ?? '';
   const parsedIssues: ApiIssue[] | null = issues ?? (run?.errorMessage ? tryParseIssues(run.errorMessage) : null);
   const history = detail?.history ?? [];
+  const gateTrail = detail?.gateTrail ?? [];
 
   // v2.86.0: the who's-next derivation — a PENDING_APPROVAL run is somebody's
   // move. The submitted event in the history already carries WHO handed it
@@ -902,6 +907,88 @@ export function PayrollRunDialog({
                 </ol>
               </div>
             )}
+
+            {/* v2.138.0: the gate verdict trail — every prepare attempt speaks,
+                oldest first, and `changed` marks where the verdict MOVED (the
+                whole point: "the gate said 5 clear, then 4 clear after the
+                consent withdrawal" is history now, not folklore). Honest
+                absence twice over: a run with no trail renders nothing; a
+                PRE-v2.138.0 PREPARED run (trail empty but preparedAt set)
+                gets one dashed note that it predates the trail — never a
+                guessed history. */}
+            {gateTrail.length > 0 ? (
+              <div className="rounded-lg border p-4" data-testid="payroll-run-gate-trail">
+                <p className="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Gate trail
+                  <span
+                    className="ml-auto rounded-full border bg-muted/50 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal tabular-nums text-muted-foreground"
+                    data-testid="payroll-run-gate-trail-count"
+                  >
+                    {gateTrail.length} {gateTrail.length === 1 ? 'attempt' : 'attempts'}
+                  </span>
+                </p>
+                <ol>
+                  {gateTrail.map((row, i) => (
+                    <li
+                      key={row.id}
+                      data-testid={`payroll-run-gate-trail-row-${i}`}
+                      className="relative flex gap-3 pb-3 last:pb-0"
+                    >
+                      {i < gateTrail.length - 1 && (
+                        <span aria-hidden className="absolute left-[5px] top-4 h-full w-px bg-border" />
+                      )}
+                      <span aria-hidden className="relative mt-1 shrink-0">
+                        {row.outcome === 'BLOCKED' ? (
+                          <ShieldAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                        ) : row.outcome === 'PASSED' ? (
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <ShieldQuestion className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex flex-wrap items-center gap-1.5 text-sm leading-tight">
+                          <Badge
+                            variant="outline"
+                            data-testid={`payroll-run-gate-trail-outcome-${i}`}
+                            className={`font-mono text-[10px] tabular-nums ${
+                              row.outcome === 'PASSED'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                : row.outcome === 'BLOCKED'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                                  : 'border-muted bg-muted/40 text-muted-foreground'
+                            }`}
+                          >
+                            {row.outcome}
+                          </Badge>
+                          <span className="tabular-nums">{row.text}</span>
+                          {row.changed ? (
+                            <span
+                              data-testid={`payroll-run-gate-trail-moved-${i}`}
+                              className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-300"
+                              title="The verdict moved between this attempt and the one before it"
+                            >
+                              moved
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                          {row.atIso ? formatEatStamp(new Date(row.atIso)) : 'no timestamp recorded'}
+                          {row.actorLabel ? ` · ${row.actorLabel}` : ''}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : run?.preparedAt ? (
+              <p
+                className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground"
+                data-testid="payroll-run-gate-trail-absent"
+              >
+                This run was prepared before the gate trail existed (v2.138.0) — its attempts left no row-by-row history.
+              </p>
+            ) : null}
 
             {/* v2.135.0: the frozen gate verdict — what the gate said when prepare
                 let this run through (or stopped it). The strip speaks the same
