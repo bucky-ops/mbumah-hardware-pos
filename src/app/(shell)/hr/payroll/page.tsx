@@ -23,6 +23,7 @@ import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-pan
 import { parseGateVerdict, buildGateVerdictText, gateVerdictTone } from '@/lib/hr/payroll/gate-verdict';
 import { downloadRunDigestCsv } from '@/components/hr/run-digest-csv';
 import { emptyPeriodRows, groupRunsByPeriod } from '@/lib/hr/payroll/run-groups';
+import { gatePreviewChips, gatePreviewLine, type GatePreview } from '@/lib/hr/payroll/gate-preview';
 import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
@@ -33,6 +34,10 @@ export interface PayrollPeriodDto {
   payDate: string | null;
   status: string;
   periodType: string;
+  // v2.137.0: the gate preview rides the list additively — pre-flight
+  // inside the prepare intent. Null (old cache, preview failure) renders
+  // the honest unavailable line, never a guessed chip.
+  gatePreview?: GatePreview | null;
 }
 
 export interface PayrollRunDto {
@@ -2506,14 +2511,64 @@ function CreateRunDialog({
               <Select value={periodId} onValueChange={setPeriodId}>
                 <SelectTrigger id="run-period"><SelectValue placeholder="Choose a period" /></SelectTrigger>
                 <SelectContent>
-                  {periods.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name} ({p.startDate.slice(0, 10)} → {p.endDate.slice(0, 10)})
-                    </SelectItem>
-                  ))}
+                  {periods.map((p) => {
+                    // v2.137.0: the gate preview rides the item — the picker
+                    // itself speaks the gate's pending counts (chips only when
+                    // something would block; silence means clear, never
+                    // guessed-clear). The selected item's chips carry into the
+                    // trigger, so the intent starts pre-flight.
+                    const chips = gatePreviewChips(p.gatePreview);
+                    return (
+                      <SelectItem key={p.id} value={p.id}>
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span>
+                            {p.name} ({p.startDate.slice(0, 10)} → {p.endDate.slice(0, 10)})
+                          </span>
+                          {chips.map((chip) => (
+                            <span
+                              key={chip.label}
+                              data-testid="payroll-picker-gate-chip"
+                              className={`rounded-full border px-1.5 py-0.5 font-mono text-[10px] font-medium tabular-nums ${
+                                chip.tone === 'rose'
+                                  ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300'
+                                  : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
+                              }`}
+                            >
+                              {chip.label}
+                            </span>
+                          ))}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             )}
+            {periodId ? (
+              (() => {
+                const selected = periods.find((p) => p.id === periodId);
+                const door = (selected?.gatePreview?.unapprovedDays ?? 0) > 0;
+                return (
+                  <p className="text-xs text-muted-foreground" data-testid="payroll-picker-gate-line">
+                    {gatePreviewLine(selected?.gatePreview)}{' '}
+                    {door ? (
+                      <a
+                        href="/hr/timesheets"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="payroll-picker-timesheet-door"
+                        aria-label="Open the timesheet desk to approve the pending days"
+                        title="Approve lives on the timesheet desk — opens in its own tab"
+                        className="inline-flex items-center gap-0.5 rounded px-0.5 font-medium text-amber-700 hover:bg-amber-50 hover:text-amber-900 hover:ring-1 hover:ring-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-amber-300 dark:hover:bg-amber-950/40 dark:hover:text-amber-200 dark:hover:ring-amber-800"
+                      >
+                        Timesheet desk
+                        <ArrowUpRight className="h-3 w-3" aria-hidden />
+                      </a>
+                    ) : null}
+                  </p>
+                );
+              })()
+            ) : null}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="run-type">Run type</Label>

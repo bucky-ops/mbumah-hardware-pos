@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.137.0',
+    title: 'The picker sees the gate',
+    bullets: [
+      'The \u201cStart a payroll run\u201d dialog no longer lists periods blind: each period now wears the gate\u2019s pending counts as chips \u2014 \u201c3 unapproved days\u201d, \u201c1 missing consent\u201d \u2014 before you create anything.',
+      'The selected period speaks a compact preview line under the picker, and when days are pending it carries the amber door straight to the timesheet desk.',
+      'The timesheet desk\u2019s pending list now exports: one CSV, one row per employee, the exact days \u2014 same RFC 4180 discipline as the case list and access ledger exports.',
+      'The export carries codes, names, and days only \u2014 no pay column exists in the file format, so it can never become a payslip preview or an approval by spreadsheet.',
+      'A failed preview read says \u201cunavailable\u201d instead of guessing, and never takes the periods list down with it.',
+    ],
+  },
+  {
     version: '2.136.0',
     title: 'The second door finds its desk',
     bullets: [
