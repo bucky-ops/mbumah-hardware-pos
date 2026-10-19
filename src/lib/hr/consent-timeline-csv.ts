@@ -102,3 +102,13 @@ export function consentTimelineCsvFilename(employeeCode: string, when: Date = ne
   const day = when.toISOString().slice(0, 10);
   return `consent-timeline-${code}-${day}.csv`;
 }
+
+/**
+ * The branch-level bulk export's file name (v2.132.0):
+ * consent-timelines-{date}.csv — plural, no code: the file is EVERY in-scope
+ * employee's timeline in one flat ledger, one row per consent cycle.
+ */
+export function consentTimelinesCsvFilename(when: Date = new Date()): string {
+  const day = when.toISOString().slice(0, 10);
+  return `consent-timelines-${day}.csv`;
+}
