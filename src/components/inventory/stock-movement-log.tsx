@@ -431,7 +431,7 @@ export function StockMovementLog({
                             className={`font-mono text-sm font-semibold ${
                               isNegative
                                 ? 'text-red-600 dark:text-red-400'
-                                : 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-emerald-700 dark:text-emerald-400'
                             }`}
                           >
                             {displayQty}

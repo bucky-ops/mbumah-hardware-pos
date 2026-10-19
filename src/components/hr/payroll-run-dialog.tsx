@@ -639,7 +639,7 @@ export function PayrollRunDialog({
                       setB2cOpen(true);
                     }}
                     disabled={busy}
-                    className="gap-1.5 border-emerald-300 bg-emerald-600 text-white hover:bg-emerald-700 dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+                    className="gap-1.5 border-emerald-300 bg-emerald-700 text-white hover:bg-emerald-800 dark:border-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
                   >
                     <Smartphone className="h-3.5 w-3.5" /> Disburse via M-Pesa
                   </Button>
@@ -681,6 +681,25 @@ export function PayrollRunDialog({
                   </Button>
                 )}
               </div>
+              {/* v2.155.0: the auto-recovery truth line. The hourly B2C sweep
+                  now re-sends gate-allowed failures and re-queries stuck
+                  transfers without human attendance, so the dialog says so —
+                  the manager should know the backoff chips are advisory, not
+                  the only path home. Rendered only where the sweep can act
+                  (posted/locked + disburse permission), never invented. */}
+              {(status === 'POSTED' || status === 'LOCKED') && can?.disburse && (
+                <p
+                  data-testid="b2c-auto-recovery-note"
+                  className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground"
+                >
+                  <Hourglass className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                  <span>
+                    Auto-recovery is on: the hourly sweep retries gate-allowed failures and re-queries stuck
+                    transfers on its own. Payslips at the attempt ceiling still wait for a human — the row
+                    chips below tell you which.
+                  </span>
+                </p>
+              )}
               {/* v2.86.0: the who's-next strip — the handover names its waiter.
                   An eligible checker sees "waiting on you"; the bound maker
                   sees the honest maker-checker boundary; a viewer without the
@@ -951,7 +970,7 @@ export function PayrollRunDialog({
                         {row.outcome === 'BLOCKED' ? (
                           <ShieldAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                         ) : row.outcome === 'PASSED' ? (
-                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                         ) : (
                           <ShieldQuestion className="h-3.5 w-3.5 text-muted-foreground/50" />
                         )}
@@ -1257,7 +1276,7 @@ export function PayrollRunDialog({
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Disburse via M-Pesa B2C
+                <Smartphone className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> Disburse via M-Pesa B2C
               </DialogTitle>
               <DialogDescription>
                 Sends each pending payslip to the employee&apos;s registered M-Pesa number as a SalaryPayment.
@@ -1306,7 +1325,7 @@ export function PayrollRunDialog({
                   size="sm"
                   disabled={busy || pendingPayslips.length === 0}
                   onClick={() => void runB2C('all')}
-                  className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600"
+                  className="gap-1.5 bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-700 dark:hover:bg-emerald-600"
                 >
                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Smartphone className="h-3.5 w-3.5" aria-hidden />}
                   {busy ? 'Sending…' : `Send ${pendingPayslips.length} payment(s)`}
@@ -1323,7 +1342,7 @@ export function PayrollRunDialog({
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   {(b2cSummary.failed?.length ?? 0) === 0 ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                   ) : (
                     <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                   )}

@@ -279,7 +279,7 @@ function AutoAdjustIndicator({ autoAdjust, isVisible }: { autoAdjust: boolean; i
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className={`inline-flex items-center gap-1 text-[10px] ${isVisible ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+          <span className={`inline-flex items-center gap-1 text-[10px] ${isVisible ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}`}>
             <Settings2 className="h-3 w-3" />
             Auto {isVisible ? '(visible)' : '(hidden)'}
           </span>
@@ -1058,7 +1058,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                                     className="gap-2 cursor-pointer"
                                     onSelect={(e) => e.preventDefault()}
                                   >
-                                    <TrendingDown className="h-4 w-4 text-green-600" />
+                                    <TrendingDown className="h-4 w-4 text-green-700" />
                                     Redeem
                                   </DropdownMenuItem>
                                 )}
@@ -1087,7 +1087,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                           {/* Send via WhatsApp */}
                           <DropdownMenuItem
                             onClick={() => handleSendGiftCardWhatsApp(card)}
-                            className="gap-2 cursor-pointer text-green-600 dark:text-green-400 focus:text-green-600 focus:bg-green-50 dark:focus:bg-green-950/30"
+                            className="gap-2 cursor-pointer text-green-700 dark:text-green-400 focus:text-green-700 focus:bg-green-50 dark:focus:bg-green-950/30"
                             onSelect={(e) => e.preventDefault()}
                           >
                             <MessageCircle className="h-4 w-4" />
@@ -1096,7 +1096,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                           {/* Send via SMS */}
                           <DropdownMenuItem
                             onClick={() => handleSendGiftCardSms(card)}
-                            className="gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
+                            className="gap-2 cursor-pointer text-emerald-700 dark:text-emerald-400 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
                             onSelect={(e) => e.preventDefault()}
                           >
                             <MessageSquare className="h-4 w-4" />
@@ -1259,7 +1259,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs gap-1 flex-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30"
+                        className="h-7 text-xs gap-1 flex-1 text-green-700 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedCard(card);
@@ -1764,7 +1764,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Current Balance</span>
-                  <span className="font-semibold text-green-600 dark:text-green-400">{formatKES(selectedCard.currentBalance)}</span>
+                  <span className="font-semibold text-green-700 dark:text-green-400">{formatKES(selectedCard.currentBalance)}</span>
                 </div>
               </div>
 
@@ -1938,7 +1938,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Current Balance</span>
-                  <span className="font-semibold text-green-600 dark:text-green-400">{formatKES(selectedCard.currentBalance)}</span>
+                  <span className="font-semibold text-green-700 dark:text-green-400">{formatKES(selectedCard.currentBalance)}</span>
                 </div>
               </div>
 
@@ -1962,7 +1962,7 @@ export default function GiftCardsTab({ storeId, userRole, userId: _userId }: Gif
                 )}
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Remaining after redemption:</span>
-                  <span className={`font-medium ${remainingAfterRedeem === 0 ? 'text-amber-500' : 'text-green-600 dark:text-green-400'}`}>
+                  <span className={`font-medium ${remainingAfterRedeem === 0 ? 'text-amber-500' : 'text-green-700 dark:text-green-400'}`}>
                     {formatKES(remainingAfterRedeem)}
                   </span>
                 </div>

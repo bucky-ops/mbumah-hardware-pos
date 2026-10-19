@@ -258,7 +258,7 @@ export default function TrialBalancePanel() {
                         <TableCell className="text-right text-sm font-mono text-blue-600 dark:text-blue-400">
                           {a.totalDebit > 0 ? formatKES(a.totalDebit) : ''}
                         </TableCell>
-                        <TableCell className="text-right text-sm font-mono text-green-600 dark:text-green-400">
+                        <TableCell className="text-right text-sm font-mono text-green-700 dark:text-green-400">
                           {a.totalCredit > 0 ? formatKES(a.totalCredit) : ''}
                         </TableCell>
                         <TableCell className="text-right text-sm font-mono">
@@ -272,7 +272,7 @@ export default function TrialBalancePanel() {
                     <TableCell className="text-right text-sm font-mono font-bold text-blue-600 dark:text-blue-400">
                       {formatKES(tb.totalDebits)}
                     </TableCell>
-                    <TableCell className="text-right text-sm font-mono font-bold text-green-600 dark:text-green-400">
+                    <TableCell className="text-right text-sm font-mono font-bold text-green-700 dark:text-green-400">
                       {formatKES(tb.totalCredits)}
                     </TableCell>
                     <TableCell className="text-right text-sm font-mono font-bold">
@@ -343,7 +343,7 @@ export default function TrialBalancePanel() {
                       <TableCell className="text-right text-sm font-mono text-blue-600 dark:text-blue-400">
                         {formatKES(s.totalDebits)}
                       </TableCell>
-                      <TableCell className="text-right text-sm font-mono text-green-600 dark:text-green-400">
+                      <TableCell className="text-right text-sm font-mono text-green-700 dark:text-green-400">
                         {formatKES(s.totalCredits)}
                       </TableCell>
                       <TableCell>
@@ -397,7 +397,7 @@ export default function TrialBalancePanel() {
                       <TableCell className="text-right text-sm font-mono text-blue-600 dark:text-blue-400">
                         {b.debit > 0 ? formatKES(b.debit) : ''}
                       </TableCell>
-                      <TableCell className="text-right text-sm font-mono text-green-600 dark:text-green-400">
+                      <TableCell className="text-right text-sm font-mono text-green-700 dark:text-green-400">
                         {b.credit > 0 ? formatKES(b.credit) : ''}
                       </TableCell>
                       <TableCell className="text-right text-sm font-mono">{formatKES(Math.abs(b.netBalance))}</TableCell>
@@ -410,7 +410,7 @@ export default function TrialBalancePanel() {
           <Separator />
           <div className="flex items-center justify-between text-xs px-1">
             <span>Total Debits: <strong className="font-mono text-blue-600 dark:text-blue-400">{selectedSnapshot ? formatKES(selectedSnapshot.totalDebits) : '-'}</strong></span>
-            <span>Total Credits: <strong className="font-mono text-green-600 dark:text-green-400">{selectedSnapshot ? formatKES(selectedSnapshot.totalCredits) : '-'}</strong></span>
+            <span>Total Credits: <strong className="font-mono text-green-700 dark:text-green-400">{selectedSnapshot ? formatKES(selectedSnapshot.totalCredits) : '-'}</strong></span>
             <Badge className={selectedSnapshot?.isBalanced
               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
               : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}>

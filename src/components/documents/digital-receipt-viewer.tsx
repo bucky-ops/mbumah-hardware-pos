@@ -118,7 +118,7 @@ export function DigitalReceiptViewer({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <ScanLine className="h-4 w-4 text-emerald-600" aria-hidden />
+            <ScanLine className="h-4 w-4 text-emerald-700" aria-hidden />
             {title}
           </DialogTitle>
           {subtitle ? <DialogDescription>{subtitle}</DialogDescription> : null}
@@ -139,7 +139,7 @@ export function DigitalReceiptViewer({
               title="Fit the whole receipt on screen without scrolling"
             >
               {autofit ? (
-                <Minimize2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+                <Minimize2 className="h-3.5 w-3.5 text-emerald-700" aria-hidden />
               ) : (
                 <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
               )}

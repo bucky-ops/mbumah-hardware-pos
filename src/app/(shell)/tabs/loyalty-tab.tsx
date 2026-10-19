@@ -348,9 +348,9 @@ export default function LoyaltyTab() {
   // Render: Stats Cards
   function renderStatsCards() {
     const stats = [
-      { title: 'Total Members', value: totalMembers.toLocaleString(), icon: Users, color: 'text-emerald-600' },
+      { title: 'Total Members', value: totalMembers.toLocaleString(), icon: Users, color: 'text-emerald-700' },
       { title: 'Points Issued', value: totalPointsIssued.toLocaleString(), icon: Sparkles, color: 'text-purple-600' },
-      { title: 'Points Redeemed', value: totalPointsRedeemed.toLocaleString(), icon: Award, color: 'text-green-600' },
+      { title: 'Points Redeemed', value: totalPointsRedeemed.toLocaleString(), icon: Award, color: 'text-green-700' },
       { title: 'Active Campaigns', value: String(activeCampaigns), icon: Target, color: 'text-rose-600' },
     ];
     return (
@@ -598,7 +598,7 @@ export default function LoyaltyTab() {
                             <Progress value={progress} className="h-1.5" />
                           </div>
                         ) : (
-                          <span className="text-[10px] text-emerald-600 font-medium">Max Tier</span>
+                          <span className="text-[10px] text-emerald-700 font-medium">Max Tier</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -744,7 +744,7 @@ export default function LoyaltyTab() {
                       </TableCell>
                       <TableCell className="text-right">
                         <span className={`text-xs font-semibold ${
-                          ['EARN', 'BONUS'].includes(tx.transactionType) ? 'text-green-600' :
+                          ['EARN', 'BONUS'].includes(tx.transactionType) ? 'text-green-700' :
                           tx.transactionType === 'REDEEM' ? 'text-blue-600' :
                           tx.transactionType === 'EXPIRE' ? 'text-gray-500' : 'text-amber-600'
                         }`}>
@@ -1196,7 +1196,7 @@ export default function LoyaltyTab() {
                         </TableCell>
                         <TableCell className="text-right text-xs font-semibold">
                           <span className={
-                            ['EARN', 'BONUS'].includes(tx.transactionType) ? 'text-green-600' :
+                            ['EARN', 'BONUS'].includes(tx.transactionType) ? 'text-green-700' :
                             tx.transactionType === 'REDEEM' ? 'text-blue-600' : 'text-amber-600'
                           }>
                             {['EARN', 'BONUS'].includes(tx.transactionType) ? '+' : ''}

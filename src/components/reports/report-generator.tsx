@@ -572,7 +572,7 @@ function SalesSummaryPreview({ data }: { data: SalesSummaryData }) {
     changePct === null || changePct === undefined
       ? 'text-muted-foreground'
       : changePct > 0
-        ? 'text-emerald-600 dark:text-emerald-400'
+        ? 'text-emerald-700 dark:text-emerald-400'
         : changePct < 0
           ? 'text-red-600 dark:text-red-400'
           : 'text-muted-foreground';

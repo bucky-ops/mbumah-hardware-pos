@@ -215,7 +215,7 @@ function ProfileSection({ storeId }: { storeId: string }) {
         <CardHeader className="flex flex-row items-start justify-between space-y-0">
           <div className="space-y-1.5">
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-emerald-600" />
+              <Building2 className="h-5 w-5 text-emerald-700" />
               KRA Business Profile
             </CardTitle>
             <CardDescription>
@@ -500,7 +500,7 @@ function InvoicesSection({ storeId }: { storeId: string }) {
       { label: 'Total', value: summary?.total ?? 0, color: 'text-slate-700 dark:text-slate-300', icon: FileText },
       { label: 'Pending', value: byStatus.PENDING ?? 0, color: 'text-slate-600 dark:text-slate-400', icon: Clock },
       { label: 'Submitted', value: byStatus.SUBMITTED ?? 0, color: 'text-blue-600 dark:text-blue-400', icon: Send },
-      { label: 'Accepted', value: byStatus.ACCEPTED ?? 0, color: 'text-emerald-600 dark:text-emerald-400', icon: CheckCircle },
+      { label: 'Accepted', value: byStatus.ACCEPTED ?? 0, color: 'text-emerald-700 dark:text-emerald-400', icon: CheckCircle },
       { label: 'Rejected', value: byStatus.REJECTED ?? 0, color: 'text-rose-600 dark:text-rose-400', icon: XCircle },
       { label: 'Failed', value: byStatus.FAILED ?? 0, color: 'text-amber-600 dark:text-amber-400', icon: AlertCircle },
     ];
@@ -1064,7 +1064,7 @@ export default function EtimsTab() {
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-emerald-600" />
+            <ShieldCheck className="h-6 w-6 text-emerald-700" />
             KRA eTIMS Integration
           </h2>
           <p className="text-sm text-muted-foreground">

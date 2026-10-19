@@ -28,7 +28,7 @@ export default async function MyLeave() {
       <div className="space-y-4">
         <SelfPageHeader
           icon={<Palmtree className="h-5 w-5" />}
-          tone="from-sky-500/15 to-indigo-500/15 text-sky-600 dark:text-sky-400"
+          tone="from-sky-500/15 to-indigo-500/15 text-sky-700 dark:text-sky-400"
           title="My leave"
           description="Balances and requests. Your manager approves before days are used."
         />
@@ -41,7 +41,7 @@ export default async function MyLeave() {
     <div className="space-y-4">
       <SelfPageHeader
         icon={<Palmtree className="h-5 w-5" />}
-        tone="from-sky-500/15 to-indigo-500/15 text-sky-600 dark:text-sky-400"
+        tone="from-sky-500/15 to-indigo-500/15 text-sky-700 dark:text-sky-400"
         title="My leave"
         description="Balances and requests. Your manager approves before days are used."
       />

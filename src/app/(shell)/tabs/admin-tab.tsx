@@ -68,7 +68,7 @@ function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
   const pct = max > 0 ? (value / max) * 100 : 0;
   const status = pct < 50 ? 'good' : pct < 80 ? 'warning' : 'critical';
   const statusColors = {
-    good: 'text-green-600',
+    good: 'text-green-700',
     warning: 'text-yellow-600',
     critical: 'text-red-600',
   };
@@ -149,7 +149,7 @@ function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
 // Stock Adjustment Dialog
 
 const REASON_CATEGORIES = [
-  { value: 'RESTOCK', label: 'Restock', icon: PlusCircle, color: 'text-green-600' },
+  { value: 'RESTOCK', label: 'Restock', icon: PlusCircle, color: 'text-green-700' },
   { value: 'DAMAGE', label: 'Damage', icon: PackageX, color: 'text-red-600' },
   { value: 'THEFT', label: 'Theft', icon: AlertOctagon, color: 'text-red-800' },
   { value: 'CORRECTION', label: 'Correction', icon: Wrench, color: 'text-amber-600' },
@@ -338,7 +338,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
                   <span className="text-muted-foreground">New Stock Level</span>
                   <span className={`font-bold text-base ${
                     newStockLevel !== null && newStockLevel >= 0
-                      ? newStockLevel > selectedProduct.reorderLevel ? 'text-green-600' : 'text-amber-600'
+                      ? newStockLevel > selectedProduct.reorderLevel ? 'text-green-700' : 'text-amber-600'
                       : 'text-red-600'
                   }`}>
                     {newStockLevel ?? '-'} {unitLabel(selectedProduct.unitType)}
@@ -422,7 +422,7 @@ function QuickActions() {
   const actions = [
     { id: 'reindex', label: 'Reindex Database', icon: Database, desc: 'Rebuild search indexes for faster queries', color: 'text-blue-600', bg: 'hover:bg-blue-50 dark:hover:bg-blue-900/20', destructive: false },
     { id: 'cache', label: 'Clear Cache', icon: Trash2, desc: 'Clear all application and query cache', color: 'text-orange-600', bg: 'hover:bg-orange-50 dark:hover:bg-orange-900/20', destructive: true },
-    { id: 'health', label: 'Health Check', icon: ShieldCheck, desc: 'Run full system diagnostics scan', color: 'text-green-600', bg: 'hover:bg-green-50 dark:hover:bg-green-900/20', destructive: false },
+    { id: 'health', label: 'Health Check', icon: ShieldCheck, desc: 'Run full system diagnostics scan', color: 'text-green-700', bg: 'hover:bg-green-50 dark:hover:bg-green-900/20', destructive: false },
     { id: 'optimize', label: 'Optimize DB', icon: Zap, desc: 'Optimize database tables and indexes', color: 'text-purple-600', bg: 'hover:bg-purple-50 dark:hover:bg-purple-900/20', destructive: false },
   ];
 
@@ -449,7 +449,7 @@ function QuickActions() {
                 <p className="text-sm font-medium">{action.label}</p>
                 <p className="text-[10px] text-muted-foreground">{action.desc}</p>
                 {result && (
-                  <p className={`text-[9px] mt-0.5 ${result.success ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`text-[9px] mt-0.5 ${result.success ? 'text-green-700' : 'text-red-600'}`}>
                     {result.success ? '✓' : '✗'} Last: {result.time}
                   </p>
                 )}
@@ -1080,7 +1080,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
               />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-green-600" />
+                  <Smartphone className="h-4 w-4 text-green-700" />
                   <Label>SMS Notifications</Label>
                 </div>
                 <p className="text-[10px] text-muted-foreground">Send SMS alerts for receipts, overdue debts, and low stock</p>
@@ -1112,7 +1112,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
               />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-emerald-600" />
+                  <MessageSquare className="h-4 w-4 text-emerald-700" />
                   <Label>WhatsApp Notifications</Label>
                 </div>
                 <p className="text-[10px] text-muted-foreground">Send WhatsApp messages for payment confirmations</p>
@@ -1137,7 +1137,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
               />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-green-600" />
+                  <Smartphone className="h-4 w-4 text-green-700" />
                   <Label>M-Pesa Payments</Label>
                 </div>
                 <p className="text-[10px] text-muted-foreground">Accept M-Pesa STK Push and paybill payments</p>
@@ -1803,8 +1803,8 @@ export default function AdminTab() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">API Response</span>
                     <div className="flex items-center gap-2">
-                      <MiniSparkline data={apiHistory} color={apiResponseTime > 200 ? 'text-red-500' : 'text-green-600'} height={16} />
-                      <span className={`font-medium ${apiResponseTime > 200 ? 'text-red-600' : 'text-green-600'}`}>
+                      <MiniSparkline data={apiHistory} color={apiResponseTime > 200 ? 'text-red-500' : 'text-green-700'} height={16} />
+                      <span className={`font-medium ${apiResponseTime > 200 ? 'text-red-600' : 'text-green-700'}`}>
                         {apiResponseTime}ms
                       </span>
                     </div>
@@ -1822,11 +1822,11 @@ export default function AdminTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-card border border-green-100 dark:border-green-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
-                  <Clock className="h-4 w-4 text-green-600" />
+                  <Clock className="h-4 w-4 text-green-700" />
                   <span className="text-xs text-muted-foreground">Uptime</span>
                 </div>
-                <p className="text-sm font-bold text-green-600">{formatUptime(uptime)}</p>
-                <p className="text-[10px] text-green-600/70 mt-0.5">Since last restart</p>
+                <p className="text-sm font-bold text-green-700">{formatUptime(uptime)}</p>
+                <p className="text-[10px] text-green-700/70 mt-0.5">Since last restart</p>
               </div>
               <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-card border border-blue-100 dark:border-blue-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
@@ -2042,7 +2042,7 @@ export default function AdminTab() {
                         <TableCell className="text-sm font-medium">{m.product?.name || m.productId}</TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{m.movementType}</Badge></TableCell>
                         <TableCell className="text-right font-medium">
-                          <span className={m.quantity > 0 ? 'text-green-600' : 'text-red-600'}>
+                          <span className={m.quantity > 0 ? 'text-green-700' : 'text-red-600'}>
                             {m.quantity > 0 ? '+' : ''}{m.quantity}
                           </span>
                         </TableCell>

@@ -70,3 +70,53 @@ of re-deciding them. Each contract names the release that set it.
   the dark background flips the math).
 - axe "incomplete" contrast nodes are resolved numerically in the round's
   QA notes, never waved through.
+
+## The B2C auto-recovery contract (v2.155.0)
+
+- Recovery is DURABLE, not dialog-bound: the hourly cron dispatcher folds a
+  `b2c-recovery` sub-job (route `/api/cron/b2c-recovery`, service
+  `src/lib/hr/payroll/b2c-recovery.ts`) that walks every posted/locked run
+  still holding unpaid money (oldest first, capped 25 runs/tick) and applies
+  the SAME gate arithmetic the run dialog uses.
+- One source of truth: `pickB2CRecoveryActions` reads the run's
+  `summariseRunB2CState` and re-sends only latest-FAILED, unsettled payslips
+  whose `evaluateB2CRetryGate` allows (backoff elapsed, ceiling not hit);
+  stuck PROCESSING past `B2C_STALE_PROCESSING_MS` triggers one re-query
+  sweep. The cron can never be more aggressive than the UI — only more
+  punctual.
+- Idempotency is inherited, never re-invented: `initiatePayrollB2C` refuses
+  a payslip with an active transaction, so overlapping ticks cannot
+  double-pay. Ceil-blocked payslips (5 attempts) stay human-only.
+- Environment discipline: in production without Daraja credentials and
+  without `MPESA_B2C_ALLOW_MOCK`, the sweep early-outs (`configured:false`)
+  before touching the database. Audit rows carry the sentinel actor
+  `system:b2c-recovery` (AuditLog.userId is a plain nullable string).
+- The run dialog says so: a `b2c-auto-recovery-note` truth line renders on
+  posted/locked runs with the disburse permission — the backoff chips are
+  advisory, not the only path home.
+
+## The tabs contrast sweep (v2.155.0)
+
+- The 19-tab POS shell family audited at 390px: every tab holds
+  `scrollWidth === 390`; seven tabs carried the tinted-bg text failures the
+  console family had already fixed — the same lesson-65 classes, tab-side.
+- The standing text families (light tokens, `dark:` pairs kept):
+  `green-700`, `emerald-700`, `sky-700` for text; `bg-emerald-700` (hover
+  `bg-emerald-800`) for white-text fills; `from-emerald-600 to-emerald-700`
+  for white-text gradients; bare `text-muted-foreground` (never `/70`) at
+  10px. Numeric passes on the palette: green-700 on gray-50 4.80:1,
+  emerald-700 on white 5.49:1, sky-700 on sky-50 5.57:1, white on
+  emerald-700 5.49:1.
+- Dark-mode hover convention: dark rest tokens darken LESS than light ones
+  (`dark:bg-emerald-700` with `dark:hover:bg-emerald-600`) — protect `dark:`
+  substrings BEFORE any family sweep, and re-check `dark:hover` pairs after.
+
+## The branches CSV contract (v2.152.0 + v2.154.0)
+
+- Three sections in one blob: the per-branch matrix, "People & payroll by
+  branch" (headcount/cost/absence/payroll status/expiry alerts — empty cells
+  honest when the org console has no data), and the desk's yesterday digest
+  (org-wide review activity; a refused read exports without the section and
+  the note says so). RFC-4180 quoting, generated stamp, raw numbers.
+- The export note links the live blob ("Open") after download; one blob
+  alive at a time; the URL is revoked on re-export.

@@ -384,7 +384,7 @@ export default function TransfersTab() {
         {[
           { title: 'Pending Transfers', value: pendingCount.toString(), icon: Clock, color: 'text-amber-600' },
           { title: 'In Transit', value: inTransitCount.toString(), icon: Truck, color: 'text-blue-600' },
-          { title: 'Completed This Month', value: completedThisMonth.toString(), icon: CheckCircle, color: 'text-green-600' },
+          { title: 'Completed This Month', value: completedThisMonth.toString(), icon: CheckCircle, color: 'text-green-700' },
           { title: 'Total Items Transferred', value: totalItemsTransferred.toString(), icon: Package, color: 'text-purple-600' },
         ].map((stat) => (
           <Card key={stat.title}>

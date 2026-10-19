@@ -50,7 +50,7 @@ export default async function MyAttendance() {
       <div className="space-y-4">
         <SelfPageHeader
           icon={<CalendarClock className="h-5 w-5" />}
-          tone="from-sky-500/15 to-cyan-500/15 text-sky-600 dark:text-sky-400"
+          tone="from-sky-500/15 to-cyan-500/15 text-sky-700 dark:text-sky-400"
           title="My attendance"
           description="Your punches and hours for recent days."
         />
@@ -70,7 +70,7 @@ export default async function MyAttendance() {
     <div className="space-y-4">
       <SelfPageHeader
         icon={<CalendarClock className="h-5 w-5" />}
-        tone="from-sky-500/15 to-cyan-500/15 text-sky-600 dark:text-sky-400"
+        tone="from-sky-500/15 to-cyan-500/15 text-sky-700 dark:text-sky-400"
         title="My attendance"
         description="Your punches and hours for recent days."
       />
@@ -78,10 +78,10 @@ export default async function MyAttendance() {
       {/* Month summary */}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={`This month summary — ${monthLabel}`}>
         {[
-          { label: 'Present', value: presentCount, icon: CheckCircle2, tone: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300' },
+          { label: 'Present', value: presentCount, icon: CheckCircle2, tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300' },
           { label: 'Late', value: lateCount, icon: Timer, tone: 'text-amber-600 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300' },
           { label: 'Absent', value: absentCount, icon: XCircle, tone: 'text-rose-600 bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300' },
-          { label: 'On leave', value: leaveCount, icon: CalendarClock, tone: 'text-sky-600 bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300' },
+          { label: 'On leave', value: leaveCount, icon: CalendarClock, tone: 'text-sky-700 bg-sky-100 dark:bg-sky-950/60 dark:text-sky-300' },
         ].map((tile) => (
           <div key={tile.label} className="rounded-2xl border bg-card p-3.5 shadow-sm transition-shadow hover:shadow-md">
             <span className={`mb-2 inline-flex h-7 w-7 items-center justify-center rounded-lg ${tile.tone}`}>

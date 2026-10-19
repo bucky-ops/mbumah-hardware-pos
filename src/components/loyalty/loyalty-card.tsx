@@ -339,7 +339,7 @@ export function LoyaltyCard({
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg border bg-gradient-to-br from-green-50 to-green-100/30 dark:from-green-950/30 dark:to-green-900/10 p-3">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              <TrendingUp className="h-3 w-3 text-green-600" /> Earned
+              <TrendingUp className="h-3 w-3 text-green-700" /> Earned
             </div>
             <div className="text-lg font-bold text-green-700 dark:text-green-400 tabular-nums">
               {data.totalEarned.toLocaleString()}
@@ -461,7 +461,7 @@ function LoyaltyTxRow({ tx }: { tx: LoyaltyTransactionItem }) {
         </p>
       </div>
       <div className="text-right shrink-0">
-        <div className={`text-sm font-bold tabular-nums ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+        <div className={`text-sm font-bold tabular-nums ${isPositive ? 'text-green-700 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
           {isPositive ? '+' : ''}
           {tx.points.toLocaleString()}
         </div>

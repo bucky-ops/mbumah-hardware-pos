@@ -173,13 +173,13 @@ export function UpdatesSafetySection() {
                 </Badge>
               )}
               {data.updateAvailable && data.latestRelease ? (
-                <Badge className="bg-emerald-600 text-white text-xs">
+                <Badge className="bg-emerald-700 text-white text-xs">
                   <History className="h-3 w-3 mr-1" />
                   Update available: {data.latestRelease.tag}
                 </Badge>
               ) : data.latestRelease ? (
                 <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />
                   Up to date with the latest release
                 </span>
               ) : null}
@@ -227,7 +227,7 @@ export function UpdatesSafetySection() {
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between rounded-lg border border-border/60 p-3">
           <div className="min-w-0">
             <p className="text-xs font-medium flex items-center gap-1.5">
-              <HardDrive className="h-3.5 w-3.5 text-emerald-600" /> Data protection
+              <HardDrive className="h-3.5 w-3.5 text-emerald-700" /> Data protection
             </p>
             <p className="text-[11px] text-muted-foreground truncate">
               {data?.lastBackup
@@ -258,7 +258,7 @@ export function UpdatesSafetySection() {
         <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
           <div>
             <p className="text-xs font-medium flex items-center gap-1.5">
-              <Undo2 className="h-3.5 w-3.5 text-emerald-600" /> Roll back production
+              <Undo2 className="h-3.5 w-3.5 text-emerald-700" /> Roll back production
             </p>
             {!data ? (
               <p className="text-[11px] text-muted-foreground mt-0.5">

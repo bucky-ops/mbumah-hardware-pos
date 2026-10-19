@@ -198,7 +198,7 @@ export function DebtPlansTab() {
           <Button
             size="sm"
             onClick={() => setCreateOpen(true)}
-            className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white"
+            className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white"
           >
             <Plus className="h-4 w-4 mr-1" />
             Create Plan
@@ -278,7 +278,7 @@ export function DebtPlansTab() {
                 repayment schedule for a customer with an outstanding balance.
               </p>
               <Button
-                className="mt-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white"
+                className="mt-4 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white"
                 onClick={() => setCreateOpen(true)}
               >
                 <Plus className="h-4 w-4 mr-1" />

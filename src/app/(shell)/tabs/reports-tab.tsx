@@ -571,7 +571,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <ArrowUpRight className="h-4 w-4 text-green-600" />
+                <ArrowUpRight className="h-4 w-4 text-green-700" />
                 Top Growing Products
               </CardTitle>
               <Button
@@ -641,7 +641,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                         return (
                           <div className="rounded-md border bg-background p-2 shadow-md text-xs space-y-1">
                             <div className="font-medium">{p.fullName}</div>
-                            <div className="text-muted-foreground">Growth: <span className="font-medium text-green-600">+{p.growth}%</span></div>
+                            <div className="text-muted-foreground">Growth: <span className="font-medium text-green-700">+{p.growth}%</span></div>
                             {p.revenue > 0 && <div className="text-muted-foreground">Revenue: <span className="font-medium">{formatKES(p.revenue)}</span></div>}
                           </div>
                         );
@@ -886,7 +886,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                         <TableCell className="text-right">{(row.share * 100).toFixed(1)}%</TableCell>
                         <TableCell className="text-right">
                           <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${
-                            row.changePct >= 0 ? 'text-green-600' : 'text-red-600'
+                            row.changePct >= 0 ? 'text-green-700' : 'text-red-600'
                           }`}>
                             {row.changePct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                             {Math.abs(Math.round(row.changePct))}%
@@ -1334,13 +1334,13 @@ export default function ReportsTab() {
   };
 
   const changeIndicator = (change: number) => {
-    if (change > 0) return <ArrowUpRight className="h-4 w-4 text-green-600" />;
+    if (change > 0) return <ArrowUpRight className="h-4 w-4 text-green-700" />;
     if (change < 0) return <ArrowDownRight className="h-4 w-4 text-red-600" />;
     return <Minus className="h-4 w-4 text-muted-foreground" />;
   };
 
   const changeColor = (change: number) => {
-    if (change > 0) return 'text-green-600';
+    if (change > 0) return 'text-green-700';
     if (change < 0) return 'text-red-600';
     return 'text-muted-foreground';
   };
@@ -1391,7 +1391,7 @@ export default function ReportsTab() {
                     {iconMap[type.iconName]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm group-hover:text-emerald-600 transition-colors">{type.label}</h3>
+                    <h3 className="font-semibold text-sm group-hover:text-emerald-700 transition-colors">{type.label}</h3>
                     <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{type.desc}</p>
                   </div>
                 </div>
@@ -1904,7 +1904,7 @@ export default function ReportsTab() {
                   <Card className="backdrop-blur-sm bg-card/80">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
-                        <HeartPulse className="h-4 w-4 text-green-600" /> Stock Health
+                        <HeartPulse className="h-4 w-4 text-green-700" /> Stock Health
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -2046,7 +2046,7 @@ export default function ReportsTab() {
                   <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground">Total Stock Value</p>
-                      <p className="text-2xl font-bold text-green-600">{formatKES(inventoryReport.totalInventoryValue)}</p>
+                      <p className="text-2xl font-bold text-green-700">{formatKES(inventoryReport.totalInventoryValue)}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">qty × cost price</p>
                     </CardContent>
                   </Card>
@@ -2145,7 +2145,7 @@ export default function ReportsTab() {
                   <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground">Today&apos;s Revenue</p>
-                      <p className="text-2xl font-bold text-green-600">{formatKES(salesReport.totalRevenue)}</p>
+                      <p className="text-2xl font-bold text-green-700">{formatKES(salesReport.totalRevenue)}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
@@ -2201,7 +2201,7 @@ export default function ReportsTab() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20">
                             <p className="text-xs text-muted-foreground">Peak Hour</p>
-                            <p className="text-xl font-bold text-green-600">{peak?.label || 'N/A'}</p>
+                            <p className="text-xl font-bold text-green-700">{peak?.label || 'N/A'}</p>
                             <p className="text-sm">{formatKES(peak?.value || 0)}</p>
                           </div>
                           <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">

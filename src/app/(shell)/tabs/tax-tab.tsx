@@ -142,7 +142,7 @@ function TaxCategoryDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={createMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700">
+          <Button onClick={handleSave} disabled={createMutation.isPending} className="bg-emerald-700 hover:bg-emerald-800">
             {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {category ? 'Update' : 'Create'}
           </Button>
@@ -263,7 +263,7 @@ function TaxFilingDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={createMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700">
+          <Button onClick={handleSave} disabled={createMutation.isPending} className="bg-emerald-700 hover:bg-emerald-800">
             {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create Filing
           </Button>
@@ -435,7 +435,7 @@ export default function TaxTab() {
           <h2 className="text-xl font-semibold">Tax / eTIMS</h2>
           <p className="text-sm text-muted-foreground">Tax categories, rates, filings, and KRA eTIMS compliance</p>
         </div>
-        <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700" onClick={() => setFilingDialogOpen(true)}>
+        <Button size="sm" className="h-8 bg-emerald-700 hover:bg-emerald-800" onClick={() => setFilingDialogOpen(true)}>
           <Plus className="mr-1.5 h-4 w-4" /> New Filing
         </Button>
       </div>
@@ -443,10 +443,10 @@ export default function TaxTab() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { title: 'Total VAT Collected', value: formatKES(totalVAT), icon: Receipt, color: 'text-emerald-600' },
+          { title: 'Total VAT Collected', value: formatKES(totalVAT), icon: Receipt, color: 'text-emerald-700' },
           { title: 'WHT Withheld', value: formatKES(totalWHT), icon: TrendingUp, color: 'text-amber-600' },
-          { title: 'Filings Due', value: filingsDue.toString(), icon: FileText, color: filingsDue > 0 ? 'text-red-600' : 'text-green-600' },
-          { title: 'eTIMS Status', value: etimsActiveCategories > 0 ? `${etimsActiveCategories} Mapped` : 'Not Set', icon: ShieldCheck, color: etimsActiveCategories > 0 ? 'text-emerald-600' : 'text-slate-500' },
+          { title: 'Filings Due', value: filingsDue.toString(), icon: FileText, color: filingsDue > 0 ? 'text-red-600' : 'text-green-700' },
+          { title: 'eTIMS Status', value: etimsActiveCategories > 0 ? `${etimsActiveCategories} Mapped` : 'Not Set', icon: ShieldCheck, color: etimsActiveCategories > 0 ? 'text-emerald-700' : 'text-slate-500' },
         ].map((stat) => (
           <Card key={stat.title}>
             <CardContent className="p-4">
@@ -515,7 +515,7 @@ export default function TaxTab() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${cat.isActive ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                              <Receipt className={`h-5 w-5 ${cat.isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+                              <Receipt className={`h-5 w-5 ${cat.isActive ? 'text-emerald-700' : 'text-slate-400'}`} />
                             </div>
                             <div>
                               <p className="font-medium text-sm">{cat.name}</p>
@@ -633,7 +633,7 @@ export default function TaxTab() {
                 <SelectItem value="TURNOVER_TAX">Turnover Tax</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" className="h-9 ml-auto bg-emerald-600 hover:bg-emerald-700" onClick={() => setFilingDialogOpen(true)}>
+            <Button size="sm" className="h-9 ml-auto bg-emerald-700 hover:bg-emerald-800" onClick={() => setFilingDialogOpen(true)}>
               <Plus className="mr-1.5 h-4 w-4" /> New Filing
             </Button>
           </div>
@@ -730,7 +730,7 @@ export default function TaxTab() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <ShieldCheck className="h-4 w-4 text-emerald-700" />
                 eTIMS Configuration
               </CardTitle>
               <CardDescription>KRA Electronic Tax Invoice Management System settings</CardDescription>
@@ -788,7 +788,7 @@ export default function TaxTab() {
                     </Badge>
                   )}
                 </div>
-                <Button size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700" onClick={() => toast.success('eTIMS settings saved')}>
+                <Button size="sm" className="h-9 bg-emerald-700 hover:bg-emerald-800" onClick={() => toast.success('eTIMS settings saved')}>
                   Save Settings
                 </Button>
               </div>

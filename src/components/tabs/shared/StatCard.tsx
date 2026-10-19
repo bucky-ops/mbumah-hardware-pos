@@ -26,7 +26,7 @@ export interface StatCardProps {
   trendLabel?: string;
   /** Background classes for the icon container, e.g. "bg-green-100" */
   iconBg?: string;
-  /** Color classes for the icon, e.g. "text-green-600" */
+  /** Color classes for the icon, e.g. "text-green-700" */
   iconColor?: string;
   /** Tailwind border-left color class, e.g. "border-l-green-500" */
   borderLeftColor?: string;

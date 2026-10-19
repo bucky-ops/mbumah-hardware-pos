@@ -647,7 +647,7 @@ export default function HrPayrollPage() {
         money: false,
         icon: CheckCircle2,
         hint: 'Journals posted; payslips issued and append-only',
-        tone: 'text-emerald-600 dark:text-emerald-400',
+        tone: 'text-emerald-700 dark:text-emerald-400',
       },
       {
         label: 'Net posted (all runs)',
@@ -657,7 +657,7 @@ export default function HrPayrollPage() {
         money: true,
         icon: Banknote,
         hint: 'Sum of net pay across posted runs',
-        tone: 'text-sky-600 dark:text-sky-400',
+        tone: 'text-sky-700 dark:text-sky-400',
       },
       {
         label: 'Payroll periods',
@@ -1243,7 +1243,7 @@ export default function HrPayrollPage() {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" aria-hidden />
                     Gate activity
                     {timeline && timeline.summary.attempts > 0 ? (
                       <span
@@ -1508,7 +1508,7 @@ export default function HrPayrollPage() {
                           {row.outcome === 'BLOCKED' ? (
                             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                           ) : row.outcome === 'PASSED' ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                           ) : (
                             <ShieldCheck className="h-4 w-4 text-muted-foreground/50" />
                           )}

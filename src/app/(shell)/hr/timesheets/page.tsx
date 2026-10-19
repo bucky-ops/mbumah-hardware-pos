@@ -658,7 +658,7 @@ export default function HrTimesheetsPage() {
                               ) : null}
                               {split.weekend > 0 ? (
                                 <span className="inline-flex items-center gap-0.5">
-                                  <Sun className="h-3 w-3 text-sky-600 dark:text-sky-400" aria-hidden />
+                                  <Sun className="h-3 w-3 text-sky-700 dark:text-sky-400" aria-hidden />
                                   {split.weekend}
                                 </span>
                               ) : null}

@@ -850,7 +850,7 @@ function EmployeesSubTab({ storeId }: { storeId: string }) {
                           <Button
                             size="icon"
                             variant="ghost"
-                            className={`h-8 w-8 ${e.userId ? 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10' : 'text-muted-foreground hover:text-foreground'}`}
+                            className={`h-8 w-8 ${e.userId ? 'text-emerald-700 hover:text-emerald-700 hover:bg-emerald-500/10' : 'text-muted-foreground hover:text-foreground'}`}
                             onClick={() => setLinkTarget(e)}
                             title={e.userId ? 'Manage portal account link' : 'Link portal account'}
                             aria-label={`${e.userId ? 'Manage' : 'Link'} portal account for ${e.fullName}`}
@@ -1065,7 +1065,7 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <UserCog className="h-4 w-4 text-emerald-600" aria-hidden /> Portal account
+            <UserCog className="h-4 w-4 text-emerald-700" aria-hidden /> Portal account
           </DialogTitle>
           <DialogDescription>
             {employee
@@ -1246,7 +1246,7 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
                           title="Copy the temporary password"
                           onClick={handleCopyPassword}
                         >
-                          {pwCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+                          {pwCopied ? <Check className="h-3.5 w-3.5 text-emerald-700" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
                           {pwCopied ? 'Copied' : 'Copy'}
                         </Button>
                       </div>
@@ -1346,7 +1346,7 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
               size="sm"
               disabled={!isCreateLinkFormReady(createForm) || busy}
               onClick={() => createAndLinkMutation.mutate(createForm)}
-              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+              className="gap-1.5 bg-emerald-700 text-white hover:bg-emerald-800"
             >
               {createAndLinkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" aria-hidden />}
               Create &amp; link account
@@ -1357,7 +1357,7 @@ function PortalLinkDialog({ open, employee, storeId, linkedUserIds, onClose }: {
               size="sm"
               disabled={!pickUserId || busy}
               onClick={() => linkMutation.mutate(pickUserId)}
-              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+              className="gap-1.5 bg-emerald-700 text-white hover:bg-emerald-800"
             >
               {linkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" aria-hidden />}
               Link account
@@ -2217,7 +2217,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                 const meta = parseLeaveAttachmentMeta(l.attachmentUrl);
                                 const markerClass =
                                   meta?.kind === 'image'
-                                    ? 'text-sky-600 dark:text-sky-400'
+                                    ? 'text-sky-700 dark:text-sky-400'
                                     : meta?.kind === 'link'
                                       ? 'text-indigo-600 dark:text-indigo-400'
                                       : 'text-rose-600 dark:text-rose-400';
@@ -2264,7 +2264,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-500/10"
+                                    className="h-8 w-8 p-0 text-green-700 hover:text-green-700 hover:bg-green-500/10"
                                     title="Approve request"
                                     aria-label={`Approve leave for ${l.employeeName}`}
                                     onClick={() => actionMutation.mutate({ action: 'APPROVE', leaveRequestId: l.id })}
@@ -2413,7 +2413,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                     {lt.description && <p className="text-xs text-muted-foreground">{lt.description}</p>}
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       <Badge variant="secondary" className="text-xs">{lt.defaultDaysPerYear} days/yr</Badge>
-                      {lt.isPaid && <Badge variant="outline" className="text-xs text-green-600 border-green-300">Paid</Badge>}
+                      {lt.isPaid && <Badge variant="outline" className="text-xs text-green-700 border-green-300">Paid</Badge>}
                       {lt.isStatutory && <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">Statutory</Badge>}
                       {lt.carryForwardAllowed && <Badge variant="outline" className="text-xs text-purple-600 border-purple-300">Carry Fwd</Badge>}
                     </div>
@@ -2956,7 +2956,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="text-muted-foreground">Available balance for this type</span>
-                      <span className={`font-semibold tabular-nums ${previewInsufficient ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      <span className={`font-semibold tabular-nums ${previewInsufficient ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                         {previewAvailable !== null && (previewAvailable % 1 === 0 ? previewAvailable : previewAvailable.toFixed(1))} of{' '}
                         {previewEntitlement !== null && (previewEntitlement % 1 === 0 ? previewEntitlement : previewEntitlement.toFixed(1))} d
                       </span>
@@ -3105,7 +3105,7 @@ function LeaveSubTab({ storeId }: { storeId: string }) {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="text-muted-foreground">Available balance for this type</span>
-                      <span className={`font-semibold tabular-nums ${previewInsufficient ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      <span className={`font-semibold tabular-nums ${previewInsufficient ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                         {previewAvailable !== null && (previewAvailable % 1 === 0 ? previewAvailable : previewAvailable.toFixed(1))} of{' '}
                         {previewEntitlement !== null && (previewEntitlement % 1 === 0 ? previewEntitlement : previewEntitlement.toFixed(1))} d
                       </span>
@@ -3631,7 +3631,7 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
               disabled={!clockEmpId || clockMutation.isPending}
               onClick={() => clockMutation.mutate({ employeeId: clockEmpId, action: 'check_in' })}
             >
-              <Clock className="h-4 w-4 mr-2 text-green-600" /> Clock In
+              <Clock className="h-4 w-4 mr-2 text-green-700" /> Clock In
             </Button>
             <Button
               variant="outline"
@@ -3699,7 +3699,7 @@ function AttendanceSubTab({ storeId }: { storeId: string }) {
                       <td className="px-2 py-2.5 text-xs tabular-nums">{r.checkOut ? formatDateTime(r.checkOut) : '-'}</td>
                       <td className="px-2 py-2.5 text-right font-medium tabular-nums">
                         {toNum(r.workingHours) > 0 ? `${toNum(r.workingHours).toFixed(1)}h` : '-'}
-                        {toNum(r.overtimeHours) > 0 ? <span className="block text-[10px] text-emerald-600 dark:text-emerald-400">+{toNum(r.overtimeHours).toFixed(1)}h OT</span> : null}
+                        {toNum(r.overtimeHours) > 0 ? <span className="block text-[10px] text-emerald-700 dark:text-emerald-400">+{toNum(r.overtimeHours).toFixed(1)}h OT</span> : null}
                         {toNum(r.lateMinutes) > 0 ? <span className="block text-[10px] text-amber-600 dark:text-amber-400">{toNum(r.lateMinutes)}m late</span> : null}
                       </td>
                       <td className="px-2 py-2.5"><StatusBadge status={r.status} /></td>

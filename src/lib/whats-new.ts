@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.155.0',
+    title: 'Recovery that never sleeps',
+    bullets: [
+      'Failed M-Pesa disbursements now retry themselves on the hourly sweep — no more waiting for someone to open the run dialog.',
+      'The same backoff and attempt-ceiling rules as the button: the sweep can never be more aggressive, only more punctual.',
+      'Stuck “processing” transfers are re-queried automatically; payslips settle the moment Safaricom answers.',
+      'Payslips that hit the 5-attempt ceiling still wait for a human — the run dialog tells you which.',
+      'Shop-floor colours deepen a shade across every tab so labels read on their own tinted cards.',
+    ],
+  },
+  {
     version: '2.154.0',
     title: 'Buttons that read in the dark',
     bullets: [

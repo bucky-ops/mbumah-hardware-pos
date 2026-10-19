@@ -102,7 +102,7 @@ const PAYMENT_METHODS: {
   iconGradient: string;
 }[] = [
   {
-    value: 'CASH', label: 'Cash', icon: Banknote, desc: 'Receive cash & give change', color: 'text-green-600',
+    value: 'CASH', label: 'Cash', icon: Banknote, desc: 'Receive cash & give change', color: 'text-green-700',
     selectedGradient: 'from-emerald-500 to-green-600',
     iconGradient: 'bg-gradient-to-br from-emerald-500 to-green-600 text-white',
   },
@@ -449,7 +449,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
             <span>{formatKES(summarySubtotal)}</span>
           </div>
           {totalDiscount > 0 && (
-            <div className="flex justify-between text-green-600">
+            <div className="flex justify-between text-green-700">
               <span className="flex items-center gap-0.5"><Tag className="h-2.5 w-2.5" />Discount</span>
               <span>-{formatKES(totalDiscount)}</span>
             </div>
@@ -528,7 +528,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
         <span className="break-words">
           Total: <span className="font-bold text-primary">{formatKES(finalTotal)}</span>
           {totalDiscount > 0 && (
-            <span className="text-green-600 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
+            <span className="text-green-700 text-xs ml-2">(Save {formatKES(totalDiscount)})</span>
           )}
         </span>
       }
@@ -752,7 +752,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                             </div>
                             <div>
                               <p className="text-muted-foreground">Available</p>
-                              <p className="font-semibold text-green-600">{formatKES(debtAvailable)}</p>
+                              <p className="font-semibold text-green-700">{formatKES(debtAvailable)}</p>
                             </div>
                             <div>
                               <p className="text-muted-foreground">This Sale</p>
@@ -937,7 +937,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                     </div>
                     <div className="text-xs flex justify-between">
                       <span className="text-muted-foreground">Total Entered:</span>
-                      <span className={`font-semibold ${(Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal ? 'text-green-600' : 'text-amber-600'}`}>
+                      <span className={`font-semibold ${(Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0) >= finalTotal ? 'text-green-700' : 'text-amber-600'}`}>
                         {formatKES((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0))}
                         {((Number(splitCashAmount) || 0) + (Number(splitMpesaAmount) || 0)) < finalTotal && (
                           <span className="ml-1">· short {formatKES(finalTotal - (Number(splitCashAmount) || 0) - (Number(splitMpesaAmount) || 0))}</span>
@@ -976,7 +976,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                           </p>
                         </div>
                         <div className="flex items-center gap-2 p-2.5 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
-                          <Smartphone className="h-4 w-4 text-green-600 shrink-0" />
+                          <Smartphone className="h-4 w-4 text-green-700 shrink-0" />
                           <p className="text-[11px] text-green-700 dark:text-green-300">
                             Using Safaricom Daraja API. Need to check credentials or test callback?{' '}
                             <a href="https://daraja.safaricom.co.ke" target="_blank" rel="noopener noreferrer" className="font-semibold underline inline-flex items-center gap-0.5">
@@ -1055,7 +1055,7 @@ export function CheckoutDialog(props: CheckoutDialogProps) {
                       <span className="font-semibold">{cashReceived ? formatKES(Number(cashReceived)) : '-'}</span>
                     </div>
                     {change > 0 && (
-                      <div className="flex justify-between text-green-600">
+                      <div className="flex justify-between text-green-700">
                         <span>Change Due</span>
                         <span className="font-bold">{formatKES(change)}</span>
                       </div>

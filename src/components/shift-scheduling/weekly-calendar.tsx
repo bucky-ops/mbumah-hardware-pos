@@ -112,7 +112,7 @@ export function WeeklyCalendar({
                   <button
                     type="button"
                     onClick={() => onSlotClick(d.date)}
-                    className="w-full h-full min-h-[100px] flex flex-col items-center justify-center gap-1 rounded-md text-[10px] text-muted-foreground/60 hover:text-emerald-600 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400 transition-colors border border-dashed border-transparent hover:border-emerald-300"
+                    className="w-full h-full min-h-[100px] flex flex-col items-center justify-center gap-1 rounded-md text-[10px] text-muted-foreground/60 hover:text-emerald-700 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400 transition-colors border border-dashed border-transparent hover:border-emerald-300"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Add shift</span>
@@ -130,7 +130,7 @@ export function WeeklyCalendar({
                     <button
                       type="button"
                       onClick={() => onSlotClick(d.date)}
-                      className="w-full flex items-center justify-center gap-1 py-1 rounded-md text-[10px] text-muted-foreground/60 hover:text-emerald-600 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400 transition-colors border border-dashed border-transparent hover:border-emerald-300"
+                      className="w-full flex items-center justify-center gap-1 py-1 rounded-md text-[10px] text-muted-foreground/60 hover:text-emerald-700 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400 transition-colors border border-dashed border-transparent hover:border-emerald-300"
                     >
                       <Plus className="h-3 w-3" />
                       <span>Add</span>

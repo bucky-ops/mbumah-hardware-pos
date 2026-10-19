@@ -841,7 +841,7 @@ export default function InvoicesTab() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <TrendingUp className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Revenue</p>
@@ -1023,7 +1023,7 @@ export default function InvoicesTab() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-emerald-600 hover:text-emerald-700"
+                              className="h-8 w-8 text-emerald-700 hover:text-emerald-700"
                               onClick={() => handleStatusChange(inv, 'PAID')}
                               title="Mark as Paid"
                               disabled={updateMutation.isPending}
@@ -1074,7 +1074,7 @@ export default function InvoicesTab() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            className="h-8 w-8 text-green-700 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
                             onClick={() => handleSendWhatsApp(inv)}
                             title="Send via WhatsApp"
                           >
@@ -1084,7 +1084,7 @@ export default function InvoicesTab() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                            className="h-8 w-8 text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                             onClick={() => handleSendSms(inv)}
                             title="Send via SMS"
                             aria-label="Send via SMS"
@@ -1703,7 +1703,7 @@ export default function InvoicesTab() {
                   </Button>
                   <Button
                     size="sm"
-                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
                     onClick={() => handleSendSms(invoiceDetail)}
                     title="Send via SMS"
                     aria-label="Send via SMS"
@@ -1736,7 +1736,7 @@ export default function InvoicesTab() {
                       />
                       <div className="min-w-0 flex-1 space-y-2">
                         <p className="flex items-center gap-2 text-sm font-semibold">
-                          <QrCode className="h-4 w-4 text-emerald-600" aria-hidden />
+                          <QrCode className="h-4 w-4 text-emerald-700" aria-hidden />
                           Digital receipt (QR)
                         </p>
                         <p className="text-xs leading-relaxed text-muted-foreground">
@@ -1749,7 +1749,7 @@ export default function InvoicesTab() {
                         <div className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
                             onClick={() => setReceiptViewerOpen(true)}
                           >
                             <Receipt className="h-4 w-4" /> View receipt

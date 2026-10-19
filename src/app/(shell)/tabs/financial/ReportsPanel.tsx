@@ -288,7 +288,7 @@ function BalanceSheetReport({ storeId }: { storeId: string }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Assets (left) */}
             <div className="p-3 rounded-lg bg-gradient-to-r from-green-50 to-green-50/50 dark:from-green-900/20 dark:to-green-900/10 border border-green-100 dark:border-green-900/30">
-              <p className="text-xs font-bold uppercase tracking-wider text-green-600 dark:text-green-400 mb-2">Assets</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-green-700 dark:text-green-400 mb-2">Assets</p>
               <div className="space-y-1 text-sm font-mono">
                 {assets.map((a) => (
                   <div key={a.accountCode} className="flex justify-between pl-2">

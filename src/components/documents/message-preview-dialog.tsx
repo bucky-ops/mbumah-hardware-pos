@@ -121,7 +121,7 @@ export function MessagePreviewDialog({
       <DialogContent className="sm:max-w-lg" aria-describedby="msg-preview-desc">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <ChannelIcon className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            <ChannelIcon className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             {title || defaultTitle}
           </DialogTitle>
           <DialogDescription id="msg-preview-desc" className="text-xs">
@@ -198,13 +198,13 @@ export function MessagePreviewDialog({
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={handleCopy} className="gap-1.5">
             {copied ? (
-              <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+              <Check className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             ) : (
               <Copy className="h-4 w-4" aria-hidden="true" />
             )}
             Copy message
           </Button>
-          <Button onClick={handleOpenApp} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+          <Button onClick={handleOpenApp} className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white">
             <ExternalLink className="h-4 w-4" aria-hidden="true" />
             Open in {channelLabel}
           </Button>

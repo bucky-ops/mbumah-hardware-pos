@@ -123,7 +123,7 @@ export function AccountsList({
                                 </span>
                               )}
                               {accountCredit > 0 && (
-                                <span className="text-green-600 dark:text-green-400 font-mono" title="Credit">
+                                <span className="text-green-700 dark:text-green-400 font-mono" title="Credit">
                                   Cr: {formatKES(accountCredit)}
                                 </span>
                               )}
@@ -183,7 +183,7 @@ export function AccountsList({
               </div>
               <div className="text-center flex-1">
                 <p className="text-[10px] text-muted-foreground uppercase">Total Credits</p>
-                <p className="font-bold text-green-600 dark:text-green-400 font-mono">{formatKES(trialBalance.totalCredits)}</p>
+                <p className="font-bold text-green-700 dark:text-green-400 font-mono">{formatKES(trialBalance.totalCredits)}</p>
               </div>
             </div>
             {!trialBalance.isBalanced && (

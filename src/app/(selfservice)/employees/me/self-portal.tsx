@@ -136,7 +136,7 @@ export function SelfPageHeader({
   action,
 }: {
   icon: React.ReactNode;
-  /** Tailwind classes for the icon tile background, e.g. 'from-emerald-500/15 to-sky-500/15 text-emerald-600 dark:text-emerald-400'. */
+  /** Tailwind classes for the icon tile background, e.g. 'from-emerald-500/15 to-sky-500/15 text-emerald-700 dark:text-emerald-400'. */
   tone: string;
   title: string;
   description: string;

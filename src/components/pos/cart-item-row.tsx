@@ -89,7 +89,7 @@ export function CartItemRow({
           <span className="text-xs text-muted-foreground">{formatKES(item.pricePerUnit)}</span>
           <span className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground font-medium">{unitLabel(item.unitType)}</span>
           {item.discountPercent > 0 && (
-            <span className="text-[9px] text-green-600 font-medium">{item.discountPercent}% off</span>
+            <span className="text-[9px] text-green-700 font-medium">{item.discountPercent}% off</span>
           )}
         </div>
         {/* Quick Add buttons - hidden on desktop, shown on hover; always visible on mobile */}

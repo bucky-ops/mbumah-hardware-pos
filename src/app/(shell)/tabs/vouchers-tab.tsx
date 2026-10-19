@@ -895,7 +895,7 @@ export default function VouchersTab() {
                 resetVoucherForm();
                 setCreateVoucherOpen(true);
               }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white shadow-md"
             >
               <Plus className="h-4 w-4 mr-2" />
               New Voucher
@@ -916,7 +916,7 @@ export default function VouchersTab() {
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <Ticket className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                  <Ticket className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
                 </div>
               </div>
             </CardContent>
@@ -1075,7 +1075,7 @@ export default function VouchersTab() {
                     </p>
                     <Button
                       size="sm"
-                      className="mt-4 bg-emerald-600 hover:bg-emerald-700"
+                      className="mt-4 bg-emerald-700 hover:bg-emerald-800"
                       onClick={() => {
                         resetVoucherForm();
                         setCreateVoucherOpen(true);
@@ -1205,7 +1205,7 @@ export default function VouchersTab() {
                                     <DropdownMenuLabel className="text-xs">Send via</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => openSendDialog(voucher, 'WHATSAPP')}>
-                                      <Phone className="h-4 w-4 mr-2 text-green-600" />
+                                      <Phone className="h-4 w-4 mr-2 text-green-700" />
                                       <span>WhatsApp</span>
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => openSendDialog(voucher, 'SMS')}>
@@ -1362,7 +1362,7 @@ export default function VouchersTab() {
                             <p className="text-xs text-muted-foreground">Redemptions</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                            <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
                               {formatKES(campaign.totalRevenue)}
                             </p>
                             <p className="text-xs text-muted-foreground">Revenue</p>
@@ -1411,7 +1411,7 @@ export default function VouchersTab() {
                         <div className="flex flex-wrap gap-2 pt-1">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+                              <Button size="sm" className="h-8 text-xs bg-emerald-700 hover:bg-emerald-800 text-white">
                                 <Send className="h-3.5 w-3.5 mr-1.5" />
                                 Send
                               </Button>
@@ -1420,7 +1420,7 @@ export default function VouchersTab() {
                               <DropdownMenuLabel className="text-xs">Send campaign via</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => { const phone = prompt('Enter WhatsApp phone number:') || ''; if (!phone) return; previewCampaignDeepLink(campaign, 'whatsapp', phone); }}>
-                                <Phone className="h-4 w-4 mr-2 text-green-600" />
+                                <Phone className="h-4 w-4 mr-2 text-green-700" />
                                 <span>WhatsApp</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => { const phone = prompt('Enter SMS phone number:') || ''; if (!phone) return; previewCampaignDeepLink(campaign, 'sms', phone); }}>
@@ -1755,7 +1755,7 @@ export default function VouchersTab() {
               <Button
                 onClick={handleCreateVoucher}
                 disabled={createVoucherMutation.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className="bg-emerald-700 hover:bg-emerald-800"
               >
                 {createVoucherMutation.isPending && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1946,7 +1946,7 @@ export default function VouchersTab() {
               <Button
                 onClick={handleEditVoucher}
                 disabled={updateVoucherMutation.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className="bg-emerald-700 hover:bg-emerald-800"
               >
                 {updateVoucherMutation.isPending && (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -2176,7 +2176,7 @@ export default function VouchersTab() {
                   <SelectContent>
                     <SelectItem value="WHATSAPP">
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-green-600" />
+                        <Phone className="h-4 w-4 text-green-700" />
                         WhatsApp
                       </div>
                     </SelectItem>
@@ -2320,7 +2320,7 @@ export default function VouchersTab() {
                   });
                 }}
                 disabled={sendVoucherMutation.isPending || !sendRecipient.trim()}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-emerald-700 hover:bg-emerald-800 text-white"
               >
                 {sendVoucherMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending…</>
@@ -2362,7 +2362,7 @@ export default function VouchersTab() {
           size="md"
           title={
             <span className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-emerald-600" />
+              <Receipt className="h-5 w-5 text-emerald-700" />
               Redeem Voucher Code
             </span>
           }
@@ -2371,7 +2371,7 @@ export default function VouchersTab() {
             <>
               <Button variant="outline" onClick={() => setRedeemCodeOpen(false)}>Close</Button>
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
                 disabled={redeemByCodeMutation.isPending || !redeemCode.trim()}
                 onClick={() => {
                   const amountNum = parseFloat(redeemAmount);
@@ -2443,7 +2443,7 @@ export default function VouchersTab() {
               redeemResult.success ? (
                 <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-4 space-y-2">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    <CheckCircle2 className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                     <p className="font-semibold text-emerald-800 dark:text-emerald-300">Voucher Redeemed Successfully</p>
                   </div>
                   <div className="space-y-1 text-sm">

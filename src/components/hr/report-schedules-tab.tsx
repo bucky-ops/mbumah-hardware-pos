@@ -920,7 +920,7 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                     variant="ghost"
                     onClick={() => openRecipients(s)}
                     disabled={busy || sendingId !== null}
-                    className="h-7 gap-1 px-2 text-xs text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                    className="h-7 gap-1 px-2 text-xs text-emerald-700 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
                     aria-label={`Manage ${s.reportLabel} recipients`}
                   >
                     <Users className="h-3 w-3" aria-hidden />
@@ -961,7 +961,7 @@ export function ReportSchedulesTab({ highlightScheduleId }: { highlightScheduleI
                     variant="ghost"
                     onClick={() => void sendNow(s)}
                     disabled={busy || sendingId !== null}
-                    className="h-7 gap-1 px-2 text-xs text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
+                    className="h-7 gap-1 px-2 text-xs text-sky-700 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300"
                     aria-label={`Send ${s.reportLabel} digest now`}
                   >
                     {sendingId === s.id ? (

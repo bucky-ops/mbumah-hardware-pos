@@ -143,7 +143,7 @@ function POStatusTimeline({ status }: { status: string }) {
               ) : (
                 <Circle className="w-4 h-4 text-muted-foreground/30" />
               )}
-              <span className={`text-[8px] mt-0.5 ${isCurrent ? 'text-primary font-bold' : isPast ? 'text-green-600' : 'text-muted-foreground/40'}`}>
+              <span className={`text-[8px] mt-0.5 ${isCurrent ? 'text-primary font-bold' : isPast ? 'text-green-700' : 'text-muted-foreground/40'}`}>
                 {step}
               </span>
             </div>
@@ -173,7 +173,7 @@ function POReceivingProgress({ po }: { po: PurchaseOrderListItem }) {
   return (
     <div className="flex items-center gap-2 text-xs">
       <Progress value={pct} className="h-1.5 flex-1" />
-      <span className={`font-medium whitespace-nowrap ${isComplete ? 'text-green-600' : isPartial ? 'text-amber-600' : 'text-muted-foreground'}`}>
+      <span className={`font-medium whitespace-nowrap ${isComplete ? 'text-green-700' : isPartial ? 'text-amber-600' : 'text-muted-foreground'}`}>
         {totalReceived}/{totalOrdered}
       </span>
     </div>
@@ -263,10 +263,10 @@ function SupplierPOPerformanceCard({ purchaseOrders }: { purchaseOrders: Purchas
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="p-3 rounded-lg bg-green-50/80 dark:bg-green-900/20 backdrop-blur-sm border border-green-200/30 dark:border-green-800/30">
             <div className="flex items-center gap-2 mb-1">
-              <Clock className="h-4 w-4 text-green-600" />
+              <Clock className="h-4 w-4 text-green-700" />
               <span className="text-xs text-muted-foreground">On-Time Rate</span>
             </div>
-            <p className="text-xl font-bold text-green-600">{onTimeRate}%</p>
+            <p className="text-xl font-bold text-green-700">{onTimeRate}%</p>
             <div className="mt-1 h-1 bg-green-200/50 rounded-full overflow-hidden">
               <div className="h-full bg-green-500 rounded-full" style={{ width: `${onTimeRate}%` }} />
             </div>
@@ -1018,7 +1018,7 @@ function SupplierDetailView({
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
-                <Truck className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <Truck className="h-5 w-5 text-green-700 dark:text-green-400" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Spend</p>
@@ -1160,7 +1160,7 @@ function SupplierDetailView({
               {supplier.phone && (
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                    <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    <Phone className="h-5 w-5 text-green-700 dark:text-green-400" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Phone</p>
@@ -1510,7 +1510,7 @@ function SendOrderDialog({
             <SelectContent>
               <SelectItem value="WHATSAPP">
                 <span className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-green-600" /> WhatsApp
+                  <Phone className="h-4 w-4 text-green-700" /> WhatsApp
                 </span>
               </SelectItem>
               <SelectItem value="EMAIL">
@@ -1946,7 +1946,7 @@ export default function SuppliersTab() {
                               }}
                               className="gap-2 cursor-pointer"
                             >
-                              <Send className="h-4 w-4 text-green-600" />
+                              <Send className="h-4 w-4 text-green-700" />
                               Send Order…
                             </DropdownMenuItem>
                             <DropdownMenuItem
@@ -1970,7 +1970,7 @@ export default function SuppliersTab() {
                                 }}
                                 className="gap-2 cursor-pointer"
                               >
-                                <Phone className="h-4 w-4 text-green-600" />
+                                <Phone className="h-4 w-4 text-green-700" />
                                 Quick WhatsApp
                               </DropdownMenuItem>
                             )}
@@ -1985,7 +1985,7 @@ export default function SuppliersTab() {
                                 }}
                                 className="gap-2 cursor-pointer"
                               >
-                                <Smartphone className="h-4 w-4 text-emerald-600" />
+                                <Smartphone className="h-4 w-4 text-emerald-700" />
                                 Quick SMS
                               </DropdownMenuItem>
                             )}

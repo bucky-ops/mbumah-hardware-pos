@@ -2017,7 +2017,7 @@ export default function POSTab() {
 
                 {/* Cart-level flat discount (Ksh) - cashier manual override */}
                 <div className="flex gap-1.5 items-center">
-                  <Tag className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                  <Tag className="h-3.5 w-3.5 text-green-700 shrink-0" />
                   <Input
                     type="number"
                     min={0}
@@ -2203,7 +2203,7 @@ export default function POSTab() {
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (
-                    <div className="flex justify-between text-green-600 animate-total-row" style={{ animationDelay: '120ms' }}>
+                    <div className="flex justify-between text-green-700 animate-total-row" style={{ animationDelay: '120ms' }}>
                       <span className="flex items-center gap-1">
                         <Tag className="h-3 w-3" />
                         Discount
@@ -2412,7 +2412,7 @@ export default function POSTab() {
                 <span>{formatKES(lastTransaction.taxAmount)}</span>
               </div>
               {lastTransaction.discountAmount > 0 && (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between text-green-700">
                   <span>Discount</span>
                   <span>-{formatKES(lastTransaction.discountAmount)}</span>
                 </div>
@@ -2442,7 +2442,7 @@ export default function POSTab() {
                     <span>{formatKES(lastCashReceived)}</span>
                   </div>
                   {lastCashReceived - lastTransaction.totalAmount > 0 && (
-                    <div className="flex justify-between text-green-600 font-semibold">
+                    <div className="flex justify-between text-green-700 font-semibold">
                       <span>Change</span>
                       <span>{formatKES(lastCashReceived - lastTransaction.totalAmount)}</span>
                     </div>
@@ -2481,7 +2481,7 @@ export default function POSTab() {
       <ResponsiveDialog
         open={receiptSendOpen}
         onOpenChange={setReceiptSendOpen}
-        title={<span className="flex items-center gap-2"><Send className="h-4 w-4 text-green-600" /> Send Receipt via WhatsApp / SMS</span>}
+        title={<span className="flex items-center gap-2"><Send className="h-4 w-4 text-green-700" /> Send Receipt via WhatsApp / SMS</span>}
         description="Enter the customer's number. We'll open WhatsApp or the SMS app with the receipt ready to send."
         size="sm"
         footer={
@@ -2729,7 +2729,7 @@ export default function POSTab() {
                 <span className="font-medium">{formatKES(preDiscountTotal)}</span>
               </div>
               {cart.discount > 0 && (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between text-green-700">
                   <span className="flex items-center gap-1"><Tag className="h-3 w-3" />Current Discount</span>
                   <span className="font-medium">-{formatKES(cart.discount)}</span>
                 </div>
@@ -2974,7 +2974,7 @@ export default function POSTab() {
                     <span>{formatKES(tax)}</span>
                   </div>
                   {totalDiscount > 0 && (
-                    <div className="flex justify-between text-green-600 animate-total-row" style={{ animationDelay: '120ms' }}>
+                    <div className="flex justify-between text-green-700 animate-total-row" style={{ animationDelay: '120ms' }}>
                       <span className="flex items-center gap-1">
                         <Tag className="h-3 w-3" />
                         Discount

@@ -37,7 +37,7 @@ interface HealthBreakdownItem {
 function scoreColor(score: number): { text: string; bg: string; stroke: string } {
   if (score >= 70) {
     return {
-      text: 'text-emerald-600 dark:text-emerald-400',
+      text: 'text-emerald-700 dark:text-emerald-400',
       bg: 'bg-emerald-500',
       stroke: '#10b981',
     };
@@ -171,7 +171,7 @@ export function StoreHealthWidget({ storeId }: StoreHealthWidgetProps) {
         score: revenueScore,
         weight: 0.30,
         detail: formatKES(todayRevenue),
-        color: 'text-emerald-600 dark:text-emerald-400',
+        color: 'text-emerald-700 dark:text-emerald-400',
       },
       {
         label: 'Stock Health',
@@ -211,7 +211,7 @@ export function StoreHealthWidget({ storeId }: StoreHealthWidgetProps) {
       <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Activity className="h-4 w-4 text-emerald-600" />
+            <Activity className="h-4 w-4 text-emerald-700" />
             Store Health
           </CardTitle>
           <CardDescription className="text-xs">Composite health score</CardDescription>
@@ -233,7 +233,7 @@ export function StoreHealthWidget({ storeId }: StoreHealthWidgetProps) {
     <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Activity className="h-4 w-4 text-emerald-600" />
+          <Activity className="h-4 w-4 text-emerald-700" />
           Store Health
           <span className={`text-xs font-medium ml-auto ${colors.text}`}>
             {label}

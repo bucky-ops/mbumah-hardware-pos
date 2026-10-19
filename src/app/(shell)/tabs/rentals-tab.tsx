@@ -110,7 +110,7 @@ function RentalTimeline({ rental }: { rental: RentalItem }) {
       <div className="text-center">
         {isOverdue && <span className="text-[10px] font-medium text-red-600 dark:text-red-400">{daysOverdue}d overdue</span>}
         {isCloseToDue && <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400">{daysRemaining}d remaining</span>}
-        {isActive && daysRemaining > 3 && <span className="text-[10px] font-medium text-green-600 dark:text-green-400">{daysRemaining}d remaining</span>}
+        {isActive && daysRemaining > 3 && <span className="text-[10px] font-medium text-green-700 dark:text-green-400">{daysRemaining}d remaining</span>}
         {isReturned && <span className="text-[10px] font-medium text-muted-foreground">Returned</span>}
       </div>
     </div>
@@ -214,7 +214,7 @@ function DamageAssessmentForm({
   const depositAmount = rental.securityDeposit;
 
   const damageIcons: Record<string, React.ReactNode> = {
-    NONE: <ShieldCheck className="h-5 w-5 text-green-600" />,
+    NONE: <ShieldCheck className="h-5 w-5 text-green-700" />,
     MINOR: <ShieldOff className="h-5 w-5 text-yellow-600" />,
     MODERATE: <ShieldAlert className="h-5 w-5 text-orange-600" />,
     SEVERE: <AlertTriangle className="h-5 w-5 text-red-600" />,
@@ -380,7 +380,7 @@ function DamageAssessmentForm({
           <span className="font-mono">{formatKES(rental.totalRentalCharge)}</span>
         </div>
         <Separator />
-        <div className={`flex justify-between text-sm font-bold ${refundAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+        <div className={`flex justify-between text-sm font-bold ${refundAmount >= 0 ? 'text-green-700' : 'text-red-600'}`}>
           <span>{refundAmount >= 0 ? 'Refund to Customer' : 'Customer Owes'}</span>
           <span className="font-mono">{formatKES(Math.abs(refundAmount))}</span>
         </div>
@@ -762,10 +762,10 @@ function RentalCardView({ rentals, onReturn, onEdit, onDelete, onSendReceipt, on
                     <Pencil className="h-3 w-3 mr-1" /> Edit
                   </Button>
                 )}
-                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => onSendReceipt(rental)}>
+                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-700 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => onSendReceipt(rental)}>
                   <Phone className="h-3 w-3 mr-1" /> WhatsApp
                 </Button>
-                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => onSendReceiptSms(rental)} title="Send via SMS">
+                <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => onSendReceiptSms(rental)} title="Send via SMS">
                   <Smartphone className="h-3 w-3 mr-1" /> SMS
                 </Button>
                 <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => onPrintReceipt(rental)}>
@@ -1159,11 +1159,11 @@ export default function RentalsTab() {
               <CardContent className="p-3">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30">
-                    <KeyRound className="h-4 w-4 text-green-600" />
+                    <KeyRound className="h-4 w-4 text-green-700" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Active</p>
-                    <p className="text-lg font-bold text-green-600">{statusCounts.active}</p>
+                    <p className="text-lg font-bold text-green-700">{statusCounts.active}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1228,7 +1228,7 @@ export default function RentalsTab() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/30 dark:to-emerald-800/30">
-                    <DollarSign className="h-5 w-5 text-emerald-600" />
+                    <DollarSign className="h-5 w-5 text-emerald-700" />
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Rental Charges</p>
@@ -1416,10 +1416,10 @@ export default function RentalsTab() {
                                       <Pencil className="h-3 w-3" />
                                     </Button>
                                   )}
-                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => handleSendReceipt(rental)}>
+                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-green-700 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/30" onClick={() => handleSendReceipt(rental)}>
                                     <Phone className="h-3 w-3" />
                                   </Button>
-                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => handleSendReceiptSms(rental)} title="Send via SMS" aria-label="Send receipt via SMS">
+                                  <Button variant="outline" size="sm" className="h-7 text-[10px] px-2 text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30" onClick={() => handleSendReceiptSms(rental)} title="Send via SMS" aria-label="Send receipt via SMS">
                                     <Smartphone className="h-3 w-3" />
                                   </Button>
                                   <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => handlePrintReceipt(rental)}>
@@ -1458,7 +1458,7 @@ export default function RentalsTab() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-green-700" />
               Process Return
             </DialogTitle>
             <DialogDescription>Return rental equipment and assess any damage</DialogDescription>

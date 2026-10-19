@@ -487,7 +487,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Timer className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            <Timer className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             Active shift
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden="true" />
@@ -580,7 +580,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
                     <span className="text-xs text-slate-500">
                       {Math.abs(endResult.cashDifference) < 1 ? 'Balanced' : endResult.cashDifference > 0 ? 'Over' : 'Short'}
                     </span>
-                    <span className={`font-mono text-base font-extrabold ${Math.abs(endResult.cashDifference) < 1 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    <span className={`font-mono text-base font-extrabold ${Math.abs(endResult.cashDifference) < 1 ? 'text-emerald-700' : 'text-amber-600'}`}>
                       {Math.abs(endResult.cashDifference) < 1
                         ? 'KES 0.00'
                         : `${endResult.cashDifference > 0 ? '+' : '−'}${formatKES(Math.abs(endResult.cashDifference))}`}
@@ -611,12 +611,12 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">+ Cash Sales</span>
-                      <span className="font-medium text-emerald-600">{formatKES(num(shift.cashSales))}</span>
+                      <span className="font-medium text-emerald-700">{formatKES(num(shift.cashSales))}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">Expected Cash (ledger)</span>
-                      <span className="font-bold text-emerald-600">
+                      <span className="font-bold text-emerald-700">
                         {expectedCash === null ? '…' : formatKES(expectedCash)}
                       </span>
                     </div>
@@ -685,7 +685,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
                       <span>Difference</span>
                       {(() => {
                         const diff = (parseFloat(countedCash) || 0) - expectedCash;
-                        if (Math.abs(diff) < 0.01) return <span className="text-emerald-600">Balanced</span>;
+                        if (Math.abs(diff) < 0.01) return <span className="text-emerald-700">Balanced</span>;
                         return diff > 0
                           ? <span className="text-amber-600">+{formatKES(diff)} over</span>
                           : <span className="text-red-600">{formatKES(diff)} short</span>;
@@ -822,7 +822,7 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         label="Today's Revenue"
         value={formatKES(todayRevenue)}
         icon={Banknote}
-        iconClass="bg-emerald-100 text-emerald-600"
+        iconClass="bg-emerald-100 text-emerald-700"
         badge={noSalesToday ? zeroSalesTrendBadge : showTrendBadge ? <TrendBadge pct={revenueChange} /> : undefined}
         sub={<span>{noSalesToday ? 'No sales yet today - start selling!' : 'net of VAT · today'}</span>}
         sparkline={revenueSpark.length >= 2 ? revenueSpark : null}
@@ -835,7 +835,7 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         iconClass="bg-green-100 text-green-700"
         sub={<span>ATV {formatKES(atv)}</span>}
         sparkline={txnSpark.some((v) => v > 0) ? txnSpark : null}
-        sparklineClass="text-green-600"
+        sparklineClass="text-green-700"
       />
       <KpiCard
         label="Avg Transaction"
@@ -920,7 +920,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
           label="Today's Sales"
           value={formatKES(todaySales)}
           icon={Banknote}
-          iconClass="bg-emerald-100 text-emerald-600"
+          iconClass="bg-emerald-100 text-emerald-700"
           sub={<span>net of VAT · your sales</span>}
         />
         <KpiCard
@@ -980,7 +980,7 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
       <Card className="rounded-2xl border-slate-200 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Receipt className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            <Receipt className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             My Sales
           </CardTitle>
           <CardDescription>Your latest transactions at this branch</CardDescription>
@@ -1067,7 +1067,7 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
     <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <BarChart3 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <BarChart3 className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           Revenue trend · today by hour
         </CardTitle>
         <CardDescription className="text-xs">Sales between 6 AM and 9 PM</CardDescription>
@@ -1114,7 +1114,7 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
                       <div
                         className={`w-full rounded-t-md transition-all ${
                           isTop
-                            ? 'bg-emerald-600'
+                            ? 'bg-emerald-700'
                             : isSecond
                               ? 'bg-amber-500'
                               : 'bg-slate-300'
@@ -1357,7 +1357,7 @@ function QuickActionsRow({ onTab }: { onTab: (tab: AppTab) => void }) {
               </div>
               <div className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
                 <span className="text-xs text-slate-500">Total cash in</span>
-                <span className="text-sm font-semibold tabular-nums text-emerald-600">+{formatKES(num(drawerData.totalCashIn))}</span>
+                <span className="text-sm font-semibold tabular-nums text-emerald-700">+{formatKES(num(drawerData.totalCashIn))}</span>
               </div>
               <div className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
                 <span className="text-xs text-slate-500">Total cash out</span>
@@ -1503,7 +1503,7 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
     <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Zap className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <Zap className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           Store health
         </CardTitle>
       </CardHeader>
@@ -1616,7 +1616,7 @@ function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
     <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Clock className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <Clock className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           Hourly sales heatmap
         </CardTitle>
         <CardDescription className="text-xs">6 AM - 9 PM · darker means busier</CardDescription>
@@ -1704,13 +1704,13 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Users className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            <Users className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             Top customers · All time
           </CardTitle>
           <button
             type="button"
             onClick={() => onTab('customers')}
-            className="text-xs font-medium text-emerald-600 underline-offset-2 hover:underline"
+            className="text-xs font-medium text-emerald-700 underline-offset-2 hover:underline"
           >
             All
           </button>
@@ -1796,7 +1796,7 @@ function TopProductsCard({ data }: { data: DashboardData | null }) {
     <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Package className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <Package className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           Top selling products
         </CardTitle>
         <CardDescription className="text-xs">Today&rsquo;s movers by revenue</CardDescription>
@@ -1870,7 +1870,7 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
     <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <TrendingUp className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+          <TrendingUp className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           Sales trend · 7 days
         </CardTitle>
         <CardDescription className="text-xs">Net revenue with forecast</CardDescription>
@@ -1928,7 +1928,7 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
             </svg>
             <div className="flex justify-between px-0.5 text-[9px] text-slate-500">
               {days.map((d, i) => (
-                <span key={d?.date ?? i} className={d?.isToday ? 'font-semibold text-emerald-600' : ''}>
+                <span key={d?.date ?? i} className={d?.isToday ? 'font-semibold text-emerald-700' : ''}>
                   {d?.label ?? ''}
                 </span>
               ))}
@@ -2096,7 +2096,7 @@ function AlertsCard({ data, onTab }: { data: DashboardData | null; onTab: (tab: 
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <Bell className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            <Bell className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             Alerts
             {alertsCount > 0 && (
               <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">

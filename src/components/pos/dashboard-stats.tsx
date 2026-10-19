@@ -78,7 +78,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       animatedValue: animatedSales,
       format: 'kes' as const,
       icon: TrendingUp,
-      color: 'text-green-600 dark:text-green-400',
+      color: 'text-green-700 dark:text-green-400',
       // Gradient icon circle - emerald (positive sales)
       iconCircle: 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-emerald-500/30',
       bg: 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/40 dark:to-emerald-950/30',
@@ -97,7 +97,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       animatedValue: animatedTransactions,
       format: 'number' as const,
       icon: ShoppingCart,
-      color: 'text-sky-600 dark:text-sky-400',
+      color: 'text-sky-700 dark:text-sky-400',
       // Gradient icon circle - sky blue (informational)
       iconCircle: 'bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-blue-500/30',
       bg: 'bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-950/40 dark:to-blue-950/30',
@@ -193,7 +193,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
       <div className="flex items-center justify-end gap-3 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1 font-medium">
           <span className="status-pulse" aria-hidden />
-          <span className="text-green-600 dark:text-green-400">Live</span>
+          <span className="text-green-700 dark:text-green-400">Live</span>
         </span>
         <span className="flex items-center gap-1" title={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleString() : 'Never updated'}>
           <Clock className="h-3 w-3" />
@@ -236,7 +236,7 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-0.5">
                   <MiniSparkline data={stat.spark} color={stat.sparkColor} />
-                  <div className={`flex items-center gap-0.5 text-[9px] font-medium ${trendIsPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <div className={`flex items-center gap-0.5 text-[9px] font-medium ${trendIsPositive ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {trendIsPositive ? <TrendingUp className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
                     {trendIsPositive ? '+' : '−'}{trendValue}%
                   </div>

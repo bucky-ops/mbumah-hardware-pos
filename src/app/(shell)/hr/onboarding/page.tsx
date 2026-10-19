@@ -125,7 +125,7 @@ export default function HrOnboardingPage() {
                       <li key={t.id} className="flex items-center justify-between gap-2 text-sm">
                         <div className="flex min-w-0 items-center gap-2">
                           <CheckCircle2
-                            className={`h-4 w-4 shrink-0 ${t.isComplete ? 'text-emerald-600' : 'text-muted-foreground/40'}`}
+                            className={`h-4 w-4 shrink-0 ${t.isComplete ? 'text-emerald-700' : 'text-muted-foreground/40'}`}
                             aria-hidden
                           />
                           <span className={`truncate ${t.isComplete ? 'text-muted-foreground line-through' : ''}`}>{t.title}</span>

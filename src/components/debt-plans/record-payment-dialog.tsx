@@ -150,7 +150,7 @@ export function RecordPaymentDialog({
             </div>
             <div className="rounded-lg bg-muted/50 p-2">
               <p className="text-muted-foreground">Already Paid</p>
-              <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+              <p className="font-semibold text-emerald-700 dark:text-emerald-400">
                 {formatKES(installment?.amountPaid ?? 0)}
               </p>
             </div>

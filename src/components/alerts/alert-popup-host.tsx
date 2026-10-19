@@ -39,13 +39,13 @@ const VARIANT_STYLES: Record<
   info: {
     ring: 'border-sky-300 dark:border-sky-800',
     icon: Info,
-    iconColor: 'text-sky-600 dark:text-sky-400',
+    iconColor: 'text-sky-700 dark:text-sky-400',
     bar: 'bg-sky-500',
   },
   success: {
     ring: 'border-emerald-300 dark:border-emerald-800',
     icon: CheckCircle2,
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    iconColor: 'text-emerald-700 dark:text-emerald-400',
     bar: 'bg-emerald-500',
   },
   warning: {

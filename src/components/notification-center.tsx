@@ -396,7 +396,7 @@ export function NotificationCenter({
       // v2.32.0: new leave requests - sky calendar-plus, the "action needed"
       // direction (employee → manager).
       case 'leave_request':
-        return <CalendarPlus className="h-4 w-4 text-sky-600" />;
+        return <CalendarPlus className="h-4 w-4 text-sky-700" />;
       // v2.33.0: cancellations - violet calendar-off, the "nothing to do"
       // surface (the balance already healed on cancel).
       case 'leave_cancel':
@@ -424,16 +424,16 @@ export function NotificationCenter({
       // marker is cleared; decide on the corrected details). Distinct from
       // the cyan employee receipt and from the amber question it closes.
       case 'leave_review_answered':
-        return <BadgeCheck className="h-4 w-4 text-emerald-600" />;
+        return <BadgeCheck className="h-4 w-4 text-emerald-700" />;
       // v2.48.0 (QA fix: the type existed in the feed since v2.47.0 but this
       // switch had no case, so approval rows rendered WITHOUT an icon):
       // payroll approvals - emerald banknote, the money decision.
       case 'payroll_approved':
-        return <Banknote className="h-4 w-4 text-emerald-600" />;
+        return <Banknote className="h-4 w-4 text-emerald-700" />;
       // v2.48.0: payroll postings - sky open-book-check, the moment the
       // journal entry lands in the books and payslip numbers are issued.
       case 'payroll_posted':
-        return <BookOpenCheck className="h-4 w-4 text-sky-600" />;
+        return <BookOpenCheck className="h-4 w-4 text-sky-700" />;
       // v2.49.0: "your payslip is issued" - teal wallet, the personal
       // "your money is ready" moment (never looks like the group's
       // emerald approval or sky posting).
@@ -449,7 +449,7 @@ export function NotificationCenter({
       // disbursement digest or the emerald approval row (different icon,
       // different rail).
       case 'payroll_paid':
-        return <HandCoins className="h-4 w-4 text-emerald-600" />;
+        return <HandCoins className="h-4 w-4 text-emerald-700" />;
       // v2.68.0: the desk's morning note - orange sunrise, the same dawn
       // voice the org dashboard's strip carries (amber morning → emerald
       // answered); orange keeps the row distinct from the amber correction
@@ -885,7 +885,7 @@ export function NotificationCenter({
                             opens the Schedules tab with the card highlighted. */}
                         {notification.actionUrl ? (
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                            <p className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                            <p className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 dark:text-sky-400">
                               {notification.actionLabel ?? 'Open'} <ArrowRight className="h-3 w-3" aria-hidden />
                             </p>
                             {notification.scheduleId ? (

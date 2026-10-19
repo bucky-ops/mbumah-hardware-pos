@@ -111,7 +111,7 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
           </div>
           <div className="rounded-lg bg-muted/50 px-2.5 py-1.5">
             <p className="text-[10px] text-muted-foreground">Balance</p>
-            <p className={`font-semibold ${plan.balance > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+            <p className={`font-semibold ${plan.balance > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
               {formatKES(plan.balance)}
             </p>
           </div>
@@ -120,14 +120,14 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
         {/* Next due / status indicators */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 border-t">
           {isCompleted ? (
-            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+            <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {plan.completedAt
                 ? `Completed ${formatDate(plan.completedAt)}`
                 : 'Completed'}
             </span>
           ) : isPaused ? (
-            <span className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
+            <span className="flex items-center gap-1 text-sky-700 dark:text-sky-400">
               <PauseCircle className="h-3.5 w-3.5" />
               Plan paused
             </span>
@@ -169,7 +169,7 @@ export function PaymentPlanCard({ plan, onViewDetails }: PaymentPlanCardProps) {
           View Details
         </Button>
         {upcomingInstallment && !isCompleted && !isPaused && plan.status === 'ACTIVE' && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 px-2">
+          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 px-2">
             <Banknote className="h-3 w-3" />
             Payable
           </span>

@@ -84,7 +84,7 @@ function actionBadgeClass(action: string): string {
     case 'MANAGER_OVERRIDE':
       return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400';
     case 'MANAGER_AUTHORIZED':
-      return 'bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400';
+      return 'bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400';
     default:
       return 'bg-muted text-muted-foreground';
   }
@@ -397,7 +397,7 @@ export function AuditTrailSection() {
                             DENIED
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px] font-semibold bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400">
+                          <Badge variant="outline" className="text-[10px] font-semibold bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400">
                             SUCCESS
                           </Badge>
                         )}

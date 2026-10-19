@@ -845,7 +845,7 @@ export default function EmployeesPage() {
               >
                 <div className="flex items-start gap-2.5">
                   <ShieldCheck
-                    className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400"
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">

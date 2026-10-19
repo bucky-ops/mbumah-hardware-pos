@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.155.0] Recovery that never sleeps
+
+The "persistence" half of the B2C retry story: the disciplined retry gate v2.33.0 built finally stops waiting for someone to open the run dialog, and the POS tabs' never-audited family gets the same contrast discipline the console family earned.
+
+### Added
+- **B2C auto-recovery sweep** (`src/lib/hr/payroll/b2c-recovery.ts`, route `/api/cron/b2c-recovery`, folded into the hourly dispatcher as `b2c-recovery`): walks every posted/locked run still holding unpaid money (oldest first, capped 25 runs/tick) and re-sends only latest-FAILED, unsettled payslips whose `evaluateB2CRetryGate` allows; stuck PROCESSING past `B2C_STALE_PROCESSING_MS` triggers one re-query sweep. One source of truth with the UI — `pickB2CRecoveryActions` reads the run's `summariseRunB2CState`, so the cron can never be more aggressive than the run dialog, only more punctual. Idempotency inherited (an active transaction is never re-sent, so overlapping ticks cannot double-pay); ceiling-blocked payslips stay human-only; per-run isolation (one bad run is recorded, the tick continues); audit rows carry the sentinel actor `system:b2c-recovery`; production without Daraja credentials and without `MPESA_B2C_ALLOW_MOCK` early-outs honestly before touching the database.
+- **The run dialog tells the truth** (`payroll-run-dialog.tsx`): a `b2c-auto-recovery-note` line renders on posted/locked runs with the disburse permission — the backoff chips are advisory, not the only path home, and ceiling-blocked rows still wait for a human.
+
+### Fixed
+- **The 19-tab POS shell passes the contrast bar** (seven tabs carried the tinted-bg failures the console family had already fixed): `text-green-600` → `green-700` (174 sites — the POS KPI trends, transactions' totals, reports' growth chips), `text-emerald-600` → `emerald-700` (170 sites — rentals' bold chips, gift-cards' balances), `text-sky-600` → `sky-700` (21 sites — financial's sky-tinted chips), white-text fills `bg-emerald-600` → `bg-emerald-700` with hover `bg-emerald-800` (31 fills — payroll's "Disburse via M-Pesa", tax, invoices, delivery), the debt-plans "Create Plan" gradient deepened (`from-emerald-600 to-emerald-700`), and debt-plans' 10px `muted-foreground/70` → full `muted-foreground`. Dark-mode hover semantics preserved (`dark:hover:bg-emerald-600` on the run dialog); the heatmap's `dark:bg-emerald-600/60` untouched.
+- Prior-round pin tests re-anchored to the sweep (v2.148's emerald-700 pin, v2.149's forbidden-token pins, v2.146's Sun icon) — the pins now forbid the OLD tokens, which is stronger than before.
+
+### Tests
+- `src/tests/b2c-recovery-v2155.test.ts` (14): pure selection (gate-allowed only, blocked never, stale-only re-query, settled no-op), the mock-discipline early-out, sentinel ctx, benign NOTHING_TO_RETRY as skip, per-run error isolation, route secret gate, dispatcher fold, dialog truth line.
+- Full suite 3149/3149 (160 files); lint 0 errors on all changed files; tsc 411 source-only = stash-baseline (zero net new).
+
 ## [2.154.0] Buttons that read in the dark
 
 The a11y campaign rode to the surfaces the console sweeps never reached — the unauthenticated login screen and /hr/reports dark mode — and found one real axe violation hiding app-wide.

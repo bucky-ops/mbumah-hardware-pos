@@ -190,7 +190,7 @@ export function ProfileSettingsDialog({
       <DialogContent className="sm:max-w-xl overflow-y-auto max-h-[90vh]" data-testid="profile-settings-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <UserRound className="h-5 w-5 text-emerald-600" />
+            <UserRound className="h-5 w-5 text-emerald-700" />
             Profile &amp; Settings
           </DialogTitle>
           <DialogDescription>
@@ -366,7 +366,7 @@ function ProfileTabs({
               <Label
                 key={value}
                 htmlFor={`theme-${value}`}
-                className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border p-3 text-xs font-normal hover:bg-muted/50 has-[[data-state=checked]]:border-emerald-600 has-[[data-state=checked]]:bg-emerald-600/5"
+                className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border p-3 text-xs font-normal hover:bg-muted/50 has-[[data-state=checked]]:border-emerald-600 has-[[data-state=checked]]:bg-emerald-700/5"
               >
                 <RadioGroupItem id={`theme-${value}`} value={value} className="sr-only" />
                 <Icon className="h-5 w-5" />

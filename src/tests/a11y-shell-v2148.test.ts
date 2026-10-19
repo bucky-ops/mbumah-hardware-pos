@@ -146,6 +146,8 @@ describe('the muted-on-white family clears the bar', () => {
   });
 
   it('"All stock healthy" rides emerald-700 (5.5:1), not emerald-600', () => {
+    // v2.155.0 re-anchor: the app-wide emerald-text sweep moved the whole
+    // family to -700, so the forbidden token is now emerald-600 itself.
     expect(readRepo(DASH).match(/text-emerald-600">All stock healthy/g)?.length ?? 0).toBe(0);
     expect(readRepo(DASH).match(/text-emerald-700">All stock healthy/g)?.length).toBe(2);
   });
@@ -253,17 +255,17 @@ describe('the live re-audit follow-ups (found on the rebuilt build)', () => {
 describe('the release surfaces speak the version', () => {
   it('package.json, whats-new and the changelog lead with 2.154.0 (re-anchored per release)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.154.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.154.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.154.0');
+    expect(pkg.version).toBe('2.155.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.155.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.155.0');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.154.0'")).toBeGreaterThan(-1);
-    expect(feed.indexOf("'2.154.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.154.0]');
+    expect(feed.indexOf("'2.155.0'")).toBeGreaterThan(-1);
+    expect(feed.indexOf("'2.155.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.155.0]');
   });
 
   it('the unread counter test is re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(43);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(44);");
   });
 });

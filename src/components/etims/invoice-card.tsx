@@ -28,7 +28,7 @@ interface InvoiceCardProps {
 const statusConfig = {
   ISSUED: {
     icon: CheckCircle2,
-    color: 'text-emerald-600',
+    color: 'text-emerald-700',
     bg: 'bg-emerald-50 border-emerald-200',
     badge: 'bg-emerald-100 text-emerald-700',
     label: 'Issued',

@@ -657,7 +657,7 @@ export default function PerformancePage() {
         <Card className="border-sky-300/70 dark:border-sky-900" data-testid="perf-auth">
           <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-950/50">
-              <LogIn className="h-6 w-6 text-sky-600 dark:text-sky-400" aria-hidden />
+              <LogIn className="h-6 w-6 text-sky-700 dark:text-sky-400" aria-hidden />
             </span>
             <div className="space-y-1">
               <p className="text-base font-semibold">Sign in to view this workspace</p>

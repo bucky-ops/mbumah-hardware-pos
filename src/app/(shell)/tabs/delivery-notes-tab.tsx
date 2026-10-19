@@ -119,7 +119,7 @@ function DeliveryTimeline({ status }: { status: string }) {
               ) : (
                 <CircleDot className="w-5 h-5 text-muted-foreground/30" />
               )}
-              <span className={`text-[9px] mt-0.5 ${isCurrent ? 'text-primary font-bold' : isPast ? 'text-green-600' : 'text-muted-foreground/40'}`}>
+              <span className={`text-[9px] mt-0.5 ${isCurrent ? 'text-primary font-bold' : isPast ? 'text-green-700' : 'text-muted-foreground/40'}`}>
                 {step === 'PENDING' ? 'Pending' : step === 'IN_TRANSIT' ? 'Transit' : 'Delivered'}
               </span>
             </div>
@@ -622,10 +622,10 @@ export default function DeliveryNotesTab() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Delivered Today</p>
-                <p className="text-2xl font-bold text-green-600">{stats.deliveredToday}</p>
+                <p className="text-2xl font-bold text-green-700">{stats.deliveredToday}</p>
               </div>
               <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CheckCircle2 className="h-5 w-5 text-green-700" />
               </div>
             </div>
           </CardContent>
@@ -782,7 +782,7 @@ export default function DeliveryNotesTab() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 text-[10px] gap-1 text-green-600 border-green-200 hover:bg-green-50 dark:border-green-800 dark:hover:bg-green-900/20"
+                              className="h-7 text-[10px] gap-1 text-green-700 border-green-200 hover:bg-green-50 dark:border-green-800 dark:hover:bg-green-900/20"
                               onClick={() => handleStatusUpdate(dn.id, 'DELIVERED')}
                               disabled={updateMutation.isPending}
                             >
@@ -836,7 +836,7 @@ export default function DeliveryNotesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
+                            className="h-7 w-7 p-0 text-green-700 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
                             onClick={() => handleSendWhatsApp(dn)}
                             title="Send to WhatsApp"
                           >
@@ -845,7 +845,7 @@ export default function DeliveryNotesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                            className="h-7 w-7 p-0 text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                             onClick={() => handleSendSms(dn)}
                             title="Send via SMS"
                             aria-label="Send via SMS"
@@ -1166,7 +1166,7 @@ export default function DeliveryNotesTab() {
                   </Button>
                   <Button
                     size="sm"
-                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
                     onClick={() => handleSendSms(noteDetail)}
                     title="Send via SMS"
                     aria-label="Send via SMS"
@@ -1200,7 +1200,7 @@ export default function DeliveryNotesTab() {
                       />
                       <div className="min-w-0 flex-1 space-y-2">
                         <p className="flex items-center gap-2 text-sm font-semibold">
-                          <QrCode className="h-4 w-4 text-emerald-600" aria-hidden />
+                          <QrCode className="h-4 w-4 text-emerald-700" aria-hidden />
                           Digital delivery note (QR)
                         </p>
                         <p className="text-xs leading-relaxed text-muted-foreground">
@@ -1213,7 +1213,7 @@ export default function DeliveryNotesTab() {
                         <div className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
                             onClick={() => setReceiptViewerOpen(true)}
                           >
                             <FileText className="h-4 w-4" /> View receipt
@@ -1291,7 +1291,7 @@ export default function DeliveryNotesTab() {
                       Created: {formatDateTime(noteDetail.createdAt)}
                     </div>
                     {noteDetail.deliveredAt && (
-                      <div className="flex items-center gap-2 text-green-600">
+                      <div className="flex items-center gap-2 text-green-700">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Delivered: {formatDateTime(noteDetail.deliveredAt)}
                       </div>

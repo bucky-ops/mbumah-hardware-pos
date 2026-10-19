@@ -67,7 +67,7 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
 
   const getPaymentIcon = (method: string) => {
     switch (method?.toUpperCase()) {
-      case 'CASH': return <Banknote className="h-3.5 w-3.5 text-green-600" />;
+      case 'CASH': return <Banknote className="h-3.5 w-3.5 text-green-700" />;
       case 'MPESA': return <Smartphone className="h-3.5 w-3.5 text-amber-600" />;
       case 'DEBT': return <CircleDollarSign className="h-3.5 w-3.5 text-red-600" />;
       case 'SPLIT': return <CreditCard className="h-3.5 w-3.5 text-purple-600" />;
@@ -96,7 +96,7 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
     <Card className="backdrop-blur-sm bg-card/80 border-border/50 hover:shadow-md transition-all duration-200">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Activity className="h-4 w-4 text-green-600" />
+          <Activity className="h-4 w-4 text-green-700" />
           Recent Activity
         </CardTitle>
       </CardHeader>
@@ -121,8 +121,8 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
               {transactions && transactions.length > 0 && (
                 <>
                   <div className="flex items-center gap-2 px-2 py-1">
-                    <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
-                    <span className="text-xs font-semibold text-green-600">Recent Sales</span>
+                    <ShoppingCart className="h-3.5 w-3.5 text-green-700" />
+                    <span className="text-xs font-semibold text-green-700">Recent Sales</span>
                   </div>
                   {transactions.slice(0, 5).map((tx) => (
                     <div
@@ -130,7 +130,7 @@ export function RecentTransactions({ storeId }: RecentTransactionsProps) {
                       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="shrink-0 p-1.5 rounded-full bg-green-100 dark:bg-green-900/30">
-                        <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
+                        <ShoppingCart className="h-3.5 w-3.5 text-green-700" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">

@@ -58,7 +58,7 @@ export default async function MyPayslips({
       <div className="space-y-4">
         <SelfPageHeader
           icon={<Wallet className="h-5 w-5" />}
-          tone="from-emerald-500/15 to-teal-500/15 text-emerald-600 dark:text-emerald-400"
+          tone="from-emerald-500/15 to-teal-500/15 text-emerald-700 dark:text-emerald-400"
           title="My payslips"
           description="Net pay, deductions, and the full computation for every period."
         />
@@ -74,7 +74,7 @@ export default async function MyPayslips({
       <PayslipsCacheWriter data={list} />
       <SelfPageHeader
         icon={<Wallet className="h-5 w-5" />}
-        tone="from-emerald-500/15 to-teal-500/15 text-emerald-600 dark:text-emerald-400"
+        tone="from-emerald-500/15 to-teal-500/15 text-emerald-700 dark:text-emerald-400"
         title="My payslips"
         description="Net pay, deductions, and the full computation for every period."
       />

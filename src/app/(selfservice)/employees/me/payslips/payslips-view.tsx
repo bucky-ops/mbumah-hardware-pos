@@ -164,7 +164,7 @@ export function PayslipsView({ initialList }: { initialList: PayslipListItem[] }
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400">{formatKes(p.netPay)}</p>
+                    <p className="text-lg font-bold tabular-nums tracking-tight text-emerald-700 dark:text-emerald-400">{formatKes(p.netPay)}</p>
                     <p className="text-[11px] tabular-nums text-muted-foreground">
                       gross {formatKes(p.grossPay)} · ded {formatKes(p.totalDeductions)}
                     </p>
@@ -172,7 +172,7 @@ export function PayslipsView({ initialList }: { initialList: PayslipListItem[] }
                 </div>
                 <div className="mt-2 flex items-center justify-between">
                   <StatusBadge status={p.runStatus} />
-                  <span className="flex items-center gap-1 text-[11px] font-medium text-sky-600 transition-colors group-hover:text-sky-700 dark:text-sky-400">
+                  <span className="flex items-center gap-1 text-[11px] font-medium text-sky-700 transition-colors group-hover:text-sky-700 dark:text-sky-400">
                     <FileDown className="h-3 w-3" aria-hidden /> View breakdown
                   </span>
                 </div>
@@ -232,7 +232,7 @@ export function PayslipsView({ initialList }: { initialList: PayslipListItem[] }
 
                 <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-emerald-500/10 to-sky-500/10 p-3.5">
                   <span className="text-sm font-semibold">Net pay</span>
-                  <span className="text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatKes(detail.netPay)}</span>
+                  <span className="text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{formatKes(detail.netPay)}</span>
                 </div>
 
                 <section aria-label="Period stats" className="grid grid-cols-4 gap-2 text-center">
