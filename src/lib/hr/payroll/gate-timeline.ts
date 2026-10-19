@@ -28,7 +28,10 @@
 //
 // PURE module: no db, no network, no clock, no window — same constraint as
 // gate-trail.ts and run-history.ts. Verdict text comes from the v2.135.0
-// parser so every surface speaks the frozen strip's exact words.
+// parser so every surface speaks the frozen strip's exact words. (The
+// v2.143.0 filename builder is the one injection point: the clock arrives
+// as a parameter — `when: Date = new Date()`, the consent filenames' own
+// pattern — so feeding a Date keeps it deterministic.)
 
 import { parseGateVerdict, buildGateVerdictText, gateVerdictTone } from './gate-verdict';
 
@@ -156,6 +159,17 @@ export function summarizeGateTimeline(rows: readonly GateTimelineRow[]): GateTim
 // member, after discipline-ledger, discipline-list, and the timesheet desk)
 // fix both. Same honesty rules as everywhere else on the card.
 
+// ── v2.143.0: the story scopes itself ───────────────────────────────────────
+// The lens answered "show me the stops"; it could not answer "what did the
+// gate do in OCTOBER". The read already carries each run's period name, so
+// the scope rides the SAME payload — one pure list of the periods present,
+// one pure filter that composes the period with the lens, and a filename
+// that says when the export is scoped. The header chip keeps speaking ALL
+// attempts (route-built); the scoped counts wear their own line. Honesty
+// rules unchanged: order preserved, nothing guessed, "All periods" is a
+// real option — unlabeled runs never vanish from the view, they only step
+// aside when a period is picked.
+
 export interface GateTimelineCsvRow {
   /** ISO string or '' — an unreadable clock exports empty, never guessed. */
   attemptedAt: string;
@@ -221,4 +235,83 @@ export function filterGateTimeline(
   if (!Array.isArray(rows)) return [];
   if (!blockedOnly) return [...rows];
   return rows.filter((r) => r && r.outcome === 'BLOCKED');
+}
+
+/** One period present in the timeline read, with its own honest counts. */
+export interface GateTimelinePeriod {
+  /** The run's payroll period name — the only period identity the payload carries. */
+  label: string;
+  attempts: number;
+  /** Distinct runs inside the period — a period prepared twice in one run counts one run. */
+  runs: number;
+}
+
+/**
+ * The periods present in this window, first-appearance ordered. The route
+ * feeds newest-first, so the picker lists the newest period first — the
+ * same reading direction the card itself uses. Rows without a period label
+ * never invent an entry (they stay visible under "All periods"); a period's
+ * runs are DISTINCT run ids, not row count.
+ */
+export function listTimelinePeriods(rows: readonly GateTimelineRow[]): GateTimelinePeriod[] {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Map<string, { attempts: number; runs: Set<string> }>();
+  for (const row of rows) {
+    if (!row || typeof row.runLabel !== 'string' || !row.runLabel.trim()) continue;
+    const entry = seen.get(row.runLabel) ?? { attempts: 0, runs: new Set<string>() };
+    entry.attempts += 1;
+    entry.runs.add(row.runId);
+    seen.set(row.runLabel, entry);
+  }
+  return Array.from(seen.entries()).map(([label, v]) => ({
+    label,
+    attempts: v.attempts,
+    runs: v.runs.size,
+  }));
+}
+
+export interface GateScopeOptions {
+  /** The lens: BLOCKED attempts only. Undefined/false keeps every outcome. */
+  blockedOnly?: boolean;
+  /** The period scope: a run label from listTimelinePeriods. Null/'' = all. */
+  periodLabel?: string | null;
+}
+
+/**
+ * The card's one composition point: period scope ∩ lens. Order preserved,
+ * intersection is the filter (either dimension alone narrows the same way),
+ * and with both dimensions off this is a COPY — the caller's array is never
+ * mutated. Non-array → []; an unknown period → [] (an empty scope is an
+ * honest empty, never a silent unscoped view).
+ */
+export function scopeGateTimeline(
+  rows: readonly GateTimelineRow[],
+  opts: GateScopeOptions,
+): GateTimelineRow[] {
+  if (!Array.isArray(rows)) return [];
+  const period =
+    typeof opts?.periodLabel === 'string' && opts.periodLabel ? opts.periodLabel : null;
+  let out = period ? rows.filter((r) => r && r.runLabel === period) : [...rows];
+  if (opts?.blockedOnly) out = out.filter((r) => r && r.outcome === 'BLOCKED');
+  return out;
+}
+
+/**
+ * The export's filename — date-stamped like the desk export, and when the
+ * story is scoped to one period the name says so (a scoped export and the
+ * full-window export must never look alike in a downloads folder). The
+ * slug keeps [a-z0-9-]: every other character collapses to one '-'. The
+ * clock is injected (the consent timeline filenames' own pattern) — the
+ * module stays pure, the caller feeds now.
+ */
+export function gateTimelineCsvFilename(
+  periodLabel?: string | null,
+  when: Date = new Date(),
+): string {
+  const date = when.toISOString().slice(0, 10);
+  const slug =
+    typeof periodLabel === 'string' && periodLabel
+      ? periodLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+      : '';
+  return slug ? `gate-activity-${slug}-${date}.csv` : `gate-activity-${date}.csv`;
 }

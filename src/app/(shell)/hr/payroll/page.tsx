@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertTriangle, ArrowLeft, ArrowUpRight, Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, History, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Banknote, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileDown, History, Landmark, Loader2, Plus, RefreshCw, Search, ShieldCheck, Wallet, X } from 'lucide-react';
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { PayrollRunDialog } from '@/components/hr/payroll-run-dialog';
 import { PayrollCorrectionsPanel } from '@/components/hr/payroll-corrections-panel';
@@ -30,7 +30,7 @@ import { gatePreviewChips, gatePreviewLine, type GatePreview } from '@/lib/hr/pa
 // across every run, so the page can answer "how has the gate behaved" at a
 // glance. Types only here — the route does the building, the card renders.
 import type { GateTimelineRow, GateTimelineSummary, GateTimelineCsvRow } from '@/lib/hr/payroll/gate-timeline';
-import { buildGateTimelineCsv, filterGateTimeline } from '@/lib/hr/payroll/gate-timeline';
+import { buildGateTimelineCsv, listTimelinePeriods, scopeGateTimeline, gateTimelineCsvFilename, summarizeGateTimeline } from '@/lib/hr/payroll/gate-timeline';
 import { yearMonthRollups, movementSideCellCompact, filterAccountSuggestions, rememberAccountCode, parseRecentAccountCodes, groupAccountsByType, ACCOUNT_PICKER_RECENTS_KEY, type AccountPickerEntry } from '@/lib/hr/payroll/period-journal';
 
 export interface PayrollPeriodDto {
@@ -420,6 +420,12 @@ export default function HrPayrollPage() {
   // speaking ALL attempts, the toggle composes BEFORE the render bound and
   // BEFORE the export, and flipping it never touches the read itself.
   const [timelineBlockedOnly, setTimelineBlockedOnly] = useState(false);
+  // v2.143.0: the period scope — the story scopes itself. Holds the period's
+  // own LABEL (the payload's only period identity); null reads "All periods".
+  // A view preference like the lens: the header chip keeps speaking the
+  // route-built ALL count, the scoped counts wear their own line, and the
+  // export's filename says when the story is scoped.
+  const [timelinePeriod, setTimelinePeriod] = useState<string | null>(null);
 
   const togglePeriod = useCallback((name: string) => {
     setCollapsedPeriods((prev) => {
@@ -588,9 +594,16 @@ export default function HrPayrollPage() {
   // a display bound must never silently truncate an audit artifact), with
   // the lens applied: what the card shows is what prints. Client-side blob,
   // the desk export's own pattern — the rows are already in memory.
+  // v2.143.0: the export follows BOTH view dimensions — period scope ∩ lens —
+  // and the filename says when it is scoped (a scoped export and the
+  // full-window export must never look alike in a downloads folder). Still
+  // the whole window the read returned, never the 8-row viewport.
   const exportGateTimelineCsv = useCallback(() => {
     if (!timeline || timeline.rows.length === 0) return;
-    const visible = filterGateTimeline(timeline.rows, timelineBlockedOnly);
+    const visible = scopeGateTimeline(timeline.rows, {
+      blockedOnly: timelineBlockedOnly,
+      periodLabel: timelinePeriod,
+    });
     const csv = buildGateTimelineCsv(
       visible.map((row): GateTimelineCsvRow => ({
         attemptedAt: row.atIso ?? '',
@@ -605,12 +618,12 @@ export default function HrPayrollPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `gate-activity-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = gateTimelineCsvFilename(timelinePeriod);
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  }, [timeline, timelineBlockedOnly]);
+  }, [timeline, timelineBlockedOnly, timelinePeriod]);
 
   const stats = useMemo(() => {
     const list = runs ?? [];
@@ -678,9 +691,26 @@ export default function HrPayrollPage() {
   // v2.142.0: the card's visible rows — the lens composes BEFORE the show-all
   // bound, so "Show all N" speaks what the lens shows and a PASSED row can
   // never smuggle into a blocked-only view (the desk lens's own rule).
+  // v2.143.0: the period scope composes with the lens at ONE point —
+  // scopeGateTimeline (period ∩ BLOCKED) — and the scoped set feeds the
+  // rows, the show-all bound, the scoped count line (the pure summarizer
+  // re-run on the scoped set), and the export alike. The header chip stays
+  // route-built: a view preference never rewrites the whole story.
+  const timelinePeriods = useMemo(
+    () => listTimelinePeriods(timeline?.rows ?? []),
+    [timeline],
+  );
   const timelineFiltered = useMemo(
-    () => filterGateTimeline(timeline?.rows ?? [], timelineBlockedOnly),
-    [timeline, timelineBlockedOnly],
+    () =>
+      scopeGateTimeline(timeline?.rows ?? [], {
+        blockedOnly: timelineBlockedOnly,
+        periodLabel: timelinePeriod,
+      }),
+    [timeline, timelineBlockedOnly, timelinePeriod],
+  );
+  const timelineScopedSummary = useMemo(
+    () => summarizeGateTimeline(timelineFiltered),
+    [timelineFiltered],
   );
   const toggleAllPeriods = useCallback(() => {
     setCollapsedPeriods(allPeriodsOpen ? new Set(periodGroups.map((g) => g.periodName)) : new Set());
@@ -1191,6 +1221,39 @@ export default function HrPayrollPage() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {/* v2.143.0: the period scope — the story scopes itself.
+                      Client-side only (the read already carries each run's
+                      period name): picking a period narrows the rows, the
+                      scoped counts wear their own line, the header chip
+                      keeps speaking ALL attempts. Rendered only when the
+                      window actually contains a labeled period — no dead
+                      control on a one-period store. */}
+                  {timelinePeriods.length > 0 ? (
+                    <Select
+                      value={timelinePeriod ?? '__all__'}
+                      onValueChange={(v) => setTimelinePeriod(v === '__all__' ? null : v)}
+                    >
+                      <SelectTrigger
+                        data-testid="payroll-gate-timeline-period-picker"
+                        aria-label="Filter the gate activity to one period"
+                        title="Scopes the card to one period's attempts — the summary chip still speaks every attempt, and the export follows the scope"
+                        className="h-8 w-auto max-w-[190px] gap-1.5 rounded-full border-input bg-background px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border focus:ring-1 focus:ring-ring data-[placeholder]:text-muted-foreground dark:bg-background [&>span]:truncate [&>span]:min-w-0"
+                      >
+                        <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__" className="text-xs">
+                          All periods
+                        </SelectItem>
+                        {timelinePeriods.map((p) => (
+                          <SelectItem key={p.label} value={p.label} className="text-xs">
+                            {p.label} · {p.attempts} {p.attempts === 1 ? 'attempt' : 'attempts'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                   {/* v2.142.0: the blocked-only lens — aria-pressed speaks the
                       state, rose when on (the BLOCKED outcome's own family,
                       dark twins included), quiet outline when off. A view
@@ -1217,7 +1280,7 @@ export default function HrPayrollPage() {
                     size="sm"
                     className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring"
                     aria-label="Export the gate activity as CSV"
-                    title="Downloads the whole window the read returned — every attempt the card read, not just the rows on screen. Counts and verdicts only, never pay data."
+                    title="Downloads every attempt the card read, not just the rows on screen — filtered to the current period and lens. Counts and verdicts only, never pay data."
                     data-testid="payroll-gate-timeline-export"
                     disabled={timeline === null || timelineFiltered.length === 0}
                     onClick={exportGateTimelineCsv}
@@ -1274,15 +1337,54 @@ export default function HrPayrollPage() {
                   attempt after that keeps its row.
                 </p>
               ) : timelineFiltered.length === 0 ? (
-                <p
-                  className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
-                  data-testid="payroll-gate-timeline-lens-empty"
-                >
-                  No blocked attempts in the window — every prepare got through. The full story stays
-                  one toggle away.
-                </p>
+                timelinePeriod && !timelineBlockedOnly ? (
+                  /* A scoped set can only empty out when the period stepped
+                     outside the bounded window (a period picked from the list
+                     always owns at least one attempt) — so this speaks the
+                     window's honesty, amber, with the way back named. */
+                  <p
+                    className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+                    data-testid="payroll-gate-timeline-scope-empty"
+                  >
+                    No attempts from this period inside the current window — the read is bounded, and
+                    older attempts stay in the ledger, never rewritten. All periods stays one pick
+                    away.
+                  </p>
+                ) : (
+                  <p
+                    className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                    data-testid="payroll-gate-timeline-lens-empty"
+                  >
+                    {timelinePeriod
+                      ? 'No blocked attempts in this period — every prepare got through. The full story stays one toggle away.'
+                      : 'No blocked attempts in the window — every prepare got through. The full story stays one toggle away.'}
+                  </p>
+                )
               ) : (
                 <div>
+                  {/* v2.143.0: the scoped counts wear their own line — the pure
+                      summarizer re-run on the scoped set. The header chip keeps
+                      speaking ALL attempts (route-built): a view preference
+                      never rewrites the whole story. */}
+                  {timelinePeriod ? (
+                    <p
+                      className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs tabular-nums text-muted-foreground"
+                      data-testid="payroll-gate-timeline-scoped"
+                    >
+                      <span className="font-mono text-[10px] uppercase tracking-wide text-foreground/80 dark:text-foreground/70">
+                        {timelinePeriod}
+                      </span>
+                      <span aria-hidden>·</span>
+                      <span>
+                        {timelineScopedSummary.attempts}{' '}
+                        {timelineScopedSummary.attempts === 1 ? 'attempt' : 'attempts'} ·{' '}
+                        {timelineScopedSummary.runs} {timelineScopedSummary.runs === 1 ? 'run' : 'runs'}
+                        {timelineScopedSummary.lastOutcome ? (
+                          <> · last {timelineScopedSummary.lastOutcome}</>
+                        ) : null}
+                      </span>
+                    </p>
+                  ) : null}
                   <ol className="divide-y rounded-md border">
                     {(timelineShowAll ? timelineFiltered : timelineFiltered.slice(0, 8)).map((row, i) => (
                       <li
@@ -1329,10 +1431,17 @@ export default function HrPayrollPage() {
                             <span>{row.atIso ? formatEatStamp(new Date(row.atIso)) : 'no timestamp recorded'}</span>
                             {row.actorLabel ? <span>· {row.actorLabel}</span> : null}
                             {row.runLabel ? (
-                              <span className="font-mono text-[10px] uppercase tracking-wide" title="The run this attempt belonged to">
+                              <button
+                                type="button"
+                                data-testid={`payroll-gate-timeline-run-${i}`}
+                                onClick={() => setTimelinePeriod(row.runLabel)}
+                                aria-label={`Filter the gate activity to ${row.runLabel}`}
+                                title="Scope the card to this period's attempts — the summary chip keeps speaking every attempt"
+                                className="rounded font-mono text-[10px] uppercase tracking-wide underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                              >
                                 · {row.runLabel}
                                 {row.runStatus ? ` · ${row.runStatus}` : ''}
-                              </span>
+                              </button>
                             ) : null}
                           </p>
                         </div>

@@ -2,6 +2,26 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.143.0] The story scopes itself
+
+The lens (v2.142.0) answered "show me the stops"; it could not answer "what did the gate do in OCTOBER". The read (v2.141.0) already carries each run's payroll period name, so this release makes the story scope itself — no new fetch, no new endpoint: a pure period list, a pure period ∩ lens filter, and an export filename that says when the story is scoped.
+
+### Added
+- **The period scope** (`listTimelinePeriods` + `scopeGateTimeline` in `gate-timeline.ts`, `payroll-gate-timeline-period-picker`): a client-side picker of the periods present in the current window, first-appearance ordered (the route feeds newest-first, so the picker lists the newest period first), each item speaking its own attempt count. "All periods" is a real option — unlabeled runs never vanish from the view, they only step aside when a period is picked. Rendered only when the window actually contains a labeled period: a one-period store never wears a dead control.
+- **The scoped count line** (`payroll-gate-timeline-scoped`): when a period is picked, the pure summarizer re-runs on the scoped set and its counts wear their own quiet line — attempts · runs · last outcome — while the header chip keeps speaking the route-built ALL count (a view preference never rewrites the whole story).
+- **Row-label scoping** (`payroll-gate-timeline-run-N`): any row's period label scopes the card on click — the story narrows itself from the row you are reading, with hover underline, focus-visible ring, and a per-period aria-label.
+
+### Changed
+- `scopeGateTimeline` is the card's ONE composition point (period ∩ BLOCKED lens): the scoped set feeds the rows, the show-all bound, the scoped line, and the export alike. With both dimensions off it returns a copy — the caller's array is never mutated; an unknown period is an honest empty, never a silent unscoped view.
+- **The export follows both dimensions** and the filename says it (`gateTimelineCsvFilename`): a scoped export downloads `gate-activity-<period-slug>-YYYY-MM-DD.csv` so a scoped file and the full-window export never look alike in a downloads folder; the clock is injected (the consent filenames' own pattern). The whole-window-never-viewport contract is unchanged.
+- **Both honest empties keep their own voices**: a scoped set that empties (the period stepped outside the bounded window) speaks amber ("No attempts from this period inside the current window — the read is bounded…"); the lens-empty stays rose and now names the period when one is picked ("No blocked attempts in this period — every prepare got through.").
+- `docs/hr/payroll-run-lifecycle.md`: the store-timeline contract names the period scope.
+
+### Tests
+- `src/tests/gate-period-v2143.test.ts` (21): the period list (distinct labels, first-appearance order, DISTINCT runs per period, unlabeled rows never invent an entry, non-array), the scope filter (either dimension alone, both intersect, order preserved, copy semantics, unknown period → [], non-array), the filename (unscoped shape, slug discipline, injected clock), the card contract (picker presence, route-built chip, scoped line, one composition point, export scope + filename, row-label click, both empties), and the pure module's head.
+- `scripts/verify-v2-143-0.mjs` (fresh).
+- `console-changelog` unread counters re-anchored for 2.143.0 joining the feed.
+
 ## [2.142.0] The activity answers back
 
 The Gate activity card (v2.141.0) kept the whole story readable but not workable: a manager hunting the stops scanned every PASSED row by eye, and the audit story could not leave the screen. And the New-run picker — which already wears the gate's pending counts (v2.137.0) — said nothing about what happened the LAST time someone prepared the selected period. This release gives the card a lens and a print door, and the picker its parity chip.

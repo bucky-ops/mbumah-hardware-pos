@@ -70,7 +70,7 @@ logging). Branch context always resolves from the session, never the client.
 Blocked runs stay in `DRAFT` with the issue list persisted to
 `PayrollRun.errorMessage`; the UI renders the codes verbatim.
 
-### Gate surfaces and contracts (v2.135.0 → v2.142.0)
+### Gate surfaces and contracts (v2.135.0 → v2.143.0)
 
 The gate's verdict is not a transient — every surface below reads the same
 frozen facts and follows the same honesty rules:
@@ -131,6 +131,23 @@ frozen facts and follows the same honesty rules:
   verdict,actor` — counts and verdicts, never employee codes or pay data).
   The export carries the WHOLE window the read returned, never the 8-row
   viewport — a display bound must never silently truncate an audit artifact.
+- **Period scope (v2.143.0).** The card scopes itself to one payroll period:
+  `listTimelinePeriods` derives the periods present in the window
+  (first-appearance order — the route feeds newest-first, so the picker
+  lists the newest period first; a period's runs are DISTINCT run ids, and
+  unlabeled rows never invent an entry), and `scopeGateTimeline` is the ONE
+  composition point where the period meets the blocked-only lens (order
+  preserved; both dimensions off returns a copy; an unknown period is an
+  honest empty, never a silent unscoped view). The scoped set feeds the
+  rows, the show-all bound, the export, and the scoped count line alike —
+  the header chip keeps speaking the route-built ALL count, because a view
+  preference never rewrites the whole story. Any row's period label scopes
+  the card on click. The export follows both dimensions and the filename
+  says it (`gateTimelineCsvFilename`: `gate-activity-<period-slug>-YYYY-MM-DD.csv`
+  when scoped, the injected-clock pattern the consent filenames use), so a
+  scoped export and the full-window export never look alike in a downloads
+  folder. The picker renders only when the window holds a labeled period —
+  a one-period store never wears a dead control.
 
 ## Posting (spec acceptance #1–#4)
 
