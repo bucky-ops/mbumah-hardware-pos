@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.129.0',
+    title: 'The ledger shows its timeline',
+    bullets: [
+      'Consent history is now readable: a History button on every Privacy-tab consent row opens that employee\u2019s full consent timeline.',
+      'The timeline reads like a ledger \u2014 cycle by cycle, oldest first: what was granted, when it was withdrawn, how many days it stood, and whether it still stands.',
+      'Re-grants wear their own indigo marker on the timeline, so the \u201cre-granted \u00d7N\u201d chip now has a door behind it.',
+      'History is a read, not a decision: every viewer of the ledger can open it, and the drawer never alters the record \u2014 append-only, nothing edited or deleted.',
+    ],
+  },
+  {
     version: '2.128.0',
     title: 'The record stands corrected',
     bullets: [

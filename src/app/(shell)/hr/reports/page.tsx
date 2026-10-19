@@ -229,6 +229,22 @@ interface ConsentDto {
   }>;
 }
 
+// v2.129.0: one employee's append-only consent timeline — the drawer's
+// source. Events arrive oldest → newest with stoodDays computed SERVER-side
+// (the drawer never reimplements the clock); standing closes the story.
+interface ConsentHistoryDto {
+  employee: { id: string; code: string; name: string };
+  events: Array<{
+    purpose: string;
+    policyVersion: string | null;
+    grantedAt: string;
+    withdrawnAt: string | null;
+    stoodDays: number | null;
+    cycle: number;
+  }>;
+  standing: boolean;
+}
+
 // v2.122.0: the retention desk (spec Phase 4.8) — the reviewable retention
 // policies folded with their live legal-hold state (what the nightly sweep
 // will and will not touch); hold/release decisions mirror the erasure +
@@ -377,6 +393,13 @@ export default function HrReportsPage() {
   const [erasure, setErasure] = useState<ErasureDto | null>(null);
   const [consent, setConsent] = useState<ConsentDto | null>(null);
   const [retention, setRetention] = useState<RetentionDto | null>(null);
+  // v2.129.0: the consent timeline drawer — one door, per-employee payload.
+  // All four reset on close (the stale-state hygiene: one employee's history
+  // must never greet the next open).
+  const [historyEmp, setHistoryEmp] = useState<ConsentDto['records'][number] | null>(null);
+  const [historyPayload, setHistoryPayload] = useState<ConsentHistoryDto | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   // v2.122.0: release is the destructive direction (the sweep resumes on its
   // next run) — it asks twice; releaseArm holds the scope currently armed.
   const [releaseArm, setReleaseArm] = useState<string | null>(null);
@@ -445,6 +468,26 @@ export default function HrReportsPage() {
     } catch {
       setErasure(null);
     }
+  }, []);
+
+  // v2.129.0: the timeline door opens — fresh fetch per open, retry reuses
+  // the door's employee (openHistory is the single loader).
+  const openHistory = useCallback((r: ConsentDto['records'][number]) => {
+    setHistoryEmp(r);
+    setHistoryPayload(null);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    apiGet<ConsentHistoryDto>(`/api/hr/privacy/consent/${encodeURIComponent(r.employeeId)}/history`)
+      .then(setHistoryPayload)
+      .catch((e: unknown) => setHistoryError(e instanceof Error ? e.message : 'Failed to load consent history.'))
+      .finally(() => setHistoryLoading(false));
+  }, []);
+
+  const closeHistory = useCallback(() => {
+    setHistoryEmp(null);
+    setHistoryPayload(null);
+    setHistoryError(null);
+    setHistoryLoading(false);
   }, []);
 
   // v2.119.0: the consent ledger loads with the Privacy tab.
@@ -1691,32 +1734,45 @@ export default function HrReportsPage() {
                         <TableCell className="text-muted-foreground">{r.grantedAt ? formatDate(r.grantedAt) : '—'}</TableCell>
                         <TableCell className="text-muted-foreground">{r.withdrawnAt ? formatDate(r.withdrawnAt) : '—'}</TableCell>
                         <TableCell className="text-right">
-                          {consent.canDecide ? (
-                            r.status === 'ACTIVE' ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={busy}
-                                data-testid="hr-privacy-consent-withdraw"
-                                aria-label={`Withdraw data-processing consent — ${r.employeeName}`}
-                                onClick={() => void run(() => apiSend('/api/hr/privacy/consent/withdraw', 'POST', { employeeId: r.employeeId }).then(() => loadConsent()))}
-                              >
-                                Withdraw
-                              </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            {/* v2.129.0: the timeline door — a READ, so it renders for every
+                                viewer of the ledger (reads are never reserved to deciders). */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              data-testid="hr-privacy-consent-history-open"
+                              aria-label={`Consent history — ${r.employeeName}`}
+                              onClick={() => openHistory(r)}
+                            >
+                              <History className="h-3.5 w-3.5" aria-hidden /> History
+                            </Button>
+                            {consent.canDecide ? (
+                              r.status === 'ACTIVE' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={busy}
+                                  data-testid="hr-privacy-consent-withdraw"
+                                  aria-label={`Withdraw data-processing consent — ${r.employeeName}`}
+                                  onClick={() => void run(() => apiSend('/api/hr/privacy/consent/withdraw', 'POST', { employeeId: r.employeeId }).then(() => loadConsent()))}
+                                >
+                                  Withdraw
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  disabled={busy}
+                                  data-testid="hr-privacy-consent-grant"
+                                  aria-label={`Grant data-processing consent — ${r.employeeName}`}
+                                  onClick={() => void run(() => apiSend('/api/hr/privacy/consent/grant', 'POST', { employeeId: r.employeeId }).then(() => loadConsent()))}
+                                >
+                                  Grant
+                                </Button>
+                              )
                             ) : (
-                              <Button
-                                size="sm"
-                                disabled={busy}
-                                data-testid="hr-privacy-consent-grant"
-                                aria-label={`Grant data-processing consent — ${r.employeeName}`}
-                                onClick={() => void run(() => apiSend('/api/hr/privacy/consent/grant', 'POST', { employeeId: r.employeeId }).then(() => loadConsent()))}
-                              >
-                                Grant
-                              </Button>
-                            )
-                          ) : (
-                            <span className="text-xs text-muted-foreground">settings managers decide</span>
-                          )}
+                              <span className="text-xs text-muted-foreground">settings managers decide</span>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1958,6 +2014,82 @@ export default function HrReportsPage() {
               Reject request
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Consent timeline drawer (v2.129.0) — the append-only ledger read verbatim:
+          every grant, withdrawal, and re-grant stays on file and the timeline
+          shows the journey the re-granted ×N chip only counts. */}
+      <Dialog open={historyEmp !== null} onOpenChange={(open) => !open && closeHistory()}>
+        <DialogContent className="print:hidden max-h-[85vh] overflow-y-auto sm:max-w-lg" data-testid="hr-privacy-consent-history">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" aria-hidden />
+              Consent timeline — {historyEmp?.employeeName ?? ''}
+            </DialogTitle>
+            <DialogDescription>
+              {historyEmp?.employeeCode ? `${historyEmp.employeeCode} · ` : ''}The append-only ledger — every grant, withdrawal, and re-grant stays on file. Reads never alter the record.
+            </DialogDescription>
+          </DialogHeader>
+          {historyLoading ? (
+            <Skeleton className="h-40 w-full" data-testid="hr-privacy-consent-history-loading" />
+          ) : historyError ? (
+            <div className="space-y-2">
+              <p role="status" className="text-xs text-rose-600 dark:text-rose-400">{historyError}</p>
+              <Button variant="outline" size="sm" onClick={() => historyEmp && openHistory(historyEmp)} aria-label="Retry consent history">
+                Retry
+              </Button>
+            </div>
+          ) : historyPayload && historyPayload.events.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground" data-testid="hr-privacy-consent-history-empty">
+              No consent records on file — the run reports MISSING_CONSENT until a grant.
+            </p>
+          ) : historyPayload ? (
+            <div className="space-y-3">
+              <ol data-testid="hr-privacy-consent-history-timeline" className="relative space-y-4 border-l-2 border-slate-200 pl-5 dark:border-slate-700">
+                {historyPayload.events.map((ev) => (
+                  <li key={ev.cycle} className="relative">
+                    <span
+                      aria-hidden
+                      data-testid={ev.withdrawnAt ? 'hr-privacy-consent-history-dot-closed' : 'hr-privacy-consent-history-dot-standing'}
+                      className={`absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-background ${ev.withdrawnAt ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400'}`}
+                    />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-semibold">Cycle {ev.cycle}</span>
+                      {ev.withdrawnAt ? (
+                        <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300">Withdrawn</span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Standing</span>
+                      )}
+                      {ev.withdrawnAt && ev.stoodDays !== null ? (
+                        <span
+                          className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300"
+                          title="Whole days between the grant and the withdrawal"
+                        >
+                          stood {ev.stoodDays} day{ev.stoodDays === 1 ? '' : 's'}
+                        </span>
+                      ) : null}
+                      {ev.cycle > 1 ? (
+                        <span className="inline-flex items-center rounded-full border border-indigo-300 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">re-grant</span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{ev.purpose}</p>
+                    <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                      Granted {formatDate(ev.grantedAt)}
+                      {ev.withdrawnAt ? ` · Withdrawn ${formatDate(ev.withdrawnAt)}` : ' · still standing'}
+                      {ev.policyVersion ? ` · policy ${ev.policyVersion}` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+              <p data-testid="hr-privacy-consent-history-footer" className="text-xs text-muted-foreground">
+                {historyPayload.events.length} record{historyPayload.events.length === 1 ? '' : 's'} on file · append-only — nothing is edited or deleted.
+                {historyPayload.standing
+                  ? ' The newest consent stands; the run gates on it.'
+                  : ' No active consent stands; the run reports MISSING_CONSENT until a re-grant.'}
+              </p>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

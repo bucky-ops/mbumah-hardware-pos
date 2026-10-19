@@ -707,6 +707,73 @@ export async function listConsentRecords(session: Session): Promise<ConsentLedge
   };
 }
 
+/** One event in an employee's append-only consent timeline (v2.129.0). */
+export interface ConsentHistoryEvent {
+  purpose: string;
+  policyVersion: string | null;
+  grantedAt: string;
+  withdrawnAt: string | null;
+  /**
+   * Whole days the consent stood before withdrawal — computed SERVER-side so
+   * the drawer never reimplements the clock (the describeRetentionWindow
+   * lesson). null while the record still stands: an open consent has no
+   * honest day count, only a standing-since date.
+   */
+  stoodDays: number | null;
+  /** 1-based chronological position — every value ≥2 is a re-grant cycle. */
+  cycle: number;
+}
+
+export interface ConsentHistory {
+  employee: { id: string; code: string; name: string };
+  /** Oldest → newest: a timeline reads like a ledger, first grant on top. */
+  events: ConsentHistoryEvent[];
+  /** True when the newest event has no withdrawnAt — the consent stands. */
+  standing: boolean;
+}
+
+/**
+ * Read-back: ONE employee's full consent timeline (v2.129.0) — the drawer's
+ * source. Scope-checked like every ledger read (a cross-branch id 404s, it
+ * does not leak), append-only rows verbatim: nothing is edited, folded, or
+ * deleted on the way out.
+ */
+export async function listConsentHistory(session: Session, employeeId: string): Promise<ConsentHistory> {
+  const employee = await db.employee.findFirst({
+    where: { id: String(employeeId ?? ''), deletedAt: null, AND: [employeeScopeWhere(session)] },
+    select: {
+      id: true,
+      employeeCode: true,
+      firstName: true,
+      lastName: true,
+      consentRecords: { orderBy: { grantedAt: 'asc' } },
+    },
+  });
+  if (!employee) throw new StageGError('CONSENT_HISTORY_NOT_FOUND', 'Employee not found in your scope.', 404);
+
+  const events: ConsentHistoryEvent[] = employee.consentRecords.map((c, i) => {
+    const stoodMs = (c.withdrawnAt ? c.withdrawnAt.getTime() : 0) - c.grantedAt.getTime();
+    return {
+      purpose: c.purpose,
+      policyVersion: c.policyVersion,
+      grantedAt: c.grantedAt.toISOString(),
+      withdrawnAt: c.withdrawnAt?.toISOString() ?? null,
+      stoodDays: c.withdrawnAt ? Math.max(0, Math.floor(stoodMs / 86_400_000)) : null,
+      cycle: i + 1,
+    };
+  });
+
+  return {
+    employee: {
+      id: employee.id,
+      code: employee.employeeCode ?? '—',
+      name: `${employee.firstName} ${employee.lastName}`.trim(),
+    },
+    events,
+    standing: events.length > 0 && events[events.length - 1].withdrawnAt === null,
+  };
+}
+
 async function consentTargetEmployee(
   input: { employeeId?: unknown },
   session: Session,
