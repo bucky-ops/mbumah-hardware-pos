@@ -255,10 +255,13 @@ export function AppSidebar() {
         )}
         <Icon className={`h-4 w-4 shrink-0 relative z-10 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
         {!collapsed && <span className="relative z-10">{label}</span>}
-        {!collapsed && id === 'pos' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F2</kbd>}
-        {!collapsed && id === 'inventory' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F3</kbd>}
-        {!collapsed && id === 'customers' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F4</kbd>}
-        {!collapsed && id === 'financial' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-500 hidden xl:inline">F5</kbd>}
+        {/* v2.148.0: the kbd hints ride text-slate-400 — slate-500 on the
+            dark rail measured below the contrast bar (axe incomplete); the
+            brighter token passes on the same border. */}
+        {!collapsed && id === 'pos' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-400 hidden xl:inline">F2</kbd>}
+        {!collapsed && id === 'inventory' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-400 hidden xl:inline">F3</kbd>}
+        {!collapsed && id === 'customers' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-400 hidden xl:inline">F4</kbd>}
+        {!collapsed && id === 'financial' && <kbd className="ml-auto rounded border border-white/10 px-1 text-[8px] text-slate-400 hidden xl:inline">F5</kbd>}
         {/* Ripple effect overlay on click */}
         <span className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none" />
       </button>
@@ -364,7 +367,13 @@ export function AppSidebar() {
               >
                 <Bell className="h-4 w-4" aria-hidden />
                 {notificationCount.unread > 0 ? (
-                  <span key={notifBadgeKey} className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                  <span key={notifBadgeKey} className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold px-1 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-600 text-white' : 'bg-amber-500 text-slate-950'}`}>
+                    {/* v2.148.0: the count pill must pass the contrast bar on
+                        its OWN token, not mid-animation — white on red-500
+                        measured 3.8:1 and the pulse half-dimmed it further
+                        (axe caught the mid-frame). Critical is now white on
+                        red-600 (4.8:1, pulse dropped — the bounce-in already
+                        announces); warning is slate-950 on amber-500 (8.6:1). */}
                     {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
                   </span>
                 ) : null}
@@ -407,7 +416,8 @@ export function AppSidebar() {
                   >
                     <Bell className="h-4 w-4" aria-hidden />
                     {notificationCount.unread > 0 && (
-                      <span key={`collapsed-${notifBadgeKey}`} className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[8px] font-bold text-white px-0.5 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                      <span key={`collapsed-${notifBadgeKey}`} className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full text-[8px] font-bold px-0.5 animate-badge-bounce-in ${notificationCount.critical > 0 ? 'bg-red-600 text-white' : 'bg-amber-500 text-slate-950'}`}>
+                        {/* v2.148.0: same pill contract as the expanded rail. */}
                         {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
                       </span>
                     )}
@@ -426,7 +436,11 @@ export function AppSidebar() {
             {navGroups.map((group, idx) => (
               <div key={group.label}>
                 {!collapsed && (
-                  <div className={`px-4 ${idx === 0 ? 'pt-2' : 'pt-4'} pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5`}>
+                  <div className={`px-4 ${idx === 0 ? 'pt-2' : 'pt-4'} pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5`}>
+                    {/* v2.148.0: section labels ride text-slate-400 — slate-500
+                        on the slate-900 rail measured 3.74:1 (axe: small text
+                        needs 4.5). The brighter token keeps the hierarchy and
+                        passes at 6.6:1. */}
                     <span>{group.label}</span>
                     <Separator className="flex-1 bg-white/10" />
                   </div>

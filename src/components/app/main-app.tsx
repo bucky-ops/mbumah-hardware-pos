@@ -220,10 +220,40 @@ export function MainApp() {
   return (
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden">
+        {/* v2.148.0: the skip link — the FIRST focusable element in the shell.
+            A keyboard user no longer tabs through the sidebar and the top bar
+            (~15 stops) before reaching content: first Tab reveals the link,
+            Enter jumps focus into <main id="main-content">. Hidden until
+            focused (sr-only / focus:not-sr-only) — sighted mouse users never
+            see it, screen-reader and keyboard users always do. */}
+        <a
+          href="#main-content"
+          data-testid="shell-skip-link"
+          onClick={(e) => {
+            // The router intercepts same-page hash clicks and does a soft
+            // pushState — which sets the hash but SKIPS the browser's
+            // fragment-focus step, leaving keyboard focus on the link. The
+            // native path stays as the no-JS fallback; with JS we land the
+            // focus ourselves.
+            e.preventDefault();
+            const target = document.getElementById('main-content');
+            if (target) {
+              target.focus();
+              target.scrollIntoView({ block: 'start' });
+              window.history.replaceState(null, '', '#main-content');
+            }
+          }}
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-slate-900 focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+        >
+          Skip to main content
+        </a>
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0 min-h-screen transition-all duration-300 ease-in-out">
           <TopBar searchBtnRef={searchBtnRef} />
-          <main className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+          {/* tabIndex={-1}: the skip target accepts focus, so focus truly
+              LANDS in the content region (and arrow keys scroll it) instead
+              of the browser scrolling silently while focus stays behind. */}
+          <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-4 custom-scrollbar focus:outline-none">
             <div className="animate-tab-enter" key={activeTab}>
               {renderTab()}
             </div>
@@ -237,14 +267,16 @@ export function MainApp() {
                 {/* VERSION FLOW (v2.6.2): renders package.json version + the
                     exact commit SHA this bundle was built from - see
                     src/lib/version.ts. Never hardcode a version here. */}
-                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline" title="App version - build commit">{APP_BUILD_LABEL}</span>
+                {/* v2.148.0: full muted-foreground — the /50 alpha measured
+                    2.1:1 on the footer bg (axe violation, 10px text). */}
+                <span className="text-[10px] text-muted-foreground hidden sm:inline" title="App version - build commit">{APP_BUILD_LABEL}</span>
               </div>
               <div className="flex items-center gap-3">
                 {/* ONLINE STATUS (v2.13.0): live navigator.onLine mirror -
                     green pulsing dot when connected, red static when the
                     browser fires 'offline'. Chip hidden on xs (crowded). */}
                 <div
-                  className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground/60"
+                  className="hidden sm:flex items-center gap-1.5 text-[10px] text-muted-foreground"
                   role="status"
                   aria-label={online ? 'Connected to the internet' : 'Offline - check your internet connection'}
                 >
@@ -260,7 +292,7 @@ export function MainApp() {
                 <button
                   type="button"
                   onClick={() => setShortcutsOpen(true)}
-                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-1"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
                   <Keyboard className="h-3 w-3" />
                   <span className="hidden sm:inline">Shortcuts</span>

@@ -238,7 +238,11 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
                 <Button variant="ghost" size="icon" className="relative h-8 w-8">
                   <Bell className="h-4 w-4" />
                   {notificationCount.unread > 0 && (
-                    <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold text-white px-1 ${notificationCount.critical > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                    <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[9px] font-bold px-1 ${notificationCount.critical > 0 ? 'bg-red-600 text-white' : 'bg-amber-500 text-slate-950'}`}>
+                      {/* v2.148.0: the topbar pill joins the sidebar's contract —
+                          white on red-600 (4.8:1), slate-950 on amber-500
+                          (8.6:1), and the pulse that let axe catch a
+                          mid-dimmed frame is gone (the pop already speaks). */}
                       {notificationCount.unread > 99 ? '99+' : notificationCount.unread}
                     </span>
                   )}
@@ -308,6 +312,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
             {roleBadgeLabel ? (
               <Badge
                 variant="outline"
+                role="group"
                 className="hidden sm:inline-flex items-center gap-1 border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
                 aria-label={`Signed in as ${roleBadgeLabel}`}
                 title={`Signed in as ${roleBadgeLabel}`}
@@ -319,6 +324,7 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
             {/* Live date + clock - "Wed 7 Oct · 19:35:50" */}
             <Badge
               variant="outline"
+              role="timer"
               className="hidden sm:flex items-center gap-1.5 border-slate-200 bg-white/60 font-mono tabular-nums text-slate-600"
               aria-label="Current date and time"
             >
@@ -352,7 +358,10 @@ export function TopBar({ searchBtnRef }: { searchBtnRef?: React.RefObject<HTMLBu
               ESC
             </kbd>
           </div>
-          <div className="max-h-80 overflow-y-auto custom-scrollbar">
+          {/* v2.148.0: the results scroller is focusable (tabIndex=0) — an
+              empty state has no focusable children, which left the region
+              unscrollable by keyboard (axe scrollable-region-focusable). */}
+          <div className="max-h-80 overflow-y-auto custom-scrollbar" tabIndex={0} aria-label="Search results">
             {searchQuery.length < 2 ? (
               <div className="p-6 text-center">
                 <Search className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />

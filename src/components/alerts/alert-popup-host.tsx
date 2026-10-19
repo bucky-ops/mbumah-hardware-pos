@@ -238,6 +238,7 @@ export function AlertPopupHost() {
 
   return (
     <div
+      role="region"
       aria-label="Alert popups"
       className="pointer-events-none fixed bottom-4 left-4 z-[60] flex max-h-[70vh] flex-col-reverse gap-2"
     >

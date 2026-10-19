@@ -517,7 +517,10 @@ export function OrgConsole() {
                   <span className="flex items-center gap-2">
                     <Users className="h-3.5 w-3.5" aria-hidden="true" />
                     People &amp; payroll by branch ({summary.hrPerStore.length})
-                    <span className="font-normal text-muted-foreground/80">
+                    {/* v2.148.0: slate-600 — the /80 alpha measured 3.61:1 and
+                        even full muted-foreground computes ~4.4:1 on the
+                        muted toggle's own bg; slate-600 passes at ~7:1. */}
+                    <span className="font-normal text-slate-600">
                       — headcount, cost, absence, latest run, expiry alerts per branch
                     </span>
                   </span>
