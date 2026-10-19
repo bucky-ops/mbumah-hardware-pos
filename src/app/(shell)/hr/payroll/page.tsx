@@ -293,8 +293,12 @@ function GatePanel({
                   consent block's fix lives on the Privacy tab's consent ledger
                   (grant lives there since v2.119.0), so a MISSING_CONSENT row
                   carries the door straight to it, its own tab (the desk's gate
-                  state stays put). A timesheet block has NO desk yet — it gets
-                  honest text, never a link that would 403 or 404. */}
+                  state stays put). v2.136.0: the timesheet block's fix has its
+                  own desk too — /hr/timesheets, the pending read + approve
+                  desk — so a TIMESHEET_NOT_APPROVED row carries ITS door,
+                  deep-linking the employee the gate blocked (?employee=<id>;
+                  the desk answers by highlighting that row). Same door shape,
+                  own amber family — the block code's own tone. */}
               {r.gateState === 'MISSING_CONSENT' ? (
                 <a
                   href="/hr/reports?tab=privacy"
@@ -308,7 +312,20 @@ function GatePanel({
                   Consent ledger
                   <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden />
                 </a>
-              ) : null}
+              ) : (
+                <a
+                  href={`/hr/timesheets?employee=${encodeURIComponent(r.employeeId)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="payroll-gate-timesheet-door"
+                  aria-label={`Open the timesheet desk to approve days for ${r.employeeName}`}
+                  title="Approve lives on the timesheet desk — opens in its own tab"
+                  className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-50 hover:text-amber-900 hover:ring-1 hover:ring-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-amber-300 dark:hover:bg-amber-950/40 dark:hover:text-amber-200 dark:hover:ring-amber-800"
+                >
+                  Timesheet desk
+                  <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden />
+                </a>
+              )}
             </div>
           ))}
         </div>

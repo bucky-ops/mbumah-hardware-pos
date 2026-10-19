@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/hr/recruitment', label: 'Recruitment' },
   { href: '/hr/onboarding', label: 'Onboarding' },
   { href: '/hr/payroll', label: 'Payroll' },
+  { href: '/hr/timesheets', label: 'Timesheets' },
   { href: '/hr/performance', label: 'Performance' },
   { href: '/hr/assets', label: 'Assets' },
   { href: '/hr/discipline', label: 'Discipline' },

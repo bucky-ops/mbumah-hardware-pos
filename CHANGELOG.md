@@ -2,6 +2,25 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.136.0] The second door finds its desk
+
+The remediation door shipped in v2.135.0 had one leaf: a missing-consent row could walk to the Privacy tab's consent ledger, but a TIMESHEET_NOT_APPROVED row could only read its own explanation — the approve route was API-only, so the gate's second block had nowhere to be fixed from the UI. This release gives that block its desk.
+
+### Added
+- **The timesheet desk** (`/hr/timesheets`, new nav slot right after Payroll): one row per employee with unapproved timesheet days — code, name, a pending-day count chip, and the exact days as chips ("Mon 05", "Tue 06"…, overflow "+N more" — never a hidden day). Each row's Approve stamps that employee's whole pending range through the ONE `approveTimesheet` service (`POST /api/attendance/timesheets/approve`), buttons disable while one approval is in flight (no double-stamp), and the desk refetches after each stamp. Scope picker rides the payroll periods (newest OPEN period by default) with an "All pending days" escape; the scope line, pending total, and checked stamp speak in the gate's own words (`formatEatStamp`).
+- **The pending read** (`GET /api/attendance/timesheets/pending`): the desk's data, gate-parity by construction — the same unapproved where (`checkIn: { not: null }`, `timesheetApprovedByUserId: null`), the same employee where (ACTIVE, not deleted, store-scoped), grouped by the pure builder in the gate's own `employeeCode asc` order. A `periodId` scopes the read to that period's dates; an unknown or cross-branch period is an honest 404 (`PERIOD_NOT_FOUND`, the gate read's mirror). Read-only by construction; rides the runs list's read-right quartet (`hr.payroll.read.all`, `HR_MANAGER`/`BRANCH_MANAGER`/`STORE_OWNER`/`ACCOUNTANT`).
+- **The pure desk layer** (`src/lib/hr/attendance-desk.ts`): `groupUnapprovedByEmployee` (the gate's order, day sort + dedupe, missing code wears the em-dash), `deskDayLabel` ("Mon 19" through UTC parts — date-only semantics can never drift a day for a Kenyan manager), `deskDayStrip` (first 12 chips, honest "+N" that counts garbage days too), `deskRangeLabel` ("1 Oct – 31 Oct 2026"; the year prints once when shared). Garbage degrades, never guesses.
+- **The second door** (gate panel): a `TIMESHEET_NOT_APPROVED` blocked row now carries its own amber door — `Timesheet desk` — deep-linking `?employee=<id>` (encoded), own tab, `rel="noopener noreferrer"`, aria-labelled with the person it fixes, the amber family the block code already wears. The consent door survives unchanged: one gate, two doors, same shape.
+
+### Changed
+- The desk answers the door's deep link: `?employee=<id>` highlights that row (amber ring, `aria-current`), a dismissible chip names the row the gate sent you for, and the param is stripped once on mount (the payroll `run=` param's own pattern) so a refresh never re-focuses a stale employee.
+- HR nav grows a "Timesheets" slot between Payroll and Performance — the door's target sits adjacent to the door.
+
+### Tests
+- `src/tests/timesheet-desk-v2136.test.ts` (20): the pure grouping (gate order, UTC date-only reduction, dedupe, garbage degradation, em-dash fallback, name tie-break), the day strip (UTC weekday labels, overflow honesty, garbage counted-not-labeled), the scope line (shared/cross-year), the pending route (quartet, parity where, honest 404, read-only pin), the desk page (approve posts the range, in-flight disable, focus-param contract, honest states, styling contract), the gate door (deep link, amber family, consent door intact), and the nav slot.
+- `scripts/verify-v2-136-0.mjs` (12 checks, written fresh): the route's parity strings, the desk's approve/focus/styling pins, the door's deep link, the nav slot, and the release discipline.
+- `console-changelog` unread counters re-anchored for 2.136.0 joining the feed.
+
 ## [2.135.0] The verdict leaves a paper trail
 
 The v2.133.0 gate door speaks the verdict live — but the verdict evaporated the moment it was spoken. Prepare's own gate evaluation left NO trace on the run it protected: a clear prepare proved nothing, and "what did the gate say when THIS run went through?" had only folklore for an answer. This release freezes the verdict onto the run record at prepare time, so the lifecycle's front door becomes auditable history.

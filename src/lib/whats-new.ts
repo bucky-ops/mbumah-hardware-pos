@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.136.0',
+    title: 'The second door finds its desk',
+    bullets: [
+      'Timesheet blocks finally have a fix you can click: a new Timesheets desk (/hr/timesheets) lists every employee with unapproved days, grouped the same way the run gate groups them.',
+      'The gate\u2019s amber TIMESHEET_NOT_APPROVED row now carries its own door \u2014 it opens the desk straight onto that employee\u2019s row, same as the consent door has done since v2.135.0.',
+      'Each row shows the exact pending days as chips (\u201cMon 05\u201d, \u201cTue 06\u201d\u2026) so you approve what you can see; overflow reads \u201c+N more\u201d rather than hiding days.',
+      'Approve stamps that employee\u2019s whole pending range through the same audited service payroll re-checks on prepare \u2014 one button, no double-stamp while it runs.',
+      'Scope the desk to any payroll period (newest open period by default) or read all pending days across every period.',
+    ],
+  },
+  {
     version: '2.135.0',
     title: 'The verdict leaves a paper trail',
     bullets: [
