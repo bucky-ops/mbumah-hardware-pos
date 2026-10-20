@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.162.0',
+    title: 'The portal signs you out when you step away',
+    bullets: [
+      'My Workspace now closes itself after 30 minutes of inactivity - the same cadence the till has always used.',
+      'The sign-out is enforced on the server: the old session cannot be replayed from a forgotten tab.',
+      'A clear overlay explains the sign-out, with a single Sign in button to continue.',
+      'The login screen got a manual contrast audit: every label, link and placeholder now passes AA on the glass card.',
+    ],
+  },
+  {
     version: '2.161.0',
     title: 'The payslip goes home',
     bullets: [

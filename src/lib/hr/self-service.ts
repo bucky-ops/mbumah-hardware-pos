@@ -24,6 +24,11 @@ import {
 import { hasHrPermission, type HrPermissionKey } from './permissions';
 import { isHrModuleEnabled } from './feature-flag';
 import { StageGError } from './stage-g-shared';
+import {
+  idleExpired,
+  sessionIdleExpiredResponse,
+  SELF_SERVICE_IDLE_MS,
+} from '@/lib/session-idle';
 import { requestLeave } from './leave-service';
 import { validateLeaveAttachmentUrl } from './leave-attachment';
 import { listMyGoals } from './goal-service';
@@ -83,6 +88,35 @@ export function selfServiceGuard(permission: HrPermissionKey) {
           { success: false, error: 'Authentication required.', code: 'UNAUTHENTICATED' },
           { status: 401 },
         );
+      }
+      // v2.162.0 THE THIRTY-MINUTE CONTRACT (spec 843.6 / 1068.7): the
+      // self-service surface enforces the same 30-minute idle window the
+      // till has had client-side since v2.6.0 — but here it is SERVER-side
+      // (a re-opened tab cannot dodge it). Expired → the session row is
+      // deleted (the 24h cookie dies with it) and the request answers 401
+      // SESSION_IDLE_EXPIRED. Still fresh → the window SLIDES: every
+      // authenticated self-service request re-stamps lastActiveAt. Legacy
+      // rows without the stamp degrade to v2.161.0 behaviour (see
+      // idleExpired's contract). The till surface (Bearer/localStorage API
+      // routes) never passes through this guard — zero till behaviour change.
+      if (
+        session.lastActiveAt &&
+        idleExpired(session.lastActiveAt, new Date(), SELF_SERVICE_IDLE_MS)
+      ) {
+        if (session.sessionId) {
+          await db.session
+            .delete({ where: { id: session.sessionId } })
+            .catch(() => {});
+        }
+        return sessionIdleExpiredResponse();
+      }
+      if (session.sessionId) {
+        await db.session
+          .update({
+            where: { id: session.sessionId },
+            data: { lastActiveAt: new Date() },
+          })
+          .catch(() => {});
       }
       const enabled = await isHrModuleEnabled(session.organizationId);
       if (!enabled) {

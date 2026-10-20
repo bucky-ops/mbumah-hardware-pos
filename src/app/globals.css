@@ -967,6 +967,17 @@
   border-color: oklch(0.68 0.18 55 / 0.7);
 }
 
+/* v2.162.0: the login placeholders inherit shadcn's muted-foreground, which
+   on the light glass card (white/60 over the navy gradient) blends to
+   2.28:1 — washed out and under the 4.5 AA bar. The card is alpha-
+   composited, so axe reports the family as an "incomplete" it cannot
+   compute; the manual blend-math audit (contrast-audit-login.mjs) closes
+   it: foreground at 80% reads 5.25:1 light / 9.31:1 dark, theme-adaptive
+   through the same --foreground var both themes already switch. */
+.login-input::placeholder {
+  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+}
+
 /* Dot grid pattern overlay */
 .dot-grid-pattern {
   background-image: radial-gradient(circle, oklch(1 0 0 / 0.07) 1px, transparent 1px);

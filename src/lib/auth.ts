@@ -56,6 +56,14 @@ export interface AuthSession {
    *  session readers (getSessionFromRequest / getSessionFromCookies) always
    *  populate it from the DB row. */
   mustChangePassword?: boolean;
+  /** v2.162.0 self-service idle contract: the Session row's primary key and
+   *  its `lastActiveAt` stamp (the column existed from day one, unwired until
+   *  now). OPTIONAL by the same legacy-mock precedent as mustChangePassword —
+   *  the two real session readers always populate both. Consumers: the
+   *  self-service guard (idle check + slide) and the portal guard; the POS
+   *  till surface deliberately never reads them (zero till behaviour change). */
+  sessionId?: string;
+  lastActiveAt?: Date;
 }
 
 // Core session extraction
@@ -125,6 +133,8 @@ export async function getSessionFromRequest(
     storeId: session.user.storeId,
     organizationId: session.user.organizationId,
     mustChangePassword: session.user.mustChangePassword,
+    sessionId: session.id,
+    lastActiveAt: session.lastActiveAt,
   };
 }
 
@@ -234,6 +244,8 @@ export async function getSessionFromCookies(): Promise<AuthSession | null> {
     storeId: session.user.storeId,
     organizationId: session.user.organizationId,
     mustChangePassword: session.user.mustChangePassword,
+    sessionId: session.id,
+    lastActiveAt: session.lastActiveAt,
   };
 }
 

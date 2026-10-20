@@ -13,11 +13,16 @@
 // "sign in" affordance, the client pages rendered bare error notes).
 
 import Link from 'next/link';
-import { LogIn, ShieldOff } from 'lucide-react';
+import { Clock, LogIn, ShieldOff } from 'lucide-react';
 import {
   getSessionFromCookies,
   type AuthSession,
 } from '@/lib/auth';
+import { db } from '@/lib/db';
+import {
+  idleExpired,
+  SELF_SERVICE_IDLE_MS,
+} from '@/lib/session-idle';
 import { hasHrPermission, type HrPermissionKey } from '@/lib/hr/permissions';
 import { isHrModuleEnabled } from '@/lib/hr/feature-flag';
 import { ChangePasswordScreen } from '@/components/change-password-screen';
@@ -81,6 +86,43 @@ export async function loadSelfPortal(permission: HrPermissionKey): Promise<SelfP
         />
       ),
     };
+  }
+
+  // v2.162.0 THE THIRTY-MINUTE CONTRACT — the SSR half. The same
+  // server-side idle window the API guard enforces, checked on every portal
+  // page render: an unattended portal (re-opened after a long pause, tab
+  // never closed) renders the honest "signed out for your safety" note
+  // instead of employee data. The session row is deleted so the cookie
+  // cannot be replayed; fresh sessions slide lastActiveAt forward so a
+  // colleague reading page after page is never interrupted mid-use.
+  if (
+    session.lastActiveAt &&
+    idleExpired(session.lastActiveAt, new Date(), SELF_SERVICE_IDLE_MS)
+  ) {
+    if (session.sessionId) {
+      await db.session
+        .delete({ where: { id: session.sessionId } })
+        .catch(() => {});
+    }
+    return {
+      ok: false,
+      note: (
+        <PortalNote
+          icon={<Clock className="h-5 w-5" aria-hidden />}
+          title="Signed out for your safety"
+          hint="This portal closes after 30 minutes of inactivity - your payslips, leave and goals stay private. Sign in again to continue."
+          showSignIn
+        />
+      ),
+    };
+  }
+  if (session.sessionId) {
+    await db.session
+      .update({
+        where: { id: session.sessionId },
+        data: { lastActiveAt: new Date() },
+      })
+      .catch(() => {});
   }
 
   // v2.44.0: first sign-in password rotation — a temporary-password session

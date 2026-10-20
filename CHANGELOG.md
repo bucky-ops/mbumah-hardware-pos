@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.162.0] The portal's thirty minutes
+
+The self-service portal reuses the till's idle-timeout contract — server-enforced, surface-scoped — and the login front door closes its last unknown with a manual glass-card contrast audit.
+
+### Added
+- **`src/lib/session-idle.ts`**: the pure idle contract — `SELF_SERVICE_IDLE_MS` (30 minutes, the till's own cadence since v2.6.0), `idleExpired` (boundary `>=` the window; a missing or unparseable `lastActiveAt` stamp degrades to NOT-expired — garbage never invents a lockout), and the stable **401 `SESSION_IDLE_EXPIRED`** payload shape. No db, no network, no clock reads (`now` is always a parameter).
+- **Server-side enforcement, scoped to the portal surface**: `selfServiceGuard` now checks `Session.lastActiveAt` on every `/api/self-service/*` request — expired → the session ROW is deleted (the 24h cookie cannot be replayed) and the request answers 401 `SESSION_IDLE_EXPIRED`; fresh → the window SLIDES (the request re-stamps `lastActiveAt`). `loadSelfPortal` does the same on every SSR page render, showing the honest "Signed out for your safety" note (Clock icon + Sign in) instead of employee data. The column existed from day one ("Track session activity") with zero readers until now.
+- **`SelfServiceIdleWatch`**: the client half, mounted once in `SelfServiceProviders` — it imports the SAME `useIdleTimeout` hook the POS shell uses (the spec's literal "reuse ... safely" answer), POSTs `/api/auth/logout` on timeout (client and server agree — no zombie cookie), and renders an `alertdialog` overlay whose only action is Sign in (focus-managed, dark-paired, focus-visible ring).
+- **docs/hr/self-service.md**: "The thirty-minute contract (v2.162.0)" — the spec's two idle questions (line 843.6 unattended tills AND self-service; line 1068.7 reuse safely) answered in the mechanism's own words, including why the till surface is untouched and why no background polling exists to keep the window alive.
+
+### Changed
+- **The login glass-card's last a11y unknown is closed by math**: axe could only report 17 "color-contrast incomplete" findings (it cannot compute alpha-over-backdrop backgrounds); `contrast-audit-login.mjs` does the blend math (page gradient → glass alpha → element) for every text family in both themes. Fixed: CardDescription /70→/80 (4.25→5.25:1 light), the forgot-password link primary/80→foreground/90 + permanent underline (3.90→6.29:1), footer base muted→foreground/80 (2.28→5.25:1), separator dots /50→/80 + aria-hidden (2.71→5.25:1), the error-dismiss X destructive→red-800 light (1.81→3.34:1, non-text 3:1 bar), and `.login-input::placeholder` via a theme-adaptive color-mix rule (2.28→5.25:1). Badge and pill families verified passing on their own painted backgrounds.
+
 ## [2.161.0] The payslip goes home
 
 The employee can finally take their payslip PDF home from the portal — with the honest lifecycle gate — and the Phase 4.7 Lighthouse acceptance criterion is re-measured and documented on the SSR-complete portal.
