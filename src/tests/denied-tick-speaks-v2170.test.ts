@@ -35,8 +35,10 @@ function denialBlock(route: string): string {
   return route.slice(start, route.indexOf('return null;', start));
 }
 
-const DENIED_SENTENCE =
-  'Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing.';
+const DENIED_BASE =
+  'Ticks the tick gate refused while armed — a secret was sent but did not match.';
+const DENIED_CAUSE =
+  'The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing.';
 
 describe('the gate writes its own row (dispatchers)', () => {
   it('both gates record CRON_TICK_DENIED before refusing, guarded by the sent-a-secret discriminator', () => {
@@ -94,7 +96,10 @@ describe('the gate writes its own row (dispatchers)', () => {
 describe('the automation read counts the refusals (API)', () => {
   it('the denial count joins the same 7-day window and the response exposes it', () => {
     expect(automationApi).toContain("const DENIED_ACTION = 'CRON_TICK_DENIED';");
-    expect(automationApi).toContain('deniedCount] = await Promise.all([');
+    // v2.171.0 re-anchor: the denial-row feed joined the parallel read, so
+    // the destructure now ends `deniedCount, deniedRows]` — the count is
+    // still the same query in the same window
+    expect(automationApi).toContain('deniedCount, deniedRows] = await Promise.all([');
     expect(automationApi).toContain('where: { action: DENIED_ACTION, createdAt: { gte: since } }');
     expect(automationApi).toContain('deniedTicks7d: deniedCount');
   });
@@ -127,19 +132,22 @@ describe('the card grows the amber denied pill', () => {
     expect(card).toContain('tabIndex={0}');
   });
 
-  it('the sentence is one truth on three surfaces, in order (title, sr-only, bubble)', () => {
-    const uses = orgConsole.split(DENIED_SENTENCE).length - 1;
-    expect(uses).toBe(3);
+  it('the sentence is one truth on three surfaces via the helper, in order (title, sr-only, bubble)', () => {
+    // v2.171.0 re-anchor: the sentence moved into the single-source
+    // deniedTickTooltip helper (per-gate clauses joined it), so the static
+    // base and cause live ONCE in the helper and the three surfaces read
+    // the helper call instead of repeating the string.
+    expect(orgConsole.split(DENIED_BASE).length - 1).toBe(1);
+    expect(orgConsole.split(DENIED_CAUSE).length - 1).toBe(1);
     expect(card).toContain('data-testid="automation-denied-bubble"');
-    // the three surfaces ride the pill in reading order, and the bubble
-    // (aria-hidden) sits between the sr-only copy and its own sentence —
-    // the screen reader heard the sentence once, the sighted keyboard
-    // user sees it once
+    const helperUses = (orgConsole.match(/deniedTickTooltip\(automation\)/g) || []).length;
+    expect(helperUses).toBeGreaterThanOrEqual(3); // title + sr-only + bubble
+    // order within the pill: title attribute, sr-only line, visible bubble
     const pillStart = orgConsole.indexOf('data-testid="automation-denied-pill"');
     const slice = orgConsole.slice(pillStart, orgConsole.indexOf('v2.164.0: the reaper', pillStart));
-    const titleAt = slice.indexOf(DENIED_SENTENCE);
-    const srAt = slice.indexOf(DENIED_SENTENCE, titleAt + 1);
-    const bubbleAt = slice.indexOf(DENIED_SENTENCE, srAt + 1);
+    const titleAt = slice.indexOf('title={deniedTickTooltip(automation)}');
+    const srAt = slice.indexOf('<span className="sr-only">{deniedTickTooltip(automation)}</span>');
+    const bubbleAt = slice.indexOf('data-testid="automation-denied-bubble"');
     expect(titleAt).toBeGreaterThan(-1);
     expect(srAt).toBeGreaterThan(titleAt);
     expect(bubbleAt).toBeGreaterThan(srAt);

@@ -341,6 +341,13 @@ export function OrgConsole() {
      *  older responses — the card renders no chip it cannot honestly
      *  fill (`?? 0` keeps absence and zero equally silent). */
     deniedTicks7d?: number;
+    /** v2.171.0: the refusal feed parallel to deniedTicks7d — exact stamps
+     *  (ISO, newest first, ≤10) and each row's gate name ('hourly' |
+     *  'nightly'; null where the path is absent, garbage, or unknown).
+     *  Optional for older responses; the sentence renders without the
+     *  details clause when they are absent, never a guess. */
+    deniedTickStamps?: string[];
+    deniedTickGates?: (string | null)[];
     secretConfigured: boolean;
     cadence: { vercelSchedule: string; pingerWorkflow: string };
   }
@@ -375,6 +382,56 @@ export function OrgConsole() {
         ? ` · and ${automation.lastTick.failedCount - automation.failedTickStamps.length} more`
         : ''
     }`;
+  }
+
+  /* v2.171.0: the denied pill's sentence is computed ONCE and rides the
+     title, the sr-only line and the visible bubble — the same one-truth
+     rule the failed-tick pill has followed since v2.167.0. When the
+     ledger rows name their gates (metadata.path, v2.170.0), the sentence
+     says WHICH gate refused and when the most recent refusal was; the
+     "and N more" valve keeps the pill's count and the ≤10-row feed
+     honest together. Rows without a readable path render the bare
+     sentence — never a guess. */
+  function deniedTickTooltip(automation: AutomationSummary): string {
+    const base =
+      'Ticks the tick gate refused while armed — a secret was sent but did not match.';
+    const cause =
+      'The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing.';
+    const stamps = automation.deniedTickStamps ?? [];
+    const gates: string[] = [];
+    const counts = new Map<string, number>();
+    for (const g of automation.deniedTickGates ?? []) {
+      if (typeof g !== 'string' || g.length === 0) continue;
+      if (!counts.has(g)) gates.push(g);
+      counts.set(g, (counts.get(g) ?? 0) + 1);
+    }
+    let details = '';
+    if (gates.length > 0) {
+      details = ` Recent refusals: ${gates
+        .map((g) => `${counts.get(g)} at the ${g} gate`)
+        .join(', ')}`;
+      if (stamps.length > 0) {
+        details += `, most recent ${formatEatStamp(new Date(stamps[0]))}`;
+      }
+      const more = (automation.deniedTicks7d ?? 0) - stamps.length;
+      if (more > 0) details += ` · and ${more} more`;
+      details += '.';
+    }
+    return `${base}${details} ${cause}`;
+  }
+
+  /* v2.171.0: the pill's own gate suffix — only when EVERY listed refusal
+     named the same gate AND the list is complete (the count does not
+     outrun the ≤10 feed; unseen rows could belong to the other gate).
+     Mixed gates, an unknown name, or a capped list render no suffix —
+     never a guess. */
+  function deniedGateLabel(automation: AutomationSummary): string | null {
+    const gates = automation.deniedTickGates ?? [];
+    if (gates.length === 0) return null;
+    if ((automation.deniedTicks7d ?? 0) > (automation.deniedTickStamps?.length ?? 0)) return null;
+    const first = gates[0];
+    if (typeof first !== 'string' || first.length === 0) return null;
+    return gates.every((g) => g === first) ? first : null;
   }
 
   function findDiagnosticFor(
@@ -1110,19 +1167,23 @@ export function OrgConsole() {
               <span
                 data-testid="automation-denied-pill"
                 className="relative group inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-1"
-                title="Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing."
+                title={deniedTickTooltip(automation)}
                 tabIndex={0}
               >
                 {automation.deniedTicks7d} denied tick{(automation.deniedTicks7d ?? 0) === 1 ? '' : 's'} in 7d
-                <span className="sr-only">
-                  Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing.
-                </span>
+                {/* v2.171.0: when every refusal the ledger lists named the
+                    SAME gate (and the list is complete), the pill itself
+                    says which — a stale secret then points at one side of
+                    the arming walkthrough at a glance. Mixed or unknown
+                    gates render no suffix, never a guess. */}
+                {deniedGateLabel(automation) && ` · ${deniedGateLabel(automation)}`}
+                <span className="sr-only">{deniedTickTooltip(automation)}</span>
                 <span
                   aria-hidden="true"
                   data-testid="automation-denied-bubble"
                   className={`${HINT_BUBBLE} normal-case tracking-normal`}
                 >
-                  Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing.
+                  {deniedTickTooltip(automation)}
                 </span>
               </span>
             )}

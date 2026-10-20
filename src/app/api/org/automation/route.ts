@@ -43,7 +43,7 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
   return runWithoutTenant(async () => {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [latestTick, failedCount, failedTicks, deniedCount] = await Promise.all([
+    const [latestTick, failedCount, failedTicks, deniedCount, deniedRows] = await Promise.all([
       rawDb.systemLog.findFirst({
         where: { action: TICK_ACTION },
         orderBy: { createdAt: 'desc' },
@@ -80,7 +80,40 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
       rawDb.systemLog.count({
         where: { action: DENIED_ACTION, createdAt: { gte: since } },
       }),
+      // v2.171.0: WHICH gate refused, per refusal — the same shape the
+      // failed ticks got in v2.166/v2.169: newest first, capped at 10, the
+      // honest "and N more" valve lives on the card where the count is
+      // already known. Each row's TOP-LEVEL metadata.path (v2.170.0
+      // standardized it) is folded to the gate's short name tolerantly —
+      // an absent, garbage, or unknown path maps to null and the sentence
+      // renders without that clause, never a guess.
+      rawDb.systemLog.findMany({
+        where: { action: DENIED_ACTION, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true, metadata: true },
+        take: 10,
+      }),
     ]);
+
+    // v2.171.0: the refusal feed — stamps stay ISO (the card owns EAT
+    // formatting) and the parallel gates array mirrors the row order.
+    const deniedTickStamps = deniedRows.map((r) => r.createdAt.toISOString());
+    const deniedTickGates: (string | null)[] = deniedRows.map((r) => {
+      if (!r.metadata) return null;
+      try {
+        const parsed: unknown = JSON.parse(r.metadata);
+        const path =
+          parsed && typeof parsed === 'object'
+            ? (parsed as { path?: unknown }).path
+            : undefined;
+        if (typeof path !== 'string') return null;
+        if (path.endsWith('/hourly')) return 'hourly';
+        if (path.endsWith('/nightly')) return 'nightly';
+        return null;
+      } catch {
+        return null;
+      }
+    });
 
     const failedTickStamps = failedTicks.map((r) => r.createdAt.toISOString());
     // v2.169.0: WHICH heartbeat failed, per stamp — the parallel array reads
@@ -178,6 +211,12 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
         // companion to the green "tick gate armed" posture (a green gate
         // with climbing denials is the stale-secret signature).
         deniedTicks7d: deniedCount,
+        // v2.171.0: the refusal feed — exact stamps (ISO, newest first,
+        // ≤10) and the parallel gate names ('hourly' | 'nightly', null
+        // where a row's path predates the standard or carries garbage);
+        // the pill's sentence says WHICH gate refused.
+        deniedTickStamps,
+        deniedTickGates,
         // Honest tick-gate posture, read server-side: while CRON_SECRET is
         // unset the dispatcher accepts unauthenticated ticks (fail-open with
         // a WARN systemLog) — the card says so in amber until the human
