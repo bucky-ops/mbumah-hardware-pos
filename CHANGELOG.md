@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.190.0] The drill-down ranks its payrolls
+
+The org dashboard's HR drill-down has sorted its "Latest payroll" column by `latestPayroll.periodName` TEXT since v2.183.0 — a fragile proxy for recency that breaks across naming formats ("November 2025" sorts after "March 2026" alphabetically) and ignores the one thing the cell actually WEARS: the status badge. The house rule is that a comparator sorts what the cell shows (the alerts cell sorts its SUM), so this release the payroll column sorts by STATUS RANK — the run's finality — and the desk roster's avatar-hue family carries its contrast-math numbers.
+
+### Added
+- **The rank ladder** (`hr-drilldown-sort.ts`): `payrollStatusRank` — LOCKED/POSTED share the top rank (both mean the money is settled; the cell paints them the same emerald), then APPROVED, DRAFT, VOIDED (dead work below even a draft); an unknown status reads 0 and never throws (the wire speaks the Prisma enum; a future value sorts beneath the known ladder, never guessed).
+- **The payroll column sorts by finality**: primary axis `mul × (rankA − rankB)`; ties break directionally by `createdAt` (desc = the freshest run first, asc = the oldest — `Date.parse`, an unparseable stamp reads as 0, never NaN), then periodName A→Z, then the stable arrival order. The fresh click is **desc** (locked clusters on top — the "which branches are settled vs still open" scan); the asc click is the honest **mirror** (least final first — the "who needs attention" scan). The v2.183.0 absence rule rides untouched: a branch with NO run sorts LAST in both directions. The branches CSV follows the SAME sorted memo — one sort, one truth, pixels and file can never disagree.
+- **The honest hint** (`org-console.tsx`): the payroll sort button carries a `title` speaking the rank language ("locked & posted first, then approved, draft, voided; click again for the mirror; no runs last") — the semantics live where the click happens, not in a changelog.
+- **The avatar-hue family's numbers** (`scripts/contrast-math-avatar-hues-v2190.mjs` + `docs/a11y/contrast-math.md`): the desk roster's six avatar hues have worn alpha-composited dark chips (`dark:bg-{c}-500/20` over the row's paint) since v2.65.0 — axe's color-contrast INCOMPLETE class, uncomputed until now. The committed script composites the real stacks (calm slate-900, hover slate-800/50, drilled emerald-500/10) from the INSTALLED Tailwind theme and speaks the verdict: **24/24 families pass** the 4.5:1 small-text bar (10px chips and initials), light amber the tightest corner at 4.54:1. Reviewed-passing — no code change, the numbers are the deliverable.
+
+### Tests
+- NEW `src/tests/hr-drilldown-rank-v2190.test.ts`: the rank ladder executed (total, uppercase-exact); the payroll sort executed (finality clusters, the November-2025/March-2026 recency trap closed, directional recency ties, the asc mirror, missing runs last both directions, unparseable stamps honest, copy-not-mutate, stability); the category move pinned (payroll leaves TEXT, joins RANK, fresh click desc); the component's hint pinned; the a11y surfaces pinned; the release surfaces.
+- The v2.183.0 suite's pins evolved deliberately (the vocabulary split, the default direction, the join test, the col-spec hint — reasoning comments where the pins live); head-pin counters re-anchored (79/80/81/112); prior pkg pins ride to 2.190.0 (the treadmill tax).
+- `verify:v2-190-0` wired — fresh verify script per the house convention.
+
 ## [2.189.0] The roster keeps its week
 
 v2.186.0 named yesterday's reviewers; v2.188.0 taught the rows to drill. But the panel's week face stayed anonymous — the tiles counted HOW MANY reviewers were active over the trailing 7 days (`weekReviewers`, v2.64.0) and kept the names to themselves, the branches CSV filed only yesterday's roster, and the printable desk report's reviewer rows carried no share at all. This release the roster keeps its week: the read exposes the week's per-reviewer shape, the panel names the week's who, the offline twin files it, and the printable twin wears the share bar.

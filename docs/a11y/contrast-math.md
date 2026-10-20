@@ -98,3 +98,34 @@ All four corners clear the 4.5:1 small-text bar with margin (the 12px
 button label). The family stays as-is — no code change, the numbers are
 the deliverable — and the next axe run's identical incomplete is a known
 quantity.
+
+## Reviewed-passing: the desk roster's avatar-hue family (v2.190.0)
+
+The desk panel's six per-reviewer avatar hues (v2.65.0) have worn
+alpha-composited dark chips since the day they shipped —
+`dark:bg-{c}-500/20` over the row's paint with `dark:text-{c}-300` on
+top — the page-composite class axe reports as color-contrast INCOMPLETE.
+Computed with the recipe by `scripts/contrast-math-avatar-hues-v2190.mjs`
+(committed; tokens read from the INSTALLED `node_modules/tailwindcss/theme.css`,
+not from memory). The chip is 10px text (roster chips `font-medium`,
+ledger initials `font-bold` — bold does not buy the 3:1 bar), so 4.5:1
+applies, and the chip paints over THREE real row states — the worst
+corner decides, so all three dark stacks are computed:
+
+| hue     | light (700 on solid 100) | dark calm (slate-900) | dark hover (slate-800/50) | dark drilled (emerald-500/10) |
+| ------- | ------------------------ | --------------------- | ------------------------- | ----------------------------- |
+| emerald | 4.73:1 pass              | 8.41:1 pass           | 7.61:1 pass               | 7.10:1 pass                   |
+| sky     | 5.10:1 pass              | 7.77:1 pass           | 7.04:1 pass               | 6.60:1 pass                   |
+| violet  | 6.13:1 pass              | 7.74:1 pass           | 7.06:1 pass               | 6.80:1 pass                   |
+| amber   | **4.54:1 pass** (tight)  | 8.69:1 pass           | 7.86:1 pass               | 7.53:1 pass                   |
+| rose    | 5.04:1 pass              | 7.84:1 pass           | 7.21:1 pass               | 7.10:1 pass                   |
+| teal    | 4.79:1 pass              | 8.60:1 pass           | 7.78:1 pass               | 7.26:1 pass                   |
+
+**24/24 families pass** the small-text bar. Light is stack-independent
+(the `-100` chip background is opaque — the row state cannot reach it);
+the dark composites clear the bar with the widest margin in calm and the
+narrowest in hover (the lightest painted row under the /20 hue layer).
+Light amber is the family's tightest corner at 4.54:1 — worth knowing
+before anyone reaches for a lighter amber chip. The family stays as-is —
+no code change, the numbers are the deliverable — and the next axe run's
+identical incomplete on the avatar chips is a known quantity.

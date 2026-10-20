@@ -35,10 +35,11 @@ import {
  *
  * The spine EXECUTED here (not just pinned), the tolerance rule pinned
  * (nothing corrupt ever throws or lies), the comparator EXECUTED (numbers
- * loudest-first, text A→Z, a branch with no payroll run sorting LAST in
- * both directions), the restraint pinned (FOUR fields, not six — the
- * honest scope of a collapsed-by-design six-column table), and the
- * component contract pinned as source text.
+ * loudest-first, text A→Z, the payroll column by STATUS RANK since
+ * v2.190.0 — the badge the cell wears — with a branch that has no payroll
+ * run sorting LAST in both directions), the restraint pinned (FOUR
+ * fields, not six — the honest scope of a collapsed-by-design six-column
+ * table), and the component contract pinned as source text.
  */
 
 const readRepo = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
@@ -209,15 +210,22 @@ describe('the storage contract - injected, silent, honest', () => {
 });
 
 describe('the comparator executed - the drill-down sort lib', () => {
-  it('the vocabulary is exported — four numeric, two text', () => {
+  it('the vocabulary is exported — four numeric, one text, one rank (v2.190.0 moved payroll out of TEXT)', () => {
     expect([...HR_DRILL_NUMERIC_COLUMNS]).toEqual(['headcount', 'cost', 'absence', 'alerts']);
-    expect([...HR_DRILL_TEXT_COLUMNS]).toEqual(['branch', 'payroll']);
+    // v2.190.0 pin evolution (deliberate): the payroll column sorts by the
+    // status badge's finality ladder now, not by periodName text — it left
+    // HR_DRILL_TEXT_COLUMNS for HR_DRILL_RANK_COLUMNS (reasoning comment
+    // where the pin lives; the full rank semantics live in the v2190 suite).
+    expect([...HR_DRILL_TEXT_COLUMNS]).toEqual(['branch']);
     expect(defaultDirFor('alerts')).toBe('desc');
     expect(defaultDirFor('headcount')).toBe('desc');
     expect(defaultDirFor('cost')).toBe('desc');
     expect(defaultDirFor('absence')).toBe('desc');
     expect(defaultDirFor('branch')).toBe('asc');
-    expect(defaultDirFor('payroll')).toBe('asc');
+    // v2.190.0 pin evolution (deliberate): a fresh payroll click wants the
+    // SETTLED branches on top — most-final first — so the default flipped
+    // from the text column's asc to the rank column's desc.
+    expect(defaultDirFor('payroll')).toBe('desc');
     expect(defaultDirFor('mystery')).toBe('asc'); // total, never guessed
   });
 
@@ -256,15 +264,21 @@ describe('the comparator executed - the drill-down sort lib', () => {
     expect(sortHrDrillRows(rows, { key: 'branch', dir: 'desc' }).map((r) => r.storeName)).toEqual(['Thika Town', 'Makongeni', 'Juja Main']);
   });
 
-  it('payroll sorts through the periodName join — a branch with NO run sorts LAST in BOTH directions', () => {
+  it('payroll sorts through the latestPayroll join by STATUS RANK — a branch with NO run still sorts LAST in BOTH directions', () => {
+    // v2.190.0 pin evolution (deliberate): the v2.183.0 join sorted by
+    // periodName text (a fragile recency proxy); the primary axis is the
+    // badge's finality ladder now, with createdAt/periodName tie-breaks —
+    // the full rank semantics live in hr-drilldown-rank-v2190. This suite
+    // keeps the rule that outlived the change: missing runs last, both
+    // directions, and the join still reads the SAME latestPayroll field.
     const rows = [
-      row({ storeId: 'a', latestPayroll: { periodName: 'October 2026', status: 'DRAFT', createdAt: 'x' } }),
+      row({ storeId: 'a', latestPayroll: { periodName: 'October 2026', status: 'DRAFT', createdAt: '2026-10-01T09:00:00Z' } }),
       row({ storeId: 'b', latestPayroll: null }),
-      row({ storeId: 'c', latestPayroll: { periodName: 'August 2026', status: 'POSTED', createdAt: 'x' } }),
+      row({ storeId: 'c', latestPayroll: { periodName: 'August 2026', status: 'POSTED', createdAt: '2026-08-01T09:00:00Z' } }),
       row({ storeId: 'd', latestPayroll: null }),
     ];
-    expect(sortHrDrillRows(rows, { key: 'payroll', dir: 'asc' }).map((r) => r.storeId)).toEqual(['c', 'a', 'b', 'd']);
-    expect(sortHrDrillRows(rows, { key: 'payroll', dir: 'desc' }).map((r) => r.storeId)).toEqual(['a', 'c', 'b', 'd']);
+    expect(sortHrDrillRows(rows, { key: 'payroll', dir: 'desc' }).map((r) => r.storeId)).toEqual(['c', 'a', 'b', 'd']);
+    expect(sortHrDrillRows(rows, { key: 'payroll', dir: 'asc' }).map((r) => r.storeId)).toEqual(['a', 'c', 'b', 'd']);
   });
 
   it('null state returns arrival order, COPIED; ties keep arrival order; an unknown key never sorts', () => {
@@ -296,7 +310,12 @@ describe('the component contract - the driven header, the spine wiring, the cont
     expect(comp).toContain("{ key: 'headcount', label: 'Headcount', align: 'right', pad: 'px-3', sortable: true },");
     expect(comp).toContain("{ key: 'cost', label: 'Cost (month)', align: 'right', pad: 'px-3', sortable: true },");
     expect(comp).toContain("{ key: 'absence', label: 'Absence', align: 'right', pad: 'px-3', sortable: true },");
-    expect(comp).toContain("{ key: 'payroll', label: 'Latest payroll', pad: 'px-3', sortable: true },");
+    // v2.190.0 pin evolution (deliberate): the payroll entry grew the
+    // honest `hint` line (the rank semantics, spoken as the button's
+    // title) and became a multi-line object — the pin follows the shape.
+    expect(comp).toContain("key: 'payroll',");
+    expect(comp).toContain("label: 'Latest payroll',");
+    expect(comp).toContain("title={c.hint}");
     expect(comp).toContain("{ key: 'alerts', label: 'Expiry alerts', align: 'right', pad: 'px-3', sortable: true },");
     expect(comp).toContain('{HR_DRILLDOWN_COLS.map((c) => (');
     expect(comp).toContain('aria-sort={hrAriaSortOf(c.key)}');
@@ -405,10 +424,10 @@ describe('docs and release surfaces', () => {
     expect(whatsNew.indexOf('2.183.0')).toBeLessThan(whatsNew.indexOf('2.182.0'));
   });
 
-  it('package.json leads 2.183.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.189.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.189.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.189.0');
+  it('package.json leads 2.190.0 (all three slots) and the verify script is wired', () => {
+    expect(pkg.version).toBe('2.190.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.190.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.190.0');
     expect(pkg.scripts['verify:v2-183-0']).toBe('node scripts/verify-v2-183-0.mjs');
     expect(readRepo('scripts/verify-v2-183-0.mjs')).toContain('v2.183.0 verification');
   });
@@ -425,7 +444,7 @@ describe('docs and release surfaces', () => {
       'src/tests/store-matrix-prefs-v2181.test.ts',
       'src/tests/branches-table-prefs-v2182.test.ts',
     ]) {
-      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.189.0');");
+      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.190.0');");
     }
   });
 });

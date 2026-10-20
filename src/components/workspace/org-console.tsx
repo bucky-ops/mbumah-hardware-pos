@@ -162,10 +162,14 @@ function BranchSortGlyph({ state }: { state: 'asc' | 'desc' | 'none' }) {
  * v2.183.0: the HR drill-down's column spec — the ONE place that names the
  * third dense table's columns (the driven header reads it). All six are
  * sortable: numbers loudest-first (headcount, cost, absence, alerts), text
- * A→Z (branch), and `payroll` sorts through the SAME latestPayroll
- * join its cells speak (a branch with no run sorts LAST in both
- * directions). `pad` keeps the stock cell rhythm the driven header had as
- * literal markup (first column breathes wider than the rest).
+ * A→Z (branch), and `payroll` sorts through the SAME latestPayroll join
+ * its cells speak — by STATUS RANK since v2.190.0 (the badge the cell
+ * wears: locked/posted first, then approved, draft, voided; no runs last
+ * in both directions). `pad` keeps the stock cell rhythm the driven header
+ * had as literal markup (first column breathes wider than the rest).
+ * v2.190.0: a column whose fresh-click semantics are not guessable from
+ * its label carries an honest `hint` — spoken as the sort button's title,
+ * so the rank language is on the screen where the click happens.
  */
 interface HrDrillColDef {
   key: string;
@@ -173,13 +177,22 @@ interface HrDrillColDef {
   align?: 'right';
   pad: string;
   sortable: boolean;
+  /** v2.190.0: the honest semantics line, rendered as the button's title. */
+  hint?: string;
 }
 const HR_DRILLDOWN_COLS: HrDrillColDef[] = [
   { key: 'branch', label: 'Branch', pad: 'px-3.5', sortable: true },
   { key: 'headcount', label: 'Headcount', align: 'right', pad: 'px-3', sortable: true },
   { key: 'cost', label: 'Cost (month)', align: 'right', pad: 'px-3', sortable: true },
   { key: 'absence', label: 'Absence', align: 'right', pad: 'px-3', sortable: true },
-  { key: 'payroll', label: 'Latest payroll', pad: 'px-3', sortable: true },
+  {
+    key: 'payroll',
+    label: 'Latest payroll',
+    pad: 'px-3',
+    sortable: true,
+    hint:
+      'Sorts by run finality: locked & posted first, then approved, draft, voided. Click again for the mirror (least final first). Branches with no runs sort last.',
+  },
   { key: 'alerts', label: 'Expiry alerts', align: 'right', pad: 'px-3', sortable: true },
 ];
 
@@ -1574,9 +1587,10 @@ export function OrgConsole() {
                         hover-chevrons vocabulary the other two tables speak)
                         and the Compact density override. Sort semantics live
                         in the drill-down's OWN pure lib (the sibling of the
-                        matrix's — numbers loudest-first, text A→Z, a branch
-                        with no payroll run sorting LAST in both
-                        directions). */}
+                        matrix's — numbers loudest-first, text A→Z, and the
+                        payroll column by STATUS RANK since v2.190.0 — the
+                        badge's finality ladder, a branch with no payroll run
+                        sorting LAST in both directions). */}
                     <table className={`w-full text-sm${hrDense ? ' [&_td]:px-2 [&_td]:py-1 [&_th]:py-1' : ''}`}>
                       <thead className="sticky top-0 bg-card">
                         <tr className="border-b text-left text-xs text-muted-foreground">
@@ -1590,6 +1604,7 @@ export function OrgConsole() {
                                 <button
                                   type="button"
                                   onClick={() => onHrSort(c.key)}
+                                  title={c.hint}
                                   className={`focus-ring group -ml-1 flex items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-muted ${
                                     hrSort?.key === c.key ? 'font-semibold text-foreground' : ''
                                   }`}
