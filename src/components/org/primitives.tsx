@@ -178,6 +178,13 @@ export interface DeskActivityData {
     requests: number;
     busiestBranch: { storeName: string; visits: number } | null;
     topReviewer: { name: string; visits: number } | null;
+    // v2.186.0: the full reviewer roster (loudest-first, cap 24) — OPTIONAL
+    // so an older cached answer renders the calm strip, never a crash.
+    // Named `reviewerRows` because the payload's `reviewers` NUMBER (the
+    // distinct-reviewer count) predates it and keeps its meaning; the
+    // digest strip's share-bar roster and the branches CSV's sub-section
+    // speak it.
+    reviewerRows?: Array<{ name: string; visits: number }>;
     branches: Array<{ storeId: string; storeName: string; visits: number }>;
   };
   stats: { total: number; weekVisits: number; weekClears: number; weekReviewers: number };

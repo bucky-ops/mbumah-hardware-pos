@@ -49,6 +49,16 @@ export interface BranchDeskCsvBlock {
   busiestBranch: { storeName: string; visits: number } | null;
   topReviewer: { name: string; visits: number } | null;
   branches: ReadonlyArray<{ storeName: string; visits: number }>;
+  /**
+   * v2.186.0: the full reviewer roster — the SAME rows the digest strip's
+   * share-bar roster speaks (loudest-first, capped 24 by the read). Named
+   * `reviewerRows` because THIS block's `reviewers` NUMBER (the distinct
+   * count, mirroring DeskActivityData['yesterday']) predates it and keeps
+   * its meaning. OPTIONAL by contract: an older answer (or a caller that
+   * has not grown the field) exports WITHOUT the sub-section — the file
+   * ends at the v2.185.0 shape, never a hole.
+   */
+  reviewerRows?: ReadonlyArray<{ name: string; visits: number }>;
 }
 
 /**
@@ -201,6 +211,27 @@ export function buildBranchesCsv(
         [b.storeName, b.visits].map(csvField).join(','),
       ),
       '',
+      // v2.186.0: the "Reviews by reviewer" sub-section — WHO pulled the
+      // desk, offline twin of the digest strip's share-bar roster (the
+      // v2.180.0 file-mirrors-screen rule). Renders ONLY when the caller
+      // carried the roster AND the window has visits to share out of — an
+      // absent roster or a zero-visit window ends the section above, never
+      // a divide-by-zero or an invented 0% column.
+      ...(desk.reviewerRows && desk.reviewerRows.length > 0 && desk.visits > 0
+        ? [
+            'Reviews by reviewer,Reviewer,Visits,Share (%)',
+            ...desk.reviewerRows.map((r) =>
+              [
+                r.name,
+                r.visits,
+                Math.round((r.visits / desk.visits) * 10000) / 100,
+              ]
+                .map(csvField)
+                .join(','),
+            ),
+            '',
+          ]
+        : []),
     );
   }
   if (trend && trend.length > 0) {

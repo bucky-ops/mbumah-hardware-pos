@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.186.0',
+    title: 'The reviewer roster rides',
+    bullets: [
+      'The desk\u2019s morning note now names every reviewer who pulled the desk yesterday \u2014 not just the count and the winner. Each reviewer appears with their own share-of-visits bar, so you can see at a glance who carried the reviews and who else was reading.',
+      'The branches CSV export grew a \u201cReviews by reviewer\u201d section carrying the same roster with exact visit shares, so the offline file mirrors what the strip shows.',
+      'Everything is additive: the reviewer count and top-reviewer chip keep their meanings, and a quiet desk (or one reviewer) stays exactly as calm as before.',
+    ],
+  },
+  {
     version: '2.185.0',
     title: 'The two revenues agree',
     bullets: [
