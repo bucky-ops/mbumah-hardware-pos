@@ -115,7 +115,16 @@ export function countBuckets(
   return buckets;
 }
 
-/** One store's week-vs-prior slice, as the API's per-store groupBys see it. */
+/**
+ * One store's week-vs-prior slice, as the API's per-store groupBys see it.
+ * v2.175.0: the slice carries the SAME identity fields the branches table
+ * speaks (slug / subdomain / isActive) so the winner can be deep-linked by
+ * the SAME safe resolver the table's "Open workspace" button uses. They are
+ * pure pass-through — the lib never derives, validates, or builds URLs; a
+ * slice without them still moves (the fields are optional) and the card
+ * falls back to plain text when they are absent, exactly as the table's
+ * safe-builder contract prescribes (no safe URL → no link, calm fallback).
+ */
 export interface StoreTrendSlice {
   storeId: string;
   storeName: string;
@@ -123,9 +132,18 @@ export interface StoreTrendSlice {
   current: number;
   /** The store's prior-week total — the SAME vocabulary as `current`. */
   prior: number;
+  /** v2.175.0: workspace identity pass-throughs (optional — see above). */
+  slug?: string | null;
+  subdomain?: string | null;
+  isActive?: boolean;
 }
 
-/** The store whose week moved the most — the honest top mover. */
+/**
+ * The store whose week moved the most — the honest top mover. v2.175.0:
+ * carries the winner's workspace identity (slug / subdomain / isActive)
+ * UNTOUCHED so the card can deep-link through the safe resolver; absent
+ * fields mean the card renders plain text, never a guessed URL.
+ */
 export interface TrendMover {
   storeId: string;
   storeName: string;
@@ -133,6 +151,10 @@ export interface TrendMover {
   prior: number;
   /** round2(current − prior), signed — negative means the branch fell. */
   delta: number;
+  /** v2.175.0: identity pass-throughs from the winning slice. */
+  slug?: string | null;
+  subdomain?: string | null;
+  isActive?: boolean;
 }
 
 /**
@@ -160,8 +182,38 @@ export function topMover(slices: StoreTrendSlice[]): TrendMover | null {
       Math.abs(delta) > Math.abs(winner.delta) ||
       (Math.abs(delta) === Math.abs(winner.delta) && slice.storeName < winner.storeName)
     ) {
-      winner = { storeId: slice.storeId, storeName: slice.storeName, current: slice.current, prior: slice.prior, delta };
+      winner = {
+        storeId: slice.storeId,
+        storeName: slice.storeName,
+        current: slice.current,
+        prior: slice.prior,
+        delta,
+        slug: slice.slug,
+        subdomain: slice.subdomain,
+        isActive: slice.isActive,
+      };
     }
   }
   return winner;
+}
+
+/**
+ * v2.175.0: ONE branch's revenue spark — the rows belonging to `storeId`
+ * filtered out of the shared week-row set, then bucketed by the SAME
+ * sparkBuckets math the header spark speaks (half-open per-day buckets,
+ * honest zeros when the branch's week is empty — a quiet branch draws a
+ * flat line, never a gap). Pure: the caller passes every anchor in; the
+ * function never reads the clock and never mutates the input rows.
+ */
+export function storeSparks(
+  rows: Array<TrendRow & { storeId: string }>,
+  storeId: string,
+  startToday: Date,
+  days = TREND_DAYS,
+): number[] {
+  return sparkBuckets(
+    rows.filter((r) => r.storeId === storeId),
+    startToday,
+    days,
+  );
 }

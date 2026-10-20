@@ -153,7 +153,7 @@ describe('the API contract - the mover rides the same Promise.all', () => {
   });
 
   it('the response stays additive — the v2.173.0 keys and role gate untouched', () => {
-    expect(route).toContain('totals,\n        trend,\n        hr,');
+    expect(route).toContain('totals,\n        trend,\n        perStoreTrend,\n        hr,'); // v2.175.0: perStoreTrend joins additively
     expect(route).toContain("const ORG_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'];");
     expect(route).toContain('sparkBuckets(trendRows, windows.startToday, TREND_DAYS)');
     expect(route).toContain('countBuckets(trendRows, windows.startToday, TREND_DAYS)');
@@ -177,7 +177,7 @@ describe('the card contract - the mover sub-line', () => {
   });
 
   it('the sentence names the branch and signs the delta (abs + explicit sign)', () => {
-    expect(card).toContain('Top mover {mover.storeName}');
+    expect(card).toContain('Top mover{\' \'}'); // v2.175.0: the name may now be an anchor, so the JSX splits
     expect(card).toContain("{mover.delta >= 0 ? '+' : '-'}");
     expect(card).toContain('format(Math.abs(mover.delta))');
   });
@@ -193,9 +193,11 @@ describe('the card contract - the mover sub-line', () => {
     );
   });
 
-  it('the TrendMoverSummary type is declared and mirrors the lib shape', () => {
+  it('the TrendMoverSummary type is declared and mirrors the lib shape (v2.175.0 grew the identity fields)', () => {
     expect(card).toContain('interface TrendMoverSummary {');
-    expect(card).toContain('  storeId: string;\n  storeName: string;\n  current: number;\n  prior: number;\n  delta: number;\n  variancePct: number;\n}');
+    expect(card).toContain(
+      '  storeId: string;\n  storeName: string;\n  current: number;\n  prior: number;\n  delta: number;\n  variancePct: number;\n  slug?: string | null;\n  subdomain?: string | null;\n  isActive?: boolean;\n}',
+    );
   });
 });
 
@@ -228,10 +230,10 @@ describe('the release surfaces', () => {
     expect(feed.indexOf('2.174.0')).toBeLessThan(feed.indexOf('2.173.0'));
   });
 
-  it('package.json leads 2.174.0 in all three slots', () => {
+  it('package.json leads the current version in all three slots (re-anchored for 2.175.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.174.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.174.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.174.0');
+    expect(pkg.version).toBe('2.175.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.175.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.175.0');
   });
 });

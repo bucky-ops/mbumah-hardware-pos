@@ -109,6 +109,9 @@ interface OrgSummaryStore extends WorkspaceStoreRef {
  * v2.174.0: the store whose week moved the most, as the API ships it (the
  * pure lib's TrendMover plus the server-computed variancePct). The card
  * renders it verbatim — no math of its own, per the strip's contract.
+ * v2.175.0: gains the winner's workspace identity (slug / subdomain /
+ * isActive) so the name can deep-link through the SAME safe resolver the
+ * branches table speaks; absent fields render plain text, never a URL.
  */
 interface TrendMoverSummary {
   storeId: string;
@@ -117,6 +120,9 @@ interface TrendMoverSummary {
   prior: number;
   delta: number;
   variancePct: number;
+  slug?: string | null;
+  subdomain?: string | null;
+  isActive?: boolean;
 }
 
 interface OrgSummary {
@@ -167,6 +173,13 @@ interface OrgSummary {
     revenue: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number; topMover?: TrendMoverSummary | null };
     transactions: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number; topMover?: TrendMoverSummary | null };
   } | null;
+  /**
+   * v2.175.0: one revenue spark PER branch (keyed by storeId; the card
+   * joins it against `stores` by id, never by row order). TOLERANT —
+   * optional + nullable: an older cached response degrades to a muted
+   * "—" in the table's 7d column, never a crash or a fabricated shape.
+   */
+  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;
   recentAudit: Array<{
     id: string;
     storeId: string | null;
@@ -278,6 +291,15 @@ function timeAgo(iso: string): string {
  * ±% clause shown only when the mover's own prior > 0 (a zero week has no
  * percentage, never an invented ∞). Same contrast family as the badge;
  * `mover` null or absent renders nothing — silence, never a guess.
+ *
+ * v2.175.0: the mover's name becomes a DOOR — when the SAME safe resolver
+ * the branches table speaks (resolveBranchWorkspace) builds a real URL
+ * from the winner's slug/subdomain/isActive, the name renders as an
+ * anchor (new tab, noopener, underline + hover + focus-visible ring, a
+ * tiny external-tab arrow, and an sr-only "opens in a new tab" clause);
+ * when no safe URL exists (missing slug / inactive / workspace mode off)
+ * the name stays plain text — the safe-builder contract, verbatim: no
+ * safe URL, no link, calm fallback.
  */
 function TrendFooter({
   spark,
@@ -299,6 +321,17 @@ function TrendFooter({
   stroke?: string;
 }) {
   const up = variance >= 0;
+  // v2.175.0: resolve the deep-link with the table's own resolver — same
+  // input shape (slug/subdomain/isActive + host/protocol), same honesty:
+  // href === null for a missing slug, an inactive branch, or workspace
+  // mode off, and the name then renders as the plain text it always was.
+  const moverHref = mover
+    ? resolveBranchWorkspace({
+        store: { slug: mover.slug ?? null, subdomain: mover.subdomain ?? null, isActive: mover.isActive ?? false },
+        currentHost: typeof window !== 'undefined' ? window.location.host : '',
+        protocol: typeof window !== 'undefined' ? window.location.protocol : undefined,
+      }).href
+    : null;
   return (
     <div className="mt-2 border-t pt-2" data-testid={testId}>
       <div className="flex items-end justify-between gap-2">
@@ -324,7 +357,23 @@ function TrendFooter({
       </p>
       {mover && (
         <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums" data-testid={`${testId}-mover`}>
-          Top mover {mover.storeName}{' '}
+          Top mover{' '}
+          {moverHref ? (
+            <a
+              href={moverHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid={`${testId}-mover-link`}
+              title={`${mover.storeName} — open workspace in a new tab`}
+              className="rounded-sm font-medium text-foreground underline decoration-muted-foreground/40 underline-offset-2 transition-colors hover:decoration-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            >
+              {mover.storeName}
+              <ArrowUpRight className="ml-0.5 inline h-2.5 w-2.5 align-baseline" aria-hidden="true" />
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          ) : (
+            <span className="font-medium text-foreground/80">{mover.storeName}</span>
+          )}{' '}
           <span className={mover.delta >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>
             {mover.delta >= 0 ? '+' : '-'}
             {format(Math.abs(mover.delta))}
@@ -1171,6 +1220,9 @@ export function OrgConsole() {
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">Branch</th>
                   <th className="px-4 py-2 font-medium text-right">Revenue today</th>
+                  {/* v2.175.0: the week's shape per branch — sits beside the
+                      revenue column it decorates, same gross vocabulary. */}
+                  <th className="px-4 py-2 font-medium">7d trend</th>
                   <th className="px-4 py-2 font-medium text-right">Txns</th>
                   <th className="px-4 py-2 font-medium text-right">Low stock</th>
                   <th className="px-4 py-2 font-medium text-right">Overdue rentals</th>
@@ -1182,6 +1234,13 @@ export function OrgConsole() {
               <tbody>
                 {summary.stores.map((store) => {
                   const inactive = store.status !== 'ACTIVE';
+                  // v2.175.0: this branch's 7-day revenue spark, joined by
+                  // storeId (never row order). Absent payload (an older
+                  // cached response without perStoreTrend) or a missing
+                  // entry renders a muted "—" — honest absence, never a
+                  // fabricated shape.
+                  const storeTrend =
+                    summary.perStoreTrend?.find((t) => t.storeId === store.id) ?? null;
                   // Safe v2.18.0.0 builder with v2.18.3.0 precise reasons:
                   // path URL on localhost / raw IPs, subdomain URL only when
                   // every safety check passes, null for inactive stores or a
@@ -1225,6 +1284,28 @@ export function OrgConsole() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.todayRevenue)}</td>
+                      {/* v2.175.0: the branch's 7-day revenue spark — the SAME
+                          Sparkline primitive the header cards speak, muted
+                          slate so a table full of them never out-screams the
+                          cards; the numbers live in the title tooltip + the
+                          sr-only clause (the svg is aria-hidden decoration).
+                          w-[84px] keeps every row's spark column equally
+                          wide so the digits to the right stop dancing. */}
+                      <td className="w-[84px] px-4 py-3">
+                        {storeTrend ? (
+                          <div
+                            className="flex w-[76px] items-center"
+                            title={`7-day revenue ${formatKES(storeTrend.weekTotal)} (gross)`}
+                          >
+                            <Sparkline data={storeTrend.spark} stroke="#64748b" width={72} height={20} />
+                            <span className="sr-only">7-day revenue {formatKES(storeTrend.weekTotal)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground" aria-hidden="true">
+                            —
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right tabular-nums">{store.todayTransactions}</td>
                       <td className={`px-4 py-3 text-right tabular-nums ${store.lowStockCount > 0 ? 'text-amber-700 font-medium dark:text-amber-400' : ''}`}>{store.lowStockCount}</td>
                       <td className={`px-4 py-3 text-right tabular-nums ${store.overdueRentals > 0 ? 'text-red-600 font-medium' : ''}`}>{store.overdueRentals}</td>

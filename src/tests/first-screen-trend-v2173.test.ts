@@ -213,7 +213,7 @@ describe('the gross contract - pinned structurally', () => {
 describe('the API contract - additive, same vocabulary, same gate', () => {
   it('the response gains trend without losing any existing key', () => {
     expect(route).toContain('generatedAt: new Date().toISOString(),');
-    expect(route).toContain('totals,\n        trend,\n        hr,');
+    expect(route).toContain('totals,\n        trend,\n        perStoreTrend,\n        hr,'); // v2.175.0: perStoreTrend joins additively
     expect(route).toContain('stores: storeRows,');
     expect(route).toContain('recentAudit,');
   });
@@ -235,7 +235,7 @@ describe('the API contract - additive, same vocabulary, same gate', () => {
 
   it('the lib import list is the one the card-side tests pin', () => {
     expect(route).toContain(
-      "import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets, topMover } from '@/lib/org/summary-trend';",
+      "import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets, topMover, storeSparks } from '@/lib/org/summary-trend';", // v2.175.0: storeSparks joins
     );
   });
 });

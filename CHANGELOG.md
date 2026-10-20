@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.175.0] The week reaches every branch row
+
+The trend strip named which branch moved the week (v2.174.0) but the branches table below it stayed shape-blind — a wall of today-only digits. This release the week's shape reaches every branch row, and the mover's name becomes a door.
+
+### Added
+- **`src/lib/org/summary-trend.ts` gains `storeSparks`**: ONE branch's revenue spark — the rows belonging to that store filtered from the shared week-row set, bucketed by the SAME `sparkBuckets` math the header spark speaks (half-open per-day buckets, honest zeros when the branch's week is empty — a quiet branch draws a flat line, never a gap). Pure as ever: the caller passes every anchor in.
+- **`StoreTrendSlice` / `TrendMover` carry workspace identity** (`slug` / `subdomain` / `isActive`) as pure pass-throughs — the lib never derives or validates URLs; the winner rides the same identity fields the branches table speaks so the card can deep-link through the SAME safe resolver.
+- **`GET /api/org/summary`**: the week-row `findMany` gains `storeId` in its select (the SAME rows now feed the per-branch sparks — no second query), and the response gains `perStoreTrend` (`Array<{ storeId, spark[7], weekTotal }>`, keyed by `storeId`) additively. `topMover` carries the winner's `slug`/`subdomain`/`isActive`. Role gate and every existing key untouched.
+- **The card**: the branches table gains a **7d trend** column beside "Revenue today" — the same `Sparkline` primitive at 72×20 in muted slate (`#64748b`, so a table full of sparks never out-screams the header cards), the week total on the cell's title tooltip + an sr-only clause, `w-[84px]` so the digits to the right stop dancing. `TrendFooter`'s mover name becomes a new-tab anchor when `resolveBranchWorkspace` builds a URL (underline + hover + focus-visible ring + tiny external-tab arrow + sr-only "opens in a new tab"), plain text otherwise — the safe-builder contract verbatim. Both payloads are TOLERANT (`perStoreTrend?`, optional link fields): an older cached response degrades to muted dashes and plain text, never a crash.
+
+### Tests
+- `src/tests/trend-doors-v2175.test.ts` (NEW): `storeSparks` math EXECUTED (per-store filtering, bucket placement at the millisecond boundaries, honest zeros, the `days` param, purity), the identity pass-through (winner carries slug/subdomain/isActive, absent fields stay absent, no URL logic in the lib), the API contract (storeId in the select, `perStoreTrend` additive + keyed, mover identity, role gate untouched), the card contract (the 7d column, muted-slate stroke, sr-only + title, the anchor's new-tab/rel/classes/testid, the plain-text fallback), and the doc rows.
+
 ## [2.174.0] The trend names which branch moved
 
 The trend strip said "the week moved −7.14%" but not WHO moved it. This release the strip names the branch — the top mover — computed by the same pure lib from two per-store groupBys riding the same `Promise.all`, with the same honesty rules as the variance badge.
