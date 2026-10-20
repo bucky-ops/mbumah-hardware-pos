@@ -15,7 +15,7 @@ import { withErrorBoundary } from '@/lib/logger';
 import { hrSummaryForOrgConsole, hrPerStoreForOrgConsole } from '@/lib/hr/reports';
 import { isHrModuleEnabled } from '@/lib/hr/feature-flag';
 import { hasHrPermission } from '@/lib/hr/permissions';
-import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets } from '@/lib/org/summary-trend';
+import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets, topMover } from '@/lib/org/summary-trend';
 import { round2 } from '@/lib/utils/financialMath';
 import type { NextRequest } from 'next/server';
 
@@ -63,7 +63,7 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
       paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
     };
 
-    const [salesByStore, lowStockByStore, overdueRentalsByStore, debtByStore, pendingMpesaByStore, recentAudit, trendWeek, trendPrior, trendRowsRaw] =
+    const [salesByStore, lowStockByStore, overdueRentalsByStore, debtByStore, pendingMpesaByStore, recentAudit, trendWeek, trendPrior, trendRowsRaw, trendWeekByStore, trendPriorByStore] =
       await Promise.all([
         // Today's revenue per store (SALE type, settled payment statuses)
         rawDb.salesTransaction.groupBy({
@@ -133,6 +133,22 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
           where: { ...TREND_WHERE, createdAt: { gte: windows.weekAgo } },
           select: { createdAt: true, totalAmount: true },
         }),
+        // v2.174.0: per-store CURRENT-week slices — BOTH mover metrics
+        // (gross amount + count) come from this ONE groupBy.
+        rawDb.salesTransaction.groupBy({
+          by: ['storeId'],
+          where: { ...TREND_WHERE, createdAt: { gte: windows.weekAgo } },
+          _sum: { totalAmount: true },
+          _count: { _all: true },
+        }),
+        // v2.174.0: per-store PRIOR-week slices — the comparison side,
+        // the exact window the prior-week aggregate above uses.
+        rawDb.salesTransaction.groupBy({
+          by: ['storeId'],
+          where: { ...TREND_WHERE, createdAt: { gte: windows.twoWeeksAgo, lt: windows.weekAgo } },
+          _sum: { totalAmount: true },
+          _count: { _all: true },
+        }),
       ]);
 
     const revenueMap = new Map(
@@ -187,18 +203,48 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
     const revenuePrior = round2(Number(trendPrior._sum.totalAmount ?? 0));
     const txWeek = trendWeek._count._all;
     const txPrior = trendPrior._count._all;
+    // v2.174.0: the top mover — per-store slices named through the ACTIVE
+    // store list (a sale whose store has no active name is counted in the
+    // totals above but can never be spoken by the mover line). Both metrics
+    // come from the same two groupBys; the lib owns every honesty rule.
+    const curMap = new Map(
+      trendWeekByStore.map((r) => [r.storeId, { amount: Number(r._sum?.totalAmount ?? 0), count: r._count?._all ?? 0 }]),
+    );
+    const priMap = new Map(
+      trendPriorByStore.map((r) => [r.storeId, { amount: Number(r._sum?.totalAmount ?? 0), count: r._count?._all ?? 0 }]),
+    );
+    const revSlices = stores.map((s) => ({
+      storeId: s.id,
+      storeName: s.name,
+      current: curMap.get(s.id)?.amount ?? 0,
+      prior: priMap.get(s.id)?.amount ?? 0,
+    }));
+    const txSlices = stores.map((s) => ({
+      storeId: s.id,
+      storeName: s.name,
+      current: curMap.get(s.id)?.count ?? 0,
+      prior: priMap.get(s.id)?.count ?? 0,
+    }));
+    const revenueMover = topMover(revSlices);
+    const txMover = topMover(txSlices);
     const trend = {
       revenue: {
         spark: sparkBuckets(trendRows, windows.startToday, TREND_DAYS),
         weekTotal: revenueWeek,
         priorWeekTotal: revenuePrior,
         variancePct: variancePct(revenueWeek, revenuePrior),
+        topMover: revenueMover
+          ? { ...revenueMover, variancePct: variancePct(revenueMover.current, revenueMover.prior) }
+          : null,
       },
       transactions: {
         spark: countBuckets(trendRows, windows.startToday, TREND_DAYS),
         weekTotal: txWeek,
         priorWeekTotal: txPrior,
         variancePct: variancePct(txWeek, txPrior),
+        topMover: txMover
+          ? { ...txMover, variancePct: variancePct(txMover.current, txMover.prior) }
+          : null,
       },
     };
 

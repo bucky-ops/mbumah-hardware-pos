@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.174.0] The trend names which branch moved
+
+The trend strip said "the week moved −7.14%" but not WHO moved it. This release the strip names the branch — the top mover — computed by the same pure lib from two per-store groupBys riding the same `Promise.all`, with the same honesty rules as the variance badge.
+
+### Added
+- **`src/lib/org/summary-trend.ts` gains `topMover`**: from per-store `{ current, prior }` slices it returns the store with the largest ABSOLUTE week-vs-prior delta, signed — a branch that fell hardest is named as readily as one that jumped. The delta is money-safe (`toDec`/`round2`). Honest silences: no prior data anywhere → `null` (the honest-variance rule); every branch exactly flat → `null` (a flat week names no mover); fewer than two stores → `null` ("top" among one is noise). Ties break alphabetically for determinism. The card, not the lib, decides what a `null` means (no line).
+- **`GET /api/org/summary`**: two per-store groupBys (the current and prior week windows, `_sum.totalAmount` + `_count._all` from the same two queries) join the existing `Promise.all`; each trend block gains `topMover` (`{ storeId, storeName, current, prior, delta, variancePct } | null`) additively. Names come from the active-store list — a sale whose store has no active name is counted but never spoken.
+- **The card**: `TrendFooter` grows an optional `mover` — a `Top mover <name> <signed delta>` sub-line (`data-testid="metric-trend-revenue-mover"` / `"metric-trend-transactions-mover"`, tabular-nums, emerald-700/red-700 with the dark `-400` steps), with the `±%` clause shown only when the mover's own prior > 0 — a zero week has no percentage, never an invented ∞. Tolerant: an older cached response without `topMover` degrades to the strip exactly as it shipped in v2.173.0.
+
+### Tests
+- `src/tests/trend-names-mover-v2174.test.ts` (NEW): the math EXECUTED (the max-|delta| winner in both directions, the honest nulls, the alphabetical tie-break, the zero-week mover, round2 money safety, the count path, purity), the API contract (both windows, both metrics from one query, additive exposure, role gate untouched), the card render contract (optional mover, sign prefixes, the `prior > 0` % gate, class families, both testids), and the doc rows.
+
 ## [2.173.0] The first screen learns to trend
 
 The owner's landing console answered "how much today?" and stopped there — the week's shape (rising, falling, flat) lived only in the expert console. This release the combined metrics speak the same trend language, computed once on the server and decorated honestly.

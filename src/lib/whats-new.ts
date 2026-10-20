@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.174.0',
+    title: 'The trend names which branch moved',
+    bullets: [
+      'Under the sparkline the Organization Console now names the branch behind the week\u2019s move \u2014 \u201cTop mover Thika +Ksh 45,000\u201d \u2014 computed on the server from the same week-vs-prior window as the percentage.',
+      'A branch that fell hardest is named just as honestly, in red; a branch that came alive from a zero week shows its jump without a made-up percentage.',
+      'Flat weeks and first weeks name nobody \u2014 when there is no real comparison, the line simply stays quiet.',
+    ],
+  },
+  {
     version: '2.173.0',
     title: 'The first screen learns to trend',
     bullets: [
