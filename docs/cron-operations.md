@@ -22,6 +22,12 @@ cadence honest, and how to read the heartbeat. Companion to
 - Vercel Hobby allows two cron entries and they are DAILY:
   - `/api/cron/nightly` — `30 2 * * *` (02:30 UTC)
   - `/api/cron/hourly` — `0 3 * * *` (03:00 UTC, ~06:00 EAT)
+- BOTH dispatchers carry sub-jobs (v2.166.0 note): the hourly carries SIX
+  (outbox, payments-sweeper, etims-retry, debt-reminders, b2c-recovery,
+  session-reaper) and — since v2.165.0 — the nightly carries FOUR
+  (reconciliation, retention, hr-report-digests, session-reaper). Both
+  write the tick ledger, and the Automation pulse card labels which
+  dispatcher fired the row it is showing.
 - Everything folded into the hourly dispatcher was designed for an hourly
   tick: outbox pump, payments sweeper, eTIMS retry, debt reminders, the
   B2C auto-recovery sweep, and (v2.163.0) the session reaper. The B2C
@@ -113,7 +119,11 @@ live pulse (sub-job chips emerald-700 ok / red-700 failed with HTTP
 status; the reaper chip adds `· reaped N` / `· clean`, a positive
 count wears a sky "N reaped" pill in the card header, and the Last tick
 line names its dispatcher and carries the exact EAT stamp tooltip since
-v2.165.0). An unparseable ledger row keeps the timestamp and renders no
+v2.165.0; the sub-job chips carry a one-line "what this sub-job owns"
+tooltip since v2.166.0 — the register above, echoed at the point of
+reading — and the failed-tick pill lists the exact failed ticks in EAT,
+capped at 10 with an honest "and N more"). An unparseable
+ledger row keeps the timestamp and renders no
 chips — never a guess.
 
 ## Contracts new scheduled work must inherit

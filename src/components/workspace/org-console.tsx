@@ -142,6 +142,24 @@ const WORKSPACE_REASON_HINTS: Record<WorkspaceUnavailableReason, string> = {
     'Branch workspace routing is disabled by configuration (NEXT_PUBLIC_STORE_WORKSPACE_MODE=off). Enable path or subdomain mode to restore workspaces.',
 };
 
+// v2.166.0: what each dispatcher sub-job OWNS, one line per name - the card
+// copy mirror of docs/cron-operations.md's sub-job register (the doc holds
+// the canonical table; this map is its card-sized echo, kept deliberately
+// static: sub-job names are code-level contracts, not API data). An unknown
+// name gets NO hint - the card never invents ownership for a sub-job it has
+// not met (the same never-a-guess rule the chips already obey).
+const AUTOMATION_SUBJOB_HINTS: Record<string, string> = {
+  outbox: 'Pumps the outbound message queue (receipts and status pushes).',
+  'payments-sweeper': 'Polls M-Pesa for payments that missed their callback.',
+  'etims-retry': 'Drains the KRA eTIMS submission retry queue (backoff + DEAD ceiling).',
+  'debt-reminders': 'Sends overdue debt statements (7-day per-ledger throttle).',
+  'b2c-recovery': 'Re-sends gate-allowed FAILED payroll transfers and re-queries stuck ones.',
+  'session-reaper': 'Deletes sign-in sessions whose expiry has passed (expiresAt only).',
+  reconciliation: 'Rebuilds the nightly financial summaries.',
+  retention: 'Purges expired records past their retention grace period.',
+  'hr-report-digests': 'Emails the scheduled HR report digests.',
+};
+
 function WorkspaceUnavailableBadge({
   reason,
   inactive,
@@ -290,6 +308,11 @@ export function OrgConsole() {
       dispatcher?: string;
     } | null;
     failedTicks7d: number;
+    /** v2.166.0: the exact timestamps (ISO, newest first) of up to 10 of
+     *  the failed ticks behind failedTicks7d — the pill's tooltip lists
+     *  them in EAT; absent from older responses, and the card renders no
+     *  tooltip it cannot honestly fill. */
+    failedTickStamps?: string[];
     secretConfigured: boolean;
     cadence: { vercelSchedule: string; pingerWorkflow: string };
   }
@@ -1102,6 +1125,17 @@ export function OrgConsole() {
                   <span
                     data-testid="automation-failed-count"
                     className="inline-flex items-center rounded-full border border-red-300 bg-red-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-red-700"
+                    title={
+                      automation.failedTickStamps && automation.failedTickStamps.length > 0
+                        ? `Failed ticks: ${automation.failedTickStamps
+                            .map((s) => formatEatStamp(new Date(s)))
+                            .join(' · ')}${
+                            automation.lastTick.failedCount > automation.failedTickStamps.length
+                              ? ` · and ${automation.lastTick.failedCount - automation.failedTickStamps.length} more`
+                              : ''
+                          }`
+                        : undefined
+                    }
                   >
                     {automation.lastTick.failedCount} failed tick
                     {automation.lastTick.failedCount === 1 ? '' : 's'} in 7d
@@ -1120,10 +1154,18 @@ export function OrgConsole() {
                       data-testid="automation-subjob-chip"
                       data-job-name={job.name}
                       data-job-ok={job.ok ? 'true' : 'false'}
+                      /* v2.166.0: the chip says what it OWNS (the register's
+                          card-sized echo) and wears cursor-help while doing
+                          it; an unknown name renders bare - never a guess. */
+                      title={AUTOMATION_SUBJOB_HINTS[job.name]}
                       className={
                         job.ok
-                          ? 'inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
-                          : 'inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700'
+                          ? `inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700${
+                              AUTOMATION_SUBJOB_HINTS[job.name] ? ' cursor-help' : ''
+                            }`
+                          : `inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700${
+                              AUTOMATION_SUBJOB_HINTS[job.name] ? ' cursor-help' : ''
+                            }`
                       }
                     >
                       <span
