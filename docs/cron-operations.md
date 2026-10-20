@@ -130,6 +130,16 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
   console's title-only LINKS (the HR tiles, the per-branch People &
   payroll deep links) say their hover sentence to screen readers via an
   sr-only echo / the accessible name itself — one truth, two surfaces.
+- **The pill names the heartbeat (v2.169.0)**: the failed-tick sentence
+  grows a parenthetical per stamp — `Failed ticks: Tue 20 Oct 2026 ·
+  06:48 EAT (hourly) · …` — read from each ledger row's own TOP-LEVEL
+  `metadata.dispatcher` (v2.165.0 standardized the field on every row;
+  the API exposes the parallel `failedTickDispatchers` array, null where
+  a row predates v2.165.0 or carries no name, and the card renders the
+  bare stamp then — never a guess). This is not the coupling the
+  v2.167.0 assessment declined: that idea rode the stamps on the
+  dispatchers' INTERNAL result shapes; this reads the ONE standardized
+  field.
 - `failedTicks7d`: partial-failure rows in the last 7 days.
 - `secretConfigured`: whether `CRON_SECRET` is set server-side — the honest
   tick-gate posture (fail-open ticks render the amber "CRON_SECRET unset"

@@ -80,6 +80,14 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.169.0',
+    title: 'The pill names the heartbeat',
+    bullets: [
+      'The Automation card\u2019s failed-tick list now says WHICH heartbeat failed — each time now reads like \u201c06:48 EAT (hourly)\u201d.',
+      'The dashboard\u2019s quiet grey buttons were measured against WCAG and pass in both themes — numbers recorded, no repaint needed.',
+    ],
+  },
+  {
     version: '2.168.0',
     title: 'The hints become visible',
     bullets: [

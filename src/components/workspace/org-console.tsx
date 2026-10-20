@@ -319,6 +319,10 @@ export function OrgConsole() {
      *  them in EAT; absent from older responses, and the card renders no
      *  tooltip it cannot honestly fill. */
     failedTickStamps?: string[];
+    /** v2.169.0: parallel to failedTickStamps (same order/length); null
+     *  where the ledger row predates v2.165.0 or carries no name. The
+     *  tooltip says WHICH heartbeat failed only when a row named one. */
+    failedTickDispatchers?: (string | null)[];
     secretConfigured: boolean;
     cadence: { vercelSchedule: string; pingerWorkflow: string };
   }
@@ -338,8 +342,16 @@ export function OrgConsole() {
     if (!automation.failedTickStamps || automation.failedTickStamps.length === 0)
       return undefined;
     if (!automation.lastTick) return undefined;
-    return `Failed ticks: ${automation.failedTickStamps
-      .map((s) => formatEatStamp(new Date(s)))
+    const stamps = automation.failedTickStamps.map((s) => formatEatStamp(new Date(s)));
+    // v2.169.0: each named stamp says WHICH heartbeat failed — the parallel
+    // failedTickDispatchers entry (same index, same order) rides along as a
+    // parenthetical; a null, an out-of-range index, or an older response
+    // without the array renders the bare stamp, never a guess.
+    const parts = stamps.map((label, i) => {
+      const d = automation.failedTickDispatchers?.[i];
+      return typeof d === 'string' && d.length > 0 ? `${label} (${d})` : label;
+    });
+    return `Failed ticks: ${parts
       .join(' · ')}${
       automation.lastTick.failedCount > automation.failedTickStamps.length
         ? ` · and ${automation.lastTick.failedCount - automation.failedTickStamps.length} more`
