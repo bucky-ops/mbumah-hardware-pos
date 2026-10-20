@@ -41,7 +41,7 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
   return runWithoutTenant(async () => {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [latestTick, failedCount] = await Promise.all([
+    const [latestTick, failedCount, failedTicks] = await Promise.all([
       rawDb.systemLog.findFirst({
         where: { action: TICK_ACTION },
         orderBy: { createdAt: 'desc' },
@@ -50,7 +50,19 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
       rawDb.systemLog.count({
         where: { action: PARTIAL_FAILURE_ACTION, createdAt: { gte: since } },
       }),
+      // v2.166.0: the exact timestamps behind the count — newest first,
+      // capped at 10 (the tooltip is a read, not an archive; the card says
+      // "and N more" when the count outruns the cap). Same 7-day window as
+      // the count above, so the two never disagree about what failed.
+      rawDb.systemLog.findMany({
+        where: { action: PARTIAL_FAILURE_ACTION, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+        take: 10,
+      }),
     ]);
+
+    const failedTickStamps = failedTicks.map((r) => r.createdAt.toISOString());
 
     // The metadata column is a JSON string by contract (v2.159.0 dispatcher
     // writes { results: SubJobResult[] }; v2.165.0 adds the dispatcher's
@@ -112,6 +124,10 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
             }
           : null,
         failedTicks7d: failedCount,
+        // v2.166.0: the pill's tooltip feed — the exact failed-tick stamps
+        // (ISO, newest first, ≤10; the honest "and N more" lives on the
+        // card where the count is already known).
+        failedTickStamps,
         // Honest tick-gate posture, read server-side: while CRON_SECRET is
         // unset the dispatcher accepts unauthenticated ticks (fail-open with
         // a WARN systemLog) — the card says so in amber until the human

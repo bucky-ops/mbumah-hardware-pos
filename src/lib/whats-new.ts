@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.166.0',
+    title: 'The chips explain themselves',
+    bullets: [
+      'Hover any sub-job chip on the Automation pulse card and it tells you what that job owns — no guide needed.',
+      'The failed-tick counter now lists the exact failed times in its tooltip (Nairobi time), so a red day is datable at a glance.',
+      'The cron guide now states plainly that both nightly and hourly dispatchers carry their own sub-job rosters.',
+    ],
+  },
+  {
     version: '2.165.0',
     title: 'Every heartbeat writes its ledger',
     bullets: [

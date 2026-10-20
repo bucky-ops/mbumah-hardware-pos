@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.166.0] The chips explain themselves
+
+A first-time owner staring at the Automation pulse card should not need the cron guide open in another tab — the sub-job chips now say what they own at the point of reading, and a red day is datable without leaving the card.
+
+### Added
+- **Sub-job ownership tooltips** (`org-console.tsx`): every sub-job chip carries a one-line `title` — "Pumps the outbound message queue…", "Drains the KRA eTIMS submission retry queue…", "Deletes sign-in sessions whose expiry has passed (expiresAt only)" — the card-sized echo of `docs/cron-operations.md`'s sub-job register (the doc stays canonical; the map is static UI copy). Chips with a hint wear `cursor-help`; an UNKNOWN sub-job name renders bare — the card never invents ownership for a job it has not met.
+- **The failed-tick pill speaks its exact ticks**: `GET /api/org/automation` now returns `failedTickStamps` — the ISO timestamps (newest first) of up to 10 `CRON_DISPATCH_PARTIAL_FAILURE` rows behind the 7-day count (same `since` window, so count and list can never disagree). The pill's tooltip lists them in EAT ("Failed ticks: Mon 19 Oct 2026 · 14:02 EAT · …") with an honest "· and N more" when the count outruns the 10-stamp cap; absent stamps (older responses) render no tooltip at all.
+- **docs/cron-operations.md**: the cadence section now states BOTH dispatchers carry sub-jobs (hourly SIX, nightly FOUR since v2.165.0) — the prose previously read as if only the hourly dispatcher had children; the heartbeat section documents the chip hints and the pill's 10-stamp cap.
+
+### Changed
+- `src/tests/chip-hints-v2166.test.ts` (NEW, 10 tests): the hint map covers exactly the nine names both dispatchers can emit, the tooltip/affordance contract, the never-invent rule, the API's take-10 same-window read (still read-only), the card's EAT/and-N-more/undefined-honesty, and both doc notes.
+
 ## [2.165.0] Every heartbeat writes its ledger
 
 Until now the nightly dispatch (reconciliation, retention, HR digests) left no always-row — a healthy nightly tick was invisible to the Automation pulse, and the session reaper swept only once a day (the hourly tick is a single daily shot on Vercel Hobby). Both heartbeats now write the same ledger, name themselves, and the reaper rides both.
