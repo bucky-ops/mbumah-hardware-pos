@@ -95,7 +95,9 @@ confirm it, and neither requires shell access:
   carries only `metadata.path`, never secret material). Before this the
   wrong-secret denial was invisible everywhere; now the card counts it
   (`deniedTicks7d`) and the two-read verification can end on the card
-  alone when the secrets disagree.
+  alone when the secrets disagree. **v2.171.0**: the `path` field feeds
+  the card's sentence — per-gate refusal counts, the most recent
+  refusal's EAT stamp, and a single-gate suffix on the pill itself.
 
 ## The sub-jobs (nine, as of v2.167.0)
 
@@ -167,10 +169,26 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
   copy, visible-on-focus bubble); zero denials render nothing. The 403
   body is unchanged, no secret material rides the row, and the write is
   catch-guarded so the refusal stays deterministic.
+- **The denial names its gate (v2.171.0)**: the refusal feed gets the
+  same shape the failed ticks have had since v2.166/v2.169 — exact
+  stamps (ISO, newest first, ≤10) exposed as `deniedTickStamps`, and
+  each row's `metadata.path` folded tolerantly to the gate's short name
+  in the parallel `deniedTickGates` ('hourly' | 'nightly'; null where
+  the path is absent, garbage, or unknown). The pill's sentence is
+  computed ONCE (a `deniedTickTooltip` helper, the failed-tick pill's
+  one-truth rule) and says WHICH gate refused — `Recent refusals: 1 at
+  the hourly gate, most recent Tue 20 Oct 2026 · 16:52 EAT` — with the
+  honest "and N more" valve when the count outruns the ≤10 feed. When
+  EVERY listed refusal names the same gate and the list is complete,
+  the pill itself appends `· hourly` / `· nightly`; mixed or unknown
+  gates render no suffix, never a guess.
 - `failedTicks7d`: partial-failure rows in the last 7 days.
 - `deniedTicks7d` (v2.170.0): refused ticks in the same 7-day window —
   the amber companion to the green "tick gate armed" posture (a green
   gate with climbing denials is the stale-secret signature).
+- `deniedTickStamps` + `deniedTickGates` (v2.171.0): the refusal feed
+  behind the count — exact stamps and per-row gate names, newest first,
+  capped at 10 with the "and N more" valve on the card.
 - `secretConfigured`: whether `CRON_SECRET` is set server-side — the honest
   tick-gate posture (fail-open ticks render the amber "CRON_SECRET unset"
   badge until the human arms the gate).

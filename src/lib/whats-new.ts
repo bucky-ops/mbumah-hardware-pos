@@ -80,6 +80,14 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.171.0',
+    title: 'The denial names its gate',
+    bullets: [
+      'When the automation gate refuses a tick, the card\u2019s note now says WHICH gate refused and when the most recent refusal was \u2014 a stale secret points at one side of the setup, not just \u201csomething\u201d.',
+      'If every refusal came from one gate, the amber pill itself names it.',
+    ],
+  },
+  {
     version: '2.170.0',
     title: 'The refused tick speaks',
     bullets: [

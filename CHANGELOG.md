@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.171.0] The denial names its gate
+
+v2.170.0 made the refused tick visible — but the sentence said only THAT the gate refused, not WHICH one. The rows already carry `metadata.path`, so the refusal feed gets the same shape the failed ticks have had since v2.166/v2.169.
+
+### Added
+- **`GET /api/org/automation` returns `deniedTickStamps` + `deniedTickGates`** — the refusal feed behind the count: exact stamps (ISO, newest first, ≤10) and each row's `metadata.path` folded tolerantly to the gate's short name ('hourly' | 'nightly'; null where the path is absent, garbage, or unknown). Same window, same cap, same tolerance rules as the failed-tick feed.
+- **The denied pill's sentence is computed once** (`deniedTickTooltip` — the failed-tick pill's one-truth rule from v2.167.0) and now says WHICH gate refused: `Recent refusals: 1 at the hourly gate, most recent Tue 20 Oct 2026 · 16:52 EAT` — with the honest `· and N more` valve when the count outruns the ≤10 feed. Title, sr-only and the visible bubble all read the helper; rows without a readable path render the bare sentence, never a guess.
+- **A single-gate suffix on the pill itself**: when EVERY listed refusal named the same gate AND the list is complete (the count does not outrun the feed — unseen rows could belong to the other gate), the pill appends `· hourly` / `· nightly`; mixed or unknown gates render no suffix.
+
+### Tests
+- `src/tests/denied-names-gate-v2171.test.ts` (NEW, 10 tests): the API's feed query + tolerant path fold + exposure + read-only, the card's interface fields, the helper's single-source base/cause strings + per-gate counts + most-recent stamp + valve, the suffix completeness guard, the three surfaces with the untouched amber/HINT_BUBBLE contract, the doc chronology, and the v2.170.0 gate pins.
+- `denied-tick-speaks-v2170.test.ts` re-anchored (2 assertions, dated): the sentence moved into the helper; the parallel read grew `deniedRows`.
+
 ## [2.170.0] The refused tick speaks
 
 A tick that sends the WRONG `x-cron-secret` used to vanish: the gate returned 403, no ledger row was written, and the exact moment the pinger's secret went stale left the Automation card green with an aging tick and no explanation — the one silent failure mode inside the arming walkthrough's card read.
