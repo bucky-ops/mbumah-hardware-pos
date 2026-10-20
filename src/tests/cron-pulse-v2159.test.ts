@@ -73,7 +73,11 @@ describe('the dispatcher writes a ledger row on every tick', () => {
   it('the ledger carries the same results the response body carries', () => {
     const tickIdx = hourlyRoute.indexOf("action: 'CRON_DISPATCH_TICK'");
     const tickSlice = hourlyRoute.slice(tickIdx, tickIdx + 800);
-    expect(tickSlice).toContain('results.map((r) => ({ name: r.name, ok: r.ok, status: r.status }))');
+    // v2.164.0 re-anchor: the ledger writes the PROMOTED entries (the
+    // dispatcher's ledgerEntry — name/ok/status, plus the session-reaper's
+    // honest deleted count when the body carried one) instead of the old
+    // inline name/ok/status mapping.
+    expect(tickSlice).toContain('metadata: { results: ledgerResults }');
   });
 
   it('keeps the partial-failure WARN for severity filtering', () => {

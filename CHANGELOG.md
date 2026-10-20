@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.164.0] The pulse speaks the reaper
+
+Automation that nobody can see is automation that can silently die — so the org console's Automation pulse card now speaks the session reaper's own sweep, and the docs carry the spec parity appendix the last three rounds kept deferring.
+
+### Added
+- **The tick ledger promotes the reaper's count** (`/api/cron/hourly`): the dispatcher's new `ledgerEntry` carries `deleted` from the session-reaper's response body onto BOTH ledger rows (the always-row and the partial-failure WARN) — but ONLY when it is a non-negative finite number (garbage is dropped, never invented). Other sub-jobs and older ticks simply lack the field.
+- **`GET /api/org/automation` passes it through**: `SubJobResult.deleted?` — the tolerant guard accepts honest absence or a real non-negative number (a string `"3"` or a negative never does), keeping pre-2.164 ledger rows readable.
+- **The Automation pulse card speaks it in two places** (`org-console.tsx`): the reaper chip gains `· reaped N` / `· clean` (tabular-nums, the HTTP-status suffix's own dress; absent/garbage renders nothing) and a sky **"N reaped" header pill** (dark-twinned, title-carried) when the last tick's count is positive — session hygiene where the eye lands first, honest silence at zero.
+- **docs/payroll-run-lifecycle.md — the Spec parity appendix**: every EMS spec Stage-4 phase (4.1→v2.18.5 … 4.8→v2.20.0) mapped to the release that delivered it, plus the deepening rows (gate surfaces, a11y sweeps, idle, reaper) and the parity rule: releases, never intents.
+- **docs/cron-operations.md**: the sub-job register — all SIX dispatcher sub-jobs in a table with ownership and scope notes (the reaper's expiresAt-only discipline), the ledger's v2.164.0 extension, and the card's new surfaces.
+
 ## [2.163.0] The session reaps itself — and the door swings back
 
 The session table finally gets its janitor (Task 156's session-hygiene sweep), and the idle sign-out's door swings back — sign-in returns the colleague to the page they were reading, validated end-to-end against open redirects.

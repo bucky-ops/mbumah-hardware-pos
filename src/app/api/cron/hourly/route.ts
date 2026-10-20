@@ -96,6 +96,29 @@ async function verifyCronSecret(request: Request): Promise<Response | null> {
 
 type SubJob = { name: string; run: () => Promise<Response> };
 
+// v2.164.0: the ledger entry the tick writes for ONE sub-job. name/ok/status
+// were always carried; `deleted` is the session-reaper's own honest count,
+// promoted from its response body SO THE PULSE CAN SPEAK IT (the org card
+// reads the tick ledger, not the reaper route - if the count is not on the
+// ledger, the card can never say it). Anything that is not a non-negative
+// finite number is DROPPED - the ledger never invents a count.
+function ledgerEntry(r: {
+  name: string;
+  ok: boolean;
+  status: number;
+  body: unknown;
+}): { name: string; ok: boolean; status: number; deleted?: number } {
+  const deleted = (r.body as { deleted?: unknown } | null | undefined)?.deleted;
+  const carryDeleted =
+    typeof deleted === 'number' && Number.isFinite(deleted) && deleted >= 0;
+  return {
+    name: r.name,
+    ok: r.ok,
+    status: r.status,
+    ...(carryDeleted ? { deleted } : {}),
+  };
+}
+
 async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
   const results = await Promise.all(
     jobs.map(async (job) => {
@@ -118,6 +141,7 @@ async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
   );
 
   const failed = results.filter((r) => !r.ok);
+  const ledgerResults = results.map(ledgerEntry);
   if (failed.length > 0) {
     await systemLog({
       action: 'CRON_DISPATCH_PARTIAL_FAILURE',
@@ -126,7 +150,7 @@ async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
       message: `Cron dispatch finished with ${failed.length}/${results.length} failed sub-job(s): ${failed
         .map((f) => `${f.name} (${f.status})`)
         .join('; ')}`,
-      metadata: { results: results.map((r) => ({ name: r.name, ok: r.ok, status: r.status })) },
+      metadata: { results: ledgerResults },
     }).catch(() => {});
   }
 
@@ -146,7 +170,7 @@ async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
       failed.length > 0
         ? `Cron tick recorded: ${results.length} sub-job(s), ${failed.length} failed.`
         : `Cron tick recorded: ${results.length} sub-job(s) all ok.`,
-    metadata: { results: results.map((r) => ({ name: r.name, ok: r.ok, status: r.status })) },
+    metadata: { results: ledgerResults },
   }).catch(() => {});
 
   return results;

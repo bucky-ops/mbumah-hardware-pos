@@ -158,3 +158,32 @@ of re-deciding them. Each contract names the release that set it.
   decorative background layers are aria-hidden, and the input focus pulse
   is raised from ambient-glow alphas (0.15/0.25) to a visible keyboard
   beacon (0.35/0.5).
+
+## Spec parity appendix (v2.164.0)
+
+The EMS spec (`upload/Pasted Content_1792080972078.txt`, Stage 4) named
+eight phases. This table maps each to the release that delivered it, so
+the next auditor starts from facts instead of archaeology. Phase numbers
+are the spec's own; "deepening" rows cover the post-parity work the spec's
+acceptance lines asked for but which shipped after the endpoint landed.
+
+| Spec phase | Scope (the spec's own words) | Delivered in | Deepening |
+|------------|------------------------------|--------------|-----------|
+| 4.1 Foundations | permissions/types/settings/audit, feature flag, migration plan | v2.18.5 | — |
+| 4.2 Employee records, documents, positions, grades, salary structures | HR master data | v2.18.6 | — |
+| 4.3 Recruitment and onboarding | hiring pipeline | v2.18.6 | — |
+| 4.4 Attendance and leave | attendance + leave workflows | v2.18.7 | timesheet desk + gate (v2.136.0), weekends lens (v2.138–145), desk a11y (v2.147.0) |
+| 4.5 Payroll engine | computation, statutory tables | v2.18.8 | engine hardening continues per-round |
+| 4.6 Payroll run lifecycle, journal posting, payslips, P10, corrections | the 14 Create paths + 11 acceptance lines | v2.18.9 | B2C disbursement (v2.21.0), gate verdict/trail/chips/card (v2.135–146), spec-path aliases (v2.160.0), idle contract (v2.162.0), session reaper (v2.163.0) |
+| 4.7 Performance, assets, disciplinary, self-service | 10 API paths + 6 `/employees/me` pages | v2.19.0 (Stage G) | portal PDF (v2.161.0), Lighthouse re-measure (v2.161.0), idle timeout (v2.162.0), return path (v2.163.0) |
+| 4.8 HR workspace, org console integration, reporting, compliance hardening | 6 report endpoints + 5 console tiles + 8 acceptance lines | v2.20.0 (Stage H) | dense tables (by v2.132.0), retention/legal-hold APIs (v2.28.0), a11y sweeps (v2.147–149), console contrast (v2.149.0), automation pulse (v2.159.0) |
+
+Stage 5 (testing and verification) names nine `scripts/verify-*.mjs`
+gates; they exist and run in CI, joined by the per-release
+`verify-v2-*-0.mjs` family (fresh-written every round) and
+`verify-spec-paths.mjs` (v2.160.0, the mechanical Phase 4.6 + 4.7 path
+gate).
+
+Parity rule this appendix obeys: every row cites a RELEASE that shipped
+(shippable, tagged, in CHANGELOG) — never an intent. When a future phase
+delta appears, it gets a row the day it ships.
