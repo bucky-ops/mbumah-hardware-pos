@@ -245,6 +245,12 @@ function StatCard({
         <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
           Open <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
         </span>
+        {/* v2.168.0: the tile's title sentence ("Open headcount report",
+            "Resolve in HR assets…") stops being mouse-only — screen readers
+            hear the same sentence the hover tooltip says. The visible
+            "Open ↗" affordance already shows itself on keyboard focus; this
+            copy closes the gap for AT, one truth on two surfaces. */}
+        {title && <span className="sr-only"> — {title}</span>}
       </Link>
     );
   }
@@ -995,7 +1001,11 @@ export function OrgConsole() {
                                     href={buildPeoplePayrollDeepLink(store.id)}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    aria-label={`People and payroll for ${store.name}`}
+                                    /* v2.168.0: the accessible name IS the
+                                        hover sentence now — one truth, two
+                                        surfaces (the title stays for the
+                                        mouse; AT hears the same intent). */
+                                    aria-label={`Open the People & Payroll tab pre-filtered to ${store.name}`}
                                   >
                                     <UserCog className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
                                     People &amp; payroll
@@ -1147,7 +1157,7 @@ export function OrgConsole() {
                 {automation.lastTick.failedCount > 0 && (
                   <span
                     data-testid="automation-failed-count"
-                    className="inline-flex items-center rounded-full border border-red-300 bg-red-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-1"
+                    className="relative group inline-flex items-center rounded-full border border-red-300 bg-red-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-1"
                     title={failedTickTooltip(automation)}
                     /* v2.167.0: the pill reaches the keyboard — focusable
                        while it has an exact-tick sentence to say (a focus
@@ -1159,6 +1169,21 @@ export function OrgConsole() {
                     {automation.lastTick.failedCount === 1 ? '' : 's'} in 7d
                     {failedTickTooltip(automation) && (
                       <span className="sr-only">{failedTickTooltip(automation)}</span>
+                    )}
+                    {/* v2.168.0: the stamps become VISIBLE on keyboard focus —
+                        a popover bubble overlays the cadence line below (an
+                        absolute overlay, so the two-row chip area never
+                        reflows), aria-hidden because the sr-only line above
+                        already speaks it once. Overrides the pill's 9px
+                        uppercase display type — the bubble reads as prose. */}
+                    {failedTickTooltip(automation) && (
+                      <span
+                        aria-hidden="true"
+                        data-testid="automation-failed-bubble"
+                        className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-max max-w-[16rem] rounded-md border bg-popover px-2 py-1 text-[11px] font-normal normal-case tracking-normal leading-snug text-popover-foreground shadow-md group-focus-visible:block"
+                      >
+                        {failedTickTooltip(automation)}
+                      </span>
                     )}
                   </span>
                 )}
@@ -1186,10 +1211,10 @@ export function OrgConsole() {
                       tabIndex={AUTOMATION_SUBJOB_HINTS[job.name] ? 0 : undefined}
                       className={
                         job.ok
-                          ? `inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700${
+                          ? `relative group inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700${
                               AUTOMATION_SUBJOB_HINTS[job.name] ? ' cursor-help' : ''
                             } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-1`
-                          : `inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700${
+                          : `relative group inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700${
                               AUTOMATION_SUBJOB_HINTS[job.name] ? ' cursor-help' : ''
                             } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-1`
                       }
@@ -1207,17 +1232,52 @@ export function OrgConsole() {
                           else (absent, older tick, garbage) renders nothing
                           — the same never-a-guess rule as the HTTP suffix. */}
                       {job.name === 'session-reaper' && job.ok && job.deleted !== undefined && (
-                        <span className="tabular-nums">
+                        /* v2.168.0: the suffix speaks for itself — the count
+                            is the sweep's own ledger row, and "clean" means
+                            zero expired sessions at tick time, not silence. */
+                        <span
+                          className="tabular-nums cursor-help"
+                          title={
+                            job.deleted > 0
+                              ? `The reaper deleted ${job.deleted} expired session${job.deleted === 1 ? '' : 's'} — the sweep's own ledger count.`
+                              : 'The reaper swept and deleted nothing — zero expired sessions at tick time.'
+                          }
+                        >
                           · {job.deleted > 0 ? `reaped ${job.deleted}` : 'clean'}
                         </span>
                       )}
-                      {!job.ok && <span className="tabular-nums">· HTTP {job.status}</span>}
+                      {!job.ok && (
+                        /* v2.168.0: the failure suffix names its source — the
+                            dispatcher's own recorded HTTP result. */
+                        <span
+                          className="tabular-nums cursor-help"
+                          title={`The dispatcher recorded HTTP ${job.status} for this sub-job — the tick's own result, not a guess.`}
+                        >
+                          · HTTP {job.status}
+                        </span>
+                      )}
                       {/* v2.167.0: the ownership line rides an sr-only copy
                           (only when hinted) — screen readers get the same
                           sentence the hover tooltip says, and an unhinted
                           chip stays silent, never a guess. */}
                       {AUTOMATION_SUBJOB_HINTS[job.name] && (
                         <span className="sr-only"> — {AUTOMATION_SUBJOB_HINTS[job.name]}</span>
+                      )}
+                      {/* v2.168.0: the hint becomes VISIBLE to sighted
+                          keyboard users — on focus the same sentence renders
+                          in a popover bubble overlaying the line below (an
+                          absolute overlay: the chip list never reflows),
+                          aria-hidden because the sr-only line already spoke
+                          it. An unhinted chip renders no bubble, never a
+                          guess. */}
+                      {AUTOMATION_SUBJOB_HINTS[job.name] && (
+                        <span
+                          aria-hidden="true"
+                          data-testid="automation-subjob-hint-bubble"
+                          className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-max max-w-[16rem] rounded-md border bg-popover px-2 py-1 text-[11px] font-normal leading-snug text-popover-foreground shadow-md group-focus-visible:block"
+                        >
+                          {AUTOMATION_SUBJOB_HINTS[job.name]}
+                        </span>
                       )}
                     </li>
                   ))}

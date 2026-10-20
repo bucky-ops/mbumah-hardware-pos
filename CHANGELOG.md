@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.168.0] The hints become visible
+
+v2.167.0 made the card's hints keyboard-REACHABLE — a focus ring says "here", not "why". This round the sentence itself becomes visible at the moment of focus, the card's self-explaining suffixes gain their own tooltips, and the org console's remaining title-only links learn to speak.
+
+### Added
+- **Visible-on-focus hint bubbles** (`org-console.tsx`): while a keyboard user focuses a hinted sub-job chip or the failed-tick pill, the SAME sentence the hover tooltip says renders in a popover bubble overlaying the line below — `absolute left-0 top-full` (an overlay, so the two-row chip area never reflows), `pointer-events-none`, `bg-popover`/`text-popover-foreground` (the token pair, dark-safe by construction), `group-focus-visible:block`. The bubble is `aria-hidden` — the sr-only line already spoke it once; sighted keyboard users get the words, assistive tech hears them exactly once. The pill's bubble overrides its 9px uppercase display type (`text-[11px] font-normal normal-case tracking-normal`) so the stamps read as prose.
+- **The suffixes speak for themselves**: the reaper chip's `· reaped N` / `· clean` suffix carries an honest tooltip — "The reaper deleted N expired session(s) — the sweep's own ledger count" / "The reaper swept and deleted nothing — zero expired sessions at tick time" — and a failure chip's `· HTTP N` suffix names its source ("the dispatcher's own recorded result, not a guess").
+- **The title-only links learn to speak**: the HR tiles echo their title sentence to screen readers (`{title && <span className="sr-only"> — {title}</span>}` inside the Link — "Open headcount report", "Resolve in HR assets…"); the per-branch People & payroll deep links fold the hover sentence INTO the accessible name (`aria-label="Open the People & Payroll tab pre-filtered to {branch}"`) — one truth, two surfaces, the title stays for the mouse.
+- **The doc says what the card now does** (`docs/cron-operations.md`): the heartbeat section gains "The hints become visible (v2.168.0)" beside the v2.167.0 note — the chronology, not a replacement.
+
+### Tests
+- `src/tests/keyboard-visible-v2168.test.ts` (NEW, 13 tests): the bubble recipe and its same-lookup guard (an unhinted chip renders no bubble, never a guess), the no-reflow absolute-overlay pin, the speak-once aria-hidden contract, the popover token pair (no alpha families), the v2.167.0 focusability contract re-pinned untouched, both suffix tooltips, the StatCard sr-only echo + branch accessible-name fold, and the doc notes.
+
 ## [2.167.0] The hints reach the keyboard
 
 v2.166.0's ownership hints and exact failed-tick stamps lived in native `title` tooltips — invisible to a keyboard and to a screen reader. The hints stop being mouse-only: what the hover said, the tab order and the assistive line now say too.

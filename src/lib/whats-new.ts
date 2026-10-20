@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.168.0',
+    title: 'The hints become visible',
+    bullets: [
+      'Tab to an Automation chip or the failed-tick pill and its hint now shows as a small note right there — no mouse needed to read the why.',
+      'The reaper\u2019s \u201creaped N / clean\u201d tag and a failed job\u2019s HTTP tag explain themselves on hover.',
+      'The dashboard\u2019s linked tiles and per-branch People & payroll buttons now say their hover sentence to screen readers too.',
+    ],
+  },
+  {
     version: '2.167.0',
     title: 'The hints reach the keyboard',
     bullets: [

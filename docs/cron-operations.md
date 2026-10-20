@@ -120,6 +120,16 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
   line, so the ownership copy and the failed-tick datetimes are no longer
   mouse-only. Unhinted names stay bare and unfocusable — never a guess,
   never a dead tab stop.
+- **The hints become visible (v2.168.0)**: the last mouse-only inch goes
+  too — while a keyboard user focuses a hinted chip or the failed-tick
+  pill, the SAME sentence renders in a popover bubble overlaying the line
+  below (an absolute overlay, so the two-row chip area never reflows;
+  aria-hidden, because the sr-only line already spoke it once). The
+  reaper chip's `· reaped N` / `· clean` suffix and a failure chip's
+  `· HTTP N` suffix carry their own honest tooltips, and the org
+  console's title-only LINKS (the HR tiles, the per-branch People &
+  payroll deep links) say their hover sentence to screen readers via an
+  sr-only echo / the accessible name itself — one truth, two surfaces.
 - `failedTicks7d`: partial-failure rows in the last 7 days.
 - `secretConfigured`: whether `CRON_SECRET` is set server-side — the honest
   tick-gate posture (fail-open ticks render the amber "CRON_SECRET unset"
