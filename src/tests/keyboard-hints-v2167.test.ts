@@ -96,8 +96,11 @@ describe('the hints reach the keyboard', () => {
     );
   });
 
-  it('the card carries exactly three sr-only copies (chip + pill + last tick)', () => {
-    expect(card.match(/className="sr-only"/g)?.length).toBe(3);
+  it('the card carries exactly four sr-only copies (chip + pill + last tick + denied pill)', () => {
+    // v2.170.0 re-anchor: the amber denied pill brings the fourth sr-only
+    // copy (its own sentence rides the same one-truth rule) — the count
+    // was 3 (chip + pill + last tick) since v2.167.0.
+    expect(card.match(/className="sr-only"/g)?.length).toBe(4);
   });
 });
 

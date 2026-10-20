@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.170.0] The refused tick speaks
+
+A tick that sends the WRONG `x-cron-secret` used to vanish: the gate returned 403, no ledger row was written, and the exact moment the pinger's secret went stale left the Automation card green with an aging tick and no explanation — the one silent failure mode inside the arming walkthrough's card read.
+
+### Added
+- **Both dispatcher gates write a `CRON_TICK_DENIED` WARN row** when a tick's `x-cron-secret` does not match the armed `CRON_SECRET` AND the request at least sent a non-empty value (`/api/cron/nightly` + `/api/cron/hourly`, identical discriminator). A misconfigured-but-honest tick — the pinger with a stale GitHub secret, a curl with a typo — always sends a secret, while anonymous scanners and the Vercel-managed scheduler send nothing: the ledger records real attempted ticks, never scanner noise, and an unauthenticated caller cannot write rows by spamming the endpoint. The row carries only `metadata.path` (never secret material), the 403 body is byte-identical, and the write is catch-guarded so the refusal stays deterministic.
+- **`GET /api/org/automation` returns `deniedTicks7d`** — refused ticks counted in the same 7-day window as the failed ticks, so the card's two amber signals never disagree about the window they describe.
+- **The card grows an amber "N denied ticks in 7d" pill** beside the posture badge with the full v2.167/v2.168 hint treatment — title tooltip, tab stop, sr-only copy, and a visible-on-focus bubble ("Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing."). Zero denials render nothing; absence (older responses) and zero are equally silent via the tolerant `?? 0` guard. The two-read verification walkthrough now ends on the card alone when the secrets disagree.
+- **The bubble recipe lives in one place**: the v2.168.0 popover class string moves into the module-level `HINT_BUBBLE` constant — the sub-job chip bubble rides it bare, the failed-tick pill and the denied pill append the `normal-case tracking-normal` prose override. Three surfaces, one home.
+
+### Tests
+- `src/tests/denied-tick-speaks-v2170.test.ts` (NEW, 9 tests): both gates' discriminator + write-before-refuse order + catch-guard, path-only metadata (secret material banned inside the systemLog call), byte-identical 403 body, untouched fail-open path, the API's window + exposure + read-only, the card's tolerant guard + amber family + three-surface sentence order + shared-constant counts, and the doc chronology (v2.170/v2.169/v2.168 notes, ledger bullet, two-read sync).
+- `keyboard-visible-v2168.test.ts` re-anchored (2 assertions, dated): the recipe literal moved into the constant, so the suite now pins the single home + the card's constant references instead of the duplicated string.
+
 ## [2.169.0] The pill names the heartbeat
 
 The failed-tick sentence dated every red tick but never said WHICH heartbeat failed. Since v2.165.0 every ledger row names its dispatcher — the sentence now says so, and the axe-incomplete question on the console's quiet grey buttons is answered with arithmetic instead of a repaint.

@@ -22,9 +22,11 @@ export const dynamic = 'force-dynamic';
 
 const ORG_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'];
 
-// The two ledger actions the dispatcher writes (v2.159.0).
+// The ledger actions the dispatcher writes (v2.159.0; v2.170.0 adds the
+// refusal row the gate itself writes).
 const TICK_ACTION = 'CRON_DISPATCH_TICK';
 const PARTIAL_FAILURE_ACTION = 'CRON_DISPATCH_PARTIAL_FAILURE';
+const DENIED_ACTION = 'CRON_TICK_DENIED';
 
 interface SubJobResult {
   name: string;
@@ -41,7 +43,7 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
   return runWithoutTenant(async () => {
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-    const [latestTick, failedCount, failedTicks] = await Promise.all([
+    const [latestTick, failedCount, failedTicks, deniedCount] = await Promise.all([
       rawDb.systemLog.findFirst({
         where: { action: TICK_ACTION },
         orderBy: { createdAt: 'desc' },
@@ -66,6 +68,17 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true, metadata: true },
         take: 10,
+      }),
+      // v2.170.0: the gate's own count — ticks refused with 403 while armed
+      // that at least SENT a secret (the discriminator lives at the gate:
+      // empty-header noise never reaches the ledger, so this count is real
+      // attempted ticks, not scanner traffic). Same 7-day window as the
+      // failed-tick count, so the card's two amber signals never disagree
+      // about the window they describe. A stale secret on ONE side of the
+      // arming walkthrough makes this climb while the tick gate reads green
+      // — the exact silent failure the card could not say before.
+      rawDb.systemLog.count({
+        where: { action: DENIED_ACTION, createdAt: { gte: since } },
       }),
     ]);
 
@@ -161,6 +174,10 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
         // failedTickStamps; null where the row predates v2.165.0 or carries
         // no name) — the pill's sentence says WHICH heartbeat failed.
         failedTickDispatchers,
+        // v2.170.0: refused ticks in the same 7-day window — the amber
+        // companion to the green "tick gate armed" posture (a green gate
+        // with climbing denials is the stale-secret signature).
+        deniedTicks7d: deniedCount,
         // Honest tick-gate posture, read server-side: while CRON_SECRET is
         // unset the dispatcher accepts unauthenticated ticks (fail-open with
         // a WARN systemLog) — the card says so in amber until the human
