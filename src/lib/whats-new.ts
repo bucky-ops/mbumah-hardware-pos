@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.188.0',
+    title: 'The roster drills',
+    bullets: [
+      'The \u201cwho pulled the desk\u201d roster now answers back: click a reviewer\u2019s row and the timeline below narrows to their visits \u2014 click again to release. The note itself stays org-wide, exactly as before.',
+      'The drilled reviewer wears the desk\u2019s green drill colour \u2014 ring, tint and a chevron \u2014 so you always know whose file you are reading, and the keyboard works too.',
+      'The revenue modal\u2019s Net lens grew its own week-over-week verdict beside the figures: is this week\u2019s net take up or down on last week\u2019s, at a glance, in the lens\u2019s violet.',
+    ],
+  },
+  {
     version: '2.187.0',
     title: 'The modal learns the lens',
     bullets: [

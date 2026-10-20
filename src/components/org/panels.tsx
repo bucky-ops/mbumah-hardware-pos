@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Activity, AlertOctagon, BadgeCheck, BellRing, Coffee, FileText, History, LogIn, MessagesSquare, RadioTower, Send, Sunrise, X } from 'lucide-react';
+import { Activity, AlertOctagon, BadgeCheck, BellRing, ChevronRight, Coffee, FileText, History, LogIn, MessagesSquare, RadioTower, Send, Sunrise, X } from 'lucide-react';
 import { authorizedFetchJson } from '@/lib/api';
 import { deskReportDrawerHref } from '@/lib/hr/desk-report';
 import { num, timeAgo, type ActivityItem, type ConsoleAlert, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData } from './primitives';
@@ -514,24 +514,55 @@ export function DeskActivity({ data, filter, onFilterChange }: {
                 reviewer is the top-reviewer chip's whole story — and only
                 when the payload carried the roster (optional field: an
                 older cached answer keeps the calm strip, never a crash).
-                Six rows render; a longer desk says "+N more" honestly. */}
+                Six rows render; a longer desk says "+N more" honestly.
+                v2.188.0 — the roster drills: each row is now a real control
+                that applies the panel's existing ?reviewer= filter (the
+                same drill the ledger rows have had since v2.65.0) — the
+                digest strip itself NEVER re-keys (the org-wide contract
+                holds; only the timeline below narrows). Clicking the
+                drilled reviewer again releases the filter, matching the
+                branch chips' toggle. The affordance is honest: hover
+                brightens the row and slides a chevron in, the drilled row
+                wears the panel's emerald drill language (ring + tint +
+                emerald bar + visible chevron), the figures re-tint with
+                it, and aria-pressed + a spoken label carry the state to
+                the reader. Keyboard focus wears the house ring. */}
             {yesterday.reviewerRows && yesterday.reviewerRows.length > 1 && (
               <div data-testid="desk-digest-roster" className="mt-2.5 border-t border-amber-100/90 pt-2 dark:border-amber-500/10">
                 <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
-                  who pulled the desk · share of {num(yesterday.visits)} visit{yesterday.visits === 1 ? '' : 's'}
+                  who pulled the desk · share of {num(yesterday.visits)} visit{yesterday.visits === 1 ? '' : 's'} · click a name to pull their file
                 </p>
                 <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
                   {yesterday.reviewerRows.slice(0, 6).map((r) => {
                     const share = yesterday.visits > 0 ? Math.round((r.visits / yesterday.visits) * 100) : 0;
+                    const drilled = reviewer === r.name;
                     return (
-                      <li key={r.name} data-testid="desk-digest-roster-row" className="flex min-w-[150px] flex-1 items-center gap-2" title={`${r.name}: ${r.visits} of ${yesterday.visits} visits (${share}%)`}>
-                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${avatarHue(r.name)}`}>
-                          {r.name}
-                        </span>
-                        <span className="h-1 min-w-[24px] flex-1 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/60" aria-hidden>
-                          <span className="block h-full rounded-full bg-emerald-500/80 transition-[width] duration-300" style={{ width: `${Math.min(100, share)}%` }} />
-                        </span>
-                        <span className="shrink-0 text-[10px] font-semibold tabular-nums text-slate-600 dark:text-slate-300">{r.visits} · {share}%</span>
+                      <li key={r.name} data-testid="desk-digest-roster-row" className="flex min-w-[150px] flex-1 items-center">
+                        <button
+                          type="button"
+                          onClick={() => onFilterChange({ ...filter, reviewer: drilled ? null : r.name })}
+                          aria-pressed={drilled}
+                          aria-label={`${drilled ? 'Stop reviewing' : 'Review'} ${r.name}'s desk visits — ${r.visits} of ${yesterday.visits} yesterday`}
+                          data-testid="desk-digest-roster-drill"
+                          title={`${r.name}: ${r.visits} of ${yesterday.visits} visits (${share}%) — ${drilled ? 'click to release the drill' : 'click to review their visits'}`}
+                          className={`group flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${drilled
+                            ? 'bg-emerald-50/90 ring-1 ring-emerald-300 dark:bg-emerald-500/10 dark:ring-emerald-500/40'
+                            : 'hover:bg-white/80 dark:hover:bg-slate-800/50'}`}
+                        >
+                          <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${avatarHue(r.name)}`}>
+                            {r.name}
+                          </span>
+                          <span className="h-1 min-w-[24px] flex-1 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/60" aria-hidden>
+                            <span className={`block h-full rounded-full transition-[width] duration-300 ${drilled ? 'bg-emerald-600' : 'bg-emerald-500/80'}`} style={{ width: `${Math.min(100, share)}%` }} />
+                          </span>
+                          <span className={`shrink-0 text-[10px] font-semibold tabular-nums transition-colors ${drilled ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300'}`}>{r.visits} · {share}%</span>
+                          <ChevronRight
+                            aria-hidden="true"
+                            className={`h-3 w-3 shrink-0 transition-all duration-150 ${drilled
+                              ? 'translate-x-0 text-emerald-800 opacity-100 dark:text-emerald-400'
+                              : '-translate-x-0.5 text-slate-500 opacity-0 group-hover:translate-x-0 group-hover:opacity-70 dark:text-slate-500'}`}
+                          />
+                        </button>
                       </li>
                     );
                   })}
@@ -688,7 +719,7 @@ export function DeskActivity({ data, filter, onFilterChange }: {
         </ul>
       )}
       <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-500">
-        Ledger keeps every visit since v2.63.0 — {num(stats.total)} on record. Click a row to review that person&apos;s desk visits; click a branch to narrow the trail.
+        Ledger keeps every visit since v2.63.0 — {num(stats.total)} on record. Click a row — or a name in the digest roster — to review that person&apos;s desk visits; click a branch to narrow the trail.
       </p>
     </section>
   );
