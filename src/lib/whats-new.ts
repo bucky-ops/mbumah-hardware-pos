@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.189.0',
+    title: 'The roster keeps its week',
+    bullets: [
+      'The desk panel now names WHO pulled the whole week, not just yesterday: under the 7-day tiles sits a new roster \u2014 every reviewer with their share-of-visits bar, their corrections answered, and the same click-to-drill as yesterday\u2019s strip.',
+      'The branches CSV export grew the week\u2019s shape: a \u201cReviews by reviewer (7d)\u201d sub-section with each reviewer\u2019s exact share, so the offline copy carries the week\u2019s who as well as the week\u2019s how much.',
+      'The printable desk report\u2019s reviewer rows now wear the same share bars, and its CSV gains a Share (%) column \u2014 the filed copy speaks the share even where colours don\u2019t print.',
+    ],
+  },
+  {
     version: '2.188.0',
     title: 'The roster drills',
     bullets: [

@@ -538,8 +538,13 @@ describe('deskReportToCsv - the report files itself', () => {
     const csv = deskReportToCsv(report, { organizationName: 'O', scopeLabel: 'S' });
     expect(csv).toContain('Branch,Visits,Corrections answered,Reviewers,Requests,Last visit (UTC)');
     expect(csv).toContain('MBUMAH HARDWARE - Juja Main,2,1,1,2,');
-    expect(csv).toContain('Name,Visits,Corrections answered,Branches,Last visit (UTC)');
-    expect(csv).toContain('System Administrator,2,1,1,');
+    // v2.189.0 — the Reviewers section grew the Share (%) column at the END
+    // (prior consumers reading columns 1-5 keep reading them unchanged);
+    // the shares are lib-computed from the report's OWN totals
+    // (2/3 → 66.67, 1/3 → 33.33).
+    expect(csv).toContain('Name,Visits,Corrections answered,Branches,Last visit (UTC),Share (%)');
+    expect(csv).toContain('System Administrator,2,1,1,2026-10-16T10:00:00.000Z,66.67');
+    expect(csv).toContain('System,1,0,1,2026-10-12T08:00:00.000Z,33.33');
     expect(csv).toContain('Employee,Leave type,Branch,Status,Visits,Last visit (UTC)');
     expect(csv).toContain('David Otieno,Sick Leave,MBUMAH HARDWARE - Juja Main,PENDING,1,');
     expect(csv).toContain('Grace Achieng,Annual Leave,MBUMAH HARDWARE - Nakuru Branch,APPROVED,1,');

@@ -805,18 +805,36 @@ export function DeskReportView() {
 
               {/* Reviewers — who did the desk work. v2.71.0: every row is a
                   door — click it and the reviewer's own visits for this same
-                  window open beneath, straight from the same derivation. */}
+                  window open beneath, straight from the same derivation.
+                  v2.189.0: the rows wear the share — the roster strip's
+                  signature share-of-visits bar rides the printable twin
+                  (the file-mirrors-screen rule): an emerald fill on a muted
+                  track, width = the reviewer's share of the WINDOW's total
+                  visits (computed from the report's OWN totals — the wire
+                  is never trusted), with the % figure spoken beside it so
+                  the filed copy carries the share even where backgrounds
+                  don't print. The top reviewer's bar wears the deep emerald
+                  the strip gives its drilled row — the loudest row is
+                  legible at a glance. */}
               <section aria-label="Reviewers in this window" data-testid="desk-report-reviewers">
                 <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <Users className="h-3.5 w-3.5" aria-hidden /> Reviewers ({data.reviewers.length})
                   <span className="hidden font-normal normal-case tracking-normal text-slate-500 sm:inline print:hidden dark:text-slate-500">
-                    — click a reviewer to read their visits · file names inside a drawer jump across
+                    — bars show each reviewer&apos;s share · click a reviewer to read their visits · file names inside a drawer jump across
                   </span>
                 </h2>
                 <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 dark:divide-slate-800 dark:border-slate-800">
                   {data.reviewers.map((r) => {
                     const open = openReviewer === r.name;
                     const visits = deskReportReviewerLedger(data.ledger, r.name);
+                    // v2.189.0 — the share: this reviewer's slice of the
+                    // window's total visits, computed from the report's own
+                    // totals (the same by-the-lib rule the CSVs follow).
+                    // A zero-visit window derives no reviewer rows, so the
+                    // denominator is provably positive here — the guard is
+                    // honest defense, not a live path.
+                    const share = data.totals.visits > 0 ? Math.round((r.visits / data.totals.visits) * 100) : 0;
+                    const loudest = r === data.reviewers[0];
                     // v2.74.0 — the via chip's label: when this drawer was
                     // reached through a request's visit rows, the same ledger
                     // names the file to offer the jump back to.
@@ -836,7 +854,24 @@ export function DeskReportView() {
                           <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${deskReportAvatarHue(r.name)}`} aria-hidden="true">
                             {r.name.trim().charAt(0).toUpperCase()}
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{r.name}</span>
+                          <span className="min-w-0 max-w-[150px] shrink truncate text-xs font-semibold text-slate-700 dark:text-slate-200" title={r.name}>{r.name}</span>
+                          {/* v2.189.0 — the share bar: the roster strip's
+                              signature, print-honest (the % figure beside it
+                              carries the share even where backgrounds don't
+                              print). */}
+                          <span className="h-1 min-w-[24px] flex-1 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/60" aria-hidden>
+                            <span
+                              className={`block h-full rounded-full transition-[width] duration-300 ${loudest ? 'bg-emerald-600' : 'bg-emerald-500/80'}`}
+                              style={{ width: `${Math.min(100, share)}%` }}
+                            />
+                          </span>
+                          <span
+                            data-testid="desk-report-reviewer-share"
+                            title={`${r.name}: ${r.visits} of ${data.totals.visits} visits (${share}%)`}
+                            className="shrink-0 text-[10px] font-semibold tabular-nums text-slate-500 dark:text-slate-500"
+                          >
+                            {share}%
+                          </span>
                           {r.clears > 0 ? (
                             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
                               <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> {num(r.clears)} cleared

@@ -218,7 +218,7 @@ describe('DeskActivity panel - the console answers who and where', () => {
   });
 
   it('the footer teaches the new interactions', () => {
-    // v2.188.0: the footer grew the roster mention — the digest roster now
+    // v2.189.0: the footer grew the roster mention — the digest roster now
     // drills too (the same ?reviewer= filter the rows have always applied).
     expect(PANELS).toContain('Click a row — or a name in the digest roster — to review that person&apos;s desk visits; click a branch to narrow the trail.');
   });

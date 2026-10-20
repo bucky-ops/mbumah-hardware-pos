@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * v2.188.0 — the roster drills, and the net wears its verdict.
+ * v2.189.0 — the roster drills, and the net wears its verdict.
  *
  * Two carried options ship together, both answering the same question a
  * owner asks staring at the console: "so what do I DO with this?"
@@ -171,9 +171,9 @@ describe('the net verdict - the second face speaks its trend', () => {
 });
 
 describe('the version contract', () => {
-  it('package.json rides at 2.188.0', () => {
-    expect(pkg.version).toBe('2.188.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.188.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.188.0');
+  it('package.json rides at 2.189.0', () => {
+    expect(pkg.version).toBe('2.189.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.189.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.189.0');
   });
 });

@@ -1,6 +1,16 @@
 // GET /api/org/review-activity (v2.64.0 organization console, v2.65.0 depth,
 // v2.67.0 the morning note, v2.68.0 the note rings the bell)
 //
+// v2.189.0 — the roster keeps its week: `stats` grew `weekReviewerRows` —
+// the per-reviewer visit counts over the SAME trailing-7-day window the
+// `weekReviewers` NUMBER has counted since v2.64.0, loudest-first (ties
+// A→Z, the yesterday roster's ordering), capped at 24 by the same
+// crowded-desk rule. Additive under a NEW name: `weekReviewers` (the
+// distinct-reviewer count) predates it and keeps its meaning — no
+// consumer re-keys. The panel's week strip ("who pulled the week") and
+// the branches CSV's "Reviews by reviewer (7d)" sub-section speak these
+// rows; an empty window derives to an honest empty array.
+//
 // v2.68.0 — the bell: the morning note grew a second voice. After deriving
 // the `yesterday` digest, the read statefully ensures (dedupe key = the
 // summarized EAT day) that a populated yesterday also lands a category-HR
@@ -126,7 +136,7 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
     if (reviewer) visitWhere.visitedByName = reviewer;
     if (branch) visitWhere.leaveRequest = { storeId: branch };
 
-    const [recentRows, total, weekVisits, weekClears, weekReviewerRows, branchRows, reviewerVisits, reviewerClears, reviewerLast, yesterdayRows] = await Promise.all([
+    const [recentRows, total, weekVisits, weekClears, weekReviewerNames, weekRosterRaw, branchRows, reviewerVisits, reviewerClears, reviewerLast, yesterdayRows] = await Promise.all([
       rawDb.leaveReviewVisit.findMany({
         where: visitWhere,
         orderBy: { createdAt: 'desc' },
@@ -154,6 +164,16 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
         where: { createdAt: { gte: weekAgo } },
         distinct: ['visitedByName'],
         select: { visitedByName: true },
+      }),
+      // v2.189.0: the WEEK roster's raw rows — the same trailing-7-day
+      // window the counts above read, visit-scale (a week of desk visits is
+      // small), from which the per-reviewer aggregation below derives.
+      // Deliberately NOT narrowed by visitWhere: the week figure is the
+      // org-wide "who pulled the week" — the same contract `stats` already
+      // follows (the tiles never re-key under the filters).
+      rawDb.leaveReviewVisit.findMany({
+        where: { createdAt: { gte: weekAgo } },
+        select: { visitedByName: true, clearedRecheck: true },
       }),
       // v2.65.0: per-store visit counts for the filter chips — read
       // org-wide and NEVER narrowed by the caller's filters, so the chip
@@ -247,6 +267,26 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
       .slice(0, 24)
       .map(([name, visits]) => ({ name, visits }));
 
+    // v2.189.0: the WEEK roster — the SAME trailing-7-day window the
+    // `weekReviewers` count reads, now named. One pass over the week's raw
+    // rows: visits and corrections answered per reviewer, loudest-first
+    // (ties A→Z — the exact ordering contract the yesterday roster
+    // follows), capped at 24 so a crowded week cannot bloat the payload.
+    // Additive under `weekReviewerRows` (the `weekReviewers` NUMBER — the
+    // distinct-reviewer count — predates it and keeps its meaning; no
+    // consumer re-keys). An empty window derives to an honest empty array.
+    const weekRosterAgg = new Map<string, { visits: number; clears: number }>();
+    for (const row of weekRosterRaw) {
+      const entry = weekRosterAgg.get(row.visitedByName) ?? { visits: 0, clears: 0 };
+      entry.visits += 1;
+      if (row.clearedRecheck) entry.clears += 1;
+      weekRosterAgg.set(row.visitedByName, entry);
+    }
+    const weekRoster = [...weekRosterAgg.entries()]
+      .sort((a, b) => b[1].visits - a[1].visits || a[0].localeCompare(b[0]))
+      .slice(0, 24)
+      .map(([name, agg]) => ({ name, visits: agg.visits, clears: agg.clears }));
+
     // v2.68.0 — the morning note rings the bell. Same figures, second
     // voice: once per summarized day (statefully deduped on deskDigestDate),
     // a populated yesterday also lands a bell row for every org-role user.
@@ -300,7 +340,11 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
           total,
           weekVisits,
           weekClears,
-          weekReviewers: weekReviewerRows.length,
+          weekReviewers: weekReviewerNames.length,
+          // v2.189.0: the roster — additive, bounded (24), loudest-first,
+          // named `weekReviewerRows` so the existing `weekReviewers` count
+          // keeps its meaning (no consumer re-keys).
+          weekReviewerRows: weekRoster,
         },
         recent: recentRows.map((v) => ({
           id: v.id,

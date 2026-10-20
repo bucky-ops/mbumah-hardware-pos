@@ -141,7 +141,10 @@ describe('GET /api/org/review-activity - the org audit read', () => {
     expect(RA).toMatch(/count\(\{\s*where:\s*\{\s*createdAt:\s*\{\s*gte: weekAgo \}\s*\}\s*\}\)/);
     expect(RA).toMatch(/count\(\{\s*where:\s*\{\s*createdAt:\s*\{\s*gte: weekAgo \},\s*clearedRecheck: true\s*\}\s*\}\)/);
     expect(RA).toContain("distinct: ['visitedByName']");
-    expect(RA).toContain('weekReviewers: weekReviewerRows.length');
+    // v2.189.0 — the local rides `weekReviewerNames` (the WEEK roster now
+    // owns the plural reading under `stats.weekReviewerRows`; the count
+    // keeps its meaning under its own name).
+    expect(RA).toContain('weekReviewers: weekReviewerNames.length');
   });
 
   it('the payload shape is { generatedAt, stats, recent } with ISO visit times', () => {
@@ -161,7 +164,11 @@ describe('Org console - the DeskActivity audit panel', () => {
 
   it('primitives declare the DeskActivityData payload type', () => {
     expect(PRIM).toContain('export interface DeskActivityData');
-    expect(PRIM).toMatch(/stats:\s*\{\s*total: number;\s*weekVisits: number;\s*weekClears: number;\s*weekReviewers: number\s*\}/);
+    // v2.189.0 — stats grew the optional `weekReviewerRows` roster (the
+    // `weekReviewers` NUMBER predates it and keeps its meaning); the
+    // four original fields keep their exact contiguity.
+    expect(PRIM).toMatch(/stats:\s*\{\s*total: number;\s*weekVisits: number;\s*weekClears: number;\s*weekReviewers: number/);
+    expect(PRIM).toContain('weekReviewerRows?: Array<{ name: string; visits: number; clears: number }>;');
   });
 
   it('the panel renders the ledger heading with the live pill', () => {
