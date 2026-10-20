@@ -54,6 +54,13 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
       // capped at 10 (the tooltip is a read, not an archive; the card says
       // "and N more" when the count outruns the cap). Same 7-day window as
       // the count above, so the two never disagree about what failed.
+      // v2.167.0 assessment (built nowhere, kept here): riding the stamps
+      // on the ledger rows' metadata instead would couple this read to
+      // each dispatcher's INTERNAL result shape (hourly rows carry
+      // `results`, nightly rows carry `ledgerResults`) — a parse-heavy
+      // contract with two writers to save one indexed query on a card
+      // read. The separate findMany stays: format-agnostic, same window,
+      // one query, honestly capped.
       rawDb.systemLog.findMany({
         where: { action: PARTIAL_FAILURE_ACTION, createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },

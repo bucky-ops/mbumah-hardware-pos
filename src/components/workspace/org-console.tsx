@@ -323,6 +323,24 @@ export function OrgConsole() {
   const [automationError, setAutomationError] = useState('');
   const [automationReload, setAutomationReload] = useState(0);
 
+  /* v2.167.0: the pill's exact-tick sentence is computed ONCE and rides
+     BOTH the native title and the sr-only line — two surfaces, one truth,
+     so the keyboard copy can never drift from the hover copy. Absent or
+     empty stamps return undefined: no tooltip is invented (the v2.166.0
+     honesty rule, now shared by both surfaces). */
+  function failedTickTooltip(automation: AutomationSummary): string | undefined {
+    if (!automation.failedTickStamps || automation.failedTickStamps.length === 0)
+      return undefined;
+    if (!automation.lastTick) return undefined;
+    return `Failed ticks: ${automation.failedTickStamps
+      .map((s) => formatEatStamp(new Date(s)))
+      .join(' · ')}${
+      automation.lastTick.failedCount > automation.failedTickStamps.length
+        ? ` · and ${automation.lastTick.failedCount - automation.failedTickStamps.length} more`
+        : ''
+    }`;
+  }
+
   function findDiagnosticFor(
     list: BranchDiagnostic[],
     store: OrgSummaryStore,
@@ -1107,6 +1125,11 @@ export function OrgConsole() {
                   title={`Tick recorded ${formatEatStamp(new Date(automation.lastTick.at))}`}
                 >
                   Last tick {timeAgo(automation.lastTick.at)}
+                  {/* v2.167.0: the exact stamp rides the screen-reader line
+                      too — the tooltip stops being mouse-only. */}
+                  <span className="sr-only">
+                    (recorded {formatEatStamp(new Date(automation.lastTick.at))})
+                  </span>
                 </span>
                 {/* v2.165.0: WHICH heartbeat. From v2.165.0 both dispatchers
                     write the ledger, so the row's own name is the honest
@@ -1124,21 +1147,19 @@ export function OrgConsole() {
                 {automation.lastTick.failedCount > 0 && (
                   <span
                     data-testid="automation-failed-count"
-                    className="inline-flex items-center rounded-full border border-red-300 bg-red-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-red-700"
-                    title={
-                      automation.failedTickStamps && automation.failedTickStamps.length > 0
-                        ? `Failed ticks: ${automation.failedTickStamps
-                            .map((s) => formatEatStamp(new Date(s)))
-                            .join(' · ')}${
-                            automation.lastTick.failedCount > automation.failedTickStamps.length
-                              ? ` · and ${automation.lastTick.failedCount - automation.failedTickStamps.length} more`
-                              : ''
-                          }`
-                        : undefined
-                    }
+                    className="inline-flex items-center rounded-full border border-red-300 bg-red-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-1"
+                    title={failedTickTooltip(automation)}
+                    /* v2.167.0: the pill reaches the keyboard — focusable
+                       while it has an exact-tick sentence to say (a focus
+                       ring IS the affordance), never a dead tab stop when
+                       the stamps are absent. */
+                    tabIndex={failedTickTooltip(automation) ? 0 : undefined}
                   >
                     {automation.lastTick.failedCount} failed tick
                     {automation.lastTick.failedCount === 1 ? '' : 's'} in 7d
+                    {failedTickTooltip(automation) && (
+                      <span className="sr-only">{failedTickTooltip(automation)}</span>
+                    )}
                   </span>
                 )}
               </div>
@@ -1156,16 +1177,21 @@ export function OrgConsole() {
                       data-job-ok={job.ok ? 'true' : 'false'}
                       /* v2.166.0: the chip says what it OWNS (the register's
                           card-sized echo) and wears cursor-help while doing
-                          it; an unknown name renders bare - never a guess. */
+                          it; an unknown name renders bare - never a guess.
+                          v2.167.0: hinted chips also reach the KEYBOARD -
+                          a tab stop with a family-colored focus ring, and
+                          the ownership line rides an sr-only copy so the
+                          hint is no longer mouse-only. */
                       title={AUTOMATION_SUBJOB_HINTS[job.name]}
+                      tabIndex={AUTOMATION_SUBJOB_HINTS[job.name] ? 0 : undefined}
                       className={
                         job.ok
                           ? `inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700${
                               AUTOMATION_SUBJOB_HINTS[job.name] ? ' cursor-help' : ''
-                            }`
+                            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-1`
                           : `inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700${
                               AUTOMATION_SUBJOB_HINTS[job.name] ? ' cursor-help' : ''
-                            }`
+                            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-1`
                       }
                     >
                       <span
@@ -1186,6 +1212,13 @@ export function OrgConsole() {
                         </span>
                       )}
                       {!job.ok && <span className="tabular-nums">· HTTP {job.status}</span>}
+                      {/* v2.167.0: the ownership line rides an sr-only copy
+                          (only when hinted) — screen readers get the same
+                          sentence the hover tooltip says, and an unhinted
+                          chip stays silent, never a guess. */}
+                      {AUTOMATION_SUBJOB_HINTS[job.name] && (
+                        <span className="sr-only"> — {AUTOMATION_SUBJOB_HINTS[job.name]}</span>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.167.0] The hints reach the keyboard
+
+v2.166.0's ownership hints and exact failed-tick stamps lived in native `title` tooltips — invisible to a keyboard and to a screen reader. The hints stop being mouse-only: what the hover said, the tab order and the assistive line now say too.
+
+### Added
+- **Hinted sub-job chips are focusable** (`org-console.tsx`): a chip with an ownership hint becomes a tab stop (`tabIndex` conditioned on the SAME lookup as the title — an unknown name never becomes a dead tab stop) and wears a family-colored focus ring as the affordance (`focus-visible:outline-none focus-visible:ring-2` + `ring-emerald-600` for ok / `ring-red-600` for a failure, `ring-offset-1`) — full-opacity families, the card's contrast discipline extended to focus.
+- **Every hint and exact stamp rides an sr-only copy**: the chip carries `<span class="sr-only"> — {hint}</span>` (guarded by the same hinted lookup, so unhinted chips stay silent); the failed-tick pill and the Last-tick line carry their exact EAT sentences too. Exactly three sr-only copies live in the card.
+- **The failed-tick sentence is computed ONCE**: a pure `failedTickTooltip(automation)` helper now feeds BOTH the native `title` and the sr-only line — two surfaces, one truth, the keyboard copy can never drift from the hover copy. The v2.166.0 honesty contract (absent stamps → `undefined` → no tooltip invented) is preserved verbatim.
+- **The register closes over all nine** (`docs/cron-operations.md`): the sub-job table grows from six rows to nine — the nightly dispatcher's exclusive sub-jobs (`reconciliation`, `retention`, `hr-report-digests`) had only lived in the cadence prose since v2.165.0 — and a drift pin asserts every `AUTOMATION_SUBJOB_HINTS` key has a row in the table (Option #1, both directions).
+- **The "stamps via ledger metadata" idea is assessed on the record** (Option #3): a dated comment in `src/app/api/org/automation/route.ts` documents why the separate `findMany` stays — riding the stamps on ledger metadata would couple the read to each dispatcher's internal result shape (`results` vs `ledgerResults`) to save one indexed query on a card read. Assessed, deliberately not built.
+
+### Changed
+- `src/tests/keyboard-hints-v2167.test.ts` (NEW, 13 tests): focusability/focus-ring/sr-only contracts, the single-source tooltip helper and its honesty guards, the three-copy card count, the nine-key drift pin against the register, the doc notes, and the API's on-the-record assessment (still read-only). `chip-hints-v2166.test.ts` re-anchors the table-heading pin with a dated note (six → nine).
+
 ## [2.166.0] The chips explain themselves
 
 A first-time owner staring at the Automation pulse card should not need the cron guide open in another tab — the sub-job chips now say what they own at the point of reading, and a red day is datable without leaving the card.

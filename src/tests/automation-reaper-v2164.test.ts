@@ -93,7 +93,10 @@ describe('the automation card - the chip and the headline pill', () => {
 
 describe('the docs - six sub-jobs and the parity appendix', () => {
   it('cron-operations.md names the reaper as the sixth sub-job with its scope rule', () => {
-    expect(cronDoc).toContain('## The sub-jobs (six, as of v2.163.0)');
+    // v2.167.0 re-anchor (dated): the table grew six -> nine (the nightly-only
+    // sub-jobs joined as rows), so the heading renamed; the nine-key drift pin
+    // lives in keyboard-hints-v2167.test.ts.
+    expect(cronDoc).toContain('## The sub-jobs (nine, as of v2.167.0)');
     expect(cronDoc).toContain('| `session-reaper` |');
     expect(cronDoc).toContain('never `lastActiveAt`');
     expect(cronDoc).toContain('extended v2.164.0');

@@ -57,7 +57,10 @@ describe('the chips say what they own', () => {
 
   it('the register stays the canonical copy (the doc still holds the table)', () => {
     expect(cronDoc).toContain('| `outbox` | outbox_events pump |');
-    expect(cronDoc).toContain('## The sub-jobs (six, as of v2.163.0)');
+    // v2.167.0 re-anchor (dated): the table grew from six to nine — the
+    // nightly-only sub-jobs joined as rows, so the heading renamed; the
+    // drift pin for ALL nine keys lives in keyboard-hints-v2167.test.ts.
+    expect(cronDoc).toContain('## The sub-jobs (nine, as of v2.167.0)');
   });
 });
 

@@ -84,7 +84,13 @@ confirm it, and neither requires shell access:
   tick. Rows/day: ~25 with the pinger armed (~2/day without). SystemLog
   retention sweeps own the growth.
 
-## The sub-jobs (six, as of v2.163.0)
+## The sub-jobs (nine, as of v2.167.0)
+
+<!-- v2.167.0: the table grew from six to nine — the nightly dispatcher's
+     three exclusive sub-jobs (reconciliation, retention, hr-report-digests)
+     had only lived in the cadence prose since v2.165.0; the register is now
+     the COMPLETE card-sized echo of AUTOMATION_SUBJOB_HINTS, and a drift pin
+     asserts every hint key has a row here. -->
 
 | name | owns | notes |
 |------|------|-------|
@@ -94,6 +100,9 @@ confirm it, and neither requires shell access:
 | `debt-reminders` | overdue debt statements | 7-day per-ledger anti-spam throttle |
 | `b2c-recovery` | failed/stuck B2C transfers | gate-allowed re-sends only (v2.155.0) |
 | `session-reaper` | **expired auth sessions** | one `deleteMany` on the indexed `expiresAt` (v2.163.0); rides BOTH dispatchers since v2.165.0 (hourly 03:00 UTC + nightly 02:30 UTC — the idempotent deleteMany makes the overlap harmless); `runWithoutTenant` — Session is a global, tenant-exempt table; scope discipline: reads ONLY `expiresAt`, never `lastActiveAt` (idle expiry stays the portal guard's contract); every sweep leaves its own INFO `SESSIONS_REAPED` row, and a reaped-zero sweep is a SUCCESS |
+| `reconciliation` | the nightly financial summaries rebuild | nightly-only (02:30 UTC) since v2.165.0 |
+| `retention` | the expired-record purge | nightly-only; honors each record's retention grace period |
+| `hr-report-digests` | the scheduled HR report digests | nightly-only; delivery is RESEND_API_KEY-gated |
 
 ## Reading the heartbeat: the Automation pulse card
 
@@ -105,6 +114,12 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
   as the line's tooltip, v2.165.0), the dispatcher that fired when the row
   names one (`· hourly dispatcher` / `· nightly dispatcher`, v2.165.0),
   per-sub-job chips, and the 7-day `CRON_DISPATCH_PARTIAL_FAILURE` count.
+- **The hints reach the keyboard (v2.167.0)**: hinted sub-job chips are
+  focusable (a tab stop with a family-colored focus ring — emerald for ok,
+  red for a failure) and every hint AND exact stamp also rides an sr-only
+  line, so the ownership copy and the failed-tick datetimes are no longer
+  mouse-only. Unhinted names stay bare and unfocusable — never a guess,
+  never a dead tab stop.
 - `failedTicks7d`: partial-failure rows in the last 7 days.
 - `secretConfigured`: whether `CRON_SECRET` is set server-side — the honest
   tick-gate posture (fail-open ticks render the amber "CRON_SECRET unset"
