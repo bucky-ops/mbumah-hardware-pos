@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowDownRight, ArrowUpRight, Banknote, CalendarCheck2, Clock3, HandCoins, PackageOpen, ShoppingCart, TrendingUp } from 'lucide-react';
-import { CountUp, Sparkline, kes, num, type KpiSummaryData, type StoreRow } from './primitives';
+import { CountUp, Sparkline, WeekDeltaChip, kes, num, type KpiSummaryData, type StoreRow } from './primitives';
 
 /** Compact KES for tight chips: 437k / 1.2m / 97.5k. */
 const kShort = (v: number): string =>
@@ -25,7 +25,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
    * answer) keeps the modal's org-wide story only, never a crash or a
    * fabricated shape.
    */
-  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;
+  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;
   /** Branch names for the drill-down rows, joined by storeId (never row order). */
   stores?: StoreRow[];
 }) {
@@ -38,12 +38,15 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   // order), loudest week first; a quiet branch still speaks (honest zeros,
   // a flat line). Only built when BOTH halves arrived: the trend block AND
   // the branch names (a branch manager's denied summary leaves both null).
+  // v2.177.0: the rows carry the prior week through (still the same payload
+  // entries — no new fetch) so each row can speak its own verdict chip.
   const branchWeek = perStoreTrend && stores.length > 0
     ? perStoreTrend
         .map((t) => ({
           storeId: t.storeId,
           spark: t.spark,
           weekTotal: t.weekTotal,
+          priorWeekTotal: t.priorWeekTotal,
           name: stores.find((s) => s.id === t.storeId)?.name ?? 'Branch',
         }))
         .sort((a, b) => b.weekTotal - a.weekTotal)
@@ -163,7 +166,13 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                       <Sparkline data={b.spark} stroke="#64748b" width={72} height={20} />
                       <span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>
                     </span>
-                    <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{kes(b.weekTotal)}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {/* v2.177.0: the row's own verdict — the SAME chip the
+                          table and the strip draw (one week, one vocabulary);
+                          no prior week renders nothing, never a guess. */}
+                      <WeekDeltaChip current={b.weekTotal} prior={b.priorWeekTotal ?? 0} />
+                      <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{kes(b.weekTotal)}</span>
+                    </span>
                   </li>
                 ))}
               </ul>

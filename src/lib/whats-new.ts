@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.177.0',
+    title: 'The week by branch learns its own variance',
+    bullets: [
+      'Every branch\u2019s seven-day shape now wears a verdict: a small up or down percentage under its sparkline \u2014 on the branches table, the console\u2019s store strip, and the Revenue drill-down alike.',
+      'The colors speak plainly: green grew, red fell, and a week that didn\u2019t move says so calmly \u2014 no branch is dressed up as a winner or a loser.',
+      'A branch with no prior week shows no percentage at all \u2014 when there is no real comparison, nothing is invented.',
+    ],
+  },
+  {
     version: '2.176.0',
     title: 'The expert console reads the week by branch',
     bullets: [

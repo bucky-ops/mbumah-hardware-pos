@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.177.0] The week by branch learns its own variance
+
+The three trend surfaces speak every branch's week shape (v2.175.0 the table, v2.176.0 the strip and the drill-down) — but a shape without a verdict still forces the reader to do the math. This release every branch's week learns its own week-over-week verdict: up, down, or flat, drawn once, spoken once, hidden when there is no comparison. Still ZERO new queries — the prior-week per-branch slices have ridden the summary payload's `topMover` math since v2.174.0.
+
+### Added
+- **`src/lib/org/summary-trend.ts` gains `weekDelta`**: ONE honest classifier every delta chip speaks. The header card's rule, per branch: a branch with NO prior week has NO comparison — `null`, never a fabricated "+0%" or an invented ∞; a current week that exactly matches prior reads `flat` at 0%, which IS a real comparison and is spoken as one. The pct reuses the SAME `variancePct` formula the org badge uses, so a branch chip and the header badge can never disagree about the math — only about the data they were handed. Pure: numbers in, verdict out, no clock.
+- **`GET /api/org/summary`**: each `perStoreTrend` entry gains `priorWeekTotal` — the SAME per-store prior-week slice the v2.174.0 top mover already computed (`priMap`; still zero new queries). Additive and round2'd; every existing key untouched.
+- **`WeekDeltaChip` + `weekDeltaWords` (org primitives)**: ONE visible vocabulary for all three trend surfaces — up `emerald-700` / down `red-700` (the v2.159 contrast family the header badge speaks), flat calm `muted-foreground` (a week that didn't move is neither a success nor a failure), lucide `ArrowUpRight`/`ArrowDownRight`/`Minus` at h-2.5, tabular-nums at 10px. The chip is `aria-hidden` decoration; `weekDeltaWords` is its accessible twin ("Up 12.4% vs prior week" / "Flat vs prior week"), `null` when there is no comparison.
+- **The dashboard's branches table**: the 7d cell stacks the chip under its spark; the tooltip gains the prior week (`7-day revenue KES X (gross) · prior KES Y`) exactly when a prior exists; a SECOND sr-only sentence speaks the verdict while the v2.175.0 base clause keeps its exact shape. No prior week → no chip, no words, nothing fabricated.
+- **The expert console's store strip**: the same chip stacks under each card's spark, the same tooltip composition, the same second sr-only sentence — one week, one vocabulary, two surfaces.
+- **The Revenue drill-down's week-by-branch rows**: each row carries its own verdict chip beside the gross week total (the rows now pass the prior week through — still the same payload entries, no new fetch).
+- **TOLERANT by contract**: `priorWeekTotal?` is optional in all three perStoreTrend declarations (primitives, dashboard card, KPI row) — an older cached response degrades to no chip, never a crash.
+
+### Tests
+- `src/tests/branch-variance-v2177.test.ts` (NEW): `weekDelta` EXECUTED (the honesty rule, flat, rounding parity with `variancePct`), the API contract (`priorWeekTotal` from `priMap`, round2'd, additive), the tolerant declarations pinned in all three files, the three surface contracts (chip classes, tooltip composition, the byte-stable base sr-only clause + the second verdict sentence, honest absence), the drill-down pass-through, and the release surfaces.
+
 ## [2.176.0] The expert console reads the week by branch
 
 The org dashboard's branches table has spoken per-branch week shapes since v2.175.0, but the expert console (`/console`) — the other org surface, already polling the SAME `/api/org/summary` response every 30 seconds — stayed shape-blind. This release the week's shape reaches the expert console: no new queries, one shared vocabulary.

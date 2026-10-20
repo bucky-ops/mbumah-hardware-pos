@@ -8,6 +8,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
+import { weekDelta } from '@/lib/org/summary-trend';
 
 // ── /api/org/summary row (per-store matrix) ──────────────────────────────────
 export interface StoreRow {
@@ -48,7 +50,7 @@ export interface OrgSummaryData {
    * cached response degrades to a muted "—", never a crash or a fabricated
    * shape (the org dashboard's branches table speaks the same contract).
    */
-  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;
+  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;
   /** v2.23.0: per-branch HR drill-down rows (ORG scope + HR module on only). */
   hrPerStore?: Array<{
     storeId: string;
@@ -251,6 +253,58 @@ export function Sparkline({ data, stroke = '#10b981', width = 96, height = 28 }:
       <circle cx={last[0]} cy={last[1]} r="2.5" fill={stroke} className="anim-pulse-dot" />
     </svg>
   );
+}
+
+// ── WeekDeltaChip (v2.177.0) — the branch's week-vs-prior verdict ──────────
+// ONE visible vocabulary for all three trend surfaces (the dashboard's
+// branches table, the expert console's store strip, the drill-down rows):
+// the pure lib's weekDelta classifies, the chip only draws — up emerald-700
+// / down red-700 (the v2.159 contrast family the header badge speaks), flat
+// calm muted (a week that didn't move is not a success or a failure), and
+// NO prior week renders NOTHING — no fabricated "+0%", no invented ∞.
+// aria-hidden decoration: the accessible verdict rides the caller's
+// sr-only sentence (weekDeltaWords below), never this glyph.
+export function WeekDeltaChip({ current, prior, className = '' }: {
+  current: number; prior: number; className?: string;
+}) {
+  const d = weekDelta(current, prior);
+  if (!d) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums ${
+        d.dir === 'up'
+          ? 'text-emerald-700 dark:text-emerald-400'
+          : d.dir === 'down'
+            ? 'text-red-700 dark:text-red-400'
+            : 'text-muted-foreground'
+      } ${className}`}
+    >
+      {d.dir === 'up' ? (
+        <ArrowUpRight className="h-2.5 w-2.5" aria-hidden="true" />
+      ) : d.dir === 'down' ? (
+        <ArrowDownRight className="h-2.5 w-2.5" aria-hidden="true" />
+      ) : (
+        <Minus className="h-2.5 w-2.5" aria-hidden="true" />
+      )}
+      {d.dir === 'up' ? '+' : ''}
+      {Math.abs(d.pct)}%
+    </span>
+  );
+}
+
+/**
+ * The chip's accessible twin — the words the callers append as their own
+ * sr-only sentence ("Up 12.4% vs prior week" / "Flat vs prior week"), or
+ * null when there is NO comparison (the caller then stays silent — the
+ * base "7-day revenue KES X" clause already said everything there is).
+ * One phrasing, three surfaces: the same week never reads two ways.
+ */
+export function weekDeltaWords(current: number, prior: number): string | null {
+  const d = weekDelta(current, prior);
+  if (!d) return null;
+  if (d.dir === 'flat') return 'Flat vs prior week';
+  return `${d.dir === 'up' ? 'Up' : 'Down'} ${Math.abs(d.pct)}% vs prior week`;
 }
 
 // ── Health gauge (circular, animates 0 -> score over 1.5s) ───────────────────
