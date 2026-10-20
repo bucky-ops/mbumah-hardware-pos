@@ -192,7 +192,7 @@ describe('the API contract - one findMany feeds every spark', () => {
 
 describe('the card contract - the 7d column and the door', () => {
   it('OrgSummary grows the TOLERANT perStoreTrend (optional + nullable, keyed by storeId)', () => {
-    expect(card).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;');
+    expect(card).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;');
   });
 
   it('the branches table gains the 7d trend column, beside the revenue column it decorates', () => {
@@ -211,7 +211,10 @@ describe('the card contract - the 7d column and the door', () => {
   });
 
   it('the numbers ride the title tooltip AND an sr-only clause — the svg stays aria-hidden decoration', () => {
-    expect(card).toContain('title={`7-day revenue ${formatKES(storeTrend.weekTotal)} (gross)`}');
+    // evolved for v2.177.0: the tooltip gains the prior week exactly when one
+    // exists; the base sr-only clause keeps its exact v2.175.0 shape (the
+    // verdict rides a SECOND sentence).
+    expect(card).toContain("title={`7-day revenue ${formatKES(storeTrend.weekTotal)} (gross)${storeTrend.priorWeekTotal ? ` · prior ${formatKES(storeTrend.priorWeekTotal)}` : ''}`}");
     expect(card).toContain('<span className="sr-only">7-day revenue {formatKES(storeTrend.weekTotal)}</span>');
   });
 
@@ -246,7 +249,10 @@ describe('the card contract - the 7d column and the door', () => {
   });
 
   it('the card stays math-free — it imports the resolver and the primitive, never the trend lib', () => {
-    expect(card).toContain("import { Sparkline } from '@/components/org/primitives';");
+    // evolved for v2.177.0: the import grew the WeekDeltaChip twins — the
+    // chip still imports the PRIMITIVES module, never the trend lib (the
+    // lib stays server/pure-side; primitives owns the client vocabulary).
+    expect(card).toContain("import { Sparkline, WeekDeltaChip, weekDeltaWords } from '@/components/org/primitives';");
     expect(card).not.toContain("from '@/lib/org/summary-trend'");
     expect(card).toContain("import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';");
   });
@@ -287,11 +293,11 @@ describe('the release surfaces', () => {
     expect(feed.indexOf('2.175.0')).toBeLessThan(feed.indexOf('2.174.0'));
   });
 
-  it('package.json leads the current version in all three slots (re-anchored for 2.176.0) + this round\u2019s verify script', () => {
+  it('package.json leads the current version in all three slots (re-anchored for 2.177.0) + this round\u2019s verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.176.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.176.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.176.0');
+    expect(pkg.version).toBe('2.177.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.177.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.177.0');
     expect(pkg.scripts['verify:v2-175-0']).toBe('node scripts/verify-v2-175-0.mjs');
   });
 });

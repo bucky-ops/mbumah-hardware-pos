@@ -217,3 +217,28 @@ export function storeSparks(
     days,
   );
 }
+
+/** One branch's week-vs-prior verdict, as the delta chips speak it. */
+export interface WeekDelta {
+  /** round2'd week-over-week variance in percent (the lib's own formula). */
+  pct: number;
+  /** 'up' grows, 'down' falls, 'flat' doesn't move — never guessed. */
+  dir: 'up' | 'down' | 'flat';
+}
+
+/**
+ * v2.177.0: the week by branch learns its own variance — ONE honest
+ * classifier every delta chip speaks (branches table, console strip,
+ * drill-down rows). The header card's rule, per branch: a branch with NO
+ * prior week has NO comparison — null, never a fabricated "+0%" or an
+ * infinity; a current week that exactly matches prior reads 'flat' at
+ * 0%, which IS a real comparison and is spoken as one. The pct reuses
+ * the SAME variancePct formula the header badge uses, so a branch chip
+ * and the org badge can never disagree about the math — only about the
+ * data they were handed. Pure: numbers in, verdict out, no clock.
+ */
+export function weekDelta(current: number, prior: number): WeekDelta | null {
+  if (prior <= 0) return null;
+  const pct = variancePct(current, prior);
+  return { pct, dir: pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat' };
+}

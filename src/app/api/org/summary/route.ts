@@ -267,10 +267,16 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
     // read). Additive: `perStoreTrend` keys by storeId so the card can
     // join it against summary.stores without relying on row order, and a
     // branch with an empty week draws the honest flat line (zeros).
+    // v2.177.0: each entry gains `priorWeekTotal` — the SAME per-store
+    // prior-week slice the v2.174.0 top mover already computed (priMap;
+    // still ZERO new queries). The client's delta chips compare through
+    // the lib's weekDelta, which returns null when a branch has no prior
+    // week — the chip hides, the shape stays, nothing is fabricated.
     const perStoreTrend = stores.map((s) => ({
       storeId: s.id,
       spark: storeSparks(trendRows, s.id, windows.startToday, TREND_DAYS),
       weekTotal: round2(curMap.get(s.id)?.amount ?? 0),
+      priorWeekTotal: round2(priMap.get(s.id)?.amount ?? 0),
     }));
 
     // EMS v2.20.0 (spec Phase 4.8): HR tiles for the organization console —

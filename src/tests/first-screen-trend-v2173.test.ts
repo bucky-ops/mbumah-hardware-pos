@@ -242,7 +242,9 @@ describe('the API contract - additive, same vocabulary, same gate', () => {
 
 describe('the card contract - the trend strip', () => {
   it('reuses the expert console\u2019s Sparkline primitive (one shape language)', () => {
-    expect(card).toContain("import { Sparkline } from '@/components/org/primitives';");
+    // evolved for v2.177.0: the import line grew the WeekDeltaChip twins
+    // (one shape language now carries the verdict chips too).
+    expect(card).toContain("import { Sparkline, WeekDeltaChip, weekDeltaWords } from '@/components/org/primitives';");
   });
 
   it('renders two trend strips with their testids', () => {

@@ -24,7 +24,7 @@ import { ExpertModules } from '@/components/org/experts';
 import { KpiRow } from '@/components/org/kpi-row';
 import { ChangelogModal, CommandPalette, ConsoleFooter, ConsoleHeader, LoginDialog, ShortcutsModal, type SessionUser } from '@/components/org/chrome';
 import { SectionErrorBoundary } from '@/components/error-boundary';
-import { KenyaMap, Sparkline, kes, num, timeAgo, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
+import { KenyaMap, Sparkline, WeekDeltaChip, weekDeltaWords, kes, num, timeAgo, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
 import { authorizedFetchJson } from '@/lib/api';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 import { PeoplePayrollByBranch, PeoplePayrollUnavailable } from '@/components/finance/people-payroll-by-branch';
@@ -313,16 +313,24 @@ export default function OrgConsolePage() {
                     (the svg is aria-hidden decoration); an older cached
                     summary without perStoreTrend — or a missing entry —
                     keeps a calm dash row at the same height, never a
-                    fabricated shape. */}
+                    fabricated shape. v2.177.0: the week learns its own
+                    variance — the WeekDeltaChip stacks under the spark (the
+                    lib's weekDelta math, one vocabulary across all three
+                    trend surfaces), the tooltip gains the prior week, and a
+                    second sr-only sentence speaks the verdict. No prior week
+                    → no chip, no words, nothing fabricated. */}
                 {(() => {
                   const storeTrend = summary?.perStoreTrend?.find((t) => t.storeId === s.id) ?? null;
+                  const deltaWords = storeTrend ? weekDeltaWords(storeTrend.weekTotal, storeTrend.priorWeekTotal ?? 0) : null;
                   return storeTrend ? (
                     <div
-                      className="mt-1.5 flex w-[76px] items-center"
-                      title={`7-day revenue ${kes(storeTrend.weekTotal)} (gross)`}
+                      className="mt-1.5 flex w-[76px] flex-col gap-0.5"
+                      title={`7-day revenue ${kes(storeTrend.weekTotal)} (gross)${storeTrend.priorWeekTotal ? ` · prior ${kes(storeTrend.priorWeekTotal)}` : ''}`}
                     >
                       <Sparkline data={storeTrend.spark} stroke="#64748b" width={72} height={20} />
+                      <WeekDeltaChip current={storeTrend.weekTotal} prior={storeTrend.priorWeekTotal ?? 0} />
                       <span className="sr-only">7-day revenue {kes(storeTrend.weekTotal)}</span>
+                      {deltaWords ? <span className="sr-only">{deltaWords}</span> : null}
                     </div>
                   ) : (
                     <div className="mt-1.5 flex min-h-[20px] items-center" aria-hidden="true">

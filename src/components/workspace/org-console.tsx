@@ -63,7 +63,7 @@ import {
 // v2.173.0: the first screen learns to trend — the Sparkline primitive the
 // expert console's KPI row speaks, reused so both consoles draw the same
 // shape language (aria-hidden svg, pulse dot on the last point).
-import { Sparkline } from '@/components/org/primitives';
+import { Sparkline, WeekDeltaChip, weekDeltaWords } from '@/components/org/primitives';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
@@ -179,7 +179,7 @@ interface OrgSummary {
    * optional + nullable: an older cached response degrades to a muted
    * "—" in the table's 7d column, never a crash or a fabricated shape.
    */
-  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;
+  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;
   recentAudit: Array<{
     id: string;
     storeId: string | null;
@@ -1241,6 +1241,13 @@ export function OrgConsole() {
                   // fabricated shape.
                   const storeTrend =
                     summary.perStoreTrend?.find((t) => t.storeId === store.id) ?? null;
+                  // v2.177.0: the accessible verdict for this branch's week —
+                  // computed once here, spoken as the SECOND sr-only sentence
+                  // in the 7d cell (null → no words, the base clause already
+                  // said everything there is).
+                  const deltaWords = storeTrend
+                    ? weekDeltaWords(storeTrend.weekTotal, storeTrend.priorWeekTotal ?? 0)
+                    : null;
                   // Safe v2.18.0.0 builder with v2.18.3.0 precise reasons:
                   // path URL on localhost / raw IPs, subdomain URL only when
                   // every safety check passes, null for inactive stores or a
@@ -1290,15 +1297,24 @@ export function OrgConsole() {
                           cards; the numbers live in the title tooltip + the
                           sr-only clause (the svg is aria-hidden decoration).
                           w-[84px] keeps every row's spark column equally
-                          wide so the digits to the right stop dancing. */}
+                          wide so the digits to the right stop dancing.
+                          v2.177.0: the week learns its own variance — the
+                          WeekDeltaChip stacks under the spark (up emerald /
+                          down red / flat muted, the lib's weekDelta math),
+                          the tooltip gains the prior week, and a SECOND
+                          sr-only sentence speaks the verdict so the base
+                          clause keeps its exact shape. No prior week → no
+                          chip, no words, nothing fabricated. */}
                       <td className="w-[84px] px-4 py-3">
                         {storeTrend ? (
                           <div
-                            className="flex w-[76px] items-center"
-                            title={`7-day revenue ${formatKES(storeTrend.weekTotal)} (gross)`}
+                            className="flex w-[76px] flex-col gap-0.5"
+                            title={`7-day revenue ${formatKES(storeTrend.weekTotal)} (gross)${storeTrend.priorWeekTotal ? ` · prior ${formatKES(storeTrend.priorWeekTotal)}` : ''}`}
                           >
                             <Sparkline data={storeTrend.spark} stroke="#64748b" width={72} height={20} />
+                            <WeekDeltaChip current={storeTrend.weekTotal} prior={storeTrend.priorWeekTotal ?? 0} />
                             <span className="sr-only">7-day revenue {formatKES(storeTrend.weekTotal)}</span>
+                            {deltaWords ? <span className="sr-only">{deltaWords}</span> : null}
                           </div>
                         ) : (
                           <span className="text-muted-foreground" aria-hidden="true">

@@ -105,19 +105,19 @@ describe('the tolerant degradations', () => {
 
 describe('the type contract - one tolerant declaration, two surfaces', () => {
   it('OrgSummaryData (expert console) grows the SAME tolerant perStoreTrend the dashboard speaks', () => {
-    expect(primitives).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;');
-    expect(dashboard).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;');
+    expect(primitives).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;');
+    expect(dashboard).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;');
   });
 
   it('KpiRow carries the same optional prop shape + the stores list for names', () => {
-    expect(kpiRow).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;');
+    expect(kpiRow).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;');
     expect(kpiRow).toContain('stores?: StoreRow[];');
   });
 });
 
 describe('the strip contract - the dashboard\'s exact vocabulary', () => {
   it('the page imports the Sparkline primitive — no new chart code', () => {
-    expect(page).toContain("import { KenyaMap, Sparkline, kes");
+    expect(page).toContain("import { KenyaMap, Sparkline, WeekDeltaChip, weekDeltaWords, kes");
   });
 
   it('the strip joins by storeId from the summary it already polls', () => {
@@ -132,7 +132,9 @@ describe('the strip contract - the dashboard\'s exact vocabulary', () => {
   });
 
   it('the gross week total rides the title tooltip AND an sr-only clause', () => {
-    expect(page).toContain('title={`7-day revenue ${kes(storeTrend.weekTotal)} (gross)`}');
+    // evolved for v2.177.0: the tooltip gains the prior week exactly when one
+    // exists; the base sr-only clause keeps its exact v2.176.0 shape.
+    expect(page).toContain("title={`7-day revenue ${kes(storeTrend.weekTotal)} (gross)${storeTrend.priorWeekTotal ? ` · prior ${kes(storeTrend.priorWeekTotal)}` : ''}`}");
     expect(page).toContain('<span className="sr-only">7-day revenue {kes(storeTrend.weekTotal)}</span>');
   });
 
@@ -210,11 +212,11 @@ describe('the release surfaces', () => {
     expect(whatsNew.indexOf('2.176.0')).toBeLessThan(whatsNew.indexOf('2.175.0'));
   });
 
-  it('package.json leads 2.176.0 in all three slots + the verify script', () => {
+  it('package.json leads 2.177.0 in all three slots + the verify script (re-anchored for 2.177.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.176.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.176.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.176.0');
+    expect(pkg.version).toBe('2.177.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.177.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.177.0');
     expect(pkg.scripts['verify:v2-176-0']).toBe('node scripts/verify-v2-176-0.mjs');
   });
 });
