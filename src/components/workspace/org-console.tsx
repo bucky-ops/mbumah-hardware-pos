@@ -24,6 +24,7 @@ import {
   CircleDollarSign,
   Clock,
   Download,
+  ExternalLink,
   LayoutDashboard,
   MessagesSquare,
   PackageOpen,
@@ -108,7 +109,7 @@ import {
   saveHrDrilldownPrefs,
 } from '@/lib/org/hr-drilldown-prefs';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
-import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
+import { buildPeoplePayrollDeepLink, buildRunDeepLinkHref } from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
 // Type-only import: erased at compile time, so the server-only diagnostics
 // data layer never enters the client bundle.
@@ -286,7 +287,13 @@ interface OrgSummary {
         headcountActive: number;
         monthEmploymentCost: number;
         monthAbsenceRatePct: number;
-        latestPayroll: { periodName: string; status: string; createdAt: string } | null;
+        latestPayroll: {
+          periodName: string;
+          status: string;
+          createdAt: string;
+          /** v2.191.0: the run-detail door's key — the wire has carried it since v2.113.0; an older cached answer without it keeps the honest plain text (never a dead link). */
+          runId?: string;
+        } | null;
         expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
       }>
     | null;
@@ -1637,9 +1644,14 @@ export function OrgConsole() {
                                 {row.monthAbsenceRatePct}%
                               </td>
                               <td className="px-3 py-2">
-                                {row.latestPayroll ? (
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <span className="text-xs text-muted-foreground">{row.latestPayroll.periodName}</span>
+                                {(() => {
+                                  if (!row.latestPayroll) {
+                                    return <span className="text-xs text-muted-foreground">no runs yet</span>;
+                                  }
+                                  // v2.191.0: the status badge — the same three-family
+                                  // vocabulary the cell has always worn, now as a value
+                                  // so the door can wrap it without duplicating it.
+                                  const statusBadge = (
                                     <span
                                       className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
                                         row.latestPayroll.status === 'LOCKED' || row.latestPayroll.status === 'POSTED'
@@ -1651,10 +1663,36 @@ export function OrgConsole() {
                                     >
                                       {row.latestPayroll.status.toLowerCase()}
                                     </span>
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">no runs yet</span>
-                                )}
+                                  );
+                                  // v2.191.0: the run-detail door — the shared panel's
+                                  // LatestRunCell affordance (v2.113.0), mirrored into the
+                                  // drill-down so BOTH "People & payroll by branch" surfaces
+                                  // open the same dialog from the same cell. The wire has
+                                  // carried runId since v2.113.0; an older cached answer
+                                  // without it degrades to the honest plain text below —
+                                  // never a dead link, never a guessed href.
+                                  if (row.latestPayroll.runId) {
+                                    return (
+                                      <a
+                                        href={buildRunDeepLinkHref(row.latestPayroll.runId)}
+                                        data-testid="org-console-hr-run-door"
+                                        aria-label={`Open the payroll run detail for ${row.latestPayroll.periodName} — ${row.storeName}`}
+                                        title={`Open the ${row.latestPayroll.periodName} run detail (recorded ${new Date(row.latestPayroll.createdAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })})`}
+                                        className="inline-flex flex-wrap items-center gap-1.5 rounded-md text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-orange-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:hover:text-orange-400"
+                                      >
+                                        <span>{row.latestPayroll.periodName}</span>
+                                        {statusBadge}
+                                        <ExternalLink className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                                      </a>
+                                    );
+                                  }
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <span className="text-xs text-muted-foreground">{row.latestPayroll.periodName}</span>
+                                      {statusBadge}
+                                    </span>
+                                  );
+                                })()}
                               </td>
                               <td className={`px-3 py-2 text-right tabular-nums ${alerts > 0 ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
                                 {alerts}

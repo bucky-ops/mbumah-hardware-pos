@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.191.0',
+    title: 'The drill-down opens the run',
+    bullets: [
+      'The \u201cLatest payroll\u201d cell in the org dashboard\u2019s People & payroll by branch table is now a door: click it to open that branch\u2019s payroll run detail directly \u2014 the same one-click open the shared People & Payroll panel has always had.',
+      'Each door speaks its run: the tooltip carries the recorded timestamp and the screen-reader label names the run and the branch.',
+      'Branches whose summary predates the run id keep the calm plain text \u2014 never a dead link \u2014 and the CSV export stays exactly as it was.',
+    ],
+  },
+  {
     version: '2.190.0',
     title: 'The drill-down ranks its payrolls',
     bullets: [

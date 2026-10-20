@@ -129,3 +129,27 @@ Light amber is the family's tightest corner at 4.54:1 — worth knowing
 before anyone reaches for a lighter amber chip. The family stays as-is —
 no code change, the numbers are the deliverable — and the next axe run's
 identical incomplete on the avatar chips is a known quantity.
+
+## Reviewed-passing: the drill-down's status-badge families (v2.191.0)
+
+The org dashboard's HR drill-down payroll cell wears three status-badge
+families (LOCKED/POSTED emerald, DRAFT/APPROVED amber, VOIDED slate).
+Light is the opaque `-50` chip; dark composites `{c}-950/40` (slate:
+`-900/60`) over the card token — the alpha class axe reports as
+color-contrast INCOMPLETE. Computed with the recipe by
+`scripts/contrast-math-drilldown-badges-v2191.mjs` (committed; the card
+token read from `src/app/globals.css`, palette from the INSTALLED
+Tailwind theme). The badge is 10px `font-medium` → 4.5:1 applies:
+
+| family                  | light            | dark (alpha over card) |
+| ----------------------- | ---------------- | ---------------------- |
+| emerald (locked/posted) | 5.09:1 pass      | 11.40:1 pass           |
+| amber (draft/approved)  | **4.87:1** pass  | 12.09:1 pass           |
+| slate (voided)          | 7.23:1 pass      | 12.20:1 pass           |
+
+**6/6 badge families pass** the small-text bar — the dark composites
+with the widest margins measured yet (the deep `-950` ground under the
+bright `-300` text). Light amber is again the family's tightest corner
+(4.87:1, the amber family's recurring signature). The badges stay
+as-is — no code change, the numbers are the deliverable — and the next
+axe run's identical incomplete on these chips is a known quantity.

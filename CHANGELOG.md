@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.191.0] The drill-down opens the run
+
+The org dashboard's HR drill-down has worn its "Latest payroll" cell as plain text since v2.23.0, while the SHARED "People & payroll by branch" panel's `LatestRunCell` has been a real door since v2.113.0 — one click opens `/hr/payroll?run=<id>` and the run-detail dialog. Both surfaces read the SAME `/api/org/summary` `hrPerStore` block, whose `latestPayroll` has carried `runId` since v2.113.0; the drill-down's local type simply never spoke it. This release the drill-down's cell mirrors the shared panel's affordance, and the cell's status-badge families carry their contrast-math numbers.
+
+### Added
+- **The run-detail door** (`org-console.tsx`): the drill-down's payroll cell with a `runId` on the wire renders as the shared panel's door — an anchor to `buildRunDeepLinkHref(runId)` wrapping the period name, the status badge, and the external-link glyph, with the spoken label ("Open the payroll run detail for October 2026 — Juja Main"), the recorded timestamp in the title, and the house door affordance (orange hover + underline-offset, the orange focus ring). Both "People & payroll by branch" surfaces now open the SAME dialog from the SAME cell.
+- **The honest degradation**: an older cached answer without `runId` (the field is a tolerant optional in the local type) renders the plain text exactly as before — never a dead link, never a guessed href. The CSV is pinned NOT to carry `runId` — doors don't belong in files; the export keeps its v2.152.0 shape.
+- **The badge families' numbers** (`scripts/contrast-math-drilldown-badges-v2191.mjs` + `docs/a11y/contrast-math.md`): the drill-down's three status-badge families (emerald locked/posted, amber draft/approved, slate voided) — light is the opaque `-50` chip, dark composites `{c}-950/40` (slate `-900/60`) over the card token, the alpha class axe reports as INCOMPLETE. **6/6 families pass** the 4.5:1 small-text bar, the dark composites with the widest margins measured yet (11.40–12.20:1), light amber again the tightest corner (4.87:1). Reviewed-passing — no code change, the numbers are the deliverable.
+
+### Tests
+- NEW `src/tests/hr-run-door-v2191.test.ts`: the link builder executed (the ONE writer of the deep-link shape); the door's markup, spoken label, timestamp, affordance, and honest degradation pinned; the CSV's no-runId shape pinned; the v2.190.0 rank machinery pinned HOLDING; the a11y surfaces; the release surfaces.
+- Head-pin counters re-anchored (80/81/82/113); prior suites' pkg pins ride to 2.191.0 (the treadmill tax).
+- `verify:v2-191-0` wired — fresh verify script per the house convention.
+
 ## [2.190.0] The drill-down ranks its payrolls
 
 The org dashboard's HR drill-down has sorted its "Latest payroll" column by `latestPayroll.periodName` TEXT since v2.183.0 — a fragile proxy for recency that breaks across naming formats ("November 2025" sorts after "March 2026" alphabetically) and ignores the one thing the cell actually WEARS: the status badge. The house rule is that a comparator sorts what the cell shows (the alerts cell sorts its SUM), so this release the payroll column sorts by STATUS RANK — the run's finality — and the desk roster's avatar-hue family carries its contrast-math numbers.
