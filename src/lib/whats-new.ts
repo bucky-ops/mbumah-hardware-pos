@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.183.0',
+    title: 'The drill-down remembers',
+    bullets: [
+      'The People & payroll by branch panel now remembers you: it reopens exactly as you left it \u2014 expanded, sorted, compact \u2014 on every visit, saved quietly in this browser.',
+      'Every column header sorts (click to sort, click again to flip): headcount, cost, absence and expiry alerts put the loudest branch on top, branch names sort A\u2192Z, and a branch with no payroll run always sorts last \u2014 honest absence, never a zero.',
+      'A Compact toggle fits more branches on screen, and a Reset button appears only when there is something to reset.',
+      'The branches CSV export follows the drill-down\u2019s sort, so the file always mirrors what\u2019s on screen.',
+    ],
+  },
+  {
     version: '2.182.0',
     title: 'The branches table remembers',
     bullets: [

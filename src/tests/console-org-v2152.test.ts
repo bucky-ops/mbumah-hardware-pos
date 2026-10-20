@@ -139,7 +139,13 @@ describe('the branches CSV carries both tables', () => {
 
   it('the handler passes the drill-down rows from the summary payload', () => {
     const org = readRepo('src/components/workspace/org-console.tsx');
-    expect(org).toContain('(summary.hrPerStore ?? []).map((r) => ({');
+    // v2.183.0 pin evolution (deliberate): the drill-down's CSV section now
+    // reads the SORTED rows — the SAME hrRows memo the table body speaks,
+    // so the file mirrors what the owner sees (the matrix's v2.180.0 rule,
+    // carried across all three dense tables). The summary payload still
+    // feeds the memo (sortHrDrillRows(summary.hrPerStore, hrSort)).
+    expect(org).toContain('hrRows.map((r) => ({');
+    expect(org).toContain('sortHrDrillRows(summary.hrPerStore, hrSort)');
     expect(org).toContain('expiryAlerts.documentsExpiring90Days + r.expiryAlerts.assetsOverdue');
   });
 });
@@ -147,11 +153,11 @@ describe('the branches CSV carries both tables', () => {
 describe('the release surfaces speak 2.152.0', () => {
   it('package.json, changelog and the feed lead with 2.152.0', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.182.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.182.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.182.0');
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.182.0]');
+    expect(pkg.version).toBe('2.183.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.183.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.183.0');
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.183.0]');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.182.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
+    expect(feed.indexOf("'2.183.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
   });
 });
