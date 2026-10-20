@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.161.0] The payslip goes home
+
+The employee can finally take their payslip PDF home from the portal — with the honest lifecycle gate — and the Phase 4.7 Lighthouse acceptance criterion is re-measured and documented on the SSR-complete portal.
+
+### Added
+- **`GET /api/self-service/me/payslips/[id]/pdf`**: the employee's own payslip PDF, reusing the HR PDF route's exact builders (`buildPayslipView` + `buildPayslipPdf` — one source of truth, masking cannot drift). Own-data rule enforced by the query scope (a payslip that is not yours is a 404, never a 403); statutory ids masked unless the caller holds `hr.employee.unmask.pii` (computed server-side); **409 NOT_ISSUED** for any payslip the run has not posted yet (rows become immutable payslips only at issuance), with a plain-language reason.
+- **The honest issuance flag** on both self-service payloads (`listMyPayslips`, `getMyPayslip`): `issued: payslipIssuedAt !== null`. `issuedAt` keeps its createdAt fallback for display-only callers.
+- **The portal dialog affordance** (`payslips-view.tsx`): a Download PDF anchor when `issued === true`, an honest "PDF download unlocks once this payslip is issued" note when `issued === false`, and silence when the field is absent (an older offline cache — never a false promise). The affordance lives in the dialog because the payslip row is a `<button>` and an anchor nested inside a button is invalid HTML. Issued list rows also show their issuance date.
+- **`scripts/seed-e2e-v161.cjs`**: the QA matrix seed — one POSTED September run with an issued payslip (PS-2026-0901) for the portal QA employee, keeping the October draft as the refusal path.
+
+### Changed
+- **docs/hr/self-service.md**: the Lighthouse section gains the v2.161.0 re-measure row — **Performance 92, Accessibility 100, Best Practices 96, SEO 100, TBT 153 ms** on the SSR-complete portal (the v2.24.0 row predated the v2.28.0 SSR completion) — spec acceptance 10 (Lighthouse above 90) HOLDS; the 4-point BP cost is the Vercel-only `/_vercel/*` insights scripts 404ing on the local daemon (environment, not the app). A "The payslip goes home" section records the PDF contract.
+
 ## [2.160.0] The spec's own paths
 
 Phase 4.6 literal spec-path parity closes — the EMS spec's three payroll report routes now exist verbatim — and the login front door closes its last a11y finding.

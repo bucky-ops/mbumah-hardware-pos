@@ -28,6 +28,10 @@ export interface PayslipListItem {
   periodEnd: string;
   runType: string;
   runStatus: string;
+  // v2.161.0: the honest issuance flag — true only after the run posts and
+  // the payslip number was stamped. Old cached lists lack it (undefined),
+  // which simply hides the issued-date line — never a false promise.
+  issued?: boolean;
   grossPay: string;
   totalDeductions: string;
   netPay: string;
@@ -46,6 +50,9 @@ interface PayslipDetail {
   stats: { daysWorked: number; daysPresent: number; daysAbsent: number; daysOnLeave: number; overtimeHours: string };
   statutoryIds: Record<string, string> | null;
   breakdown: Record<string, unknown>;
+  // v2.161.0: drives the dialog's PDF affordance. undefined (a detail cached
+  // by an older build) renders neither the download nor the note.
+  issued?: boolean;
 }
 
 export const DETAIL_CACHE_PREFIX = 'mbt_self_payslip_v1:';
@@ -161,6 +168,7 @@ export function PayslipsView({ initialList }: { initialList: PayslipListItem[] }
                     <p className="truncate text-sm font-semibold">{p.periodName}</p>
                     <p className="text-xs text-muted-foreground">
                       {p.payslipNumber ?? 'Payslip'} · {p.runType.toLowerCase()} run · {Number(p.overtimeHours).toFixed(0)}h OT
+                      {p.issued ? ` · Issued ${new Date(p.issuedAt).toISOString().slice(0, 10)}` : ''}
                     </p>
                   </div>
                   <div className="text-right">
@@ -252,6 +260,26 @@ export function PayslipsView({ initialList }: { initialList: PayslipListItem[] }
                 {detail.statutoryIds ? (
                   <p className="text-center text-[11px] text-muted-foreground">
                     Statutory IDs on this payslip are masked ({Object.values(detail.statutoryIds)[0]}). HR can unmask for official use.
+                  </p>
+                ) : null}
+
+                {/* v2.161.0: the payslip goes home — the employee can finally
+                    take the PDF. Same builders as the HR route, statutory ids
+                    masked for self-service (the own-payslip JSON already is). */}
+                {detail.issued === true ? (
+                  <a
+                    href={`/api/self-service/me/payslips/${detail.id}/pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="selfservice-payslip-pdf"
+                    className="flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-950"
+                  >
+                    <FileDown className="h-4 w-4" aria-hidden />
+                    Download PDF{detail.payslipNumber ? ` · ${detail.payslipNumber}` : ''}
+                  </a>
+                ) : detail.issued === false ? (
+                  <p data-testid="selfservice-payslip-pdf-pending" className="text-center text-[11px] text-muted-foreground">
+                    PDF download unlocks once this payslip is issued (the run posts) — the breakdown above is already live.
                   </p>
                 ) : null}
               </div>

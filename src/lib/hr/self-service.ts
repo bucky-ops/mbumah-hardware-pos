@@ -310,6 +310,11 @@ export async function listMyPayslips(employee: SelfEmployee, year?: number): Pro
     periodEnd: p.payrollRun.payrollPeriod.endDate.toISOString(),
     runType: p.payrollRun.runType,
     runStatus: p.payrollRun.status,
+    // v2.161.0: the honest issuance flag — a DRAFT/PENDING/APPROVED row is
+    // NOT yet a payslip (rows become immutable payslips at POST). Drives the
+    // portal's PDF affordance; `issuedAt` keeps its createdAt fallback for
+    // display, so callers that only print a date stay unchanged.
+    issued: p.payslipIssuedAt !== null,
     grossPay: money(p.grossPay),
     totalDeductions: money(p.totalDeductions),
     netPay: money(p.netPay),
@@ -415,6 +420,9 @@ export async function getMyPayslip(
       ? null // unmasked values are only ever served by HR endpoints w/ audit
       : { nssa: '[REDACTED]', kraPin: '[REDACTED]', shif: '[REDACTED]' },
     breakdown,
+    // v2.161.0: the honest issuance flag for the dialog's PDF affordance —
+    // true only when the run posted and the payslip number was stamped.
+    issued: p.payslipIssuedAt !== null,
     issuedAt: toIso(p.payslipIssuedAt) ?? p.createdAt.toISOString(),
   };
 }
