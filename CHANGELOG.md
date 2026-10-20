@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.185.0] The two revenues agree
+
+Since v2.173.0 the two org surfaces put DIFFERENT numbers under the same "Revenue" label: the owner dashboard's /api/org/summary spoke GROSS of tax (`_sum.totalAmount`, the till face), while the expert console's /api/org/kpi-summary subtracted `taxAmount` and spoke NET — a divergence recorded in v2.173.0, labeled into both CSV exports (v2.178.0/v2.179.0), and carried twice as the top reconciliation pick. This release the reconciliation lands: the expert console now speaks the same gross till face, and the analyst's net/VAT view moves under its own explicit label instead of living as a quiet second meaning of "Revenue".
+
+### Changed
+- **`/api/org/kpi-summary` revenue is GROSS of tax**: `today`, `weekTotal`, `priorWeekTotal` and the 7-day sparkline all read `_sum.totalAmount` as-is through a `grossOf` helper; the `netOf` subtraction helper is deleted (structurally pinned out — a tax subtraction on the revenue path can never silently return). The health model's revenue detail now reads "7d gross KES … vs prior …", and the revenueScore compares like with like.
+- **The VAT lens rides ADDITIVELY**: the payload gains `kpis.revenue.taxWeekTotal`, `taxPriorWeekTotal` and `netWeekTotal` (gross − tax) computed from the tax sums the aggregates already fetched — no extra query. `KpiSummaryData` types them OPTIONAL so an older cached answer renders the calm gross story, never a crash.
+
+### Added
+- **The emerald VAT ribbon in the revenue drill-down modal** (`kpi-row.tsx`): "incl. VAT (7d)" + the net figure under an explicitly-labeled, emerald-bordered row that renders ONLY when the additive fields arrived (`taxWeekTotal != null`) — tolerant by type, never a NaN. The modal retitles "Revenue trend (gross)", the Revenue chip wears a quiet `gross` qualifier pill, and the week-by-branch note retires its net-vs-gross qualifier ("branch shapes and the org line above speak the same gross till face").
+- **The recorded history updated everywhere the divergence lived**: the kpi-summary route header gains the REVENUE SEMANTICS block (what changed, why, where the lens went); the org/summary route comment and the `summary-trend.ts` contract header now record divergence → reconciliation; `docs/multi-store-workspaces.md`'s trend row tells the same story; and both CSV note lines (branches CSV, store-matrix CSV) record the AGREEMENT instead of the gap.
+
+### Tests
+- NEW `src/tests/revenue-reconciled-v2185.test.ts`: the subtraction pinned OUT (`netOf` forbidden, `.minus(toDec(sums.taxAmount))` forbidden on the route), the headline variables pinned through `grossOf`, the additive fields pinned IN, the ribbon's tolerance and labeling pinned, the one-revenue-contract pinned across BOTH routes, and the CSV/doc/comment updates pinned.
+- The five divergence-era suites evolved deliberately: `first-screen-trend-v2173` (route + doc pins now expect the reconciled wording), `expert-week-v2176` and `branch-variance-v2177` (modal copy pins), `branches-csv-week-v2178` and `store-matrix-week-v2179` (CSV note pins).
+- The six head-pin suites re-anchored with the new counters (74/75/76/107).
+
 ## [2.184.0] The drill-down heals
 
 A post-release E2E pass on the shipped v2.183.0 build caught the one promise the drill-down's memory had not yet kept: a corrupt payload degraded to the calm stock table on load (nothing threw, nothing lied), but the corrupt BYTES stayed in storage until the next owner choice — while both siblings self-heal to an absent key on reload. The gap was structural: the siblings' restore always hands back a FRESH widths object, so their write-back's stock fork runs on every load; the drill-down has no widths by the documented restraint, so a stock-shaped restore changed nothing by reference and the debounced write-back never fired. This release the restore bumps ONE counter — the write-back's post-restore pulse — and the stock fork clears whatever junk it finds, the siblings' self-heal carried over verbatim.

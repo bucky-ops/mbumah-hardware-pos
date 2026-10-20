@@ -205,8 +205,11 @@ describe('the gross contract - pinned structurally', () => {
     expect(route).toContain('GROSS by contract');
   });
 
-  it('the route documents the kpi-summary net-of-tax divergence (on the record)', () => {
-    expect(route).toContain('kpi-summary computes revenue NET of tax');
+  it('the route documents the v2.185.0 reconciliation (on the record)', () => {
+    // v2.185.0: the divergence was RECONCILED — kpi-summary now speaks the
+    // same gross till face; the comment records the history, not a live gap.
+    expect(route).toContain('kpi-summary computed revenue NET of tax');
+    expect(route).toContain('RECONCILED in v2.185.0');
   });
 });
 
@@ -301,7 +304,8 @@ describe('the doc contract', () => {
     expect(doc).toContain('src/lib/org/summary-trend.ts');
   });
 
-  it('the doc records the kpi-summary net-of-tax divergence too', () => {
-    expect(doc).toContain('computes its revenue NET of tax');
+  it('the doc records the v2.185.0 reconciliation too', () => {
+    expect(doc).toContain('COMPUTED its revenue NET of tax');
+    expect(doc).toContain('RECONCILED in v2.185.0');
   });
 });

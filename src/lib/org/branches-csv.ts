@@ -227,7 +227,7 @@ export function buildBranchesCsv(
           .map(csvField)
           .join(',');
       }),
-      'Note,Branch week shapes are gross revenue — the dashboard\u2019s org trend line is net of VAT',
+      'Note,Branch week shapes are gross revenue — the org trend line and the expert console KPI agree (gross till face, reconciled v2.185.0)',
       '',
     );
   }

@@ -87,7 +87,7 @@ const WEEK_SECTION = [
   'Nairobi CBD,123992,9048,1270.38',
   'Juja Road,94150,266124,-64.62',
   'Ruiru,35620,39252,-9.25',
-  'Note,Branch week shapes are gross revenue — the dashboard’s org trend line is net of VAT',
+  'Note,Branch week shapes are gross revenue — the org trend line and the expert console KPI agree (gross till face, reconciled v2.185.0)',
   '',
 ].join('\n');
 
@@ -256,9 +256,10 @@ describe('the lib contract - one classifier, one section', () => {
     expect(lib).toContain("'The week by branch (7d)',");
   });
 
-  it('the note carries the net-vs-gross divergence label into the offline artifact', () => {
+  it('the note carries the v2.185.0 reconciliation into the offline artifact', () => {
     expect(lib).toContain('Branch week shapes are gross revenue');
-    expect(lib).toContain('org trend line is net of VAT');
+    // v2.185.0: the divergence label retires — the note records the AGREEMENT.
+    expect(lib).toContain('expert console KPI agree (gross till face, reconciled v2.185.0)');
   });
 
   it('the change cell prints the signed pct and the empty absence — spelled in code', () => {
@@ -320,9 +321,9 @@ describe('the docs speak the fourth section', () => {
 describe('release surfaces', () => {
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0) and the verify script is wired', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.184.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.184.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.184.0');
+    expect(pkg.version).toBe('2.185.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.185.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.185.0');
     expect(pkg.scripts['verify:v2-178-0']).toBe('node scripts/verify-v2-178-0.mjs');
   });
 

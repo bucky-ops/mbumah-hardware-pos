@@ -5,6 +5,17 @@
 // demo targets. Runs inside runWithoutTenant because the console is a
 // cross-store surface; the role gate below is the authorization boundary.
 //
+// REVENUE SEMANTICS (v2.185.0 — the two revenues agree):
+//   Revenue here is GROSS of tax (`_sum.totalAmount`, the till face) —
+//   the SAME semantic /api/org/summary has spoken since v2.173.0 on the
+//   owner dashboard. Until v2.184.0 this route subtracted `taxAmount`, so
+//   the two consoles' identically-labeled "Revenue" KPIs disagreed (a
+//   cross-surface divergence recorded in v2.173.0 and reconciled here).
+//   The net and VAT views did not die: the payload now carries the tax
+//   ADDITIVELY (`taxWeekTotal`, `taxPriorWeekTotal`, `netWeekTotal`) so
+//   the analyst keeps the VAT lens under an explicitly-labeled ribbon —
+//   no surface ever again ships two numbers under one name.
+//
 // HEALTH MODEL (adapted from the sandbox lineage, demo target removed):
 //   revenue  0-100  this week vs PRIOR week (capped; prior=0 and sales -> 100)
 //   stock    0-100  100 - 100 x lowStock/totalSkus
@@ -83,27 +94,33 @@ async function orgKpiSummaryHandler(): Promise<Response> {
       }),
     ]);
 
-    const netOf = (sums: {
-      totalAmount: Parameters<typeof toDec>[0];
-      taxAmount: Parameters<typeof toDec>[0];
-    }) => toDec(sums.totalAmount).minus(toDec(sums.taxAmount));
-    const revToday = round2(netOf(todayAgg._sum));
-    const revWeek = round2(netOf(weekAgg._sum));
-    const revPrior = round2(netOf(priorAgg._sum));
+    // v2.185.0: GROSS by contract — `totalAmount` as-is, the SAME number
+    // /api/org/summary puts under "Revenue today". The tax sums stay in the
+    // aggregates so the additive VAT block below keeps its lens.
+    const grossOf = (sums: { totalAmount: Parameters<typeof toDec>[0] }) =>
+      toDec(sums.totalAmount);
+    const revToday = round2(grossOf(todayAgg._sum));
+    const revWeek = round2(grossOf(weekAgg._sum));
+    const revPrior = round2(grossOf(priorAgg._sum));
+    // The VAT lens — additive, labeled, never mixed into the headline.
+    const taxWeek = round2(toDec(weekAgg._sum.taxAmount));
+    const taxPrior = round2(toDec(priorAgg._sum.taxAmount));
+    const netWeek = round2(revWeek - taxWeek);
     const txToday = todayAgg._count._all;
     const txWeek = weekAgg._count._all;
     const txPrior = priorAgg._count._all;
     const revenueVariancePct = revPrior > 0 ? round2(((revWeek - revPrior) / revPrior) * 100) : 0;
     const txVariancePct = txPrior > 0 ? round2(((txWeek - txPrior) / txPrior) * 100) : 0;
 
-    // 7-day net-revenue sparkline (oldest -> newest).
+    // 7-day gross-revenue sparkline (oldest -> newest) — the same till face
+    // as the headline, per the v2.185.0 reconciliation.
     const sparkBuckets = new Array<number>(7).fill(0);
     for (let i = 0; i < 7; i++) {
       const dayStart = new Date(startToday.getTime() - (6 - i) * DAY_MS);
       const dayEnd = new Date(dayStart.getTime() + DAY_MS);
       for (const row of sparkRows) {
         if (row.createdAt >= dayStart && row.createdAt < dayEnd) {
-          sparkBuckets[i] += toDec(row.totalAmount).minus(toDec(row.taxAmount)).toNumber();
+          sparkBuckets[i] += toDec(row.totalAmount).toNumber();
         }
       }
     }
@@ -282,7 +299,7 @@ async function orgKpiSummaryHandler(): Promise<Response> {
       score: healthScore,
       label: healthScore >= 80 ? 'Good' : healthScore >= 60 ? 'Fair' : 'At Risk',
       breakdown: [
-        { key: 'revenue', label: 'Revenue', score: revenueScore, detail: `7d KES ${revWeek.toLocaleString('en-KE')} vs prior ${revPrior.toLocaleString('en-KE')}` },
+        { key: 'revenue', label: 'Revenue', score: revenueScore, detail: `7d gross KES ${revWeek.toLocaleString('en-KE')} vs prior ${revPrior.toLocaleString('en-KE')}` },
         { key: 'stock', label: 'Stock', score: stockScore, detail: `${lowStock} low of ${totalSkus} SKUs` },
         { key: 'debt', label: 'Debt', score: debtScore, detail: `Outstanding KES ${debtTotal.toLocaleString('en-KE')}` },
         { key: 'engagement', label: 'Engagement', score: engagementScore, detail: `${chatCount} chat messages, ${sentReminders} reminders` },
@@ -304,7 +321,19 @@ async function orgKpiSummaryHandler(): Promise<Response> {
       data: {
         generatedAt: now.toISOString(),
         kpis: {
-          revenue: { today: revToday, weekTotal: revWeek, priorWeekTotal: revPrior, variancePct: revenueVariancePct, spark },
+          // v2.185.0: the headline numbers are GROSS; the tax/net lens rides
+          // ADDITIVELY so an older client (and the health model) never has
+          // to care it arrived.
+          revenue: {
+            today: revToday,
+            weekTotal: revWeek,
+            priorWeekTotal: revPrior,
+            variancePct: revenueVariancePct,
+            spark,
+            taxWeekTotal: taxWeek,
+            taxPriorWeekTotal: taxPrior,
+            netWeekTotal: netWeek,
+          },
           transactions: { today: txToday, weekTotal: txWeek, priorWeekTotal: txPrior, variancePct: txVariancePct },
           lowStock: { count: lowStock },
           overdueRentals: { count: rentalsOverdue },

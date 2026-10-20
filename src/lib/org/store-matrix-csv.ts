@@ -63,14 +63,16 @@ export const STORE_MATRIX_CSV_COLUMNS = [
 ] as const;
 
 /**
- * The closing note — the v2.173.0 gross-vs-net divergence label carried into
- * the offline artifact (the same parity move the branches CSV made in
- * v2.178.0): the matrix's week shapes come from /api/org/summary (gross of
- * tax), while the expert console's revenue KPI is net. Rides only when the
- * trend block is present and non-empty — an absent week never adds a note.
+ * The closing note — the v2.173.0 gross-vs-net divergence label, CARRIED
+ * into the offline artifact since v2.179.0 and UPDATED by the v2.185.0
+ * reconciliation: the matrix's week shapes come from /api/org/summary
+ * (gross of tax) and the expert console's revenue KPI now speaks the SAME
+ * gross till face, so the note records the agreement instead of the gap.
+ * Rides only when the trend block is present and non-empty — an absent
+ * week never adds a note.
  */
 export const STORE_MATRIX_TREND_NOTE =
-  'Note,Store week shapes are gross revenue — the expert console\u2019s revenue KPI is net of VAT';
+  'Note,Store week shapes are gross revenue — the expert console KPI agrees (gross till face, reconciled v2.185.0)';
 
 /** RFC-4180 field quoting: wrap when the value carries , " \n or \r. */
 function csvField(value: string | number): string {
