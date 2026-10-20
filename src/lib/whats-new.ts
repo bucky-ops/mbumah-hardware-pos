@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.185.0',
+    title: 'The two revenues agree',
+    bullets: [
+      'The expert console\u2019s Revenue KPI now counts the same thing your dashboard\u2019s \u201cRevenue today\u201d card always has: the full till amount including VAT. One word, one number, everywhere \u2014 no more wondering why the two consoles disagreed.',
+      'The VAT amount did not disappear: the revenue drill-down now shows a quiet green line \u2014 \u201cincl. VAT\u201d for the week plus the net figure \u2014 so the analyst\u2019s view is still there, clearly labeled.',
+      'The revenue sparkline, week totals and health breakdown all follow the same till-face rule, and both CSV exports\u2019 notes now record the agreement instead of the old gap.',
+    ],
+  },
+  {
     version: '2.184.0',
     title: 'The drill-down heals',
     bullets: [

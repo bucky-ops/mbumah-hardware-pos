@@ -154,9 +154,11 @@ describe('the strip contract - the dashboard\'s exact vocabulary', () => {
 });
 
 describe('the modal contract - the week by branch', () => {
-  it('the drill-down names the section + speaks the net-vs-gross note where both vocabularies meet', () => {
+  it('the drill-down names the section + speaks the reconciled gross note where both vocabularies meet', () => {
     expect(kpiRow).toContain('The week by branch');
-    expect(kpiRow).toContain('branch shapes are gross — the org line above is net of VAT');
+    // v2.185.0: the net-vs-gross qualifier retires — every shape in the
+    // modal speaks the same gross till face, and the note says exactly that.
+    expect(kpiRow).toContain('branch shapes and the org line above speak the same gross till face');
   });
 
   it('the join is executed in the card, by storeId, with the honest fallback label', () => {
@@ -177,8 +179,9 @@ describe('the modal contract - the week by branch', () => {
     expect(kpiRow).toContain('{kes(b.weekTotal)}</span>');
   });
 
-  it('the modal keeps its org-wide net lead — the branches speak underneath, not instead', () => {
-    expect(kpiRow.indexOf('Revenue trend (net of VAT)')).toBeLessThan(kpiRow.indexOf('The week by branch'));
+  it('the modal keeps its org-wide gross lead — the branches speak underneath, not instead', () => {
+    // v2.185.0: the lead is GROSS (the reconciliation) — same position rule.
+    expect(kpiRow.indexOf('Revenue trend (gross)')).toBeLessThan(kpiRow.indexOf('The week by branch'));
     expect(kpiRow).toContain('<Sparkline data={k.revenue.spark} width={380} height={80} />');
   });
 });
@@ -214,9 +217,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots + the verify script (re-anchored for 2.181.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.184.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.184.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.184.0');
+    expect(pkg.version).toBe('2.185.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.185.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.185.0');
     expect(pkg.scripts['verify:v2-176-0']).toBe('node scripts/verify-v2-176-0.mjs');
   });
 });

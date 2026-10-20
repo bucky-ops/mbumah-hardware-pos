@@ -2,8 +2,10 @@
 
 // KPI Command Row - 6 KPI cards with count-up, sparkline and the real
 // week-vs-prior-week variance from /api/org/kpi-summary. No fabricated trend
-// windows: the drill-down modal shows the actual 7-day net-revenue sparkline
-// and the real week totals.
+// windows: the drill-down modal shows the actual 7-day gross-revenue sparkline
+// and the real week totals. v2.185.0: BOTH org surfaces speak GROSS of tax —
+// the headline is the till face, and the VAT lens rides additively under an
+// explicitly-labeled ribbon (never mixed into the headline again).
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +65,9 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
             <Banknote className="h-3.5 w-3.5 text-emerald-700" /> Revenue
+            {/* v2.185.0: the till-face qualifier — one word where the
+                divergence used to live, styled quiet so the number leads. */}
+            <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200" title="Gross of VAT — the same till face the owner dashboard speaks">gross</span>
           </span>
           <span className="h-2 w-2 rounded-full bg-orange-500 anim-pulse-dot" />
         </div>
@@ -137,7 +142,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
       <Dialog open={trendOpen} onOpenChange={setTrendOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-700" /> Revenue trend (net of VAT)</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-700" /> Revenue trend (gross)</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
             <Sparkline data={k.revenue.spark} width={380} height={80} />
@@ -147,18 +152,29 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
               <div><span className="text-slate-500">Prior 7d</span><p className="font-bold text-slate-800">{kes(k.revenue.priorWeekTotal)}</p></div>
               <div><span className="text-slate-500">Avg / day (7d)</span><p className="font-bold text-slate-800">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
             </div>
+            {/* v2.185.0: the VAT lens — the analyst's net number did not die
+                in the reconciliation; it moved HERE, under its own label.
+                Tolerant by type (optional fields): an older cached answer
+                renders nothing here, never a NaN, never a crash. */}
+            {k.revenue.taxWeekTotal != null && (
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">incl. VAT (7d)</span>
+                <span className="text-xs font-semibold tabular-nums text-emerald-900">{kes(k.revenue.taxWeekTotal)}</span>
+                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-700 ring-1 ring-emerald-100" title="Week revenue net of VAT">net {kes(k.revenue.netWeekTotal ?? k.revenue.weekTotal - k.revenue.taxWeekTotal)}</span>
+              </div>
+            )}
           </div>
           {/* v2.176.0: the week by branch — the org line above stays the lead;
-              the branches speak underneath, loudest week first. The branch
-              shapes are GROSS (the summary's week rows carry totalAmount);
-              the org spark is NET of VAT — both labeled, one modal, no
-              quiet mixing. Names are text (self-speaking); the spark is
-              aria-hidden decoration. An absent block (branch manager or an
-              older cached answer) renders nothing here — honest absence. */}
+              the branches speak underneath, loudest week first. v2.185.0:
+              the org spark is GROSS too — every shape in this modal speaks
+              the SAME till face, so the qualifier note retires. Names are
+              text (self-speaking); the spark is aria-hidden decoration. An
+              absent block (branch manager or an older cached answer)
+              renders nothing here — honest absence. */}
           {branchWeek && branchWeek.length > 0 && (
             <div className="mt-3 border-t border-slate-100 pt-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">The week by branch</p>
-              <p className="mb-2 text-[10px] text-slate-500">branch shapes are gross — the org line above is net of VAT</p>
+              <p className="mb-2 text-[10px] text-slate-500">branch shapes and the org line above speak the same gross till face</p>
               <ul className="space-y-1.5">
                 {branchWeek.map((b) => (
                   <li key={b.storeId} className="flex items-center justify-between gap-3">

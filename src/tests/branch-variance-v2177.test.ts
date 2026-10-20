@@ -241,8 +241,8 @@ describe('the drill-down contract - each row speaks its own verdict', () => {
     expect(kpiRow).toContain("stores.find((s) => s.id === t.storeId)?.name ?? 'Branch'");
   });
 
-  it('the org net lead still comes before the branch section', () => {
-    expect(kpiRow.indexOf('Revenue trend (net of VAT)')).toBeLessThan(kpiRow.indexOf('The week by branch'));
+  it('the org gross lead still comes before the branch section (v2.185.0: gross, reconciled)', () => {
+    expect(kpiRow.indexOf('Revenue trend (gross)')).toBeLessThan(kpiRow.indexOf('The week by branch'));
   });
 });
 
@@ -273,9 +273,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads 2.177.0 in all three slots + the verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.184.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.184.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.184.0');
+    expect(pkg.version).toBe('2.185.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.185.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.185.0');
     expect(pkg.scripts['verify:v2-177-0']).toBe('node scripts/verify-v2-177-0.mjs');
   });
 });

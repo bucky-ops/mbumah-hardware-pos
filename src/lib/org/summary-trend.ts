@@ -4,19 +4,20 @@
 // convention: the caller passes the time anchors in, so tests can pin the
 // math to the millisecond and the API route feeds it the read's own
 // anchors). Mirrors the window/bucket/variance math the expert console's
-// kpi-summary route has shipped since v2.18.3, with ONE deliberate
-// divergence documented below.
+// kpi-summary route has shipped since v2.18.3.
 //
 // SEMANTICS CONTRACT (gross, not net):
 //   The org dashboard's "Revenue today" StatCard totals `totalAmount` —
 //   GROSS of tax (see /api/org/summary, the groupBy `_sum.totalAmount`).
 //   This trend decorates THAT card on the SAME surface, so every number it
 //   ships is gross too: a net-of-tax spark under a gross headline would be
-//   a lying adjacency. The expert console (/api/org/kpi-summary) computes
-//   its revenue NET of tax — a pre-existing cross-surface divergence
-//   between the two consoles' "Revenue" labels, observed and recorded in
-//   v2.173.0 but NOT reconciled here (changing the expert console's
-//   contract is its own round). Within each surface, the numbers agree.
+//   a lying adjacency. The expert console (/api/org/kpi-summary) COMPUTED
+//   its revenue NET of tax — a cross-surface divergence between the two
+//   consoles' "Revenue" labels, observed and recorded in v2.173.0 — and
+//   RECONCILED in v2.185.0: kpi-summary now speaks this same gross till
+//   face (its VAT lens rides additively under its own label), so both
+//   org surfaces agree and this contract is simply THE org revenue
+//   contract, not one side of a divergence.
 
 import { toDec, round2 } from '@/lib/utils/financialMath';
 

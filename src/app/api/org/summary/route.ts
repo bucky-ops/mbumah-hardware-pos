@@ -192,11 +192,12 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
     // decorates the "Revenue today" StatCard on THIS surface, whose value
     // is the gross `_sum.totalAmount` above; a net-of-tax spark under a
     // gross headline would be a lying adjacency. (The expert console's
-    // kpi-summary computes revenue NET of tax — a pre-existing cross-surface
-    // divergence between the two "Revenue" labels, recorded in v2.173.0,
-    // deliberately not reconciled here.) The card hides the variance badge
-    // when priorWeekTotal is 0 — no prior data means NO comparison, never
-    // a fabricated "+0%".
+    // kpi-summary computed revenue NET of tax — a cross-surface divergence
+    // between the two "Revenue" labels, recorded in v2.173.0 and
+    // RECONCILED in v2.185.0: kpi-summary now speaks this same gross till
+    // face, with its VAT lens riding additively under its own label.) The
+    // card hides the variance badge when priorWeekTotal is 0 — no prior
+    // data means NO comparison, never a fabricated "+0%".
     const trendRows = trendRowsRaw.map((r) => ({
       createdAt: r.createdAt,
       amount: Number(r.totalAmount),
