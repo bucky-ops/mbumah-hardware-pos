@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.179.0',
+    title: 'The matrix reads the week',
+    bullets: [
+      'The Store Intelligence Matrix grows a Week 7d column \u2014 every store\u2019s seven-day sparkline, its gross week total, and the same up/down verdict the branches table speaks.',
+      'The matrix\u2019s CSV export now carries the comparison: week total, prior week, and the signed change \u2014 a store with no prior week leaves the change cell empty instead of inventing a number.',
+      'Opening a store\u2019s workspace from the matrix shows its week at the top \u2014 shape, total, and verdict, from the same data, one vocabulary everywhere.',
+    ],
+  },
+  {
     version: '2.178.0',
     title: 'The export carries the week',
     bullets: [

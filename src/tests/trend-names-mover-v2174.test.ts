@@ -230,10 +230,10 @@ describe('the release surfaces', () => {
     expect(feed.indexOf('2.174.0')).toBeLessThan(feed.indexOf('2.173.0'));
   });
 
-  it('package.json leads the current version in all three slots (re-anchored for 2.178.0)', () => {
+  it('package.json leads the current version in all three slots (re-anchored for 2.179.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.178.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.178.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.178.0');
+    expect(pkg.version).toBe('2.179.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.179.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.179.0');
   });
 });
