@@ -80,6 +80,14 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.184.0',
+    title: 'The drill-down heals',
+    bullets: [
+      'A corrupted saved layout in the People & payroll by branch panel now cleans itself up automatically on the next visit — the panel goes quiet, the junk bytes are wiped, nothing for you to do.',
+      'Same quiet promise as the Store Intelligence Matrix and the branches table: your layout is remembered when it is sound, and forgotten cleanly when it is not.',
+    ],
+  },
+  {
     version: '2.183.0',
     title: 'The drill-down remembers',
     bullets: [

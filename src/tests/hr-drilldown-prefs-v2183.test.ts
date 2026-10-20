@@ -338,7 +338,14 @@ describe('the component contract - the driven header, the spine wiring, the cont
     expect(comp).toContain('open: hrPerStoreOpen,');
     expect(comp).toContain('sort: hrSort,');
     expect(comp).toContain('dense: hrDense,');
-    expect(comp).toContain('}, [hrPerStoreOpen, hrSort, hrDense]);');
+    // v2.184.0 pin evolution (deliberate): the deps carry the restore tick —
+    // the post-restore pulse that walks the stock fork even when the restore
+    // changed nothing by reference, so corrupt bytes self-heal to absent
+    // (the siblings' behavior: their restore always hands back a FRESH
+    // widths object; the drill-down has none by the documented restraint).
+    expect(comp).toContain('}, [hrRestoreTick, hrPerStoreOpen, hrSort, hrDense]);');
+    expect(comp).toContain('setHrRestoreTick((t) => t + 1);');
+    expect(comp).toContain('const [hrRestoreTick, setHrRestoreTick] = useState(0);');
   });
 
   it('the header row is a legal tree — the controls are SIBLINGS of the door button, never children', () => {
@@ -399,9 +406,9 @@ describe('docs and release surfaces', () => {
   });
 
   it('package.json leads 2.183.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.183.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.183.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.183.0');
+    expect(pkg.version).toBe('2.184.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.184.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.184.0');
     expect(pkg.scripts['verify:v2-183-0']).toBe('node scripts/verify-v2-183-0.mjs');
     expect(readRepo('scripts/verify-v2-183-0.mjs')).toContain('v2.183.0 verification');
   });
@@ -418,7 +425,7 @@ describe('docs and release surfaces', () => {
       'src/tests/store-matrix-prefs-v2181.test.ts',
       'src/tests/branches-table-prefs-v2182.test.ts',
     ]) {
-      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.183.0');");
+      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.184.0');");
     }
   });
 });
