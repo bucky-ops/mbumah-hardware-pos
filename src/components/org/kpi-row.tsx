@@ -6,6 +6,10 @@
 // and the real week totals. v2.185.0: BOTH org surfaces speak GROSS of tax —
 // the headline is the till face, and the VAT lens rides additively under an
 // explicitly-labeled ribbon (never mixed into the headline again).
+// v2.187.0: the lens deepens — the modal grows an explicit Gross/Net toggle
+// backed by the per-day net buckets (`netSpark`, zero extra queries) and the
+// ribbon grows the VAT week-over-week. Gross stays the default: the toggle
+// is an analyst turn, never a quiet second meaning of the headline.
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +36,14 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   stores?: StoreRow[];
 }) {
   const [trendOpen, setTrendOpen] = useState(false);
+  // v2.187.0: the modal's lens — GROSS is the default and the contract
+  // (v2.185.0); net is an explicit analyst turn, never a second meaning.
+  const [lens, setLens] = useState<'gross' | 'net'>('gross');
   const k = data.kpis;
+  // v2.187.0: the net lens is available only when the payload carried the
+  // per-day net buckets — an older cached answer keeps the calm gross modal
+  // (no toggle, no broken promises), the same tolerance the ribbon speaks.
+  const netReady = Array.isArray(k.revenue.netSpark) && k.revenue.netSpark.length === 7;
   const debtHot = k.debt.total > 400_000;
   const pendingTotal = k.pending.purchaseOrders + k.pending.openShifts + k.pending.expenses;
 
@@ -142,24 +153,96 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
       <Dialog open={trendOpen} onOpenChange={setTrendOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-700" /> Revenue trend (gross)</DialogTitle>
+            {/* v2.187.0: the title follows the lens — the gross till face
+                keeps its exact contract name (v2.185.0); the net view is
+                the SAME series minus VAT, under its own honest name. */}
+            <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-700" /> {lens === 'gross' ? 'Revenue trend (gross)' : 'Revenue trend (net)'}</DialogTitle>
           </DialogHeader>
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-            <Sparkline data={k.revenue.spark} width={380} height={80} />
+            {/* v2.187.0: the lens toggle — an explicit two-face switch, not a
+                quiet second meaning. Renders ONLY when the payload carried
+                the per-day net buckets (a v2.187.0 answer): an older cached
+                answer keeps the calm gross modal exactly as v2.185.0 drew
+                it, never a broken toggle. The active face wears its own
+                hue (emerald gross / violet net) so the chart below always
+                agrees with the control above it. */}
+            {netReady && (
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <div role="group" aria-label="Revenue lens" data-testid="revenue-lens-toggle" className="inline-flex rounded-full border border-slate-200 bg-white p-0.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  {(['gross', 'net'] as const).map((l) => (
+                    <button
+                      key={l}
+                      type="button"
+                      aria-pressed={lens === l}
+                      onClick={() => setLens(l)}
+                      data-testid={`revenue-lens-${l}`}
+                      title={l === 'gross' ? 'The till face — includes VAT' : 'VAT removed — the revenue that is actually yours'}
+                      className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${lens === l
+                        ? l === 'gross'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'bg-violet-600 text-white shadow'
+                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'}`}
+                    >
+                      {l === 'gross' ? 'Gross' : 'Net'}
+                    </button>
+                  ))}
+                </div>
+                <span data-testid="revenue-lens-note" className="text-[10px] text-slate-500">
+                  {lens === 'gross' ? 'the till face — includes VAT' : 'one read, two faces'}
+                </span>
+              </div>
+            )}
+            {lens === 'gross' ? (
+              <Sparkline data={k.revenue.spark} width={380} height={80} />
+            ) : (
+              // The net line wears violet — a different face wears a
+              // different hue, so a glance can never mistake the two.
+              <Sparkline data={k.revenue.netSpark ?? []} stroke="#8b5cf6" width={380} height={80} />
+            )}
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              <div><span className="text-slate-500">Today</span><p className="font-bold text-slate-800">{kes(k.revenue.today)}</p></div>
-              <div><span className="text-slate-500">7d total</span><p className="font-bold text-slate-800">{kes(k.revenue.weekTotal)}</p></div>
-              <div><span className="text-slate-500">Prior 7d</span><p className="font-bold text-slate-800">{kes(k.revenue.priorWeekTotal)}</p></div>
-              <div><span className="text-slate-500">Avg / day (7d)</span><p className="font-bold text-slate-800">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
+              {lens === 'gross' ? (
+                <>
+                  <div><span className="text-slate-500">Today</span><p className="font-bold text-slate-800">{kes(k.revenue.today)}</p></div>
+                  <div><span className="text-slate-500">7d total</span><p className="font-bold text-slate-800">{kes(k.revenue.weekTotal)}</p></div>
+                  <div><span className="text-slate-500">Prior 7d</span><p className="font-bold text-slate-800">{kes(k.revenue.priorWeekTotal)}</p></div>
+                  <div><span className="text-slate-500">Avg / day (7d)</span><p className="font-bold text-slate-800">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
+                </>
+              ) : (
+                // The net grid — every cell the gross face has, minus VAT.
+                // The three net fields ship together (v2.187.0 payload); the
+                // ?? guards a pathological mixed answer, never a NaN.
+                <>
+                  <div><span className="text-slate-500">Today</span><p data-testid="revenue-net-today" className="font-bold text-slate-800">{kes(k.revenue.netTodayTotal ?? 0)}</p></div>
+                  <div><span className="text-slate-500">7d total</span><p data-testid="revenue-net-week" className="font-bold text-slate-800">{kes(k.revenue.netWeekTotal ?? k.revenue.weekTotal - (k.revenue.taxWeekTotal ?? 0))}</p></div>
+                  <div><span className="text-slate-500">Prior 7d</span><p data-testid="revenue-net-prior" className="font-bold text-slate-800">{kes(k.revenue.netPriorWeekTotal ?? 0)}</p></div>
+                  <div><span className="text-slate-500">Avg / day (7d)</span><p data-testid="revenue-net-avg" className="font-bold text-slate-800">{kes(Math.round((k.revenue.netWeekTotal ?? k.revenue.weekTotal - (k.revenue.taxWeekTotal ?? 0)) / 7))}</p></div>
+                </>
+              )}
             </div>
             {/* v2.185.0: the VAT lens — the analyst's net number did not die
                 in the reconciliation; it moved HERE, under its own label.
                 Tolerant by type (optional fields): an older cached answer
                 renders nothing here, never a NaN, never a crash. */}
             {k.revenue.taxWeekTotal != null && (
-              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-1.5">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-1.5">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">incl. VAT (7d)</span>
                 <span className="text-xs font-semibold tabular-nums text-emerald-900">{kes(k.revenue.taxWeekTotal)}</span>
+                {/* v2.187.0: the VAT week-over-week — taxPriorWeekTotal's
+                    first consumer. Quiet, arrowed, honest about a zero
+                    prior (no invented %, the WeekDeltaChip honesty rule). */}
+                {k.revenue.taxPriorWeekTotal != null && (() => {
+                  const vatDelta = k.revenue.taxWeekTotal - k.revenue.taxPriorWeekTotal;
+                  const vatPct = k.revenue.taxPriorWeekTotal > 0 ? Math.round((vatDelta / k.revenue.taxPriorWeekTotal) * 1000) / 10 : null;
+                  return (
+                    <span
+                      data-testid="revenue-vat-wow"
+                      title={`VAT week-over-week: ${kes(k.revenue.taxWeekTotal)} vs prior ${kes(k.revenue.taxPriorWeekTotal ?? 0)}`}
+                      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ${vatDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : vatDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-slate-50 text-slate-500 ring-slate-200'}`}
+                    >
+                      {vatDelta > 0 ? '▲' : vatDelta < 0 ? '▼' : '—'} {vatPct == null ? 'vs prior' : `${vatDelta > 0 ? '+' : ''}${vatPct}% vs prior`}
+                    </span>
+                  );
+                })()}
                 <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-700 ring-1 ring-emerald-100" title="Week revenue net of VAT">net {kes(k.revenue.netWeekTotal ?? k.revenue.weekTotal - k.revenue.taxWeekTotal)}</span>
               </div>
             )}
@@ -171,7 +254,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
               text (self-speaking); the spark is aria-hidden decoration. An
               absent block (branch manager or an older cached answer)
               renders nothing here — honest absence. */}
-          {branchWeek && branchWeek.length > 0 && (
+          {branchWeek && branchWeek.length > 0 && lens === 'gross' && (
             <div className="mt-3 border-t border-slate-100 pt-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">The week by branch</p>
               <p className="mb-2 text-[10px] text-slate-500">branch shapes and the org line above speak the same gross till face</p>
@@ -192,6 +275,17 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+          {/* v2.187.0: in the net lens the branch rows step aside honestly —
+              the per-branch week rides /api/org/summary, which carries no
+              per-branch tax, so a net-by-branch row would be a fabrication.
+              One line, one door back. */}
+          {branchWeek && branchWeek.length > 0 && lens === 'net' && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p data-testid="revenue-net-branch-note" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                the branch rows speak the gross till face — net by branch is not on the wire, so they rest while the net lens is on. Flip back to Gross to compare branches.
+              </p>
             </div>
           )}
         </DialogContent>

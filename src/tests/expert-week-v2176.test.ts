@@ -170,7 +170,12 @@ describe('the modal contract - the week by branch', () => {
   });
 
   it('the section renders only when BOTH halves arrived — honest absence otherwise', () => {
-    expect(kpiRow).toContain('{branchWeek && branchWeek.length > 0 && (');
+    // v2.187.0: the gate grew the lens — the branch rows speak the GROSS
+    // face only (per-branch tax is not on the wire), so the section now
+    // renders only in the gross lens; the net lens steps them aside with
+    // an honest note (pinned in revenue-net-lens-v2187). The honest
+    // absence rule itself is unchanged: both halves or nothing.
+    expect(kpiRow).toContain("{branchWeek && branchWeek.length > 0 && lens === 'gross' && (");
   });
 
   it('each row: spark + name + week total, the spark aria-hidden decoration', () => {
@@ -217,9 +222,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots + the verify script (re-anchored for 2.181.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.186.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.186.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.186.0');
+    expect(pkg.version).toBe('2.187.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.187.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.187.0');
     expect(pkg.scripts['verify:v2-176-0']).toBe('node scripts/verify-v2-176-0.mjs');
   });
 });
