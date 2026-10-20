@@ -9,6 +9,7 @@ The root-domain console for `SUPER_ADMIN` and `STORE_OWNER` (full view) and `ACC
 What it shows:
 
 - Six combined organization totals for today: revenue, transactions, low stock items, overdue rentals, debt outstanding, pending M-Pesa payments.
+- A 7-day trend strip on the Revenue and Transactions cards (v2.173.0): the week's per-day sparkline (oldest → newest, gross `totalAmount` — the same semantics as the "Revenue today" headline it decorates), the week-vs-prior-week variance badge, and a "7d … · prior …" microcopy line. The variance badge renders only when the prior week has data — with no prior week there is NO comparison, never a fabricated "+0%". The trend rides the same response (`data.trend`) and degrades to the plain cards when absent.
 - A per-branch table with the same KPIs per store (revenue today, transactions, low stock, overdue rentals, debt, pending M-Pesa), the branch code and location, and an inactive marker for stores that are not `ACTIVE`.
 - The ten most recent audit events, org-wide.
 - A Global Chat button (see [Global chat](global-chat.md)).
@@ -21,6 +22,8 @@ KPI definitions (from the summary route):
 |-----|-----------|
 | Revenue today | Sum of `SALE` transactions created today with payment status `COMPLETED` or `PARTIAL` |
 | Transactions today | Count of those transactions |
+| Trend · Revenue spark | v2.173.0 — per-day gross `totalAmount` over the last 7 days (today inclusive), oldest → newest; the window math is the pure lib `src/lib/org/summary-trend.ts` |
+| Trend · variance badge | v2.173.0 — `((week − prior) / prior) × 100` rounded to 2 dp, vs the prior 7-day window; hidden when the prior window total is 0. Note: the expert console's KPI row (`/api/org/kpi-summary`) computes its revenue NET of tax — a pre-existing cross-surface divergence between the two "Revenue" labels, recorded in v2.173.0 |
 | Low stock | Active products at or below their reorder level |
 | Overdue rentals | Rentals `ACTIVE` or `OVERDUE` whose expected return date has passed |
 | Debt outstanding | Sum of balances on debt ledgers `OUTSTANDING`, `PARTIAL` or `OVERDUE` |

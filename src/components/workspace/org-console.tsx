@@ -13,6 +13,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  ArrowDownRight,
   ArrowUpRight,
   Building2,
   CalendarClock,
@@ -59,6 +60,10 @@ import {
   expectationDotClass,
   expectationTextClass,
 } from '@/lib/org/tick-expectation';
+// v2.173.0: the first screen learns to trend — the Sparkline primitive the
+// expert console's KPI row speaks, reused so both consoles draw the same
+// shape language (aria-hidden svg, pulse dot on the last point).
+import { Sparkline } from '@/components/org/primitives';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
@@ -131,6 +136,17 @@ interface OrgSummary {
         expiryAlerts: { documentsExpiring90Days: number; assetsOverdue: number };
       }>
     | null;
+  /**
+   * v2.173.0: the 7-day trend (gross, matching the totals block above).
+   * TOLERANT — optional and nullable, because an older cached response (or
+   * a future route regression) must degrade to the plain cards, never
+   * crash the first screen. The variance badge is hidden when
+   * priorWeekTotal is 0: no prior data means NO comparison, never "+0%".
+   */
+  trend?: {
+    revenue: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number };
+    transactions: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number };
+  } | null;
   recentAudit: Array<{
     id: string;
     storeId: string | null;
@@ -226,6 +242,62 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/**
+ * v2.173.0: the trend strip the Revenue and Transactions cards share — the
+ * 7-day sparkline (aria-hidden decoration; the numbers below it are the
+ * real content), the week-vs-prior variance badge, and the two-week
+ * microcopy. Every number arrives server-computed — the card adds no math
+ * of its own. The badge renders ONLY when the prior week has data
+ * (priorWeekTotal > 0): no prior data means NO comparison, never a
+ * fabricated "+0%". Colors carry the v2.159 contrast lesson — emerald-700
+ * / red-700 real text (red-600 was the knife-edge 4.53:1), dark-mode lifts
+ * to the -400 steps.
+ */
+function TrendFooter({
+  spark,
+  weekTotal,
+  priorWeekTotal,
+  variancePct: variance,
+  format,
+  testId,
+  stroke,
+}: {
+  spark: number[];
+  weekTotal: number;
+  priorWeekTotal: number;
+  variancePct: number;
+  format: (v: number) => string;
+  testId: string;
+  stroke?: string;
+}) {
+  const up = variance >= 0;
+  return (
+    <div className="mt-2 border-t pt-2" data-testid={testId}>
+      <div className="flex items-end justify-between gap-2">
+        <Sparkline data={spark} stroke={stroke} />
+        {priorWeekTotal > 0 && (
+          <span
+            className={`flex items-center gap-0.5 text-[11px] font-semibold ${
+              up ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'
+            }`}
+          >
+            {up ? (
+              <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+            ) : (
+              <ArrowDownRight className="h-3 w-3" aria-hidden="true" />
+            )}
+            {up ? '+' : ''}
+            {variance}%
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+        7d {format(weekTotal)} · prior {format(priorWeekTotal)}
+      </p>
+    </div>
+  );
+}
+
 function StatCard({
   icon,
   label,
@@ -233,6 +305,7 @@ function StatCard({
   tone,
   href,
   title,
+  footer,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -242,6 +315,9 @@ function StatCard({
   // focus ring + hover affordance; otherwise it stays a static card.
   href?: string;
   title?: string;
+  // v2.173.0: optional trend strip (TrendFooter) rendered under the value.
+  // Only the Revenue and Transactions cards pass one; the rest stay plain.
+  footer?: React.ReactNode;
 }) {
   const body = (
     <>
@@ -253,6 +329,7 @@ function StatCard({
         {label}
       </div>
       <p className={`mt-2 text-xl font-semibold tabular-nums ${tone === 'warn' ? 'text-amber-700 dark:text-amber-400' : ''}`}>{value}</p>
+      {footer}
     </>
   );
   if (href) {
@@ -807,8 +884,41 @@ export function OrgConsole() {
         {/* Combined organization metrics */}
         <section aria-label="Combined organization metrics">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <StatCard icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />} label="Revenue today" value={formatKES(summary.totals.revenue)} />
-            <StatCard icon={<ReceiptText className="h-4 w-4" aria-hidden="true" />} label="Transactions today" value={String(summary.totals.transactions)} />
+            <StatCard
+              icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
+              label="Revenue today"
+              value={formatKES(summary.totals.revenue)}
+              footer={
+                summary.trend ? (
+                  <TrendFooter
+                    spark={summary.trend.revenue.spark}
+                    weekTotal={summary.trend.revenue.weekTotal}
+                    priorWeekTotal={summary.trend.revenue.priorWeekTotal}
+                    variancePct={summary.trend.revenue.variancePct}
+                    format={(v) => formatKES(v)}
+                    testId="metric-trend-revenue"
+                  />
+                ) : undefined
+              }
+            />
+            <StatCard
+              icon={<ReceiptText className="h-4 w-4" aria-hidden="true" />}
+              label="Transactions today"
+              value={String(summary.totals.transactions)}
+              footer={
+                summary.trend ? (
+                  <TrendFooter
+                    spark={summary.trend.transactions.spark}
+                    weekTotal={summary.trend.transactions.weekTotal}
+                    priorWeekTotal={summary.trend.transactions.priorWeekTotal}
+                    variancePct={summary.trend.transactions.variancePct}
+                    format={(v) => String(v)}
+                    testId="metric-trend-transactions"
+                    stroke="#2563eb"
+                  />
+                ) : undefined
+              }
+            />
             <StatCard icon={<PackageOpen className="h-4 w-4" aria-hidden="true" />} label="Low stock items" value={String(summary.totals.lowStock)} tone={summary.totals.lowStock > 0 ? 'warn' : undefined} />
             <StatCard icon={<Clock className="h-4 w-4" aria-hidden="true" />} label="Overdue rentals" value={String(summary.totals.overdueRentals)} tone={summary.totals.overdueRentals > 0 ? 'warn' : undefined} />
             <StatCard icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />} label="Debt outstanding" value={formatKES(summary.totals.debtOutstanding)} />

@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.173.0] The first screen learns to trend
+
+The owner's landing console answered "how much today?" and stopped there — the week's shape (rising, falling, flat) lived only in the expert console. This release the combined metrics speak the same trend language, computed once on the server and decorated honestly.
+
+### Added
+- **`src/lib/org/summary-trend.ts` (NEW, pure)**: the 7-day trend math — `trendWindows` (today's midnight, the 7-day window starting 6 days back, the prior window starting 13 days back — mirrors the kpi-summary windows), `variancePct` (the same `((current − prior) / prior) × 100` round2'd; 0 when prior has no data), `sparkBuckets` (gross amounts into 7 half-open per-day buckets, oldest → newest) and `countBuckets` (the same buckets, 1 per row). No db, no fetch, no `Date.now` — the caller passes every anchor in.
+- **`GET /api/org/summary` gains a `trend` block**: revenue and transactions each carry `{ spark[7], weekTotal, priorWeekTotal, variancePct }`, computed from two aggregates + one row fetch riding the existing `Promise.all`. GROSS by contract — the trend decorates the "Revenue today" StatCard whose value is the gross `_sum.totalAmount`; a net-of-tax spark under a gross headline would be a lying adjacency. (The expert console's kpi-summary computes revenue NET of tax — a pre-existing cross-surface divergence between the two consoles' "Revenue" labels, recorded in v2.173.0, deliberately not reconciled here.)
+- **The card renders the trend strip** on the Revenue and Transactions cards (`data-testid="metric-trend-revenue"` / `"metric-trend-transactions"`): the Sparkline primitive the expert console already speaks (aria-hidden decoration; the numbers are the content), a week-vs-prior variance badge (emerald-700 up / red-700 down — the v2.159 contrast lesson; dark mode lifts to the -400 steps), and a "7d … · prior …" microcopy line. The badge renders ONLY when `priorWeekTotal > 0` — no prior data means NO comparison, never a fabricated "+0%". `trend?` is tolerant (optional + nullable): an older cached response degrades to the plain cards, never crashes the first screen.
+
+### Tests
+- `src/tests/first-screen-trend-v2173.test.ts` (NEW): the window/bucket/variance math EXECUTED (midnight anchors, the −6d/−13d windows, half-open bucket boundaries at the millisecond, oldest→newest ordering, empty input → honest zeros, prior=0 variance), the gross semantics pinned structurally (no `taxAmount` anywhere in the lib), the API's `trend` contract (same `SALE` + `['COMPLETED','PARTIAL']` vocabulary, additive response keys, role gate untouched), the card render contract (Sparkline reuse, testids, badge classes, the `priorWeekTotal > 0` gate, tolerant `trend?`), and the doc rows.
+
 ## [2.172.0] The card expects the tick
 
 "Last tick 3h ago" was history; the operator still had to arithmetic their way to "is the heartbeat on time?". This release the Automation card answers it directly, computed from the ledger read's own anchors so the browser clock never enters the math.
