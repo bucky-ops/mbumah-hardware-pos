@@ -105,6 +105,20 @@ interface OrgSummaryStore extends WorkspaceStoreRef {
   pendingMpesa: number;
 }
 
+/**
+ * v2.174.0: the store whose week moved the most, as the API ships it (the
+ * pure lib's TrendMover plus the server-computed variancePct). The card
+ * renders it verbatim — no math of its own, per the strip's contract.
+ */
+interface TrendMoverSummary {
+  storeId: string;
+  storeName: string;
+  current: number;
+  prior: number;
+  delta: number;
+  variancePct: number;
+}
+
 interface OrgSummary {
   generatedAt: string;
   totals: {
@@ -143,9 +157,15 @@ interface OrgSummary {
    * crash the first screen. The variance badge is hidden when
    * priorWeekTotal is 0: no prior data means NO comparison, never "+0%".
    */
+  /**
+   * v2.174.0: the store whose week moved the most, server-computed by the
+   * pure lib's topMover (the card adds no math of its own). Optional +
+   * nullable — an older cached response without the field degrades to the
+   * strip exactly as it shipped in v2.173.0.
+   */
   trend?: {
-    revenue: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number };
-    transactions: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number };
+    revenue: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number; topMover?: TrendMoverSummary | null };
+    transactions: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number; topMover?: TrendMoverSummary | null };
   } | null;
   recentAudit: Array<{
     id: string;
@@ -252,12 +272,19 @@ function timeAgo(iso: string): string {
  * fabricated "+0%". Colors carry the v2.159 contrast lesson — emerald-700
  * / red-700 real text (red-600 was the knife-edge 4.53:1), dark-mode lifts
  * to the -400 steps.
+ *
+ * v2.174.0: the optional `mover` names WHICH branch moved the week — a
+ * `Top mover <name> <signed delta>` sub-line under the microcopy, with the
+ * ±% clause shown only when the mover's own prior > 0 (a zero week has no
+ * percentage, never an invented ∞). Same contrast family as the badge;
+ * `mover` null or absent renders nothing — silence, never a guess.
  */
 function TrendFooter({
   spark,
   weekTotal,
   priorWeekTotal,
   variancePct: variance,
+  mover,
   format,
   testId,
   stroke,
@@ -266,6 +293,7 @@ function TrendFooter({
   weekTotal: number;
   priorWeekTotal: number;
   variancePct: number;
+  mover?: TrendMoverSummary | null;
   format: (v: number) => string;
   testId: string;
   stroke?: string;
@@ -294,6 +322,21 @@ function TrendFooter({
       <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
         7d {format(weekTotal)} · prior {format(priorWeekTotal)}
       </p>
+      {mover && (
+        <p className="mt-0.5 text-[10px] text-muted-foreground tabular-nums" data-testid={`${testId}-mover`}>
+          Top mover {mover.storeName}{' '}
+          <span className={mover.delta >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>
+            {mover.delta >= 0 ? '+' : '-'}
+            {format(Math.abs(mover.delta))}
+          </span>
+          {mover.prior > 0 && (
+            <span>
+              {' '}({mover.variancePct >= 0 ? '+' : ''}
+              {mover.variancePct}%)
+            </span>
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -895,6 +938,7 @@ export function OrgConsole() {
                     weekTotal={summary.trend.revenue.weekTotal}
                     priorWeekTotal={summary.trend.revenue.priorWeekTotal}
                     variancePct={summary.trend.revenue.variancePct}
+                    mover={summary.trend.revenue.topMover}
                     format={(v) => formatKES(v)}
                     testId="metric-trend-revenue"
                   />
@@ -912,6 +956,7 @@ export function OrgConsole() {
                     weekTotal={summary.trend.transactions.weekTotal}
                     priorWeekTotal={summary.trend.transactions.priorWeekTotal}
                     variancePct={summary.trend.transactions.variancePct}
+                    mover={summary.trend.transactions.topMover}
                     format={(v) => String(v)}
                     testId="metric-trend-transactions"
                     stroke="#2563eb"

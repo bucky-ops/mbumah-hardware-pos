@@ -114,3 +114,54 @@ export function countBuckets(
   }
   return buckets;
 }
+
+/** One store's week-vs-prior slice, as the API's per-store groupBys see it. */
+export interface StoreTrendSlice {
+  storeId: string;
+  storeName: string;
+  /** The store's current-week total (gross amount, or transaction count). */
+  current: number;
+  /** The store's prior-week total — the SAME vocabulary as `current`. */
+  prior: number;
+}
+
+/** The store whose week moved the most — the honest top mover. */
+export interface TrendMover {
+  storeId: string;
+  storeName: string;
+  current: number;
+  prior: number;
+  /** round2(current − prior), signed — negative means the branch fell. */
+  delta: number;
+}
+
+/**
+ * v2.174.0: which branch moved the week? The largest ABSOLUTE week-vs-prior
+ * delta wins — a branch that fell hardest is named as readily as one that
+ * jumped (the sign on the card tells the direction; the lib never hides a
+ * crash behind a rise). Honest silences, mirroring the variance badge's
+ * rules: no prior data anywhere → null (no comparison exists); every delta
+ * exactly zero → null (a flat week names no mover); fewer than two slices
+ * → null ("top" among one is noise — the org variance already says it).
+ * Ties on |delta| break alphabetically by name so the same input always
+ * names the same branch. The delta is money-safe (toDec/round2) so a
+ * float-heavy revenue path can never ship 0.30000000000000004.
+ */
+export function topMover(slices: StoreTrendSlice[]): TrendMover | null {
+  if (slices.length < 2) return null;
+  const priorTotal = slices.reduce((acc, s) => acc + s.prior, 0);
+  if (priorTotal <= 0) return null;
+  let winner: TrendMover | null = null;
+  for (const slice of slices) {
+    const delta = round2(toDec(slice.current).minus(toDec(slice.prior)).toNumber());
+    if (delta === 0) continue;
+    if (
+      !winner ||
+      Math.abs(delta) > Math.abs(winner.delta) ||
+      (Math.abs(delta) === Math.abs(winner.delta) && slice.storeName < winner.storeName)
+    ) {
+      winner = { storeId: slice.storeId, storeName: slice.storeName, current: slice.current, prior: slice.prior, delta };
+    }
+  }
+  return winner;
+}

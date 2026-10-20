@@ -235,7 +235,7 @@ describe('the API contract - additive, same vocabulary, same gate', () => {
 
   it('the lib import list is the one the card-side tests pin', () => {
     expect(route).toContain(
-      "import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets } from '@/lib/org/summary-trend';",
+      "import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets, topMover } from '@/lib/org/summary-trend';",
     );
   });
 });
@@ -263,7 +263,7 @@ describe('the card contract - the trend strip', () => {
   });
 
   it('trend is TOLERANT: optional and nullable in the OrgSummary interface', () => {
-    expect(card).toContain('  trend?: {\n    revenue: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number };\n    transactions: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number };\n  } | null;');
+    expect(card).toContain('  trend?: {\n    revenue: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number; topMover?: TrendMoverSummary | null };\n    transactions: { spark: number[]; weekTotal: number; priorWeekTotal: number; variancePct: number; topMover?: TrendMoverSummary | null };\n  } | null;');
   });
 
   it('each card gates its footer on summary.trend (older responses degrade, not crash)', () => {

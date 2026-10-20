@@ -10,6 +10,7 @@ What it shows:
 
 - Six combined organization totals for today: revenue, transactions, low stock items, overdue rentals, debt outstanding, pending M-Pesa payments.
 - A 7-day trend strip on the Revenue and Transactions cards (v2.173.0): the week's per-day sparkline (oldest → newest, gross `totalAmount` — the same semantics as the "Revenue today" headline it decorates), the week-vs-prior-week variance badge, and a "7d … · prior …" microcopy line. The variance badge renders only when the prior week has data — with no prior week there is NO comparison, never a fabricated "+0%". The trend rides the same response (`data.trend`) and degrades to the plain cards when absent.
+- A top-mover sub-line on the same strip (v2.174.0): `Top mover <branch> <signed delta>` names the branch whose week-vs-prior delta is the largest in absolute terms — a branch that fell hardest is named as readily as one that jumped, and a branch that came alive from a zero week shows its jump without a percentage (a zero prior week has none, never an invented ∞). Computed server-side by the same pure lib (`topMover`); honest silences apply — no prior data anywhere, an exactly flat week, or a single-store org name nobody, and the line renders nothing.
 - A per-branch table with the same KPIs per store (revenue today, transactions, low stock, overdue rentals, debt, pending M-Pesa), the branch code and location, and an inactive marker for stores that are not `ACTIVE`.
 - The ten most recent audit events, org-wide.
 - A Global Chat button (see [Global chat](global-chat.md)).
@@ -24,6 +25,7 @@ KPI definitions (from the summary route):
 | Transactions today | Count of those transactions |
 | Trend · Revenue spark | v2.173.0 — per-day gross `totalAmount` over the last 7 days (today inclusive), oldest → newest; the window math is the pure lib `src/lib/org/summary-trend.ts` |
 | Trend · variance badge | v2.173.0 — `((week − prior) / prior) × 100` rounded to 2 dp, vs the prior 7-day window; hidden when the prior window total is 0. Note: the expert console's KPI row (`/api/org/kpi-summary`) computes its revenue NET of tax — a pre-existing cross-surface divergence between the two "Revenue" labels, recorded in v2.173.0 |
+| Trend · top mover | v2.174.0 — the branch whose week-vs-prior delta is largest in absolute terms (revenue gross, transactions counted), signed; null (line hidden) when the prior window has no data anywhere, every branch is exactly flat, or the org has fewer than two active stores; ties break alphabetically |
 | Low stock | Active products at or below their reorder level |
 | Overdue rentals | Rentals `ACTIVE` or `OVERDUE` whose expected return date has passed |
 | Debt outstanding | Sum of balances on debt ledgers `OUTSTANDING`, `PARTIAL` or `OVERDUE` |
