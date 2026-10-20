@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.186.0] The reviewer roster rides
+
+The desk's morning note answered "how many" and "who won" — the distinct-reviewer count and the top-reviewer chip — but never shipped the FULL per-reviewer roster: the read has computed the `reviewerDigest` map since v2.67.0 and kept the rows to itself. This release the rows ride end to end: the payload exposes them, the digest strip draws them, and the branches CSV files them.
+
+### Added
+- **`yesterday.reviewerRows` on /api/org/review-activity**: the SAME map the topReviewer figure reads, every reviewer loudest-first (ties A→Z, the digestTopReviewer ordering), capped at 24 rows so a crowded desk cannot bloat the payload. Additive under a NEW name — the payload's `reviewers` NUMBER (the distinct count, v2.67.0) predates it and keeps its meaning; no consumer re-keys.
+- **The share-bar roster in the digest strip** (`panels.tsx`): "who pulled the desk · share of N visits" — every reviewer in their avatar hue with an emerald share-of-visits bar (width = share, capped 100) and their `visits · share%` figure. Renders only when MORE than one reviewer showed (a solo reviewer is the top-reviewer chip's whole story), six rows render, a longer desk says "+N more reviewers on the roster". Optional-field tolerant: an older cached answer keeps the calm strip, never a crash.
+- **The "Reviews by reviewer" CSV sub-section** (`branches-csv.ts`): the desk section grows `Reviews by reviewer,Reviewer,Visits,Share (%)` — the offline twin of the roster (the v2.180.0 file-mirrors-screen rule). The share is computed BY THE LIB from the block's own visits (`round(visits/visits × 10000)/100`) — the wire is never trusted; an absent roster or a zero-visit window ends the section above (never a divide-by-zero, never an invented 0% column); RFC-4180 quoting carries comma-bearing names.
+- **The export's tolerant parse** (`org-console.tsx`): `yesterday.reviewerRows` rides into the desk block only when `Array.isArray` and every row is provably sound (string name + number visits); an absent field exports WITHOUT the sub-section — the file ends at the v2.185.0 shape.
+
+### Tests
+- NEW `src/tests/reviewer-roster-v2186.test.ts`: the derivation + cap + additive naming pinned on the route, the roster gate + share math + "+N more" pinned on the strip, the EXECUTED CSV round-trip (exact shares 50 / 33.33 / 16.67, the comma-name quoting, the absent-roster and zero-visit honesty), the parse tolerance, and the version.
+- The six head-pin suites re-anchored with the new counters (75/76/77/108); prior pkg pins ride to 2.186.0 (the treadmill tax).
+
 ## [2.185.0] The two revenues agree
 
 Since v2.173.0 the two org surfaces put DIFFERENT numbers under the same "Revenue" label: the owner dashboard's /api/org/summary spoke GROSS of tax (`_sum.totalAmount`, the till face), while the expert console's /api/org/kpi-summary subtracted `taxAmount` and spoke NET — a divergence recorded in v2.173.0, labeled into both CSV exports (v2.178.0/v2.179.0), and carried twice as the top reconciliation pick. This release the reconciliation lands: the expert console now speaks the same gross till face, and the analyst's net/VAT view moves under its own explicit label instead of living as a quiet second meaning of "Revenue".

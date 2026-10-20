@@ -234,6 +234,18 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
     );
     const digestTopReviewer = [...reviewerDigest.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? null;
+    // v2.186.0: the FULL reviewer roster rides — the SAME map the
+    // topReviewer figure reads, every reviewer loudest-first (ties A→Z, the
+    // digestTopReviewer ordering), capped at 24 rows so a crowded desk
+    // cannot bloat the payload. Additive under `reviewerRows` (the payload's
+    // `reviewers` NUMBER — the distinct-reviewer count — predates it and
+    // keeps its meaning; no consumer re-keys). The digest strip's share-bar
+    // roster and the branches CSV's "Reviews by reviewer" sub-section speak
+    // these rows. An empty window derives to an honest empty array.
+    const digestReviewers = [...reviewerDigest.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 24)
+      .map(([name, visits]) => ({ name, visits }));
 
     // v2.68.0 — the morning note rings the bell. Same figures, second
     // voice: once per summarized day (statefully deduped on deskDigestDate),
@@ -278,6 +290,10 @@ async function orgReviewActivityHandler(request: Request): Promise<Response> {
           topReviewer: digestTopReviewer
             ? { name: digestTopReviewer[0], visits: digestTopReviewer[1] }
             : null,
+          // v2.186.0: the roster — additive, bounded (24), loudest-first,
+          // named `reviewerRows` so the existing `reviewers` count keeps its
+          // meaning (no consumer re-keys).
+          reviewerRows: digestReviewers,
           branches: digestBranches,
         },
         stats: {

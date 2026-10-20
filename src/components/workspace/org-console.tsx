@@ -999,10 +999,11 @@ export function OrgConsole() {
             label?: unknown;
             visits?: unknown;
             clears?: unknown;
-            reviewers?: unknown;
+            reviewers?: unknown; // the distinct-reviewer COUNT
             requests?: unknown;
             busiestBranch?: unknown;
             topReviewer?: unknown;
+            reviewerRows?: unknown; // v2.186.0: the roster array (the API's field)
             branches?: unknown;
           }
         | undefined;
@@ -1043,6 +1044,20 @@ export function OrgConsole() {
                 typeof b?.storeName === 'string' && typeof b?.visits === 'number',
             )
             .map((b) => ({ storeName: b.storeName, visits: b.visits })),
+          // v2.186.0: the reviewer roster rides the desk block when the
+          // answer carried it (OPTIONAL by contract — an older answer
+          // exports without the sub-section; the parse keeps only provably
+          // sound rows: a string name and a number visits). Named
+          // `reviewerRows` because the desk block's `reviewers` NUMBER (the
+          // distinct count) predates it and keeps its meaning.
+          reviewerRows: Array.isArray(y.reviewerRows)
+            ? (y.reviewerRows as Array<{ name?: unknown; visits?: unknown }>)
+                .filter(
+                  (r): r is { name: string; visits: number } =>
+                    typeof r?.name === 'string' && typeof r?.visits === 'number',
+                )
+                .map((r) => ({ name: r.name, visits: r.visits }))
+            : undefined,
         };
       }
     } catch {

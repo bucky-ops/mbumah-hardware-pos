@@ -478,33 +478,70 @@ export function DeskActivity({ data, filter, onFilterChange }: {
           ) : null}
         </div>
         {yesterday.visits > 0 ? (
-          <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
-            <div data-testid="desk-digest-visits">
-              <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.visits)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">visit{yesterday.visits === 1 ? '' : 's'}</p>
-            </div>
-            <div data-testid="desk-digest-clears">
-              <p className="text-lg font-bold leading-none tabular-nums text-emerald-700 dark:text-emerald-400">{num(yesterday.clears)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">correction{yesterday.clears === 1 ? '' : 's'} answered</p>
-            </div>
-            <div data-testid="desk-digest-reviewers">
-              <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.reviewers)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">reviewer{yesterday.reviewers === 1 ? '' : 's'} on the desk</p>
-            </div>
-            <div data-testid="desk-digest-requests">
-              <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.requests)}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">request{yesterday.requests === 1 ? '' : 's'} touched</p>
-            </div>
-            {yesterday.branches.length > 1 ? (
-              <div data-testid="desk-digest-branches" className="ml-auto flex flex-wrap items-center gap-1">
-                {yesterday.branches.slice(0, 3).map((b) => (
-                  <span key={b.storeId} className="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] tabular-nums text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                    {shortStoreName(b.storeName)} {b.visits}
-                  </span>
-                ))}
+          <>
+            <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
+              <div data-testid="desk-digest-visits">
+                <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.visits)}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">visit{yesterday.visits === 1 ? '' : 's'}</p>
               </div>
-            ) : null}
-          </div>
+              <div data-testid="desk-digest-clears">
+                <p className="text-lg font-bold leading-none tabular-nums text-emerald-700 dark:text-emerald-400">{num(yesterday.clears)}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">correction{yesterday.clears === 1 ? '' : 's'} answered</p>
+              </div>
+              <div data-testid="desk-digest-reviewers">
+                <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.reviewers)}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">reviewer{yesterday.reviewers === 1 ? '' : 's'} on the desk</p>
+              </div>
+              <div data-testid="desk-digest-requests">
+                <p className="text-lg font-bold leading-none tabular-nums text-slate-800 dark:text-slate-100">{num(yesterday.requests)}</p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-500">request{yesterday.requests === 1 ? '' : 's'} touched</p>
+              </div>
+              {yesterday.branches.length > 1 ? (
+                <div data-testid="desk-digest-branches" className="ml-auto flex flex-wrap items-center gap-1">
+                  {yesterday.branches.slice(0, 3).map((b) => (
+                    <span key={b.storeId} className="rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] tabular-nums text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                      {shortStoreName(b.storeName)} {b.visits}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            {/* v2.186.0 — the reviewer roster: WHO pulled the desk, not just
+                how many. The same map the top-reviewer chip reads, every
+                reviewer wearing their avatar hue with a share-of-visits bar
+                (emerald fill on a muted track, width = share, capped 100).
+                Renders only when MORE THAN ONE reviewer showed — a solo
+                reviewer is the top-reviewer chip's whole story — and only
+                when the payload carried the roster (optional field: an
+                older cached answer keeps the calm strip, never a crash).
+                Six rows render; a longer desk says "+N more" honestly. */}
+            {yesterday.reviewerRows && yesterday.reviewerRows.length > 1 && (
+              <div data-testid="desk-digest-roster" className="mt-2.5 border-t border-amber-100/90 pt-2 dark:border-amber-500/10">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
+                  who pulled the desk · share of {num(yesterday.visits)} visit{yesterday.visits === 1 ? '' : 's'}
+                </p>
+                <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+                  {yesterday.reviewerRows.slice(0, 6).map((r) => {
+                    const share = yesterday.visits > 0 ? Math.round((r.visits / yesterday.visits) * 100) : 0;
+                    return (
+                      <li key={r.name} data-testid="desk-digest-roster-row" className="flex min-w-[150px] flex-1 items-center gap-2" title={`${r.name}: ${r.visits} of ${yesterday.visits} visits (${share}%)`}>
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${avatarHue(r.name)}`}>
+                          {r.name}
+                        </span>
+                        <span className="h-1 min-w-[24px] flex-1 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/60" aria-hidden>
+                          <span className="block h-full rounded-full bg-emerald-500/80 transition-[width] duration-300" style={{ width: `${Math.min(100, share)}%` }} />
+                        </span>
+                        <span className="shrink-0 text-[10px] font-semibold tabular-nums text-slate-600 dark:text-slate-300">{r.visits} · {share}%</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {yesterday.reviewerRows.length > 6 && (
+                  <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-500">+{yesterday.reviewerRows.length - 6} more reviewer{yesterday.reviewerRows.length - 6 === 1 ? '' : 's'} on the roster</p>
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <p data-testid="desk-digest-empty" className="flex items-center gap-1.5 rounded-lg border border-dashed border-amber-300/60 bg-amber-50/40 px-3 py-2 text-[11px] text-slate-500 dark:border-amber-500/20 dark:bg-amber-500/5 dark:text-slate-400">
             <Coffee className="h-3.5 w-3.5 text-amber-500" /> The desk was quiet yesterday — no visits on record. The note fills as reviewers open leave requests.
