@@ -187,7 +187,19 @@ export interface DeskActivityData {
     reviewerRows?: Array<{ name: string; visits: number }>;
     branches: Array<{ storeId: string; storeName: string; visits: number }>;
   };
-  stats: { total: number; weekVisits: number; weekClears: number; weekReviewers: number };
+  stats: {
+    total: number;
+    weekVisits: number;
+    weekClears: number;
+    weekReviewers: number;
+    // v2.189.0: the WEEK roster (loudest-first, cap 24) — OPTIONAL so an
+    // older cached answer renders the calm tiles, never a crash. Named
+    // `weekReviewerRows` because the payload's `weekReviewers` NUMBER (the
+    // distinct-reviewer count) predates it and keeps its meaning; the
+    // panel's week strip and the branches CSV's "Reviews by reviewer (7d)"
+    // sub-section speak it.
+    weekReviewerRows?: Array<{ name: string; visits: number; clears: number }>;
+  };
   recent: Array<{
     id: string;
     visitedByName: string;

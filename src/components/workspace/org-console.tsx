@@ -993,7 +993,30 @@ export function OrgConsole() {
     let deskNote = '';
     try {
       const res = await authorizedFetchJson('/api/org/review-activity');
-      const data = res.json?.data as { yesterday?: unknown } | undefined;
+      const data = res.json?.data as { yesterday?: unknown; stats?: unknown } | undefined;
+      // v2.189.0: the WEEK shape rides the same answer — `stats.weekVisits`
+      // (the denominator) and `stats.weekReviewerRows` (the roster) are the
+      // trailing-7-day twin of the yesterday digest. Parsed with the SAME
+      // tolerance: only provably sound fields survive; an absent field
+      // exports without the week sub-section.
+      const st = data?.stats as
+        | {
+            weekVisits?: unknown;
+            weekReviewerRows?: unknown; // v2.189.0: the week roster array
+          }
+        | undefined;
+      const weekRows = Array.isArray(st?.weekReviewerRows)
+        ? (st.weekReviewerRows as Array<{ name?: unknown; visits?: unknown }>)
+            .filter(
+              (r): r is { name: string; visits: number } =>
+                typeof r?.name === 'string' && typeof r?.visits === 'number',
+            )
+            .map((r) => ({ name: r.name, visits: r.visits }))
+        : undefined;
+      const week =
+        st && typeof st.weekVisits === 'number' && weekRows && weekRows.length > 0
+          ? { visits: st.weekVisits, reviewerRows: weekRows }
+          : undefined;
       const y = data?.yesterday as
         | {
             label?: unknown;
@@ -1058,6 +1081,10 @@ export function OrgConsole() {
                 )
                 .map((r) => ({ name: r.name, visits: r.visits }))
             : undefined,
+          // v2.189.0: the week shape rides when the answer carried it (the
+          // same tolerant parse — provably sound rows only). Absent → the
+          // file ends at the v2.188.0 shape, never a hole.
+          week,
         };
       }
     } catch {

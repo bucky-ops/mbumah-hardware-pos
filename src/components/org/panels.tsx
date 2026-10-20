@@ -595,6 +595,78 @@ export function DeskActivity({ data, filter, onFilterChange }: {
         ))}
       </div>
 
+      {/* v2.189.0 — the week roster: WHO pulled the week, the trailing-7-day
+          twin of the digest strip's roster. The tiles answer "how many were
+          active this week" (the weekReviewers count, v2.64.0) but kept the
+          names to themselves; this strip names them — the SAME share-bar
+          affordance family as yesterday's roster (avatar hue pill, emerald
+          bar on a muted track, visits · share figure, the chevron drill)
+          plus the week face's own mark: a per-reviewer clears chip (the
+          corrections this reviewer answered in the window) — the yesterday
+          strip's contract keeps its exact shape. The rows drill the SAME
+          ?reviewer= filter (the toggle semantics hold; the strip itself
+          NEVER re-keys — org-wide by contract, read from `stats`, never
+          the filtered timeline). Renders when the week had visits AND the
+          payload carried the rows — the week face has no top-reviewer chip,
+          so even a solo reviewer is worth naming (their row is the whole
+          story, a 100% bar). Six rows render; a busier week says "+N more"
+          honestly. The slate divider (not the digest's amber) keeps the two
+          faces distinguishable at a glance. */}
+      {stats.weekVisits > 0 && stats.weekReviewerRows && stats.weekReviewerRows.length > 0 && (
+        <div data-testid="desk-week-roster" className="mb-3 border-t border-slate-100 pt-2 dark:border-slate-800">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
+            who pulled the week · share of {num(stats.weekVisits)} visit{stats.weekVisits === 1 ? '' : 's'} · click a name to pull their file
+          </p>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {stats.weekReviewerRows.slice(0, 6).map((r) => {
+              const weekShare = stats.weekVisits > 0 ? Math.round((r.visits / stats.weekVisits) * 100) : 0;
+              const weekDrilled = reviewer === r.name;
+              return (
+                <li key={r.name} data-testid="desk-week-roster-row" className="flex min-w-[150px] flex-1 items-center">
+                  <button
+                    type="button"
+                    onClick={() => onFilterChange({ ...filter, reviewer: weekDrilled ? null : r.name })}
+                    aria-pressed={weekDrilled}
+                    aria-label={`${weekDrilled ? 'Stop reviewing' : 'Review'} ${r.name}'s desk visits — ${r.visits} of ${stats.weekVisits} this week`}
+                    data-testid="desk-week-roster-drill"
+                    title={`${r.name}: ${r.visits} of ${stats.weekVisits} visits this week (${weekShare}%) — ${weekDrilled ? 'click to release the drill' : 'click to review their visits'}`}
+                    className={`group flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${weekDrilled
+                      ? 'bg-emerald-50/90 ring-1 ring-emerald-300 dark:bg-emerald-500/10 dark:ring-emerald-500/40'
+                      : 'hover:bg-white/80 dark:hover:bg-slate-800/50'}`}
+                  >
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${avatarHue(r.name)}`}>
+                      {r.name}
+                    </span>
+                    <span className="h-1 min-w-[24px] flex-1 overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/60" aria-hidden>
+                      <span className={`block h-full rounded-full transition-[width] duration-300 ${weekDrilled ? 'bg-emerald-600' : 'bg-emerald-500/80'}`} style={{ width: `${Math.min(100, weekShare)}%` }} />
+                    </span>
+                    {r.clears > 0 ? (
+                      <span
+                        data-testid="desk-week-roster-clears"
+                        title={`${r.name} answered ${r.clears} correction${r.clears === 1 ? '' : 's'} this week`}
+                        className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold tabular-nums text-emerald-700 dark:text-emerald-300"
+                      >
+                        <BadgeCheck className="h-2.5 w-2.5" aria-hidden /> {r.clears}
+                      </span>
+                    ) : null}
+                    <span className={`shrink-0 text-[10px] font-semibold tabular-nums transition-colors ${weekDrilled ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-600 dark:text-slate-300'}`}>{r.visits} · {weekShare}%</span>
+                    <ChevronRight
+                      aria-hidden="true"
+                      className={`h-3 w-3 shrink-0 transition-all duration-150 ${weekDrilled
+                        ? 'translate-x-0 text-emerald-800 opacity-100 dark:text-emerald-400'
+                        : '-translate-x-0.5 text-slate-500 opacity-0 group-hover:translate-x-0 group-hover:opacity-70 dark:text-slate-500'}`}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {stats.weekReviewerRows.length > 6 && (
+            <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-500">+{stats.weekReviewerRows.length - 6} more reviewer{stats.weekReviewerRows.length - 6 === 1 ? '' : 's'} on the week roster</p>
+          )}
+        </div>
+      )}
+
       {/* v2.65.0 drill-down bar — who the desk is looking at right now */}
       {reviewer ? (
         <div data-testid="desk-drilldown-bar" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">

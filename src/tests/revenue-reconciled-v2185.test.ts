@@ -149,8 +149,8 @@ describe('the recorded history - comments, docs, CSV notes', () => {
 
 describe('the version contract', () => {
   it('package.json rides at 2.185.0', () => {
-    expect(pkg.version).toBe('2.188.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.188.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.188.0');
+    expect(pkg.version).toBe('2.189.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.189.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.189.0');
   });
 });

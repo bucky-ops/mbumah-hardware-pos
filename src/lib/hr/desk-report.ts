@@ -738,8 +738,9 @@ export function deskReportVisitTime(at: string): string {
  *   <one row per branch, visits desc>
  *   (blank)
  *   Reviewers
- *   Name,Visits,Corrections answered,Branches,Last visit (UTC)
- *   <one row per reviewer, visits desc>
+ *   Name,Visits,Corrections answered,Branches,Last visit (UTC),Share (%)
+ *   <one row per reviewer, visits desc — v2.189.0 adds the Share (%) column
+ *    at the END, lib-computed from the report's own totals>
  *   (blank)
  *   Most-visited requests
  *   Employee,Leave type,Branch,Status,Visits,Last visit (UTC)
@@ -786,9 +787,22 @@ export function deskReportToCsv(
 
   lines.push('');
   lines.push('Reviewers');
-  row(['Name', 'Visits', 'Corrections answered', 'Branches', 'Last visit (UTC)']);
+  // v2.189.0: the Share column rides — each reviewer's slice of the
+  // window's total visits, computed BY THE LIB from the report's OWN
+  // totals (round2 of ×100 — the wire is never trusted). Appended at the
+  // END of the row so any prior consumer reading columns 1–5 keeps reading
+  // them unchanged; reviewers exist only when visits > 0, so the share
+  // math is safe — the '' branch is honest defense, never a live 0%.
+  row(['Name', 'Visits', 'Corrections answered', 'Branches', 'Last visit (UTC)', 'Share (%)']);
   for (const r of report.reviewers) {
-    row([r.name, r.visits, r.clears, r.branches, r.lastVisitAt ?? '']);
+    row([
+      r.name,
+      r.visits,
+      r.clears,
+      r.branches,
+      r.lastVisitAt ?? '',
+      report.totals.visits > 0 ? Math.round((r.visits / report.totals.visits) * 10000) / 100 : '',
+    ]);
   }
 
   lines.push('');

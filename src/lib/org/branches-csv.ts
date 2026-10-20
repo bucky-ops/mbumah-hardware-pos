@@ -59,6 +59,16 @@ export interface BranchDeskCsvBlock {
    * ends at the v2.185.0 shape, never a hole.
    */
   reviewerRows?: ReadonlyArray<{ name: string; visits: number }>;
+  /**
+   * v2.189.0: the WEEK shape — the trailing-7-day twin of the yesterday
+   * digest, the same window the summary tiles' "Visits · 7 days" figure
+   * speaks. `visits` is the week's total (the share denominator);
+   * `reviewerRows` is the per-reviewer roster (loudest-first, capped 24 by
+   * the read). OPTIONAL by contract: an older answer (or a caller that has
+   * not grown the field) exports WITHOUT the week sub-section — the file
+   * ends at the v2.188.0 shape, never a hole.
+   */
+  week?: { visits: number; reviewerRows?: ReadonlyArray<{ name: string; visits: number }> } | null;
 }
 
 /**
@@ -188,6 +198,9 @@ export function buildBranchesCsv(
     );
   }
   if (desk) {
+    // v2.189.0: the week block captured once so the callback below keeps a
+    // non-null narrowing (TS cannot see through the spread's guard).
+    const week = desk.week;
     lines.push(
       `Desk report — ${desk.label}`,
       'Desk activity,Value',
@@ -225,6 +238,29 @@ export function buildBranchesCsv(
                 r.name,
                 r.visits,
                 Math.round((r.visits / desk.visits) * 10000) / 100,
+              ]
+                .map(csvField)
+                .join(','),
+            ),
+            '',
+          ]
+        : []),
+      // v2.189.0: the "Reviews by reviewer (7d)" sub-section — the week
+      // shape, offline twin of the panel's week strip (the v2.180.0
+      // file-mirrors-screen rule). The share is computed BY THE LIB from
+      // the week block's OWN visits (round2 of ×100) — the wire is never
+      // trusted. Renders ONLY when the caller carried the week block AND
+      // its roster AND the week has visits to share out of — an absent
+      // block, an absent roster or a zero-visit week ends the section
+      // above, never a divide-by-zero or an invented 0% column.
+      ...(week && week.reviewerRows && week.reviewerRows.length > 0 && week.visits > 0
+        ? [
+            'Reviews by reviewer (7d),Reviewer,Visits,Share (%)',
+            ...week.reviewerRows.map((r) =>
+              [
+                r.name,
+                r.visits,
+                Math.round((r.visits / week.visits) * 10000) / 100,
               ]
                 .map(csvField)
                 .join(','),
