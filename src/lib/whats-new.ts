@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.164.0',
+    title: 'The pulse speaks the reaper',
+    bullets: [
+      'The Automation pulse card now shows how many expired sign-in sessions each tick reaped — visible at a glance, next to the tick status.',
+      'The sub-job chips speak their own sweep: reaped counts on the reaper chip, honest silence everywhere else.',
+      'A new spec parity appendix maps every EMS spec phase to the release that delivered it.',
+      'The cron operations guide now names all six dispatcher sub-jobs and their ownership.',
+    ],
+  },
+  {
     version: '2.163.0',
     title: 'The session reaps itself — and the door swings back',
     bullets: [

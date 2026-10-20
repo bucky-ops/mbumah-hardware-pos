@@ -23,9 +23,9 @@ cadence honest, and how to read the heartbeat. Companion to
   - `/api/cron/nightly` — `30 2 * * *` (02:30 UTC)
   - `/api/cron/hourly` — `0 3 * * *` (03:00 UTC, ~06:00 EAT)
 - Everything folded into the hourly dispatcher was designed for an hourly
-  tick: outbox pump, payments sweeper, eTIMS retry, debt reminders, and the
-  B2C auto-recovery sweep. The B2C backoff windows (2m-30m) are meaningless
-  at one tick a day.
+  tick: outbox pump, payments sweeper, eTIMS retry, debt reminders, the
+  B2C auto-recovery sweep, and (v2.163.0) the session reaper. The B2C
+  backoff windows (2m-30m) are meaningless at one tick a day.
 - **The remedy is `.github/workflows/cron-hourly.yml`**: a GitHub Actions
   workflow scheduled `0 * * * *` (plus `workflow_dispatch` for manual
   arming) that pings the production dispatcher with the `x-cron-secret`
@@ -42,14 +42,31 @@ cadence honest, and how to read the heartbeat. Companion to
 3. Optional repo secret `PROD_URL` (defaults to the known deployment URL).
 4. Run the workflow once via `workflow_dispatch` to verify end-to-end.
 
-## The tick ledger (v2.159.0)
+## The tick ledger (v2.159.0, extended v2.164.0)
 
 - Every completed dispatch writes ONE `CRON_DISPATCH_TICK` INFO systemLog
   row with `metadata.results` = `[{ name, ok, status }, ...]` for all
   sub-jobs. The `CRON_DISPATCH_PARTIAL_FAILURE` WARN stays for severity
   filtering; the ledger is the always-row.
+- **v2.164.0**: the session-reaper's entry also carries `deleted` (the
+  sweep's own count) whenever the response body held a non-negative finite
+  number — promoted by the dispatcher's `ledgerEntry`, never invented by
+  the ledger. The Automation pulse card renders it as `· reaped N` (or
+  `· clean` for zero) on the chip and an "N reaped" header pill when
+  positive. Older ticks and other sub-jobs simply lack the field.
 - ~24 rows/day with the pinger armed (~1/day without). SystemLog retention
   sweeps own the growth.
+
+## The sub-jobs (six, as of v2.163.0)
+
+| name | owns | notes |
+|------|------|-------|
+| `outbox` | outbox_events pump | opportunistic pumps also fire post-checkout |
+| `payments-sweeper` | M-Pesa payment polling | early-outs when unconfigured |
+| `etims-retry` | KRA eTIMS queue drain | backoff + DEAD ceiling (v2.6.0) |
+| `debt-reminders` | overdue debt statements | 7-day per-ledger anti-spam throttle |
+| `b2c-recovery` | failed/stuck B2C transfers | gate-allowed re-sends only (v2.155.0) |
+| `session-reaper` | **expired auth sessions** | one `deleteMany` on the indexed `expiresAt` (v2.163.0); `runWithoutTenant` — Session is a global, tenant-exempt table; scope discipline: reads ONLY `expiresAt`, never `lastActiveAt` (idle expiry stays the portal guard's contract); every sweep leaves its own INFO `SESSIONS_REAPED` row, and a reaped-zero sweep is a SUCCESS |
 
 ## Reading the heartbeat: the Automation pulse card
 
@@ -69,9 +86,10 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
 The org console card renders every state honestly: loading skeletons, an
 empty state before the first tick, an error state with Retry (a read
 failure is NOT a dispatch failure — the heartbeat keeps running), and the
-live pulse (sub-job chips emerald-700 ok / red-700 failed with HTTP status).
-An unparseable ledger row keeps the timestamp and renders no chips — never
-a guess.
+live pulse (sub-job chips emerald-700 ok / red-700 failed with HTTP
+status; the reaper chip adds `· reaped N` / `· clean`, and a positive
+count wears a sky "N reaped" pill in the card header). An unparseable
+ledger row keeps the timestamp and renders no chips — never a guess.
 
 ## Contracts new scheduled work must inherit
 

@@ -270,6 +270,9 @@ export function OrgConsole() {
     name: string;
     ok: boolean;
     status: number;
+    /** v2.164.0: the session-reaper's deleted count, when the tick ledger
+     *  carried it (optional for every other sub-job and for older ticks). */
+    deleted?: number;
   }
   interface AutomationSummary {
     generatedAt: string;
@@ -1001,6 +1004,25 @@ export function OrgConsole() {
                 {automation.secretConfigured ? 'tick gate armed' : 'CRON_SECRET unset'}
               </span>
             )}
+            {/* v2.164.0: the reaper's own headline. When the last tick's
+                ledger carried a deleted count > 0, the card says it up here
+                where the eye lands first — session hygiene is operational
+                telemetry, not a chip detail to hunt for. Honest absence:
+                zero reaps or an older tick render NOTHING (clean is the
+                expected state, silence does not lie about it). */}
+            {automationPhase === 'ready' &&
+              automation?.lastTick &&
+              (automation.lastTick.subJobs.find((j) => j.name === 'session-reaper')?.deleted ??
+                0) > 0 && (
+                <span
+                  data-testid="automation-reaped-pill"
+                  title="Expired sign-in sessions the reaper deleted during the last automation tick"
+                  className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-300"
+                >
+                  {automation.lastTick.subJobs.find((j) => j.name === 'session-reaper')?.deleted}{' '}
+                  reaped
+                </span>
+              )}
             {automationPhase === 'error' && (
               <Button
                 variant="outline"
@@ -1078,6 +1100,16 @@ export function OrgConsole() {
                         }`}
                       />
                       {job.name}
+                      {/* v2.164.0: the reaper chip speaks its own sweep -
+                          `· reaped N` when the ledger carried a positive
+                          count, `· clean` when it carried zero; anything
+                          else (absent, older tick, garbage) renders nothing
+                          — the same never-a-guess rule as the HTTP suffix. */}
+                      {job.name === 'session-reaper' && job.ok && job.deleted !== undefined && (
+                        <span className="tabular-nums">
+                          · {job.deleted > 0 ? `reaped ${job.deleted}` : 'clean'}
+                        </span>
+                      )}
                       {!job.ok && <span className="tabular-nums">· HTTP {job.status}</span>}
                     </li>
                   ))}

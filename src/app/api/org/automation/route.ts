@@ -30,6 +30,11 @@ interface SubJobResult {
   name: string;
   ok: boolean;
   status: number;
+  /** v2.164.0: the session-reaper's own honest count, promoted onto the
+   *  tick ledger by the dispatcher (only when a non-negative finite
+   *  number). Optional for every other sub-job and for pre-2.164 ticks -
+   *  the card renders nothing when it is absent, never a guess. */
+  deleted?: number;
 }
 
 async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
@@ -61,12 +66,21 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
           Array.isArray((parsed as { results?: unknown }).results)
         ) {
           subJobs = ((parsed as { results: unknown[] }).results as SubJobResult[]).filter(
-            (r): r is SubJobResult =>
-              !!r &&
-              typeof r === 'object' &&
-              typeof (r as SubJobResult).name === 'string' &&
-              typeof (r as SubJobResult).ok === 'boolean' &&
-              typeof (r as SubJobResult).status === 'number',
+            (r): r is SubJobResult => {
+              if (!r || typeof r !== 'object') return false;
+              const job = r as SubJobResult;
+              // deleted rides only when it is honestly absent or a real
+              // non-negative number - a string "3" or a negative never does.
+              // (Destructured once: TS cannot narrow a cast-property access
+              // across a || / && chain, and no-non-null-assertion is house
+              // lint policy.)
+              const { name, ok, status, deleted } = job;
+              if (typeof name !== 'string' || typeof ok !== 'boolean' || typeof status !== 'number') {
+                return false;
+              }
+              if (deleted === undefined) return true;
+              return typeof deleted === 'number' && Number.isFinite(deleted) && deleted >= 0;
+            },
           );
         }
       } catch {
