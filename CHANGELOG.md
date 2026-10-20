@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.188.0] The roster drills
+
+v2.186.0 taught the desk's morning note to name its reviewers, but the roster rows kept their hands in their pockets — the answer to "who pulled the desk?" was on the screen and the drill-down was one click away, yet the row connected neither. The same round of questioning left the revenue modal's net face mute about its own trend even though both windows were already on the wire. This release both carried options ship: the roster drills, and the net lens wears its verdict.
+
+### Added
+- **The roster drills** (`panels.tsx`): each "who pulled the desk" row is now a real control that applies the panel's existing `?reviewer=` filter — the same drill the ledger rows have had since v2.65.0, one state lift, no new wire. Clicking the drilled reviewer again releases the filter, matching the branch chips' toggle semantics. The org-wide contract holds: the digest strip NEVER re-keys — only the timeline below narrows.
+- **The drill affordance, in full detail**: hover brightens the row and slides a chevron in; the drilled row wears the panel's emerald drill language (ring + tint + emerald share bar + visible chevron); the visit figures re-tint with the state; `aria-pressed` + a spoken label ("Review Amina's desk visits — 3 of 5 yesterday") carry the state to screen readers; keyboard focus wears the house emerald ring. The strip's caption ("· click a name to pull their file") and the panel footer both invite the drill.
+- **The net week-over-week verdict** (`kpi-row.tsx`): in the Net lens, a violet strip mirrors the VAT ribbon structurally — label, week figure, arrowed verdict, prior chip — so the net face finally speaks its own trend (`netWeekTotal` vs `netPriorWeekTotal`, both already on the wire). The honesty rule is the SAME as the VAT chip: emerald up, red down, calm flat, and a zero prior renders NO percentage — never an invented "0%", never a NaN. The violet family keeps the two faces distinguishable at a glance; renders only when the prior window arrived (an older cached answer keeps the calm grid).
+
+### Tests
+- NEW `src/tests/roster-drills-v2188.test.ts` (14 tests): the drill's control semantics, the toggle, the emerald drill language, the chevron affordance, the invitations, the v2.186.0 strip pins holding (share math, width cap, six rows, "+N more"), the verdict's gate + fallback chain + honesty rule (EXECUTED against the shipped v2.187.0 E2E figures), the violet family, the arrow semantics, and the version.
+- The head-pin suites re-anchored with the new counters (77/78/79/110); prior pkg pins ride to 2.188.0 (the treadmill tax).
+- `verify:v2-188-0` wired — fresh verify script per the house convention.
+
 ## [2.187.0] The modal learns the lens
 
 v2.185.0 reconciled the two revenues: the headline is GROSS of tax on both org surfaces, and the analyst's net/VAT view moved under an explicitly-labeled ribbon. But the lens stayed a strip — one week tax figure, one net figure — while the modal's chart and stat grid spoke only the gross face, and `taxPriorWeekTotal` had no consumer at all. This release the lens deepens into a full second face of the SAME read.

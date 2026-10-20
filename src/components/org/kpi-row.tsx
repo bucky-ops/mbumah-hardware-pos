@@ -219,6 +219,39 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                 </>
               )}
             </div>
+            {/* v2.188.0: the net lens wears its own week-over-week verdict —
+                the v2.187.0 ribbon chip spoke only the VAT face; the net face
+                stayed mute about its own trend even though BOTH windows were
+                already on the wire (netWeekTotal since v2.185.0's chip,
+                netPriorWeekTotal since v2.187.0). The strip mirrors the VAT
+                ribbon structurally — label, week figure, arrowed verdict,
+                prior chip — but wears the net face's violet family so the
+                two faces stay distinguishable at a glance. The verdict is
+                the SAME honesty rule as the VAT chip: up emerald, down red,
+                flat calm, and a zero prior renders NO percentage (never an
+                invented "0%" or a NaN). Renders only in the net lens and
+                only when the prior window arrived (optional field: an older
+                cached answer keeps the calm grid, never a broken strip). */}
+            {lens === 'net' && k.revenue.netPriorWeekTotal != null && (() => {
+              const netPrior = k.revenue.netPriorWeekTotal ?? 0;
+              const netWeek = k.revenue.netWeekTotal ?? k.revenue.weekTotal - (k.revenue.taxWeekTotal ?? 0);
+              const netDelta = netWeek - netPrior;
+              const netPct = netPrior > 0 ? Math.round((netDelta / netPrior) * 1000) / 10 : null;
+              return (
+                <div data-testid="revenue-net-wow-strip" className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-violet-100 bg-violet-50/70 px-2.5 py-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-800">net week-over-week</span>
+                  <span data-testid="revenue-net-wow-week" className="text-xs font-semibold tabular-nums text-violet-900">{kes(netWeek)}</span>
+                  <span
+                    data-testid="revenue-net-wow"
+                    title={`Net week-over-week: ${kes(netWeek)} vs prior ${kes(netPrior)}`}
+                    className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ${netDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : netDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-slate-50 text-slate-500 ring-slate-200'}`}
+                  >
+                    {netDelta > 0 ? '▲' : netDelta < 0 ? '▼' : '—'} {netPct == null ? 'vs prior' : `${netDelta > 0 ? '+' : ''}${netPct}% vs prior`}
+                  </span>
+                  <span data-testid="revenue-net-wow-prior" className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-violet-700 ring-1 ring-violet-100" title="Prior week net of VAT">prior {kes(netPrior)}</span>
+                </div>
+              );
+            })()}
             {/* v2.185.0: the VAT lens — the analyst's net number did not die
                 in the reconciliation; it moved HERE, under its own label.
                 Tolerant by type (optional fields): an older cached answer
