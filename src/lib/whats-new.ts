@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.161.0',
+    title: 'The payslip goes home',
+    bullets: [
+      'New: employees can download their own payslip PDF from the portal’s breakdown dialog, once the payroll run has posted.',
+      'Honest: a payslip that is still a draft shows plainly that the PDF unlocks when the run posts — and old cached screens stay silent rather than promise.',
+      'Verified: the self-service portal now officially measures above the 90 target on mobile (Performance 92, Accessibility 100, SEO 100).',
+      'Improved: payslips that have been issued now show their issuance date right on the card.',
+    ],
+  },
+  {
     version: '2.160.0',
     title: "The spec's own paths",
     bullets: [

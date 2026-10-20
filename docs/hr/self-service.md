@@ -167,3 +167,60 @@ time). Remaining headroom is the Next.js App Router runtime itself
 (~224 KiB framework chunk, irreducible) and the residual hydration work of
 the interactive islands (payslip dialog, leave form, acknowledge buttons) —
 micro-optimisations only from here.
+
+### v2.161.0 re-measure — all six pages SSR (production build)
+
+The v2.24.0 row above predates the v2.28.0 SSR completion; the acceptance
+re-measure finally ran against the fully server-rendered portal. Mobile
+Lighthouse 13.5.0 (`--only-categories=performance,accessibility,best-practices,seo`)
+against `:3200/employees/me` on the production daemon build, cashier session.
+The measurement method note below ("extra header does not persist") was
+written for the v2.23.0 SPA-era portal, where the page fetched its payload
+client-side after mount; since v2.28.0 the HTML carries the payload, so a
+single header-authenticated run measures real content — the LCP element in
+this run was the home card's payslip amount (`MAIN > DIV > SECTION > P`), not
+an error state.
+
+| run | perf | a11y | BP | SEO | TBT | note |
+|-----|------|------|----|-----|-----|------|
+| **v2.161.0 SSR-complete** | **92** | **100** | 96 | 100 | 153 ms | LCP 3.0 s (lab-throttled); FCP = SI 1.39 s; CLS 0 |
+
+Verdict: **spec acceptance 10 (Lighthouse above 90) HOLDS on the SSR-complete
+portal.** The remaining performance headroom: LCP element render delay
+~177 ms and TBT 153 ms — both micro-optimisation territory.
+
+The 4-point Best-Practices cost is an environment artifact, not an app bug:
+`/_vercel/insights/script.js` and `/_vercel/speed-insights/script.js` are
+Vercel-managed endpoints that only exist on the Vercel deployment; on the
+local daemon they 404 and Lighthouse counts the console noise. On production
+Vercel these serve normally.
+
+### The payslip goes home (v2.161.0)
+
+`GET /api/self-service/me/payslips/[id]/pdf` — the employee can finally
+download their own payslip PDF from the portal's breakdown dialog. The
+contract:
+
+- **One source of truth**: the route reuses the HR PDF route's exact builders
+  (`buildPayslipView` + `buildPayslipPdf`) — no re-implementation, the PII
+  masking and the layout cannot drift.
+- **Masking posture** identical to the JSON detail route: statutory ids are
+  masked unless the caller holds `hr.employee.unmask.pii` (computed
+  server-side from the session role — never a query parameter).
+- **Own-data rule**: the query is scoped by `employeeId: employee.id`; a
+  payslip that is not yours is a **404** (existence is not leaked), matching
+  `getMyPayslip`.
+- **Honest lifecycle gate**: payslips become immutable (and downloadable) the
+  moment the run POSTS — the sanctioned issuance write stamps
+  `payslipNumber` + `payslipIssuedAt`. A non-issued detail (a DRAFT /
+  PENDING_APPROVAL / APPROVED row) answers **409 NOT_ISSUED** with a
+  plain-language reason; the dialog shows the same truth ("PDF download
+  unlocks once this payslip is issued").
+- **The honest flag**: `listMyPayslips` and `getMyPayslip` payloads now carry
+  `issued: payslipIssuedAt !== null`. The portal renders the download only
+  when `issued === true`, the pending note when `issued === false`, and
+  NOTHING when the field is absent (an older offline cache — never a false
+  promise). Issued list rows also show their issuance date.
+- **Why the dialog**: the payslip row is a `<button>`; an anchor nested
+  inside a button is invalid HTML — the dialog is both the valid and the
+  natural decision point for taking the document home.
