@@ -42,7 +42,22 @@ cadence honest, and how to read the heartbeat. Companion to
 3. Optional repo secret `PROD_URL` (defaults to the known deployment URL).
 4. Run the workflow once via `workflow_dispatch` to verify end-to-end.
 
-## The tick ledger (v2.159.0, extended v2.164.0)
+### Verifying the arming (two reads, five minutes, v2.165.0)
+
+Arming is not done until it is OBSERVED done — two independent reads
+confirm it, and neither requires shell access:
+
+1. **The Actions tab**: the `workflow_dispatch` run (step 4) must be green
+   — the "Verify every sub-job came back ok" step is the honest verdict, a
+   red run names the failing sub-job in its log. A green run here is proof
+   the repo secret + the URL work.
+2. **The card**: reload the org console's Automation pulse — the amber
+   "CRON_SECRET unset" badge must flip to the emerald "tick gate armed"
+   (the posture is read server-side from the env, so the flip is proof the
+   Vercel env var landed), and the tick source label (v2.165.0) on the
+   "Last tick" line plus a green run in the Actions tab close the loop.
+
+## The tick ledger (v2.159.0, extended v2.164.0 + v2.165.0)
 
 - Every completed dispatch writes ONE `CRON_DISPATCH_TICK` INFO systemLog
   row with `metadata.results` = `[{ name, ok, status }, ...]` for all
@@ -54,8 +69,14 @@ cadence honest, and how to read the heartbeat. Companion to
   the ledger. The Automation pulse card renders it as `· reaped N` (or
   `· clean` for zero) on the chip and an "N reaped" header pill when
   positive. Older ticks and other sub-jobs simply lack the field.
-- ~24 rows/day with the pinger armed (~1/day without). SystemLog retention
-  sweeps own the growth.
+- **v2.165.0**: BOTH dispatchers write the ledger. The nightly dispatcher
+  (which had left no always-row since v2.159.0) writes its own tick row,
+  and every row's metadata names its dispatcher (`dispatcher: 'hourly' |`
+  `'nightly'`) — the org card reads the field to label the "Last tick"
+  line (`· nightly dispatcher`), and older rows simply omit the label.
+  The card's tooltip on the same line carries the exact EAT stamp of the
+  tick. Rows/day: ~25 with the pinger armed (~2/day without). SystemLog
+  retention sweeps own the growth.
 
 ## The sub-jobs (six, as of v2.163.0)
 
@@ -66,7 +87,7 @@ cadence honest, and how to read the heartbeat. Companion to
 | `etims-retry` | KRA eTIMS queue drain | backoff + DEAD ceiling (v2.6.0) |
 | `debt-reminders` | overdue debt statements | 7-day per-ledger anti-spam throttle |
 | `b2c-recovery` | failed/stuck B2C transfers | gate-allowed re-sends only (v2.155.0) |
-| `session-reaper` | **expired auth sessions** | one `deleteMany` on the indexed `expiresAt` (v2.163.0); `runWithoutTenant` — Session is a global, tenant-exempt table; scope discipline: reads ONLY `expiresAt`, never `lastActiveAt` (idle expiry stays the portal guard's contract); every sweep leaves its own INFO `SESSIONS_REAPED` row, and a reaped-zero sweep is a SUCCESS |
+| `session-reaper` | **expired auth sessions** | one `deleteMany` on the indexed `expiresAt` (v2.163.0); rides BOTH dispatchers since v2.165.0 (hourly 03:00 UTC + nightly 02:30 UTC — the idempotent deleteMany makes the overlap harmless); `runWithoutTenant` — Session is a global, tenant-exempt table; scope discipline: reads ONLY `expiresAt`, never `lastActiveAt` (idle expiry stays the portal guard's contract); every sweep leaves its own INFO `SESSIONS_REAPED` row, and a reaped-zero sweep is a SUCCESS |
 
 ## Reading the heartbeat: the Automation pulse card
 
@@ -74,8 +95,10 @@ cadence honest, and how to read the heartbeat. Companion to
 ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
 `runWithoutTenant`) returns:
 
-- `lastTick`: the latest ledger row — timestamp, per-sub-job chips, and the
-  7-day `CRON_DISPATCH_PARTIAL_FAILURE` count.
+- `lastTick`: the latest ledger row — timestamp (with the exact EAT stamp
+  as the line's tooltip, v2.165.0), the dispatcher that fired when the row
+  names one (`· hourly dispatcher` / `· nightly dispatcher`, v2.165.0),
+  per-sub-job chips, and the 7-day `CRON_DISPATCH_PARTIAL_FAILURE` count.
 - `failedTicks7d`: partial-failure rows in the last 7 days.
 - `secretConfigured`: whether `CRON_SECRET` is set server-side — the honest
   tick-gate posture (fail-open ticks render the amber "CRON_SECRET unset"
@@ -87,9 +110,11 @@ The org console card renders every state honestly: loading skeletons, an
 empty state before the first tick, an error state with Retry (a read
 failure is NOT a dispatch failure — the heartbeat keeps running), and the
 live pulse (sub-job chips emerald-700 ok / red-700 failed with HTTP
-status; the reaper chip adds `· reaped N` / `· clean`, and a positive
-count wears a sky "N reaped" pill in the card header). An unparseable
-ledger row keeps the timestamp and renders no chips — never a guess.
+status; the reaper chip adds `· reaped N` / `· clean`, a positive
+count wears a sky "N reaped" pill in the card header, and the Last tick
+line names its dispatcher and carries the exact EAT stamp tooltip since
+v2.165.0). An unparseable ledger row keeps the timestamp and renders no
+chips — never a guess.
 
 ## Contracts new scheduled work must inherit
 
@@ -100,6 +125,9 @@ ledger row keeps the timestamp and renders no chips — never a guess.
   keeps dedicated vercel.json entries out) — give it a name, a
   withErrorBoundary-wrapped GET, its own `x-cron-secret` check, and it
   inherits the ledger row and the pinger's green/red verdict for free.
+  If the job must never miss a day, fold it into BOTH dispatchers (the
+  session reaper has ridden both since v2.165.0) — idempotent jobs only;
+  the overlap must be provably harmless.
 - Sub-jobs must stay idempotent: overlapping ticks (Vercel + the pinger)
   cannot double-deliver. The B2C sweep inherits this from
   `initiatePayrollB2C`'s active-transaction refusal.

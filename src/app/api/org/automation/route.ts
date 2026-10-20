@@ -53,10 +53,12 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
     ]);
 
     // The metadata column is a JSON string by contract (v2.159.0 dispatcher
-    // writes { results: SubJobResult[] }). A row that cannot be parsed is a
+    // writes { results: SubJobResult[] }; v2.165.0 adds the dispatcher's
+    // name). A row that cannot be parsed is a
     // ledger row without sub-job detail - the tick itself still happened, so
     // the timestamp stays and the chips render nothing (never a guess).
     let subJobs: SubJobResult[] = [];
+    let tickDispatcher: string | undefined;
     if (latestTick?.metadata) {
       try {
         const parsed: unknown = JSON.parse(latestTick.metadata);
@@ -82,6 +84,13 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
               return typeof deleted === 'number' && Number.isFinite(deleted) && deleted >= 0;
             },
           );
+          // v2.165.0: which dispatcher fired ('hourly' | 'nightly'). Rows
+          // older than v2.165.0 lack the field - absent or garbage keeps it
+          // undefined and the card renders no source label (never a guess).
+          const rawDispatcher = (parsed as { dispatcher?: unknown }).dispatcher;
+          if (typeof rawDispatcher === 'string' && rawDispatcher.length > 0) {
+            tickDispatcher = rawDispatcher;
+          }
         }
       } catch {
         subJobs = []; // tolerant read: the tick stamp still renders
@@ -93,7 +102,14 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
       data: {
         generatedAt: new Date().toISOString(),
         lastTick: latestTick
-          ? { at: latestTick.createdAt.toISOString(), failedCount: failedCount, subJobs }
+          ? {
+              at: latestTick.createdAt.toISOString(),
+              failedCount: failedCount,
+              subJobs,
+              // v2.165.0: present only when the ledger row named its
+              // dispatcher - older ticks simply omit the field.
+              ...(tickDispatcher ? { dispatcher: tickDispatcher } : {}),
+            }
           : null,
         failedTicks7d: failedCount,
         // Honest tick-gate posture, read server-side: while CRON_SECRET is

@@ -142,6 +142,10 @@ async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
 
   const failed = results.filter((r) => !r.ok);
   const ledgerResults = results.map(ledgerEntry);
+  // v2.165.0: the metadata names the dispatcher that fired ('hourly') - the
+  // nightly dispatcher writes the SAME action from v2.165.0 on, so a ledger
+  // row without a name can no longer say which heartbeat it recorded. The
+  // Automation pulse card reads this field to label the last tick.
   if (failed.length > 0) {
     await systemLog({
       action: 'CRON_DISPATCH_PARTIAL_FAILURE',
@@ -150,7 +154,7 @@ async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
       message: `Cron dispatch finished with ${failed.length}/${results.length} failed sub-job(s): ${failed
         .map((f) => `${f.name} (${f.status})`)
         .join('; ')}`,
-      metadata: { results: ledgerResults },
+      metadata: { dispatcher: 'hourly', results: ledgerResults },
     }).catch(() => {});
   }
 
@@ -170,7 +174,7 @@ async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
       failed.length > 0
         ? `Cron tick recorded: ${results.length} sub-job(s), ${failed.length} failed.`
         : `Cron tick recorded: ${results.length} sub-job(s) all ok.`,
-    metadata: { results: ledgerResults },
+    metadata: { dispatcher: 'hourly', results: ledgerResults },
   }).catch(() => {});
 
   return results;

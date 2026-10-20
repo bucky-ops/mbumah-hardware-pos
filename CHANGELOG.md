@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.165.0] Every heartbeat writes its ledger
+
+Until now the nightly dispatch (reconciliation, retention, HR digests) left no always-row — a healthy nightly tick was invisible to the Automation pulse, and the session reaper swept only once a day (the hourly tick is a single daily shot on Vercel Hobby). Both heartbeats now write the same ledger, name themselves, and the reaper rides both.
+
+### Added
+- **The nightly dispatcher folds the session reaper** (`/api/cron/nightly`) as its fourth sub-job: a SECOND daily sweep at 02:30 UTC, 30 minutes ahead of the hourly tick — a frozen or failed 03:00 deployment can no longer leave expired sessions unreaped for a day. The overlap is provably harmless: the reaper is one idempotent `deleteMany` on the indexed `expiresAt` column (expiresAt only, never `lastActiveAt`).
+- **The nightly always-row**: the nightly dispatch writes its own `CRON_DISPATCH_TICK` INFO ledger row (the identical contract hourly has carried since v2.159.0, with the same `ledgerEntry` promotion of the reaper's honest deleted count) — the Automation pulse card can now show the nightly heartbeat, not just the hourly one.
+- **Dispatcher identity on every ledger row**: both dispatchers stamp `metadata.dispatcher` (`'hourly'` / `'nightly'`); `GET /api/org/automation` parses it tolerantly (absent or garbage on pre-2.165 rows → the field is simply omitted) and the card renders it.
+- **The card's Last tick line speaks its source and its exact stamp** (`org-console.tsx`): a `· nightly dispatcher` / `· hourly dispatcher` source label (full-opacity muted-foreground — the card's contrast discipline holds) rendered only when the row named one, and a tooltip carrying the exact EAT stamp ("Tick recorded Mon 20 Oct 2026 · 13:09 EAT") so an operator diffing two ticks never arithmetic's their way back from "3h ago".
+- **docs/cron-operations.md**: the arming section gains the two-read verification (the Actions tab's green run + the card's amber→emerald posture flip — arming is not done until it is OBSERVED done); the ledger section documents both writers and the dispatcher identity; the sub-job table and the contracts section state the both-dispatcher fold rule (idempotent jobs only, the overlap must be provably harmless).
+
+### Changed
+- `src/tests/cron-pulse-v2159` and `src/tests/automation-reaper-v2164` re-anchored (dated notes) to the dispatcher-stamped metadata shape.
+
 ## [2.164.0] The pulse speaks the reaper
 
 Automation that nobody can see is automation that can silently die — so the org console's Automation pulse card now speaks the session reaper's own sweep, and the docs carry the spec parity appendix the last three rounds kept deferring.
