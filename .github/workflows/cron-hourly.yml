@@ -1,0 +1,82 @@
+# Hourly cron pinger (v2.159.0)
+#
+# WHY THIS FILE EXISTS
+#   Vercel Hobby allows at most two cron entries (vercel.json) and they fire
+#   DAILY in practice on this project: /api/cron/hourly is scheduled
+#   "0 3 * * *" — once a day at 03:00 UTC. Every sub-job folded into that
+#   dispatcher (outbox pump, payments sweeper, eTIMS retry, debt reminders,
+#   payroll B2C auto-recovery) was designed for an HOURLY cadence: the B2C
+#   backoff windows (2m-30m) are meaningless when the sweep runs once a day.
+#
+#   This workflow keeps the designed cadence by pinging the production
+#   dispatcher every hour from GitHub Actions — no Vercel Pro required.
+#
+# SETUP (one-time, human):
+#   1. Vercel project env: set CRON_SECRET (the cron routes currently
+#      fail-open with a WARN systemLog while it is unset).
+#   2. GitHub repo secret CRON_SECRET: the same value.
+#   3. Optional repo secret PROD_URL: the deployment base URL. When unset
+#      the default below is used.
+#
+# FAILURE IS HONEST AND VISIBLE: a non-200 response, a non-success payload,
+# or ANY failed sub-job turns this run red in the Actions tab.
+
+name: Cron hourly ping
+
+on:
+  schedule:
+    # Top of every hour, UTC. GitHub Actions cron is UTC-only.
+    - cron: "0 * * * *"
+  # Manual trigger so the ping can be armed/verified right after the
+  # secrets land, without waiting for the next top-of-hour.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping the hourly dispatcher
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PROD_URL: ${{ secrets.PROD_URL }}
+        run: |
+          url="${PROD_URL:-https://mbumah-hardware-pos-one.vercel.app}"
+          echo "Pinging ${url}/api/cron/hourly"
+          code=$(curl -sS --max-time 45 -o /tmp/cron-body.json -w '%{http_code}' \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            "${url}/api/cron/hourly") || {
+              echo "::error::The dispatcher did not answer (curl failure)."
+              exit 1
+            }
+          echo "HTTP ${code}"
+          cat /tmp/cron-body.json
+          echo "cron_http_code=${code}" >> "$GITHUB_OUTPUT"
+          if [ "${code}" != "200" ]; then
+            echo "::error::Expected HTTP 200 from /api/cron/hourly, got ${code}."
+            exit 1
+          fi
+
+      - name: Verify every sub-job came back ok
+        run: |
+          node -e '
+            const body = require("/tmp/cron-body.json");
+            if (!body || body.success !== true) {
+              console.error("::error::Dispatcher payload is not a full success:", JSON.stringify(body).slice(0, 400));
+              process.exit(1);
+            }
+            const results = Array.isArray(body.results) ? body.results : [];
+            if (results.length === 0) {
+              console.error("::error::Dispatcher returned no sub-job results.");
+              process.exit(1);
+            }
+            const failed = results.filter((r) => !r.ok);
+            if (failed.length > 0) {
+              console.error("::error::Failed sub-jobs: " + failed.map((r) => r.name + " (" + r.status + ")").join(", "));
+              process.exit(1);
+            }
+            console.log("All " + results.length + " sub-jobs ok: " + results.map((r) => r.name).join(", "));
+          '

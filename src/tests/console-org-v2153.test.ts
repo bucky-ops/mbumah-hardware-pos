@@ -35,7 +35,8 @@ describe('the tinted alert cards speak tokens that clear their own tints', () =>
 
   it('the detail line is slate-600 — clears every tint with margin', () => {
     const panels = readRepo(PANELS);
-    expect(panels).toContain('<p className="text-xs text-slate-600">{a.detail}</p>');
+    // v2.159.0: the dark half joined the pair (axe dark re-audit).
+    expect(panels).toContain('<p className="text-xs text-slate-600 dark:text-slate-400">{a.detail}</p>');
     expect(panels).not.toContain('<p className="text-xs text-slate-500">{a.detail}</p>');
   });
 
@@ -64,11 +65,11 @@ describe('the People & payroll module finishes its own pass', () => {
 describe('the release surfaces speak 2.154.0 (re-anchored per release)', () => {
   it('package.json, changelog and the feed lead with 2.154.0', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.158.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.158.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.158.0');
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.158.0]');
+    expect(pkg.version).toBe('2.159.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.159.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.159.0');
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.159.0]');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.158.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
+    expect(feed.indexOf("'2.159.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
   });
 });

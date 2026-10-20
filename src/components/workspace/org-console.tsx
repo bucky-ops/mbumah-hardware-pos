@@ -24,7 +24,9 @@ import {
   MessagesSquare,
   PackageOpen,
   ReceiptText,
+  RefreshCw,
   ShieldAlert,
+  Timer,
   UserCog,
   Users,
   Wallet,
@@ -260,6 +262,28 @@ export function OrgConsole() {
   // v2.23.0: per-branch HR drill-down visibility (collapsed until asked for —
   // the console opens with the summary tiles; the table is one click away).
   const [hrPerStoreOpen, setHrPerStoreOpen] = useState(false);
+  // v2.159.0: the Automation pulse card — the last cron dispatch tick from
+  // the ledger (GET /api/org/automation, ORG_ROLES parity with the summary).
+  // Additive by contract: a refused or failed read renders an honest error
+  // state, it never breaks the console payload.
+  interface AutomationSubJob {
+    name: string;
+    ok: boolean;
+    status: number;
+  }
+  interface AutomationSummary {
+    generatedAt: string;
+    lastTick: { at: string; failedCount: number; subJobs: AutomationSubJob[] } | null;
+    failedTicks7d: number;
+    secretConfigured: boolean;
+    cadence: { vercelSchedule: string; pingerWorkflow: string };
+  }
+  const [automation, setAutomation] = useState<AutomationSummary | null>(null);
+  const [automationPhase, setAutomationPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    'idle',
+  );
+  const [automationError, setAutomationError] = useState('');
+  const [automationReload, setAutomationReload] = useState(0);
 
   function findDiagnosticFor(
     list: BranchDiagnostic[],
@@ -463,6 +487,29 @@ export function OrgConsole() {
     };
   }, [setOrganizationMode]);
 
+  // v2.159.0: the automation ledger read — parallel to the summary fetch,
+  // same auth lifecycle, same honest error handling. Reload key re-runs the
+  // read when the card's Retry is pressed.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      setAutomationPhase((p) => (p === 'ready' ? 'ready' : 'loading'));
+      const res = await authorizedFetchJson('/api/org/automation');
+      if (cancelled) return;
+      if (!res.ok || !res.json?.success || !res.json?.data) {
+        setAutomationPhase('error');
+        setAutomationError(res.json?.error || 'The automation ledger could not be read.');
+        return;
+      }
+      setAutomation(res.json.data as AutomationSummary);
+      setAutomationPhase('ready');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, automationReload]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
@@ -660,8 +707,12 @@ export function OrgConsole() {
                     People &amp; payroll by branch ({summary.hrPerStore.length})
                     {/* v2.148.0: slate-600 — the /80 alpha measured 3.61:1 and
                         even full muted-foreground computes ~4.4:1 on the
-                        muted toggle's own bg; slate-600 passes at ~7:1. */}
-                    <span className="font-normal text-slate-600">
+                        muted toggle's own bg; slate-600 passes at ~7:1.
+                        v2.159.0: the dark half — the axe re-audit caught
+                        slate-600 on the dark card at 2.38:1, so the span
+                        wears the standing dark:text-slate-400 pair (~9:1
+                        on the near-black card). */}
+                    <span className="font-normal text-slate-600 dark:text-slate-400">
                       — headcount, cost, absence, latest run, expiry alerts per branch
                     </span>
                   </span>
@@ -924,6 +975,130 @@ export function OrgConsole() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/* v2.159.0: Automation pulse — the cron dispatcher's heartbeat,
+            read from the CRON_DISPATCH_TICK ledger. Sits next to the audit
+            feed because it IS operational telemetry: the tick is the app's
+            heartbeat, and the card says honestly whether it beats. */}
+        <section
+          aria-label="Automation pulse"
+          role="region"
+          data-testid="automation-card"
+          className="border rounded-lg bg-card"
+        >
+          <div className="px-4 py-3 border-b flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold">Automation pulse</h2>
+            {automationPhase === 'ready' && automation && (
+              <span
+                data-testid="automation-secret-posture"
+                className={
+                  automation.secretConfigured
+                    ? 'inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-700'
+                    : 'inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700'
+                }
+              >
+                {automation.secretConfigured ? 'tick gate armed' : 'CRON_SECRET unset'}
+              </span>
+            )}
+            {automationPhase === 'error' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-7 text-xs"
+                data-testid="automation-retry"
+                onClick={() => {
+                  setAutomationError('');
+                  setAutomationPhase('loading');
+                  setAutomationReload((n) => n + 1);
+                }}
+              >
+                <RefreshCw className="h-3 w-3" aria-hidden="true" /> Retry
+              </Button>
+            )}
+          </div>
+          {automationPhase === 'error' ? (
+            <p
+              role="note"
+              data-testid="automation-error"
+              className="px-4 py-4 text-sm text-red-700"
+            >
+              {automationError || 'The automation ledger could not be read.'} The heartbeat
+              itself keeps running — this is a read failure, not a dispatch failure.
+            </p>
+          ) : automationPhase !== 'ready' || !automation ? (
+            <div className="px-4 py-4 space-y-2" aria-label="Loading automation pulse">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-4 w-72" />
+            </div>
+          ) : !automation.lastTick ? (
+            <p role="note" data-testid="automation-empty" className="px-4 py-4 text-sm text-muted-foreground">
+              No dispatch has been recorded yet — the first tick (Vercel at 03:00 UTC, or the
+              cron-hourly workflow) writes the ledger and this card wakes up.
+            </p>
+          ) : (
+            <div className="px-4 py-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Timer className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+                <span data-testid="automation-last-tick" className="font-medium">
+                  Last tick {timeAgo(automation.lastTick.at)}
+                </span>
+                {automation.lastTick.failedCount > 0 && (
+                  <span
+                    data-testid="automation-failed-count"
+                    className="inline-flex items-center rounded-full border border-red-300 bg-red-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-red-700"
+                  >
+                    {automation.lastTick.failedCount} failed tick
+                    {automation.lastTick.failedCount === 1 ? '' : 's'} in 7d
+                  </span>
+                )}
+              </div>
+              {automation.lastTick.subJobs.length > 0 ? (
+                <ul
+                  data-testid="automation-subjob-list"
+                  className="flex flex-wrap gap-1.5"
+                  aria-label="Sub-jobs from the last tick"
+                >
+                  {automation.lastTick.subJobs.map((job) => (
+                    <li
+                      key={job.name}
+                      data-testid="automation-subjob-chip"
+                      data-job-name={job.name}
+                      data-job-ok={job.ok ? 'true' : 'false'}
+                      className={
+                        job.ok
+                          ? 'inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700'
+                          : 'inline-flex items-center gap-1 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700'
+                      }
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${
+                          job.ok ? 'bg-emerald-700' : 'bg-red-700'
+                        }`}
+                      />
+                      {job.name}
+                      {!job.ok && <span className="tabular-nums">· HTTP {job.status}</span>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p role="note" className="text-xs text-muted-foreground">
+                  The tick is on the ledger but its sub-job detail cannot be read — never a
+                  guess, the chips stay empty until a parseable tick lands.
+                </p>
+              )}
+              <p
+                role="note"
+                data-testid="automation-cadence-line"
+                className="text-xs text-muted-foreground"
+              >
+                Vercel fires the dispatcher daily ({automation.cadence.vercelSchedule} UTC);
+                the {automation.cadence.pingerWorkflow} GitHub Actions workflow keeps the
+                designed hourly cadence when armed with CRON_SECRET.
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Recent audit events */}

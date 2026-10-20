@@ -1,0 +1,99 @@
+// GET /api/org/automation (v2.159.0)
+//
+// The org console's "Automation pulse" card: the last cron dispatch the
+// ledger has on record, the 7-day failed-tick count, and the tick-gate
+// posture. Automation that nobody can see is automation that can silently
+// die — the v2.158.0 proxy fix made the production dispatcher reachable,
+// this read makes it VISIBLE.
+//
+// AUTHORIZATION: SUPER_ADMIN and STORE_OWNER and ACCOUNTANT — the same
+// ORG_ROLES contract as /api/org/summary (organization-wide telemetry;
+// branch-only roles must never see it).
+//
+// READ-ONLY: no writes anywhere; the ledger rows are written by the
+// dispatcher itself (CRON_DISPATCH_TICK, v2.159.0).
+
+import { rawDb, runWithoutTenant } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
+import { withErrorBoundary } from '@/lib/logger';
+import type { NextRequest } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+
+const ORG_ROLES = ['SUPER_ADMIN', 'STORE_OWNER', 'ACCOUNTANT'];
+
+// The two ledger actions the dispatcher writes (v2.159.0).
+const TICK_ACTION = 'CRON_DISPATCH_TICK';
+const PARTIAL_FAILURE_ACTION = 'CRON_DISPATCH_PARTIAL_FAILURE';
+
+interface SubJobResult {
+  name: string;
+  ok: boolean;
+  status: number;
+}
+
+async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
+  return runWithoutTenant(async () => {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [latestTick, failedCount] = await Promise.all([
+      rawDb.systemLog.findFirst({
+        where: { action: TICK_ACTION },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true, metadata: true },
+      }),
+      rawDb.systemLog.count({
+        where: { action: PARTIAL_FAILURE_ACTION, createdAt: { gte: since } },
+      }),
+    ]);
+
+    // The metadata column is a JSON string by contract (v2.159.0 dispatcher
+    // writes { results: SubJobResult[] }). A row that cannot be parsed is a
+    // ledger row without sub-job detail - the tick itself still happened, so
+    // the timestamp stays and the chips render nothing (never a guess).
+    let subJobs: SubJobResult[] = [];
+    if (latestTick?.metadata) {
+      try {
+        const parsed: unknown = JSON.parse(latestTick.metadata);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          Array.isArray((parsed as { results?: unknown }).results)
+        ) {
+          subJobs = ((parsed as { results: unknown[] }).results as SubJobResult[]).filter(
+            (r): r is SubJobResult =>
+              !!r &&
+              typeof r === 'object' &&
+              typeof (r as SubJobResult).name === 'string' &&
+              typeof (r as SubJobResult).ok === 'boolean' &&
+              typeof (r as SubJobResult).status === 'number',
+          );
+        }
+      } catch {
+        subJobs = []; // tolerant read: the tick stamp still renders
+      }
+    }
+
+    return Response.json({
+      success: true,
+      data: {
+        generatedAt: new Date().toISOString(),
+        lastTick: latestTick
+          ? { at: latestTick.createdAt.toISOString(), failedCount: failedCount, subJobs }
+          : null,
+        failedTicks7d: failedCount,
+        // Honest tick-gate posture, read server-side: while CRON_SECRET is
+        // unset the dispatcher accepts unauthenticated ticks (fail-open with
+        // a WARN systemLog) — the card says so in amber until the human
+        // arms the gate.
+        secretConfigured: Boolean(process.env.CRON_SECRET),
+        cadence: { vercelSchedule: '0 3 * * *', pingerWorkflow: 'cron-hourly.yml' },
+      },
+    });
+  });
+}
+
+export const GET = withErrorBoundary(
+  requireAuth(orgAutomationHandler, { roles: ORG_ROLES }),
+  'ORG_AUTOMATION',
+);
