@@ -25,19 +25,35 @@
 // and the accessible state rides aria-sort on each th. The table body AND
 // the CSV export read the same sorted rows — the file is the offline twin
 // of what the owner SEES, not of some other order.
+//
+// v2.181.0 — the matrix remembers: every owner-tunable choice (column
+// widths since v2.18.3, hidden columns, the sort since v2.180.0, and the
+// new compact-rows density) now outlives the panel through ONE versioned,
+// corrupt-tolerant localStorage spine (src/lib/org/store-matrix-prefs.ts).
+// Restore happens AFTER hydration (server-default matrix first, saved
+// layout second — a mismatch is a bug, default-then-restore is a feature);
+// writes are debounced so a column drag cannot thrash storage; a stock
+// layout clears the key outright; and the Columns menu grows a Reset
+// layout action plus a hint line that says the memory exists.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Download, ExternalLink, FileText, LayoutGrid, ShieldCheck, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
+import { Download, ExternalLink, FileText, LayoutGrid, RotateCcw, Rows3, ShieldCheck, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
 import { Sparkline, WeekDeltaChip, kes, num, weekDeltaWords, type StoreRow } from './primitives';
 import { buildStoreMatrixCsv } from '@/lib/org/store-matrix-csv';
 import { nextSortState, sortMatrixRows, type MatrixSortState } from '@/lib/org/store-matrix-sort';
+import {
+  clearMatrixPrefs,
+  loadMatrixPrefs,
+  MATRIX_PREFS_VERSION,
+  saveMatrixPrefs,
+} from '@/lib/org/store-matrix-prefs';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 
 /**
@@ -106,7 +122,62 @@ export function StoreMatrix({
   // The lib owns the semantics (default directions, the flip, absence last);
   // the component only stores what the lib returns.
   const [sortState, setSortState] = useState<MatrixSortState | null>(null);
+  // v2.181.0: compact-rows density — the fourth owner-tunable dimension and
+  // the last member of the remembered payload.
+  const [dense, setDense] = useState(false);
+  // v2.181.0: gates the write-back until the restore has run — the mount
+  // effect's own setState calls must never be mistaken for owner choices.
+  const restored = useRef(false);
   const dragging = useRef<{ key: string; startX: number; startW: number } | null>(null);
+
+  // v2.181.0: ONE restore after hydration. The server renders the stock
+  // matrix (the lib is pure and storage-less under SSR); the client's first
+  // paint matches it; THEN the saved layout takes over. Restoring during
+  // render would tear hydration; restoring before paint would be fine for
+  // the owner but impossible to do honestly — the calm default-then-restore
+  // ordering is the contract.
+  useEffect(() => {
+    const storage = typeof window === 'undefined' ? null : window.localStorage;
+    const prefs = loadMatrixPrefs(storage);
+    setWidths(prefs.widths);
+    setVisible(prefs.visible);
+    setSortState(prefs.sort);
+    setDense(prefs.dense);
+    restored.current = true;
+  }, []);
+
+  // v2.181.0: the debounced write-back — every owner choice lands 250ms
+  // after the last change settles (a column drag repaints dozens of widths;
+  // storage takes ONE). A stock layout clears the key outright (nothing
+  // saved is the honest shape of "no customizations"), anything else saves
+  // the whole payload through the lib — the ONE writer of the bytes. A
+  // refused save (quota, privacy mode) is silent: the matrix forgets on the
+  // next reload exactly as it always did, and never nags about it.
+  useEffect(() => {
+    if (!restored.current) return;
+    const t = setTimeout(() => {
+      const storage = typeof window === 'undefined' ? null : window.localStorage;
+      const stock =
+        Object.keys(widths).length === 0 &&
+        Object.keys(visible).length === 0 &&
+        sortState === null &&
+        dense === false;
+      if (stock) clearMatrixPrefs(storage);
+      else saveMatrixPrefs(storage, { v: MATRIX_PREFS_VERSION, widths, visible, sort: sortState, dense });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [widths, visible, sortState, dense]);
+
+  // v2.181.0: Reset layout — every remembered choice back to stock, the
+  // stored key cleared with it. The persist effect above will see the stock
+  // shape and keep the storage honest (cleared, not written-over).
+  const resetLayout = () => {
+    setWidths({});
+    setVisible({});
+    setSortState(null);
+    setDense(false);
+    onToast('Matrix layout reset to defaults');
+  };
 
   // v2.179.0: the week join — by storeId, never row order (the same rule
   // the branches table and the store strip speak). One Map, rebuilt only
@@ -237,18 +308,47 @@ export function StoreMatrix({
           <Badge variant="outline" className="text-[10px] text-slate-500">{stores.length} stores</Badge>
         </h2>
         <div className="flex items-center gap-2">
+          {/* v2.181.0: the density toggle — the fourth tunable dimension.
+              The active state speaks in the console's orange accent with
+              aria-pressed carrying it to screen readers; the tooltip says
+              what the toggle does AND that the choice is remembered. */}
+          <Button
+            size="sm"
+            variant="outline"
+            className={`h-7 text-[11px] ${dense ? 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100' : ''}`}
+            aria-pressed={dense}
+            title={dense ? 'Compact rows on — click for comfortable rows (saved with your layout)' : 'Compact rows — denser table, saved with your layout'}
+            onClick={() => setDense((d) => !d)}
+          >
+            <Rows3 className="mr-1 h-3 w-3" /> Compact
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="sm" variant="outline" className="h-7 text-[11px]"><SlidersHorizontal className="mr-1 h-3 w-3" /> Columns</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
               <DropdownMenuLabel>Column visibility</DropdownMenuLabel>
+              {/* v2.181.0: the hint that says the memory exists — widths,
+                  visibility, sort and density all save to this browser. */}
+              <p className="px-2 pb-1.5 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
+                Widths, hidden columns, sort and density save to this browser automatically.
+              </p>
               {cols.map((c) => (
                 <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-slate-50">
                   <Checkbox checked={visible[c.key] !== false} onCheckedChange={(v) => setVisible((p) => ({ ...p, [c.key]: Boolean(v) }))} />
                   {c.label}
                 </label>
               ))}
+              {/* v2.181.0: Reset layout — the owner's escape hatch from every
+                  remembered choice, muted by design (an exit, not an invite). */}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={resetLayout}
+                title="Restore the stock matrix and clear the saved layout from this browser"
+                className="text-[11px] text-slate-500 focus:text-slate-800"
+              >
+                <RotateCcw className="mr-2 h-3 w-3" /> Reset layout
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={exportCsv}><Download className="mr-1 h-3 w-3" /> CSV</Button>
@@ -257,7 +357,11 @@ export function StoreMatrix({
       </header>
 
       <div className="max-h-96 overflow-auto">
-        <Table>
+        {/* v2.181.0: the density dimension — compact rows pull the cell
+            padding in and lower the header band, ~30% more rows on screen
+            without touching a single render body; the th band shrinks with
+            them so the sticky header stays in step. */}
+        <Table className={dense ? '[&_td]:px-2 [&_td]:py-1 [&_th]:h-8 [&_th]:py-1' : undefined}>
           <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
             <TableRow className="hover:bg-transparent">
               {shown.map((c) => (

@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.181.0',
+    title: 'The matrix remembers',
+    bullets: [
+      'Your Store Intelligence Matrix now keeps its shape \u2014 column widths, hidden columns, sorting and row density all survive a reload, saved quietly in this browser.',
+      'New Compact toggle: denser rows fit roughly a third more of the table on screen when you want the whole org in one glance.',
+      'Something feel off? Columns \u203a Reset layout puts the matrix back to stock in one click.',
+    ],
+  },
+  {
     version: '2.180.0',
     title: 'The matrix learns to sort',
     bullets: [
