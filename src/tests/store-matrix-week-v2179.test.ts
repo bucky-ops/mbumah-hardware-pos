@@ -324,10 +324,10 @@ describe('docs and release surfaces', () => {
     expect(whatsNew.indexOf('2.179.0')).toBeLessThan(whatsNew.indexOf('2.178.0'));
   });
 
-  it('package.json leads 2.179.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.179.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.179.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.179.0');
+  it('package.json leads the current version in all three slots (re-anchored for 2.180.0) and the verify script is wired', () => {
+    expect(pkg.version).toBe('2.180.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.180.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.180.0');
     expect(pkg.scripts['verify:v2-179-0']).toBe('node scripts/verify-v2-179-0.mjs');
     expect(readRepo('scripts/verify-v2-179-0.mjs')).toContain('v2.179.0 verification');
   });
@@ -340,7 +340,7 @@ describe('docs and release surfaces', () => {
       'src/tests/branch-variance-v2177.test.ts',
       'src/tests/branches-csv-week-v2178.test.ts',
     ]) {
-      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.179.0');");
+      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.180.0');");
     }
   });
 

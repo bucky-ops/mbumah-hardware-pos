@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.180.0',
+    title: 'The matrix learns to sort',
+    bullets: [
+      'Every Store Intelligence Matrix column header is now a real sort button \u2014 click to sort, click again to flip. Numbers arrive loudest-first, names A to Z.',
+      'The week column sorts by the seven-day total, and a store with no week data stays at the bottom in both directions \u2014 no comparison is never dressed up as a zero.',
+      'The CSV export follows the sort \u2014 the file mirrors the order on screen, and the sort state is spoken to screen readers through the table\u2019s own headers.',
+    ],
+  },
+  {
     version: '2.179.0',
     title: 'The matrix reads the week',
     bullets: [
