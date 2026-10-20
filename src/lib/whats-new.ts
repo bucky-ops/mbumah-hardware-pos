@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.190.0',
+    title: 'The drill-down ranks its payrolls',
+    bullets: [
+      'The org dashboard\u2019s \u201cLatest payroll\u201d column now sorts by run finality, not by period name: one click clusters the settled branches (locked & posted) at the top, the open work (approved, draft) beneath, and voided branches near the bottom \u2014 the settled-vs-still-open scan in one click.',
+      'Click the same header again for the mirror view: least final first \u2014 the who-needs-attention scan. Branches with no runs stay last in both directions, and the header carries an honest tooltip explaining the order.',
+      'Ties inside the same status break by the run\u2019s own recency, so the freshest work surfaces first; the CSV export follows the exact same order (one sort, one truth).',
+    ],
+  },
+  {
     version: '2.189.0',
     title: 'The roster keeps its week',
     bullets: [
