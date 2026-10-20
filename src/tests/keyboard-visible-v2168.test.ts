@@ -36,7 +36,12 @@ describe('the hints become visible (chips + pill)', () => {
     // tab stop and the cursor affordance use the ternary form instead)
     const guardCount = (card.match(/AUTOMATION_SUBJOB_HINTS\[job\.name\] && \(/g) || []).length;
     expect(guardCount).toBe(2); // the sr-only line + the visible bubble
-    expect(card).toContain(BUBBLE_RECIPE);
+    // v2.170.0 re-anchor: the recipe literal moved into the module-level
+    // HINT_BUBBLE constant (three surfaces now share it — chip, pill, and
+    // the denied chip), so the card slice references the constant while
+    // the whole file carries the exact recipe ONCE. Same string, one home.
+    expect(orgConsole.match(/pointer-events-none absolute left-0 top-full/g) || []).toHaveLength(1);
+    expect(card).toContain('className={HINT_BUBBLE}');
   });
 
   it('the failed-tick pill renders the same bubble, guarded by the same helper call', () => {
@@ -47,7 +52,9 @@ describe('the hints become visible (chips + pill)', () => {
     const helperUses = (card.match(/failedTickTooltip\(automation\)/g) || []).length;
     expect(helperUses).toBeGreaterThanOrEqual(6); // title + tabIndex + sr-only + bubble + caps
     // the bubble overrides the pill's 9px uppercase display type
-    expect(card).toContain('text-[11px] font-normal normal-case tracking-normal');
+    // (v2.170.0 re-anchor: the base recipe rides the shared HINT_BUBBLE
+    // constant; the override appends to it via the template literal)
+    expect(card).toContain('`${HINT_BUBBLE} normal-case tracking-normal`');
   });
 
   it('the bubble is an absolute overlay - the two-row chip area never reflows', () => {

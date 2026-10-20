@@ -80,6 +80,14 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.170.0',
+    title: 'The refused tick speaks',
+    bullets: [
+      'If the automation gate refuses a sign-in attempt from the scheduler because the secret does not match, the Automation card now counts it — a green badge with climbing denials is the stale-secret signature.',
+      'The hint bubbles now share one recipe across the card — same note style on every hinted chip, the failed-tick pill and the new denied pill.',
+    ],
+  },
+  {
     version: '2.169.0',
     title: 'The pill names the heartbeat',
     bullets: [

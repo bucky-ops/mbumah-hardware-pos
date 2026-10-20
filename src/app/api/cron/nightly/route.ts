@@ -63,6 +63,27 @@ async function verifyCronSecret(request: Request): Promise<Response | null> {
   }
 
   if (provided !== secret) {
+    // v2.170.0: a refusal is a real operational event - before this, a tick
+    // that sent the WRONG secret was invisible everywhere (no ledger row,
+    // the 403 body the only trace), so the exact moment the pinger's secret
+    // went stale left the card green with an aging tick and no explanation.
+    // The ledger records the denial ONLY when the request at least SENT a
+    // non-empty secret: a misconfigured-but-honest tick (the pinger with a
+    // stale GitHub secret, a curl with a typo) always does, while anonymous
+    // scanners and the Vercel-managed scheduler (which cannot send custom
+    // headers) send nothing - the ledger never chases noise, and an
+    // unauthenticated caller cannot write rows by spamming the endpoint.
+    // No secret material rides the row - the path names the dispatcher,
+    // nothing else is needed to diagnose a mismatch.
+    if (provided && provided.length > 0) {
+      await systemLog({
+        action: 'CRON_TICK_DENIED',
+        component: LogComponent.SYSTEM,
+        severity: LogSeverity.WARN,
+        message: 'A tick sent an x-cron-secret that did not match - refused with 403.',
+        metadata: { path: '/api/cron/nightly' },
+      }).catch(() => {});
+    }
     return Response.json(
       { success: false, error: 'Forbidden: invalid or missing x-cron-secret header.' },
       { status: 403 },

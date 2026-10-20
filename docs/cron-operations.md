@@ -62,6 +62,10 @@ confirm it, and neither requires shell access:
    (the posture is read server-side from the env, so the flip is proof the
    Vercel env var landed), and the tick source label (v2.165.0) on the
    "Last tick" line plus a green run in the Actions tab close the loop.
+   If the two secrets DISAGREE, the card says so since v2.170.0: refused
+   ticks that sent a secret render the amber "N denied ticks in 7d" pill
+   beside the badge — the stale-secret signature the Actions tab names
+   in its log and the card now counts in its own window.
 
 ## The tick ledger (v2.159.0, extended v2.164.0 + v2.165.0)
 
@@ -83,6 +87,15 @@ confirm it, and neither requires shell access:
   The card's tooltip on the same line carries the exact EAT stamp of the
   tick. Rows/day: ~25 with the pinger armed (~2/day without). SystemLog
   retention sweeps own the growth.
+- **v2.170.0**: the gate writes its own row — `CRON_TICK_DENIED` (WARN)
+  when a tick sends an `x-cron-secret` that does not match the armed
+  `CRON_SECRET` AND at least sent a non-empty value (empty-header
+  requests — scanners, the Vercel-managed scheduler — write nothing, so
+  the row means "a real tick was refused", never scanner noise; the row
+  carries only `metadata.path`, never secret material). Before this the
+  wrong-secret denial was invisible everywhere; now the card counts it
+  (`deniedTicks7d`) and the two-read verification can end on the card
+  alone when the secrets disagree.
 
 ## The sub-jobs (nine, as of v2.167.0)
 
@@ -140,7 +153,24 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
   v2.167.0 assessment declined: that idea rode the stamps on the
   dispatchers' INTERNAL result shapes; this reads the ONE standardized
   field.
+- **The refused tick speaks (v2.170.0)**: a tick that sends the WRONG
+  `x-cron-secret` is refused with 403 — and used to vanish (no ledger
+  row, the 403 body the only trace), so the moment the pinger's secret
+  went stale left the card green with an aging tick and no explanation.
+  Both gates now write a `CRON_TICK_DENIED` WARN row when the request at
+  least SENT a non-empty secret (a misconfigured-but-honest tick always
+  does; anonymous scanners and the Vercel-managed scheduler send nothing,
+  so the ledger never chases noise and an unauthenticated caller cannot
+  write rows by spamming the endpoint). The card counts them as
+  `deniedTicks7d` — an amber "N denied ticks in 7d" pill beside the
+  posture badge, with the full hint treatment (title, tab stop, sr-only
+  copy, visible-on-focus bubble); zero denials render nothing. The 403
+  body is unchanged, no secret material rides the row, and the write is
+  catch-guarded so the refusal stays deterministic.
 - `failedTicks7d`: partial-failure rows in the last 7 days.
+- `deniedTicks7d` (v2.170.0): refused ticks in the same 7-day window —
+  the amber companion to the green "tick gate armed" posture (a green
+  gate with climbing denials is the stale-secret signature).
 - `secretConfigured`: whether `CRON_SECRET` is set server-side — the honest
   tick-gate posture (fail-open ticks render the amber "CRON_SECRET unset"
   badge until the human arms the gate).

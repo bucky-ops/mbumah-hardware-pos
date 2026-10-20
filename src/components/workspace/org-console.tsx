@@ -65,6 +65,18 @@ import {
 import { useWorkspaceAuthBoot } from '@/lib/workspace/workspace-store';
 import { useWorkspaceStore, type WorkspaceStoreRef } from '@/lib/workspace/workspace-store';
 
+// v2.170.0: the visible-on-focus bubble recipe, shared by EVERY hinted
+// surface on the Automation card (v2.168.0 wrote it twice — chip + pill;
+// the denied chip makes three, so the string lives in ONE place). An
+// absolute overlay (top-full + mt-1.5) so the line below never reflows,
+// popover token pair for dark-mode safety, pointer-events-none so the
+// overlay can never swallow a click, group-focus-visible to appear.
+// The pill-family surfaces (9px uppercase display type) append
+// `normal-case tracking-normal` — text-transform and letter-spacing
+// inherit, prose bubbles must opt back out.
+const HINT_BUBBLE =
+  'pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-max max-w-[16rem] rounded-md border bg-popover px-2 py-1 text-[11px] font-normal leading-snug text-popover-foreground shadow-md group-focus-visible:block';
+
 interface OrgSummaryStore extends WorkspaceStoreRef {
   code: string | null;
   location: string | null;
@@ -323,6 +335,12 @@ export function OrgConsole() {
      *  where the ledger row predates v2.165.0 or carries no name. The
      *  tooltip says WHICH heartbeat failed only when a row named one. */
     failedTickDispatchers?: (string | null)[];
+    /** v2.170.0: ticks the gate refused with 403 in the same 7-day window
+     *  (only denials that at least SENT a secret reach the ledger, so the
+     *  count is real attempted ticks, never scanner noise). Optional for
+     *  older responses — the card renders no chip it cannot honestly
+     *  fill (`?? 0` keeps absence and zero equally silent). */
+    deniedTicks7d?: number;
     secretConfigured: boolean;
     cadence: { vercelSchedule: string; pingerWorkflow: string };
   }
@@ -1079,6 +1097,35 @@ export function OrgConsole() {
                 {automation.secretConfigured ? 'tick gate armed' : 'CRON_SECRET unset'}
               </span>
             )}
+            {/* v2.170.0: the refusal becomes visible — a wrong-secret tick
+                used to vanish (403, no ledger row), leaving a green gate
+                with an aging tick and no explanation. The gate now writes
+                CRON_TICK_DENIED (only for denials that SENT a secret), and
+                the card counts them in the same 7-day window as the failed
+                ticks. Amber — the same family as the unset posture — with
+                the full v2.167/v2.168 hint treatment: title, tab stop,
+                sr-only copy, visible bubble. Zero denials render nothing:
+                silence does not invent a problem. */}
+            {automationPhase === 'ready' && automation && (automation.deniedTicks7d ?? 0) > 0 && (
+              <span
+                data-testid="automation-denied-pill"
+                className="relative group inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-1"
+                title="Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing."
+                tabIndex={0}
+              >
+                {automation.deniedTicks7d} denied tick{(automation.deniedTicks7d ?? 0) === 1 ? '' : 's'} in 7d
+                <span className="sr-only">
+                  Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing.
+                </span>
+                <span
+                  aria-hidden="true"
+                  data-testid="automation-denied-bubble"
+                  className={`${HINT_BUBBLE} normal-case tracking-normal`}
+                >
+                  Ticks the tick gate refused while armed — a secret was sent but did not match. The usual cause is a stale CRON_SECRET on one side of the arming walkthrough; the refused tick ran nothing.
+                </span>
+              </span>
+            )}
             {/* v2.164.0: the reaper's own headline. When the last tick's
                 ledger carried a deleted count > 0, the card says it up here
                 where the eye lands first — session hygiene is operational
@@ -1192,7 +1239,7 @@ export function OrgConsole() {
                       <span
                         aria-hidden="true"
                         data-testid="automation-failed-bubble"
-                        className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-max max-w-[16rem] rounded-md border bg-popover px-2 py-1 text-[11px] font-normal normal-case tracking-normal leading-snug text-popover-foreground shadow-md group-focus-visible:block"
+                        className={`${HINT_BUBBLE} normal-case tracking-normal`}
                       >
                         {failedTickTooltip(automation)}
                       </span>
@@ -1286,7 +1333,7 @@ export function OrgConsole() {
                         <span
                           aria-hidden="true"
                           data-testid="automation-subjob-hint-bubble"
-                          className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-max max-w-[16rem] rounded-md border bg-popover px-2 py-1 text-[11px] font-normal leading-snug text-popover-foreground shadow-md group-focus-visible:block"
+                          className={HINT_BUBBLE}
                         >
                           {AUTOMATION_SUBJOB_HINTS[job.name]}
                         </span>
