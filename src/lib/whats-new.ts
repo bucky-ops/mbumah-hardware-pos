@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.159.0',
+    title: 'The dispatcher keeps its hours',
+    bullets: [
+      'New: the Organization console shows the Automation pulse — the last background-job tick, each job’s outcome, and whether ticks failed this week.',
+      'New: an hourly scheduler (GitHub Actions) now pings the background jobs between Vercel’s daily run, so M-Pesa recovery and reminders act within the hour.',
+      'Honesty: the badge says plainly when the tick gate (CRON_SECRET) is not armed yet.',
+      'Fixed: a rare helper label on the POS dashboard was too faint to read at small size.',
+    ],
+  },
+  {
     version: '2.158.0',
     title: 'The wake-up call gets through',
     bullets: [

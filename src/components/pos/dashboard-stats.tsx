@@ -230,13 +230,15 @@ export function DashboardStats({ storeId, onLowStockClick }: { storeId: string; 
                       {stat.format === 'kes' ? formatKES(stat.animatedValue) : stat.animatedValue}
                     </p>
                     {isClickable && (
-                      <span className="text-[9px] text-muted-foreground/50">→</span>
+                      <span className="text-[9px] text-muted-foreground" aria-hidden="true">
+                        →
+                      </span>
                     )}
                   </div>
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-0.5">
                   <MiniSparkline data={stat.spark} color={stat.sparkColor} />
-                  <div className={`flex items-center gap-0.5 text-[9px] font-medium ${trendIsPositive ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <div className={`flex items-center gap-0.5 text-[9px] font-medium ${trendIsPositive ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                     {trendIsPositive ? <TrendingUp className="h-2.5 w-2.5" /> : <ArrowDownRight className="h-2.5 w-2.5" />}
                     {trendIsPositive ? '+' : '−'}{trendValue}%
                   </div>

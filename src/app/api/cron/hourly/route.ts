@@ -125,6 +125,25 @@ async function dispatchAll(request: Request, jobs: readonly SubJob[]) {
     }).catch(() => {});
   }
 
+  // v2.159.0: the tick LEDGER. The WARN above only fires on partial failure,
+  // which meant a healthy production tick left NO trace - the org console's
+  // automation pulse (GET /api/org/automation) could never tell "the last
+  // tick was all green" from "no tick has ever run". Every completed
+  // dispatch now writes one INFO row carrying the full sub-job ledger; the
+  // automation card reads the latest row. One row per tick (~24/day with the
+  // hourly pinger armed) - SystemLog is a log table and retention sweeps own
+  // the rest.
+  await systemLog({
+    action: 'CRON_DISPATCH_TICK',
+    component: LogComponent.SYSTEM,
+    severity: LogSeverity.INFO,
+    message:
+      failed.length > 0
+        ? `Cron tick recorded: ${results.length} sub-job(s), ${failed.length} failed.`
+        : `Cron tick recorded: ${results.length} sub-job(s) all ok.`,
+    metadata: { results: results.map((r) => ({ name: r.name, ok: r.ok, status: r.status })) },
+  }).catch(() => {});
+
   return results;
 }
 

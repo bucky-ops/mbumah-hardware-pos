@@ -421,7 +421,7 @@ export function ShortcutsModal({ open, onOpenChange }: { open: boolean; onOpenCh
           {rows.map(([k, v]) => (
             <li key={k} className="flex items-center justify-between border-b border-slate-50 pb-1">
               <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{k}</kbd>
-              <span className="text-slate-600">{v}</span>
+              <span className="text-slate-600 dark:text-slate-400">{v}</span>
             </li>
           ))}
         </ul>
@@ -434,7 +434,7 @@ export function ShortcutsModal({ open, onOpenChange }: { open: boolean; onOpenCh
             {deskRows.map(([k, v]) => (
               <li key={k} className="flex items-center justify-between border-b border-slate-50 pb-1">
                 <kbd className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">{k}</kbd>
-                <span className="text-slate-600">{v}</span>
+                <span className="text-slate-600 dark:text-slate-400">{v}</span>
               </li>
             ))}
           </ul>

@@ -98,7 +98,7 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
       {/* Pending actions */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
         <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><ShoppingCart className="h-3.5 w-3.5 text-slate-500" /> Pending</div>
-        <div className="mt-1"><CountUp value={pendingTotal} className="text-2xl font-bold text-slate-600" /></div>
+        <div className="mt-1"><CountUp value={pendingTotal} className="text-2xl font-bold text-slate-600 dark:text-slate-400" /></div>
         <p className="mt-2 text-[10px] text-slate-500">POs {k.pending.purchaseOrders} · shifts {k.pending.openShifts} · expenses {k.pending.expenses}</p>
       </div>
 

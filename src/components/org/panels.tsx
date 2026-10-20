@@ -43,7 +43,7 @@ export function DecisionSupport({ data, onToast }: {
                 <div>
                   <p className={`text-[13px] font-semibold ${SEV_TEXT[a.severity] ?? 'text-slate-700'}`}>{a.title}</p>
                   {/* v2.152.0: slate-600 — the tinted rows (bg-red-50/amber-50/blue-50) measured slate-500 at 4.27-4.55:1, under or on the 4.5 edge; slate-600 clears ~6.9:1 on every tint. */}
-                  <p className="text-xs text-slate-600">{a.detail}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">{a.detail}</p>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {a.actions.map((act) => (
@@ -79,7 +79,7 @@ function QueueRow({ label, value, onToast }: {
 }) {
   return (
     <li className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-      <span className="text-slate-600">{label}</span>
+      <span className="text-slate-600 dark:text-slate-400">{label}</span>
       <span className="flex items-center gap-2">
         <Badge variant="outline" className={value > 0 ? 'border-orange-300 text-orange-800 dark:border-orange-500/40 dark:text-orange-300' : 'text-slate-500'}>{value}</Badge>
         <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => onToast(`${label}: ${value} - drill down from the branch workspace`)}>View</Button>
@@ -268,7 +268,7 @@ export function ChatDrawer({ open, onOpenChange, unread, signedIn, onRequireSign
             <div className="flex-1 space-y-2 overflow-y-auto bg-slate-50 p-3">
               {messages.map((m) => (
                 <div key={m.id} className={`anim-slide-fade max-w-[85%] rounded-xl p-2 shadow-sm ${m.isOwn ? 'ml-auto bg-orange-50' : 'bg-white'}`}>
-                  <p className="text-[10px] font-semibold text-slate-600">
+                  <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">
                     {m.isOwn ? 'You' : m.sender.name}
                     <span className="font-normal text-slate-500"> · {m.sender.role}{m.originStoreName ? ` · ${m.originStoreName}` : ''} · {timeAgo(m.sentAt)}</span>
                   </p>

@@ -39,9 +39,12 @@ describe('the header right group can never push the page again', () => {
 });
 
 describe('a named scroller needs a role that may carry a name', () => {
-  it('both org-console scroll wrappers are role="region"', () => {
+  it('the named regions of the org console (3 since v2.159.0)', () => {
     const org = readRepo(ORG);
-    expect((org.match(/role="region"/g) || []).length).toBe(2);
+    // v2.159.0: the Automation pulse card joins the two scroll wrappers as a
+    // third named region (the v2.147.0 naming contract: a region carries its
+    // own aria-label via an explicit role).
+    expect((org.match(/role="region"/g) || []).length).toBe(3);
     expect(org).toContain('role="region"\n            tabIndex={0}\n            aria-label="Branches, scrollable table"');
     expect(org).toContain('role="region"\n                    tabIndex={0}\n                    aria-label="People and payroll by branch, scrollable table"');
   });

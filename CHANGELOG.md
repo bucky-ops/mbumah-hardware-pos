@@ -2,6 +2,25 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.159.0] The dispatcher keeps its hours
+
+v2.158.0 made the production cron reachable; this release makes it PUNCTUAL and VISIBLE — the designed hourly cadence gets an off-Vercel keeper, and every tick leaves a ledger row a human can read.
+
+### Added
+- **The cron-hourly GitHub Actions workflow** (`.github/workflows/cron-hourly.yml`): scheduled hourly (`0 * * * *`, plus `workflow_dispatch` for manual arming) — pings the production dispatcher with the `x-cron-secret` header and turns red on any non-200, non-success payload, or failed sub-job. Closes the Hobby-cadence gap: Vercel fires the dispatcher daily (`0 3 * * *`), the B2C backoff windows (2m-30m) and reminder semantics were designed hourly; the pinger restores them without Vercel Pro. Setup contract documented in the workflow header (Vercel `CRON_SECRET` env + repo secret + optional `PROD_URL`).
+- **The tick ledger** (`src/app/api/cron/hourly/route.ts`): every completed dispatch writes one `CRON_DISPATCH_TICK` INFO systemLog row carrying the full sub-job results (`[{name, ok, status}]`). The partial-failure WARN kept for severity filtering; the ledger is the always-row — before this, a healthy tick left NO trace and no reader could tell "all green" from "never ran".
+- **`GET /api/org/automation`** (ORG_ROLES parity with `/api/org/summary`): the latest ledger tick (timestamp + per-sub-job results), the 7-day partial-failure count, the honest server-side tick-gate posture (`Boolean(process.env.CRON_SECRET)`), and the cadence truth. Read-only over `rawDb` under `runWithoutTenant`; ledger metadata parsed tolerantly (garbage yields empty chips, never a throw).
+- **The Automation pulse card** on the org console (before the audit feed): last-tick line, per-sub-job chips (emerald-700 ok / red-700 failed with HTTP status), the 7-day failed-tick badge, the CRON_SECRET posture badge (emerald armed / amber unset), and the both-schedulers cadence line. Every state honest: loading skeletons, a pre-first-tick empty state, an error state with Retry that says the read failure is not a dispatch failure, and an unparseable tick that keeps the stamp while rendering no chips.
+
+### Changed
+- **POS dashboard trend affordance reads at 9px** (`src/components/pos/dashboard-stats.tsx`): the click-affordance arrow drops its `/50` alpha (full `text-muted-foreground` ≈ 5.76:1) and admits it is decoration (`aria-hidden`); the 9px trend percentage moves `red-600` → `red-700` (knife-edge 4.53:1 → 5.9:1), dark pairs kept.
+
+### Docs
+- `docs/cron-operations.md`: the production cron story in order (the v2.16.0 401 wall, the v2.158.0 pass-through, the v2.159.0 cadence + ledger), the pinger arming steps, the ledger/card contracts, and the rules new scheduled work must inherit (no proxy edit needed; idempotency required).
+
+### Tests
+- `src/tests/cron-pulse-v2159.test.ts` (20 NEW): workflow contract ×4 (hourly schedule, secret header, honest failure, setup), dispatcher ledger ×4 (tick row, results parity, WARN kept, vercel.json truth), automation route ×5 (org-roles parity, read-only org-wide, 7-day tail, tolerant parse, secret posture), card contract ×5 (fetch lifecycle, all honest states, named region, cadence line, contrast families), style pins ×2. Console-changelog counters re-anchored 48/49/50/81.
+
 ## [2.158.0] The wake-up call gets through
 
 The round's real bug find, caught by probing the freshly-shipped sweep route: the edge proxy 401'd every cron tick — in production — since the workspace proxy landed.

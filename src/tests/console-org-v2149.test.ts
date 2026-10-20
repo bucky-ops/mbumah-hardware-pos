@@ -200,7 +200,9 @@ describe('the light-surface slate family is swept to passing tokens', () => {
       const bare = src.match(/(^|[^:-])text-slate-400/g) ?? [];
       expect(bare.length, `${f} bare text-slate-400`).toBe(0);
     }
-    expect(readRepo(PANELS).match(/dark:text-slate-400/g)?.length).toBe(8);
+    // v2.159.0: +3 — the bare light-half slate-600 sites (alert detail, label
+    // value, drill-down heading) gained the standing dark:text-slate-400 pair.
+    expect(readRepo(PANELS).match(/dark:text-slate-400/g)?.length).toBe(11);
   });
 
   it('the store matrix zero placeholders pass too (slate-300 was 1.97:1)', () => {
