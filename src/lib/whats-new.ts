@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.176.0',
+    title: 'The expert console reads the week by branch',
+    bullets: [
+      'The Organization Console\u2019s store strip now draws each branch\u2019s seven-day sparkline \u2014 the same muted shapes the dashboard\u2019s branches table speaks, from the same week rows, with the week total on hover.',
+      'The Revenue card\u2019s drill-down now lists the week by branch: every branch\u2019s shape and week total, loudest week first \u2014 the org spark on top, the branches underneath.',
+      'A console answered by an older release keeps its calm dash \u2014 the expert console never invents a shape it wasn\u2019t told.',
+    ],
+  },
+  {
     version: '2.175.0',
     title: 'The week reaches every branch row',
     bullets: [

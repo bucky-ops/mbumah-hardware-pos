@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.176.0] The expert console reads the week by branch
+
+The org dashboard's branches table has spoken per-branch week shapes since v2.175.0, but the expert console (`/console`) — the other org surface, already polling the SAME `/api/org/summary` response every 30 seconds — stayed shape-blind. This release the week's shape reaches the expert console: no new queries, one shared vocabulary.
+
+### Added
+- **The store strip draws each branch's week**: every branch card in the console's store strip carries its own muted slate sparkline (the dashboard table's exact vocabulary — 72×20, `#64748b`, the same `Sparkline` primitive), joined by `storeId` from the `perStoreTrend` block the page already fetches. The gross week total rides the card's title tooltip and an sr-only clause; a branch with a quiet week draws the honest flat line, and an older cached summary without the block keeps a calm dash row at spark height — never a fabricated shape. The card's workspace door is untouched.
+- **The Revenue drill-down lists the week by branch**: the KPI row's revenue trend modal keeps its org-wide net-of-VAT spark as the lead and now speaks the branches underneath — one row per branch (spark + name + gross week total), joined by `storeId`, sorted loudest week first, under an explicit note that the branch shapes are gross while the org line is net of VAT (the recorded cross-surface divergence, now labeled at the exact place both meet). TOLERANT: a branch manager without matrix access (or an older cached answer) sees the org-wide story only — nothing fabricated, nothing broken.
+- **`OrgSummaryData` (the expert console's type) grows the tolerant `perStoreTrend?`** — the same declaration the org dashboard's card speaks, so both surfaces share one contract.
+
+### Tests
+- `src/tests/expert-week-v2176.test.ts` (NEW): the executed join (by storeId, never row order), the loudest-first sort with tie stability, the tolerant degradations (null block, missing entry, empty stores), the strip + modal render contracts (muted slate 72×20, title tooltip + sr-only, the dash row, the net-vs-gross note, the honest-absence rendering), the page wiring (no second fetch — the props ride the polled summary), the doc rows, and the release surfaces.
+
 ## [2.175.0] The week reaches every branch row
 
 The trend strip named which branch moved the week (v2.174.0) but the branches table below it stayed shape-blind — a wall of today-only digits. This release the week's shape reaches every branch row, and the mover's name becomes a door.

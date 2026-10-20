@@ -9,17 +9,45 @@ import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowDownRight, ArrowUpRight, Banknote, CalendarCheck2, Clock3, HandCoins, PackageOpen, ShoppingCart, TrendingUp } from 'lucide-react';
-import { CountUp, Sparkline, kes, num, type KpiSummaryData } from './primitives';
+import { CountUp, Sparkline, kes, num, type KpiSummaryData, type StoreRow } from './primitives';
 
 /** Compact KES for tight chips: 437k / 1.2m / 97.5k. */
 const kShort = (v: number): string =>
   v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}m` : v >= 1000 ? `${Math.round(v / 100) / 10}k` : String(v);
 
-export function KpiRow({ data }: { data: KpiSummaryData }) {
+export function KpiRow({ data, perStoreTrend, stores = [] }: {
+  data: KpiSummaryData;
+  /**
+   * v2.176.0: the per-branch week — the SAME additive block /api/org/summary
+   * has ridden since v2.175.0, passed in by the console page from the
+   * response it already polls (no second fetch). TOLERANT — optional +
+   * nullable: a branch manager without matrix access (or an older cached
+   * answer) keeps the modal's org-wide story only, never a crash or a
+   * fabricated shape.
+   */
+  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;
+  /** Branch names for the drill-down rows, joined by storeId (never row order). */
+  stores?: StoreRow[];
+}) {
   const [trendOpen, setTrendOpen] = useState(false);
   const k = data.kpis;
   const debtHot = k.debt.total > 400_000;
   const pendingTotal = k.pending.purchaseOrders + k.pending.openShifts + k.pending.expenses;
+
+  // v2.176.0: the drill-down's branch rows — joined by storeId (never row
+  // order), loudest week first; a quiet branch still speaks (honest zeros,
+  // a flat line). Only built when BOTH halves arrived: the trend block AND
+  // the branch names (a branch manager's denied summary leaves both null).
+  const branchWeek = perStoreTrend && stores.length > 0
+    ? perStoreTrend
+        .map((t) => ({
+          storeId: t.storeId,
+          spark: t.spark,
+          weekTotal: t.weekTotal,
+          name: stores.find((s) => s.id === t.storeId)?.name ?? 'Branch',
+        }))
+        .sort((a, b) => b.weekTotal - a.weekTotal)
+    : null;
 
   return (
     <section aria-label="KPI command row" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -117,6 +145,30 @@ export function KpiRow({ data }: { data: KpiSummaryData }) {
               <div><span className="text-slate-500">Avg / day (7d)</span><p className="font-bold text-slate-800">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
             </div>
           </div>
+          {/* v2.176.0: the week by branch — the org line above stays the lead;
+              the branches speak underneath, loudest week first. The branch
+              shapes are GROSS (the summary's week rows carry totalAmount);
+              the org spark is NET of VAT — both labeled, one modal, no
+              quiet mixing. Names are text (self-speaking); the spark is
+              aria-hidden decoration. An absent block (branch manager or an
+              older cached answer) renders nothing here — honest absence. */}
+          {branchWeek && branchWeek.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">The week by branch</p>
+              <p className="mb-2 text-[10px] text-slate-500">branch shapes are gross — the org line above is net of VAT</p>
+              <ul className="space-y-1.5">
+                {branchWeek.map((b) => (
+                  <li key={b.storeId} className="flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Sparkline data={b.spark} stroke="#64748b" width={72} height={20} />
+                      <span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{kes(b.weekTotal)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </section>
