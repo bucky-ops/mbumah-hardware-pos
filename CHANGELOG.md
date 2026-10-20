@@ -2,6 +2,22 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.178.0] The export carries the week
+
+The branches table speaks every branch's week — spark, verdict chip, prior week on hover — but the branches CSV (v2.112 lineage, sections through v2.154.0) ended at the desk digest: a file that could be read but not charted. This release the export becomes the offline twin of the table: a fourth section, "The week by branch (7d)", carries the drill-down's own rows with their verdicts, computed by the SAME classifier the chips speak. Zero new queries — the block has ridden every summary response since v2.174.0.
+
+### Added
+- **`buildBranchesCsv` grows its fifth parameter (`trend`)**: a `BranchTrendCsvRow[]` the caller pre-joins (the summary's `perStoreTrend` entry joined to its branch name by `storeId` — the drill-down's own join, `'Branch'` when a name cannot resolve, so no row is silently dropped). Present and non-empty, it appends the section: title line `The week by branch (7d)`, header `Branch,Revenue 7d (KES),Prior week (KES),Change (%)`, rows sorted loudest week first (the drill-down's sort; `Array.sort` is stable, so tied weeks keep their arrival order), then a closing note — `Note,Branch week shapes are gross revenue — the dashboard's org trend line is net of VAT` — carrying the v2.176.0 divergence label into the offline artifact.
+- **The Change % is the SAME `weekDelta` verdict the chips speak**: signed (the sign IS the direction in a spreadsheet), round2'd by the same `variancePct` formula the org badge uses — chip and file can never disagree about the math, only about the data they were handed. Honest absence: a missing or non-positive prior week leaves the Change cell EMPTY — never a fabricated "+0%" or an invented infinity; an exactly flat week prints `0`, which IS a real comparison.
+- **Honest absence, whole-block**: `trend` nullish or empty → the file ends byte-identically to the v2.177.0 shape (the section simply never existed) — an older cached summary degrades, never breaks.
+- **The export note counts what it wrote**: `Exported branches_2026-10-20.csv · 4 sections` (singular handled) — the owner can tell at a glance whether the week (and the desk) made the file. The desk-unavailable suffix composes after the count as before.
+- **The export button speaks its own busy state**: `aria-busy` while the desk read answers, the label swaps to `Exporting…`, and the download icon pulses (`animate-pulse`) — the desk fetch is the one async step, and the button no longer sits silently disabled.
+- **Docs**: `multi-store-workspaces.md` gains the export bullet and the `| Export · week by branch |` KPI row; `payroll-run-lifecycle.md`'s branches-CSV contract is now the four-section contract.
+
+### Tests
+- `src/tests/branches-csv-week-v2178.test.ts` (NEW): the section EXECUTED (bytes pinned end-to-end, loudest-first with stable ties, the weekDelta parity assertion — the file's Change cell equals `weekDelta`'s own pct for the same inputs), the honesty rule (missing/undefined/zero/negative prior → empty cell, flat → `0`), the whole-block honest absence (nullish/empty → the exact v2.177.0 bytes), the caller contract (join by storeId, `'Branch'` fallback, no second fetch, the section-count note, the busy-state button), the docs rows, and the release surfaces.
+- `console-org-v2154.test.ts` call-shape pin evolved deliberately (`desk,\n    );` → `desk,\n      trendRows,\n    );`) — the call grew its fifth argument.
+
 ## [2.177.0] The week by branch learns its own variance
 
 The three trend surfaces speak every branch's week shape (v2.175.0 the table, v2.176.0 the strip and the drill-down) — but a shape without a verdict still forces the reader to do the math. This release every branch's week learns its own week-over-week verdict: up, down, or flat, drawn once, spoken once, hidden when there is no comparison. Still ZERO new queries — the prior-week per-branch slices have ridden the summary payload's `topMover` math since v2.174.0.
