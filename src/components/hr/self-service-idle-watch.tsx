@@ -24,9 +24,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Clock, LogIn } from 'lucide-react';
 import { useIdleTimeout } from '@/hooks/use-idle-timeout';
+import {
+  buildPortalReturnHref,
+} from '@/lib/session-idle';
 
 export function SelfServiceIdleWatch() {
   const [timedOut, setTimedOut] = useState(false);
+  const [returnPath, setReturnPath] = useState<string | null>(null);
   const headingRef = useRef<HTMLParagraphElement | null>(null);
 
   const handleIdleTimeout = useCallback(() => {
@@ -36,6 +40,12 @@ export function SelfServiceIdleWatch() {
     fetch('/api/auth/logout', { method: 'POST', keepalive: true }).catch(
       () => {},
     );
+    // v2.163.0: remember WHERE the colleague was reading so the sign-in
+    // link can carry it as ?next= (the door swings back). Safe: this only
+    // ever runs from a client timer, never during SSR/hydration.
+    if (typeof window !== 'undefined') {
+      setReturnPath(window.location.pathname);
+    }
     setTimedOut(true);
   }, []);
 
@@ -84,12 +94,18 @@ export function SelfServiceIdleWatch() {
           leave and goals stay private — sign in again to continue.
         </p>
         <Link
-          href="/"
+          href={buildPortalReturnHref(returnPath)}
           data-testid="self-idle-signin"
           className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           <LogIn className="h-4 w-4" aria-hidden /> Sign in
         </Link>
+        <p
+          data-testid="self-idle-return-hint"
+          className="mt-2.5 text-xs leading-relaxed text-muted-foreground"
+        >
+          Signing in brings you straight back to this page.
+        </p>
       </div>
     </div>
   );

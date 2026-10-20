@@ -20,6 +20,7 @@ import {
 } from '@/lib/auth';
 import { db } from '@/lib/db';
 import {
+  buildPortalReturnHref,
   idleExpired,
   SELF_SERVICE_IDLE_MS,
 } from '@/lib/session-idle';
@@ -36,11 +37,16 @@ export function PortalNote({
   title,
   hint,
   showSignIn = false,
+  returnPath,
 }: {
   icon: React.ReactNode;
   title: string;
   hint: string;
   showSignIn?: boolean;
+  /** v2.163.0: where the colleague was reading - carried to the login
+   *  screen as ?next= so sign-in lands back on this page (validated by
+   *  safeReturnPath; absent falls back to the plain login root). */
+  returnPath?: string;
 }) {
   return (
     <div className="rounded-2xl border bg-card p-6 text-center shadow-sm">
@@ -50,12 +56,19 @@ export function PortalNote({
       <p className="text-sm font-semibold">{title}</p>
       <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
       {showSignIn ? (
-        <Link
-          href="/"
-          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-        >
-          <LogIn className="h-3.5 w-3.5" aria-hidden /> Sign in
-        </Link>
+        <>
+          <Link
+            href={buildPortalReturnHref(returnPath)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          >
+            <LogIn className="h-3.5 w-3.5" aria-hidden /> Sign in
+          </Link>
+          {returnPath ? (
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              Signing in brings you straight back to this page.
+            </p>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -72,7 +85,12 @@ export type SelfPortalGuard =
  * against the session role exactly like selfServiceGuard does for the API
  * routes, so the page and its API agree on access.
  */
-export async function loadSelfPortal(permission: HrPermissionKey): Promise<SelfPortalGuard> {
+export async function loadSelfPortal(
+  permission: HrPermissionKey,
+  // v2.163.0: the page's own path, carried into the note's sign-in link as
+  // ?next= so the door swings back to where the colleague was reading.
+  portalPath?: string,
+): Promise<SelfPortalGuard> {
   const session = await getSessionFromCookies();
   if (!session) {
     return {
@@ -83,6 +101,7 @@ export async function loadSelfPortal(permission: HrPermissionKey): Promise<SelfP
           title="Sign in to open your workspace"
           hint="Your payslips, leave, attendance and goals are private to your account."
           showSignIn
+          returnPath={portalPath}
         />
       ),
     };
@@ -112,6 +131,7 @@ export async function loadSelfPortal(permission: HrPermissionKey): Promise<SelfP
           title="Signed out for your safety"
           hint="This portal closes after 30 minutes of inactivity - your payslips, leave and goals stay private. Sign in again to continue."
           showSignIn
+          returnPath={portalPath}
         />
       ),
     };

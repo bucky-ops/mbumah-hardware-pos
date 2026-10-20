@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.163.0',
+    title: 'The session reaps itself — and the door swings back',
+    bullets: [
+      'Expired sign-in sessions are now reaped automatically every hour — the session table stops growing rows nobody will ever use again.',
+      'After a 30-minute safety sign-out, signing back in brings you straight back to the page you were reading.',
+      'The return path is validated end-to-end: only safe, same-origin pages can be reopened after sign-in.',
+      'A new contrast-math guide documents how we verify readability on glass and gradient surfaces axe cannot measure.',
+    ],
+  },
+  {
     version: '2.162.0',
     title: 'The portal signs you out when you step away',
     bullets: [

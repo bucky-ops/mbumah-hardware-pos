@@ -17,7 +17,7 @@ import { GoalsView, type GoalDto, type ReviewDto } from './goals-view';
 export const dynamic = 'force-dynamic';
 
 export default async function MyGoals() {
-  const guard = await loadSelfPortal('hr.performance.read.own');
+  const guard = await loadSelfPortal('hr.performance.read.own', '/employees/me/goals');
   if (!guard.ok) return guard.note;
 
   let goals: GoalDto[];

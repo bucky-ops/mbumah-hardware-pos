@@ -80,7 +80,7 @@ async function loadPayslipNotices(userId: string): Promise<PayslipNoticeDto[]> {
 }
 
 export default async function EmployeeHome() {
-  const guard = await loadSelfPortal('hr.payroll.read.own');
+  const guard = await loadSelfPortal('hr.payroll.read.own', '/employees/me');
   if (!guard.ok) return guard.note;
 
   let data: HomeDashboardDto;

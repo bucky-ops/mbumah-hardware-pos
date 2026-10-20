@@ -34,7 +34,7 @@ function isExpiringSoon(iso: string | null): boolean {
 export const dynamic = 'force-dynamic';
 
 export default async function MyDocuments() {
-  const guard = await loadSelfPortal('hr.documents.read.own');
+  const guard = await loadSelfPortal('hr.documents.read.own', '/employees/me/documents');
   if (!guard.ok) return guard.note;
 
   let docs: DocumentDto[];
