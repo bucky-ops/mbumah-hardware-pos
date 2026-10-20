@@ -91,6 +91,22 @@ import {
   loadBranchesTablePrefs,
   saveBranchesTablePrefs,
 } from '@/lib/org/branches-table-prefs';
+// v2.183.0: the drill-down's OWN comparator + spine — the third dense
+// table speaks the same owner vocabulary through its SIBLING lib (the
+// hrPerStore row shares no fields with MatrixSortRow, so a reused
+// comparator would be a guessed one). nextSortState is aliased because the
+// branches/matrix import above already claims the bare name.
+import {
+  nextSortState as nextHrSortState,
+  sortHrDrillRows,
+  type HrDrillSortState,
+} from '@/lib/org/hr-drilldown-sort';
+import {
+  HR_DRILLDOWN_PREFS_VERSION,
+  clearHrDrilldownPrefs,
+  loadHrDrilldownPrefs,
+  saveHrDrilldownPrefs,
+} from '@/lib/org/hr-drilldown-prefs';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
@@ -127,6 +143,9 @@ const HINT_BUBBLE =
  * or keyboard focus — the affordance is a whisper, not a shout.
  * aria-hidden: the accessible state rides aria-sort on the th, never this
  * glyph.
+ * v2.183.0: the drill-down's driven header reuses the SAME component —
+ * one sort language across ALL THREE dense tables now, and the glyph is
+ * the vocabulary's body.
  */
 function BranchSortGlyph({ state }: { state: 'asc' | 'desc' | 'none' }) {
   if (state === 'asc') return <ArrowUp className="h-3 w-3 text-orange-500" aria-hidden="true" />;
@@ -138,6 +157,31 @@ function BranchSortGlyph({ state }: { state: 'asc' | 'desc' | 'none' }) {
     />
   );
 }
+
+/**
+ * v2.183.0: the HR drill-down's column spec — the ONE place that names the
+ * third dense table's columns (the driven header reads it). All six are
+ * sortable: numbers loudest-first (headcount, cost, absence, alerts), text
+ * A→Z (branch), and `payroll` sorts through the SAME latestPayroll
+ * join its cells speak (a branch with no run sorts LAST in both
+ * directions). `pad` keeps the stock cell rhythm the driven header had as
+ * literal markup (first column breathes wider than the rest).
+ */
+interface HrDrillColDef {
+  key: string;
+  label: string;
+  align?: 'right';
+  pad: string;
+  sortable: boolean;
+}
+const HR_DRILLDOWN_COLS: HrDrillColDef[] = [
+  { key: 'branch', label: 'Branch', pad: 'px-3.5', sortable: true },
+  { key: 'headcount', label: 'Headcount', align: 'right', pad: 'px-3', sortable: true },
+  { key: 'cost', label: 'Cost (month)', align: 'right', pad: 'px-3', sortable: true },
+  { key: 'absence', label: 'Absence', align: 'right', pad: 'px-3', sortable: true },
+  { key: 'payroll', label: 'Latest payroll', pad: 'px-3', sortable: true },
+  { key: 'alerts', label: 'Expiry alerts', align: 'right', pad: 'px-3', sortable: true },
+];
 
 /**
  * v2.182.0: the branches table's column spec — the ONE place that names
@@ -558,7 +602,7 @@ export function OrgConsole() {
   // dimensions (widths since this release, visibility, sort, compact-rows
   // density) ride the SAME versioned, corrupt-tolerant localStorage spine
   // the matrix got in v2.181.0, under the table's OWN key
-  // (mbumah.branches-table.prefs) so the two tables never share bytes and
+  // (the branches spine's own key) so the two tables never share bytes and
   // resetting one can never surprise the other. Restore happens AFTER
   // hydration (server-stock first paint, saved layout second); writes are
   // debounced so a column drag cannot thrash storage; a stock layout
@@ -629,7 +673,63 @@ export function OrgConsole() {
   }, [branchWidths, branchVisible, branchSort, branchDense]);
   // v2.23.0: per-branch HR drill-down visibility (collapsed until asked for —
   // the console opens with the summary tiles; the table is one click away).
+  // v2.183.0: the drill-down remembers — the open state PLUS the two
+  // in-table tunables (sort, compact-rows density) ride the SAME kind of
+  // versioned, corrupt-tolerant localStorage spine the matrix (v2.181.0)
+  // and the branches table (v2.182.0) got, under the drill-down's OWN key
+  // (the drill-down spine's own key) so the three tables never share bytes and
+  // resetting one can never surprise the others. Restore happens AFTER
+  // hydration (server-stock first paint, saved layout second); writes are
+  // debounced so toggling cannot thrash storage; a stock layout (door
+  // closed, no sort, comfortable rows) clears the key outright.
   const [hrPerStoreOpen, setHrPerStoreOpen] = useState(false);
+  const [hrSort, setHrSort] = useState<HrDrillSortState | null>(null);
+  const [hrDense, setHrDense] = useState(false);
+  // v2.183.0: gates the write-back until the restore has run — the mount
+  // effect's own setState calls must never be mistaken for owner choices.
+  const hrRestored = useRef(false);
+  // v2.183.0: the visible, polite confirmation for the action that has no
+  // other surface (Reset) — the same one-line-note pattern the branches
+  // layout note speaks, never an alert().
+  const [hrLayoutNote, setHrLayoutNote] = useState('');
+
+  // v2.183.0: ONE restore after hydration — the branches spine's exact
+  // shape (default-then-restore ordering; the macrotask deferral keeps
+  // setState out of the effect body per the react-hooks/set-state-in-effect
+  // rule, the house pattern since v2.182.0).
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const storage = typeof window === 'undefined' ? null : window.localStorage;
+      const prefs = loadHrDrilldownPrefs(storage);
+      setHrPerStoreOpen(prefs.open);
+      setHrSort(prefs.sort);
+      setHrDense(prefs.dense);
+      hrRestored.current = true;
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  // v2.183.0: the debounced write-back — every owner choice lands 250ms
+  // after the last change settles. A stock layout CLEARS the key outright
+  // (the door closed + no sort + comfortable rows is the honest shape of
+  // "no customizations"); anything else saves the whole payload through
+  // the lib — the ONE writer of the bytes. A refused save is silent.
+  useEffect(() => {
+    if (!hrRestored.current) return;
+    const t = setTimeout(() => {
+      const storage = typeof window === 'undefined' ? null : window.localStorage;
+      const stock = !hrPerStoreOpen && hrSort === null && hrDense === false;
+      if (stock) clearHrDrilldownPrefs(storage);
+      else
+        saveHrDrilldownPrefs(storage, {
+          v: HR_DRILLDOWN_PREFS_VERSION,
+          open: hrPerStoreOpen,
+          sort: hrSort,
+          dense: hrDense,
+        });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [hrPerStoreOpen, hrSort, hrDense]);
   // v2.159.0: the Automation pulse card — the last cron dispatch tick from
   // the ledger (GET /api/org/automation, ORG_ROLES parity with the summary).
   // Additive by contract: a refused or failed read renders an honest error
@@ -836,6 +936,29 @@ export function OrgConsole() {
     setBranchLayoutNote('Branch table layout reset to defaults');
   };
 
+  // v2.183.0: the rows the drill-down table AND the CSV export speak — ONE
+  // comparator, one order, never two (the matrix's v2.180.0 rule, now
+  // across ALL THREE dense tables). Null sort state → the API's arrival
+  // order, copied. A summary without the hrPerStore block (HR module off,
+  // non-org scope) renders no rows at all — the same honest absence the
+  // collapsed door has always spoken.
+  const hrRows = useMemo(
+    () => (summary?.hrPerStore ? sortHrDrillRows(summary.hrPerStore, hrSort) : []),
+    [summary, hrSort],
+  );
+  const onHrSort = (key: string) => setHrSort((prev) => nextHrSortState(prev, key));
+  const hrAriaSortOf = (key: string): 'ascending' | 'descending' | 'none' =>
+    hrSort?.key === key ? (hrSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  // v2.183.0: Reset — the drill-down's escape hatch from its remembered
+  // sort and density (the door state is NOT reset here: the owner is
+  // looking at the open panel, and the toggle itself is the door's
+  // escape). The note is the visible, polite confirmation.
+  const resetHrDrillLayout = () => {
+    setHrSort(null);
+    setHrDense(false);
+    setHrLayoutNote('Drill-down layout reset to defaults');
+  };
+
   // v2.149.0: take the branches table away as CSV — client-side blob, the
   // same shape store-matrix's export uses; numbers export RAW (no thousands
   // separators) so a spreadsheet re-reads them as numbers, and the polite
@@ -939,7 +1062,10 @@ export function OrgConsole() {
       new Date(),
       // v2.152.0: the drill-down's rows ride the same download (present even
       // while the section is collapsed — the data is the summary's).
-      (summary.hrPerStore ?? []).map((r) => ({
+      // v2.183.0: the section reads the SORTED rows — the SAME hrRows memo
+      // the table body speaks, so the file mirrors what the owner sees (the
+      // matrix's v2.180.0 rule, now across all three dense tables).
+      hrRows.map((r) => ({
         storeName: r.storeName,
         headcountActive: r.headcountActive,
         monthEmploymentCost: r.monthEmploymentCost,
@@ -1300,31 +1426,75 @@ export function OrgConsole() {
             </p>
             {summary.hrPerStore && summary.hrPerStore.length > 0 ? (
               <div className="mt-3 overflow-hidden rounded-lg border">
-                <button
-                  type="button"
-                  onClick={() => setHrPerStoreOpen((v) => !v)}
-                  aria-expanded={hrPerStoreOpen}
-                  className="flex w-full items-center justify-between gap-2 bg-muted/40 px-3.5 py-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                    People &amp; payroll by branch ({summary.hrPerStore.length})
-                    {/* v2.148.0: slate-600 — the /80 alpha measured 3.61:1 and
-                        even full muted-foreground computes ~4.4:1 on the
-                        muted toggle's own bg; slate-600 passes at ~7:1.
-                        v2.159.0: the dark half — the axe re-audit caught
-                        slate-600 on the dark card at 2.38:1, so the span
-                        wears the standing dark:text-slate-400 pair (~9:1
-                        on the near-black card). */}
-                    <span className="font-normal text-slate-600 dark:text-slate-400">
-                      — headcount, cost, absence, latest run, expiry alerts per branch
+                {/* v2.183.0: the header row is now a DIV hosting three
+                    SIBLINGS — the open/close button, and the drill-down's own
+                    owner controls (the polite note, the conditional Reset,
+                    the Compact toggle). A button can never nest inside a
+                    button (invalid HTML, a screen-reader trap), so the
+                    v2.182.0 controls join as siblings instead of children —
+                    the same vocabulary, a legal tree. */}
+                <div className="flex items-stretch justify-between gap-2 bg-muted/40">
+                  <button
+                    type="button"
+                    onClick={() => setHrPerStoreOpen((v) => !v)}
+                    aria-expanded={hrPerStoreOpen}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3.5 py-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                      People &amp; payroll by branch ({summary.hrPerStore.length})
+                      {/* v2.148.0: slate-600 — the /80 alpha measured 3.61:1 and
+                          even full muted-foreground computes ~4.4:1 on the
+                          muted toggle's own bg; slate-600 passes at ~7:1.
+                          v2.159.0: the dark half — the axe re-audit caught
+                          slate-600 on the dark card at 2.38:1, so the span
+                          wears the standing dark:text-slate-400 pair (~9:1
+                          on the near-black card).
+                          v2.183.0: the hint that says the memory exists —
+                          sort, density and the open door all save to this
+                          browser, riding the same muted pair. */}
+                      <span className="font-normal text-slate-600 dark:text-slate-400">
+                        — headcount, cost, absence, latest run, expiry alerts per branch · layout saves to this browser
+                      </span>
                     </span>
-                  </span>
-                  <ChevronDown
-                    className={`h-4 w-4 shrink-0 transition-transform duration-200 ${hrPerStoreOpen ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 transition-transform duration-200 ${hrPerStoreOpen ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5 pr-2.5">
+                    <p aria-live="polite" data-testid="org-console-hr-note" className="text-xs text-muted-foreground">
+                      {hrLayoutNote}
+                    </p>
+                    {/* v2.183.0: Reset — muted by design (an exit, not an
+                        invite), and only PRESENT when there is something to
+                        reset: a stock drill-down renders no Reset at all,
+                        the honest mirror of the branches table's menu item.
+                        The door state is deliberately out of its scope — the
+                        toggle itself is the door's escape. */}
+                    {hrSort !== null || hrDense ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                        title="Restore the stock drill-down (arrival order, comfortable rows) and clear the saved layout from this browser"
+                        onClick={resetHrDrillLayout}
+                      >
+                        <RotateCcw className="mr-1 h-3 w-3" aria-hidden="true" /> Reset
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={`h-6 text-[11px] ${hrDense ? 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100' : ''}`}
+                      aria-pressed={hrDense}
+                      title={hrDense ? 'Compact rows on — click for comfortable rows (saved with your layout)' : 'Compact rows — denser table, saved with your layout'}
+                      onClick={() => setHrDense((d) => !d)}
+                    >
+                      <Rows3 className="mr-1 h-3 w-3" aria-hidden="true" /> Compact
+                    </Button>
+                  </div>
+                </div>
                 {hrPerStoreOpen ? (
                   // v2.149.0: min-w-0 + overflow-x — the six-column table's
                   // intrinsic min-content used to propagate straight through
@@ -1338,19 +1508,43 @@ export function OrgConsole() {
                     tabIndex={0}
                     aria-label="People and payroll by branch, scrollable table"
                   >
-                    <table className="w-full text-sm">
+                    {/* v2.183.0: the drill-down speaks the owner vocabulary —
+                        a driven header (real sort buttons over the ONE
+                        HR_DRILLDOWN_COLS spec, aria-sort carrying the state,
+                        the shared BranchSortGlyph wearing the orange-active /
+                        hover-chevrons vocabulary the other two tables speak)
+                        and the Compact density override. Sort semantics live
+                        in the drill-down's OWN pure lib (the sibling of the
+                        matrix's — numbers loudest-first, text A→Z, a branch
+                        with no payroll run sorting LAST in both
+                        directions). */}
+                    <table className={`w-full text-sm${hrDense ? ' [&_td]:px-2 [&_td]:py-1 [&_th]:py-1' : ''}`}>
                       <thead className="sticky top-0 bg-card">
                         <tr className="border-b text-left text-xs text-muted-foreground">
-                          <th className="px-3.5 py-2 font-medium">Branch</th>
-                          <th className="px-3 py-2 text-right font-medium">Headcount</th>
-                          <th className="px-3 py-2 text-right font-medium">Cost (month)</th>
-                          <th className="px-3 py-2 text-right font-medium">Absence</th>
-                          <th className="px-3 py-2 font-medium">Latest payroll</th>
-                          <th className="px-3 py-2 text-right font-medium">Expiry alerts</th>
+                          {HR_DRILLDOWN_COLS.map((c) => (
+                            <th
+                              key={c.key}
+                              className={`${c.pad} py-2 font-medium ${c.align === 'right' ? 'text-right' : ''}`}
+                              aria-sort={hrAriaSortOf(c.key)}
+                            >
+                              <div className={`flex items-center gap-1 ${c.align === 'right' ? 'justify-end' : ''}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => onHrSort(c.key)}
+                                  className={`focus-ring group -ml-1 flex items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-muted ${
+                                    hrSort?.key === c.key ? 'font-semibold text-foreground' : ''
+                                  }`}
+                                >
+                                  <span className="whitespace-nowrap">{c.label}</span>
+                                  <BranchSortGlyph state={hrSort?.key === c.key ? hrSort.dir : 'none'} />
+                                </button>
+                              </div>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {summary.hrPerStore.map((row) => {
+                        {hrRows.map((row) => {
                           const alerts = row.expiryAlerts.documentsExpiring90Days + row.expiryAlerts.assetsOverdue;
                           return (
                             <tr key={row.storeId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
