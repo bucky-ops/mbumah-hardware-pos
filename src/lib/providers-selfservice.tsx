@@ -15,6 +15,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { SelfServiceIdleWatch } from '@/components/hr/self-service-idle-watch';
 
 function SelfServiceErrorLogging({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -41,6 +42,10 @@ export function SelfServiceProviders({ children }: { children: ReactNode }) {
     <ErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
         <SelfServiceErrorLogging>{children}</SelfServiceErrorLogging>
+        {/* v2.162.0: the thirty-minute idle watch — mounted ONCE for the
+            whole portal tree, next to the theme provider (the only other
+            global client concern the slim shell keeps). */}
+        <SelfServiceIdleWatch />
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -224,3 +224,49 @@ contract:
 - **Why the dialog**: the payslip row is a `<button>`; an anchor nested
   inside a button is invalid HTML — the dialog is both the valid and the
   natural decision point for taking the document home.
+
+## The thirty-minute contract (v2.162.0)
+
+The EMS spec asks two idle-timeout questions — line 843.6: *"Does idle
+timeout protect unattended tills and potentially employee self-service
+sessions?"* and line 1068.7: *"Can self-service reuse auth and idle timeout
+safely?"* The till half was answered in v2.6.0 (client-side `useIdleTimeout`
+in the POS shell: 30 minutes → clear tokens → login screen, cart kept). The
+portal half stayed open until v2.162.0: a portal browser kept its 24-hour
+cookie session indefinitely, no matter how long it sat unattended. The
+answer is now **yes — reused, server-enforced, surface-scoped**:
+
+- **One cadence, two surfaces**: `SELF_SERVICE_IDLE_MS` is the SAME
+  30-minute window the till has used since v2.6.0 (`src/lib/session-idle.ts`
+  is the pure contract: `idleExpired`, the 401 shape, the constant — no db,
+  no clock reads; `now` is always a parameter).
+- **Server-side enforcement (the real protection)**: `selfServiceGuard`
+  checks `Session.lastActiveAt` on EVERY `/api/self-service/*` request —
+  expired → the session ROW is deleted (the cookie dies with it; it cannot
+  be replayed) and the request answers **401 `SESSION_IDLE_EXPIRED`**;
+  fresh → the window SLIDES (the request re-stamps `lastActiveAt`). The
+  SSR half lives in `loadSelfPortal`: an idle-expired page render shows the
+  honest "Signed out for your safety" note (Clock icon + Sign in) instead
+  of employee data, and deletes the row the same way.
+- **The column was already there**: `Session.lastActiveAt`
+  ("Track session activity") existed from day one but had zero readers or
+  writers until v2.162.0. Legacy rows created before this release carry no
+  stamp — `idleExpired` treats a missing or unparseable stamp as NOT
+  expired (honest degradation to the v2.161.0 behaviour: absolute 24h
+  expiry only; garbage never invents a lockout).
+- **The client affordance reuses the literal hook**: `SelfServiceIdleWatch`
+  (mounted once in `SelfServiceProviders`) imports the SAME `useIdleTimeout`
+  the till uses; on timeout it POSTs `/api/auth/logout` (client and server
+  agree — no zombie cookie) and renders an `alertdialog` overlay whose only
+  action is Sign in. The overlay is the courtesy; the server check is the
+  law — a re-opened tab or a scripted fetch cannot dodge it.
+- **Surface-scoped on purpose (the "safely" part)**: the till's API routes
+  never pass through `selfServiceGuard` or `loadSelfPortal`, so POS
+  behaviour is byte-identical to pre-v2.162.0. One session row can serve
+  both surfaces (one login); each surface enforces idle over ITS OWN
+  traffic only — a cashier pounding the till all day does not keep an
+  abandoned portal tab alive, and an employee reading portal pages does
+  not get logged out mid-use (every page render slides the window).
+- **No background polling exists on the portal** (verified v2.24.0+): the
+  slim shell has no React Query and no interval fetchers, so nothing keeps
+  the window alive but actual use.

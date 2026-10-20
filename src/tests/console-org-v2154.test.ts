@@ -110,7 +110,11 @@ describe('the login screen passes on both glass variants', () => {
     expect(src).toContain('text-[11px] text-foreground/80');
     expect(src).not.toContain('text-muted-foreground/70');
     expect(src).not.toContain('text-muted-foreground/30');
-    expect((src.match(/text-foreground\/50/g) ?? []).length).toBe(2);
+    // v2.162.0 re-anchor: the two separator dots joined the /80 family —
+    // the blend-math audit measured /50 at 2.71:1 on the light glass; they
+    // are aria-hidden decoratives now (5.25:1). ZERO /50 remains.
+    expect((src.match(/text-foreground\/50/g) ?? []).length).toBe(0);
+    expect((src.match(/<span className="text-foreground\/80" aria-hidden="true">·<\/span>/g) ?? []).length).toBe(2);
   });
 
   it('the dark-gradient texts keep their readability margins', () => {
@@ -126,7 +130,10 @@ describe('the login screen passes on both glass variants', () => {
 
   it('the destructive dismiss icon drops its alpha', () => {
     const src = readRepo('src/components/login-screen.tsx');
-    expect(src).toContain('rounded-md p-1 text-destructive transition-colors');
+    // v2.162.0 re-anchor: on the light glass the `destructive` token
+    // (oklch 0.577) measured 1.81:1 — under the 3:1 non-text bar; the X
+    // now uses red-800 light / destructive dark (3.34:1 / 5.84:1).
+    expect(src).toContain('rounded-md p-1 text-red-800 dark:text-destructive transition-colors');
     // no CLASS attribute carries the 70% alpha (comments may narrate the fix)
     expect(src).not.toMatch(/className="[^"]*text-destructive\/70/);
   });
@@ -269,11 +276,11 @@ describe('the export handler rides the review-activity read and follows up', () 
 describe('the release surfaces speak 2.154.0', () => {
   it('package.json, changelog and the feed lead with 2.154.0', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.161.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.161.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.161.0');
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.161.0]');
+    expect(pkg.version).toBe('2.162.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.162.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.162.0');
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.162.0]');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.161.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
+    expect(feed.indexOf("'2.162.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
   });
 });

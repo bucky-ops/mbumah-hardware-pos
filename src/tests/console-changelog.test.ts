@@ -372,11 +372,11 @@ describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
     // 2.110.0 flag means 2.111.0 … 2.161.0 sit strictly between (the head
     // 2.161.0 reads "latest", NOT 'new'), so the honest count is 50; a
     // 2.77.0 flag counts 2.78.0 … 2.160.0 (the head never joins this count).
-    // Re-anchored for 2.161.0 joining the feed.
-    expect(whatsNewUnreadCount('2.110.0')).toBe(50);
-    expect(whatsNewUnreadCount('2.109.0')).toBe(51);
-    expect(whatsNewUnreadCount('2.108.0')).toBe(52);
-    expect(whatsNewUnreadCount('2.77.0')).toBe(83);
+    // Re-anchored for 2.162.0 joining the feed.
+    expect(whatsNewUnreadCount('2.110.0')).toBe(51);
+    expect(whatsNewUnreadCount('2.109.0')).toBe(52);
+    expect(whatsNewUnreadCount('2.108.0')).toBe(53);
+    expect(whatsNewUnreadCount('2.77.0')).toBe(84);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(10);
   });
 

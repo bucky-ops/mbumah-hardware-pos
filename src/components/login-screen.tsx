@@ -189,7 +189,10 @@ export function LoginScreen() {
                 <img src="/logo3d-gear-256.png" alt="Mbumah Hardware" className="w-full h-full object-cover bg-white" />
               </motion.div>
               <CardTitle className="text-2xl font-bold tracking-tight">MBUMAH HARDWARE</CardTitle>
-              <CardDescription className="text-base font-medium text-foreground/70">
+              <CardDescription className="text-base font-medium text-foreground/80">
+                {/* v2.162.0: /70 measured 4.25:1 on the light glass blend —
+                    just under the 4.5 AA bar for 16px text. /80 = 5.25:1
+                    light / 9.31:1 dark (blend-math audit). */}
                 Point of Sale &amp; ERP System
               </CardDescription>
 
@@ -235,11 +238,16 @@ export function LoginScreen() {
                       {/* v2.154.0: was text-destructive/70 — on the red-tint
                           alert bg the 70% alpha icon sat at the 3:1 non-text
                           edge; the solid token clears it. */}
+                      {/* v2.162.0: the light `destructive` token (oklch
+                          0.577) on the light glass measured 1.81:1 — under
+                          the 3:1 non-text bar for a UI component. red-800
+                          measures 3.34:1; dark `destructive` already reads
+                          5.84:1 and stays. */}
                       <button
                         type="button"
                         onClick={() => setErrorMessage(null)}
                         aria-label="Dismiss error"
-                        className="absolute right-2 top-2 rounded-md p-1 text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        className="absolute right-2 top-2 rounded-md p-1 text-red-800 dark:text-destructive transition-colors hover:bg-destructive/10 hover:text-red-800 dark:hover:text-destructive"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -272,12 +280,17 @@ export function LoginScreen() {
                     <Label htmlFor="password" className="text-sm font-medium">Password</Label>
                     {/* INLINE forgot-password help - replaces the old
                         toast.info popup; help opens in place. */}
+                    {/* v2.162.0: was primary/80 (3.90:1 light / 3.80:1 dark
+                        on the glass — both under the 4.5 bar for 11px
+                        text). The link now carries a permanent underline
+                        (affordance no longer rides on the color alone)
+                        at foreground/90 — 6.29:1 light / 11.49:1 dark. */}
                     <button
                       type="button"
                       onClick={() => setShowForgotHelp((v) => !v)}
                       aria-expanded={showForgotHelp}
                       aria-controls="forgot-password-help"
-                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary/80 hover:text-primary underline-offset-2 hover:underline transition-colors"
+                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-foreground/90 underline underline-offset-2 hover:text-primary transition-colors"
                     >
                       Forgot password?
                       {showForgotHelp ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -364,7 +377,14 @@ export function LoginScreen() {
                 </Button>
               </form>
             </CardContent>
-            <CardFooter className="flex flex-col gap-3 text-sm text-muted-foreground">
+              {/* v2.162.0: the footer BASE joins the v2.154.0 fix — the
+                  muted-foreground token on the light glass (white/60 over
+                  the navy gradient, effective ≈ #ababb5) measures 2.28:1
+                  (axe cannot compute alpha-over-backdrop backgrounds, so it
+                  reported this family as an "incomplete" rather than a
+                  violation — the manual blend-math audit closes it).
+                  foreground/80 reads 5.25:1 light / 9.31:1 dark. */}
+            <CardFooter className="flex flex-col gap-3 text-sm text-foreground/80">
               {/* v2.154.0: the footer line drops the muted-foreground alphas —
                   on the light glass card (white/60 over the navy gradient,
                   effective ≈ #ababb5) muted/70 measured ~1.7:1 and the muted/30
@@ -377,14 +397,22 @@ export function LoginScreen() {
                 >
                   <Smartphone className="h-3 w-3" /> 0795 191 909
                 </a>
-                <span className="text-foreground/50">·</span>
+                {/* v2.162.0: the separator dots were left at /50 by the
+                    v2.154.0 pass (2.71:1 light) — raised to the same /80
+                    (5.25:1) and marked aria-hidden: they are decorative
+                    separators, not content. */}
+                <span className="text-foreground/80" aria-hidden="true">·</span>
                 <a
                   href="mailto:info@mbumahhardware.co.ke"
                   className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
                 >
                   <Mail className="h-3 w-3" /> Support
                 </a>
-                <span className="text-foreground/50">·</span>
+                {/* v2.162.0: the separator dots were left at /50 by the
+                    v2.154.0 pass (2.71:1 light) — raised to the same /80
+                    (5.25:1) and marked aria-hidden: they are decorative
+                    separators, not content. */}
+                <span className="text-foreground/80" aria-hidden="true">·</span>
                 <span className="inline-flex items-center gap-1">
                   <ShieldCheck className="h-3 w-3" /> Privacy
                 </span>
