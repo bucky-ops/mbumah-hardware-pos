@@ -4,7 +4,11 @@
 // read but not taken away).
 //
 // PURE module: no db, no network, no clock (the generated stamp is passed in),
-// no DOM — so vitest can pin the exact bytes without a browser.
+// no DOM — so vitest can pin the exact bytes without a browser. v2.178.0
+// imports the ONE weekDelta classifier so the file's change % can never
+// disagree with the chips — the verdict math lives in exactly one place.
+
+import { weekDelta } from '@/lib/org/summary-trend';
 
 /** Structural input: only the fields the CSV speaks. */
 export interface BranchCsvRow {
@@ -47,6 +51,21 @@ export interface BranchDeskCsvBlock {
   branches: ReadonlyArray<{ storeName: string; visits: number }>;
 }
 
+/**
+ * v2.178.0: one branch's week as the CSV's fourth section speaks it — the
+ * pre-joined row the caller builds (the summary's perStoreTrend entry joined
+ * to its branch name by storeId, the drill-down's own join). The change % is
+ * NOT carried here: the lib computes it with the SAME weekDelta classifier
+ * the chips speak, so the file can never disagree with the table's verdicts.
+ */
+export interface BranchTrendCsvRow {
+  storeName: string;
+  /** The branch's gross week total — the tooltip's own number. */
+  weekTotal: number;
+  /** Absent or ≤ 0 means NO comparison: the Change cell stays empty. */
+  priorWeekTotal?: number;
+}
+
 /** RFC-4180 field quoting: wrap when the value carries , " \n or \r. */
 function csvField(value: string | number): string {
   const s = String(value);
@@ -64,6 +83,14 @@ export const BRANCHES_CSV_COLUMNS = [
   'Overdue rentals',
   'Debt outstanding (KES)',
   'M-Pesa pending',
+] as const;
+
+/** v2.178.0: the week section's own header — the table's 7d column, as numbers. */
+export const BRANCHES_TREND_CSV_COLUMNS = [
+  'Branch',
+  'Revenue 7d (KES)',
+  'Prior week (KES)',
+  'Change (%)',
 ] as const;
 
 export const BRANCHES_HR_CSV_COLUMNS = [
@@ -93,12 +120,19 @@ export const BRANCHES_HR_CSV_COLUMNS = [
  * renders. Nullish: the file ends exactly where v2.152.0 ended (byte-pinned
  * by the tests); an empty branch list still prints the headline figures —
  * a quiet desk is an honest zero, not an absence.
+ *
+ * v2.178.0: `trend` (when the summary payload carried perStoreTrend) appends
+ * a fourth section — the week by branch, the same loudest-first rows the
+ * Revenue drill-down lists, each with its prior week and the SAME weekDelta
+ * verdict the chips speak. Nullish or empty: the file ends exactly where
+ * v2.177.0 ended (byte-pinned by the tests).
  */
 export function buildBranchesCsv(
   stores: readonly BranchCsvRow[],
   generatedAt: Date = new Date(),
   hrPerStore?: readonly BranchHrCsvRow[] | null,
   desk?: BranchDeskCsvBlock | null,
+  trend?: readonly BranchTrendCsvRow[] | null,
 ): string {
   const header = BRANCHES_CSV_COLUMNS.join(',');
   const rows = stores.map((s) =>
@@ -166,6 +200,34 @@ export function buildBranchesCsv(
       ...desk.branches.map((b) =>
         [b.storeName, b.visits].map(csvField).join(','),
       ),
+      '',
+    );
+  }
+  if (trend && trend.length > 0) {
+    // v2.178.0: the week by branch — the drill-down's own rows, offline.
+    // Loudest week first (the drill-down's sort; Array.sort is stable, so
+    // tied weeks keep their arrival order). The change % is the SAME
+    // weekDelta verdict the chips speak: signed (the sign IS the direction
+    // in a spreadsheet), round2'd, and EMPTY when there is no comparison —
+    // a missing or non-positive prior week prints nothing, never a
+    // fabricated "+0%" or an invented infinity.
+    const ordered = [...trend].sort((a, b) => b.weekTotal - a.weekTotal);
+    lines.push(
+      'The week by branch (7d)',
+      BRANCHES_TREND_CSV_COLUMNS.join(','),
+      ...ordered.map((t) => {
+        const d =
+          t.priorWeekTotal === undefined ? null : weekDelta(t.weekTotal, t.priorWeekTotal);
+        return [
+          t.storeName,
+          t.weekTotal,
+          t.priorWeekTotal === undefined ? '' : t.priorWeekTotal,
+          d ? String(d.pct) : '',
+        ]
+          .map(csvField)
+          .join(',');
+      }),
+      'Note,Branch week shapes are gross revenue — the dashboard\u2019s org trend line is net of VAT',
       '',
     );
   }

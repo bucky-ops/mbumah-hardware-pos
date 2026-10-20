@@ -131,15 +131,23 @@ of re-deciding them. Each contract names the release that set it.
   and `dark:text-muted-foreground/N` do not exist in this codebase — the
   sweeps are byte-safe by construction.
 
-## The branches CSV contract (v2.152.0 + v2.154.0)
+## The branches CSV contract (v2.152.0 + v2.154.0 + v2.178.0)
 
-- Three sections in one blob: the per-branch matrix, "People & payroll by
+- Four sections in one blob: the per-branch matrix, "People & payroll by
   branch" (headcount/cost/absence/payroll status/expiry alerts — empty cells
-  honest when the org console has no data), and the desk's yesterday digest
+  honest when the org console has no data), the desk's yesterday digest
   (org-wide review activity; a refused read exports without the section and
-  the note says so). RFC-4180 quoting, generated stamp, raw numbers.
-- The export note links the live blob ("Open") after download; one blob
-  alive at a time; the URL is revoked on re-export.
+  the note says so), and "The week by branch (7d)" (v2.178.0 — the
+  drill-down's own rows, loudest week first, each branch's gross week total,
+  prior week, and a signed Change % computed by the SAME `weekDelta`
+  classifier the chips speak; a missing or non-positive prior week leaves
+  the Change cell EMPTY — never a fabricated "+0%" or an invented infinity).
+  RFC-4180 quoting, generated stamp, raw numbers.
+- The export note counts the sections it actually wrote ("Exported
+  branches_….csv · 4 sections") and links the live blob ("Open") after
+  download; one blob alive at a time; the URL is revoked on re-export. The
+  button speaks its own busy state ("Exporting…", `aria-busy`, the download
+  icon pulses) while the desk read answers.
 
 ## The spec's own paths (v2.160.0)
 

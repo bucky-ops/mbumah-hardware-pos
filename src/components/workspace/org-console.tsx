@@ -697,6 +697,16 @@ export function OrgConsole() {
          must never fail because the morning note did not answer */
     }
     if (!desk) deskNote = ' · desk activity unavailable';
+    // v2.178.0: the week by branch rides the same download — the summary's
+    // own perStoreTrend block joined to the branch names by storeId (the
+    // drill-down's join, 'Branch' when a name cannot resolve). NO second
+    // fetch: the block has ridden every summary response since v2.174.0, so
+    // the file costs the poll nothing.
+    const trendRows = (summary.perStoreTrend ?? []).map((t) => ({
+      storeName: summary.stores.find((s) => s.id === t.storeId)?.name ?? 'Branch',
+      weekTotal: t.weekTotal,
+      priorWeekTotal: t.priorWeekTotal,
+    }));
     const csv = buildBranchesCsv(
       summary.stores.map((s) => ({
         name: s.name,
@@ -726,6 +736,9 @@ export function OrgConsole() {
       // v2.154.0: the desk's yesterday digest as the third section (null
       // when the read refused — the file ends at the v2.152.0 shape).
       desk,
+      // v2.178.0: the week by branch as the fourth section (empty when the
+      // payload lacked the block — the file ends at the v2.177.0 shape).
+      trendRows,
     );
     const stamp = new Date().toISOString().slice(0, 10);
     const filename = `branches_${stamp}.csv`;
@@ -741,7 +754,16 @@ export function OrgConsole() {
     if (exportUrlRef.current) URL.revokeObjectURL(exportUrlRef.current);
     exportUrlRef.current = url;
     setExportUrl(url);
-    setExportNote(`Exported ${filename}${deskNote}`);
+    // v2.178.0: the note counts the sections it actually wrote — the owner
+    // can tell at a glance whether the week (and the desk) made the file.
+    const sections =
+      1 +
+      (summary.hrPerStore && summary.hrPerStore.length > 0 ? 1 : 0) +
+      (desk ? 1 : 0) +
+      (trendRows.length > 0 ? 1 : 0);
+    setExportNote(
+      `Exported ${filename} \u00b7 ${sections} section${sections === 1 ? '' : 's'}${deskNote}`,
+    );
     setExporting(false);
   }
 
@@ -1198,9 +1220,13 @@ export function OrgConsole() {
                 data-testid="org-console-export-csv"
                 onClick={exportBranchesCsv}
                 disabled={exporting}
+                aria-busy={exporting}
               >
-                <Download className="mr-1 h-3 w-3" aria-hidden="true" />
-                Export CSV
+                <Download
+                  className={`mr-1 h-3 w-3${exporting ? ' animate-pulse' : ''}`}
+                  aria-hidden="true"
+                />
+                {exporting ? 'Exporting\u2026' : 'Export CSV'}
               </Button>
               <p className="hidden text-xs text-muted-foreground sm:block">Opening a branch workspace keeps this console tab available</p>
             </div>

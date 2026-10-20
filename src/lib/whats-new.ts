@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.178.0',
+    title: 'The export carries the week',
+    bullets: [
+      'The branches CSV export now ends with "The week by branch (7d)" \u2014 every branch\u2019s week total, its prior week, and the signed change, the same rows the Revenue drill-down lists, ready for a spreadsheet.',
+      'The change percentage speaks the same math as the on-screen chips \u2014 the sign tells the direction, and a branch with no prior week leaves the cell empty instead of inventing a number.',
+      'The export note counts what it actually wrote ("4 sections"), and the button says Exporting\u2026 while the file is gathered.',
+    ],
+  },
+  {
     version: '2.177.0',
     title: 'The week by branch learns its own variance',
     bullets: [
