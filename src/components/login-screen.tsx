@@ -29,6 +29,7 @@ import { useAuthStore } from '@/lib/stores';
 import { APP_BUILD_LABEL } from '@/lib/version';
 // v2.16.0 (subdomain workspaces): role-based post-login destination.
 import { postLoginRedirect } from '@/lib/workspace/links';
+import { safeReturnPath } from '@/lib/session-idle';
 // v2.17.9 (staged updates): calm progress banner while the server updates.
 // Renders null outside maintenance windows, so it costs nothing normally.
 import { UpdateProgressBar } from '@/components/updater/update-progress-bar';
@@ -101,7 +102,19 @@ export function LoginScreen() {
       // screen instead of the shell (no router.push past the checkpoint).
       const flaggedUser = useAuthStore.getState().user;
       if (flaggedUser?.mustChangePassword) return;
-      const target = postLoginRedirect(flaggedUser);
+      // v2.163.0 the door swings back: an idle sign-out (or a session note)
+      // sent the colleague here with ?next=<the page they were reading>.
+      // That path WINS over the role-based default - they asked for their
+      // payslips, not for a dashboard. Read at event time from the real
+      // location (no useSearchParams - the login screen has no Suspense
+      // boundary and no SSR dependency on the query), then validated by
+      // safeReturnPath so the classic open-redirect doors stay shut.
+      const nextParam =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('next')
+          : null;
+      const target =
+        safeReturnPath(nextParam) ?? postLoginRedirect(flaggedUser);
       if (target) router.push(target);
     } catch (err: unknown) {
       // INLINE feedback instead of a popup toast: the error appears inside

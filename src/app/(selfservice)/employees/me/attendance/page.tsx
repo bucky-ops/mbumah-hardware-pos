@@ -38,7 +38,7 @@ function timeOrDash(iso: string | null): string {
 export const dynamic = 'force-dynamic';
 
 export default async function MyAttendance() {
-  const guard = await loadSelfPortal('hr.attendance.record.own');
+  const guard = await loadSelfPortal('hr.attendance.record.own', '/employees/me/attendance');
   if (!guard.ok) return guard.note;
 
   let data: AttendanceDto;

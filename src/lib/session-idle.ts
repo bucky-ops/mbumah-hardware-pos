@@ -66,3 +66,60 @@ export function sessionIdleExpiredResponse(): Response {
     { status: 401 },
   );
 }
+
+// ---------------------------------------------------------------------------
+// v2.163.0 - THE DOOR SWINGS BACK (the return path)
+//
+// The idle overlay and the server-side "signed out for your safety" note
+// both send the colleague to the login screen with `?next=<where they
+// were>`. After sign-in, LoginScreen prefers that path over the role-based
+// default, so an employee reading their payslips lands back on their
+// payslips - not on a dashboard they never asked for.
+//
+// The helper is PURE and PARANOID because `?next=` is the classic open-
+// redirect door: only same-origin relative paths survive, everything else
+// (protocol-relative //evil.example, scheme-like javascript:, backslash
+// tricks, control characters, absurd lengths) degrades to null and the
+// role-based default takes over. A null return is NEVER an error - it is
+// the honest "no safe return path was offered".
+// ---------------------------------------------------------------------------
+
+/** Longest return path we will honour - real portal routes are far shorter. */
+const SAFE_RETURN_PATH_MAX = 512;
+
+/**
+ * Validate a caller-supplied `?next=` value as a same-origin relative path.
+ * Returns the path unchanged when safe, null otherwise (the caller then
+ * falls back to its own default destination).
+ */
+export function safeReturnPath(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  const path = String(raw);
+  if (path.length > SAFE_RETURN_PATH_MAX) return null;
+  // Must be relative: exactly one leading slash (no protocol-relative '//').
+  if (!path.startsWith('/') || path.startsWith('//')) return null;
+  // Backslashes are Windows separators and URL-smuggling tricks - reject.
+  if (path.includes('\\')) return null;
+  // Control characters (including newlines, which enable header injection
+  // downstream) and the scheme-colon shape (`javascript:`, `http:`) never
+  // pass. A colon before the first slash is always a scheme in a path.
+  for (let i = 0; i < path.length; i++) {
+    const code = path.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return null;
+  }
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(path)) return null;
+  return path;
+}
+
+/**
+ * Build the sign-in href for a return path: `/` when none was offered (the
+ * login screen's own address), otherwise `/?next=<encoded path>`.
+ */
+export function buildPortalReturnHref(
+  returnPath: string | null | undefined,
+): string {
+  const safe = safeReturnPath(returnPath);
+  return safe ? `/?next=${encodeURIComponent(safe)}` : '/';
+}

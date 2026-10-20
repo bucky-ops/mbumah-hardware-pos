@@ -38,7 +38,7 @@ export default async function MyPayslips({
 }: {
   searchParams: Promise<{ year?: string }>;
 }) {
-  const guard = await loadSelfPortal('hr.payroll.read.own');
+  const guard = await loadSelfPortal('hr.payroll.read.own', '/employees/me/payslips');
   if (!guard.ok) return guard.note;
 
   const { year: yearParam } = await searchParams;

@@ -57,6 +57,11 @@ import { GET as debtRemindersGET } from '@/app/api/cron/debt-reminders/route';
 // which payslips may re-send, and initiation is idempotent, so overlapping
 // ticks cannot double-pay.
 import { GET as b2cRecoveryGET } from '@/app/api/cron/b2c-recovery/route';
+// v2.163.0: the session reaper joins the dispatcher - one deleteMany on the
+// indexed expiresAt column (the session-hygiene sweep; idle-expiry deletion
+// stays the portal guard's own enforcement path, this reaper only owns
+// sessions nobody will ever present again).
+import { GET as sessionReaperGET } from '@/app/api/cron/session-reaper/route';
 
 export const dynamic = 'force-dynamic';
 // Both sub-routes declare maxDuration 60; running them in parallel keeps the
@@ -168,6 +173,10 @@ async function hourlyCronHandler(...args: unknown[]): Promise<Response> {
     // runs (backoff + ceiling respected; early-outs in production when Daraja
     // is unconfigured and mock is not opted in).
     { name: 'b2c-recovery', run: () => b2cRecoveryGET(request) },
+    // v2.163.0: session reaper - deletes auth sessions whose expiresAt has
+    // passed (one deleteMany on an indexed column; a reaped-zero sweep is a
+    // healthy outcome and still leaves its INFO ledger row).
+    { name: 'session-reaper', run: () => sessionReaperGET(request) },
   ]);
 
   const allOk = results.every((r) => r.ok);

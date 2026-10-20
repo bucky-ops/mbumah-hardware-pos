@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.163.0] The session reaps itself — and the door swings back
+
+The session table finally gets its janitor (Task 156's session-hygiene sweep), and the idle sign-out's door swings back — sign-in returns the colleague to the page they were reading, validated end-to-end against open redirects.
+
+### Added
+- **`GET /api/cron/session-reaper`**: one `deleteMany` on the indexed `expiresAt` column, wrapped in `runWithoutTenant` (Session is a global, tenant-exempt table), gated by the same `x-cron-secret` pattern as every sibling cron route (fail-open with a WARN when CRON_SECRET is unset). Every sweep leaves an INFO `SESSIONS_REAPED` ledger row — a reaped-zero sweep is a healthy outcome and still traces.
+- **`src/lib/session-reaper.ts`**: the pure summary contract — honest plurals, an honest zero ("No expired sessions to reap — the session table is clean."), garbage counts degrade to the zero case. No db, no clock.
+- **The reaper joins the hourly dispatcher** (`/api/cron/hourly`) as the sixth sub-job — the same fold pattern as etims-retry / debt-reminders / b2c-recovery (Vercel Hobby's two-cron limit keeps scheduled jobs out of vercel.json). Idle-expiry deletion stays the portal guard's own enforcement path; the reaper only owns sessions nobody will ever present again.
+- **The return path** (`src/lib/session-idle.ts` grows): `safeReturnPath` — the paranoid `?next=` validator (same-origin relative paths only; protocol-relative `//`, scheme-like `javascript:`, backslashes, control characters and >512-char values all degrade to null, and null is never an error) — and `buildPortalReturnHref` (`/?next=<encoded>` or plain `/`). The idle overlay (`SelfServiceIdleWatch`) now remembers `window.location.pathname` at timeout and carries it on its Sign in link; the server-side PortalNote gains a `returnPath` prop wired from all six `loadSelfPortal` page callers (payslips / attendance / leave / goals / documents / home); `LoginScreen` reads `?next=` at submit time and that path WINS over the role-based default (first-sign-in password rotation still gates first).
+- **`docs/a11y/contrast-math.md`**: the one-page recipe for closing axe "color-contrast incomplete" findings by blend math (Ottoson oklch→sRGB, real paint-stack compositing, the two background-model false-fail families), with `scripts/contrast-audit-login.mjs` committed as the reference implementation.
+
+### Changed
+- **Idle overlay + portal notes gain the return hint**: "Signing in brings you straight back to this page." — the promise is now spoken where the click happens (both the client overlay and the server-rendered notes).
+
 ## [2.162.0] The portal's thirty minutes
 
 The self-service portal reuses the till's idle-timeout contract — server-enforced, surface-scoped — and the login front door closes its last unknown with a manual glass-card contrast audit.

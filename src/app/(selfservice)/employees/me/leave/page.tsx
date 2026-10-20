@@ -17,7 +17,7 @@ import { LeaveView, type LeaveDto } from './leave-view';
 export const dynamic = 'force-dynamic';
 
 export default async function MyLeave() {
-  const guard = await loadSelfPortal('hr.leave.read.own');
+  const guard = await loadSelfPortal('hr.leave.read.own', '/employees/me/leave');
   if (!guard.ok) return guard.note;
 
   let data: LeaveDto;
