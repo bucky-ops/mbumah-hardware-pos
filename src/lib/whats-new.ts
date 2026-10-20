@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.165.0',
+    title: 'Every heartbeat writes its ledger',
+    bullets: [
+      'The nightly automation tick now also sweeps expired sign-in sessions — a second daily chance, so a frozen morning tick never strands them for a day.',
+      'The nightly tick is now visible on the Automation pulse card, alongside the hourly one.',
+      'The Last tick line says which heartbeat it is reading (hourly or nightly) and carries the exact time in its tooltip.',
+      'The arming guide gains a two-read verification: the Actions tab and the card must both confirm the tick gate is armed.',
+    ],
+  },
+  {
     version: '2.164.0',
     title: 'The pulse speaks the reaper',
     bullets: [

@@ -77,7 +77,10 @@ describe('the dispatcher writes a ledger row on every tick', () => {
     // dispatcher's ledgerEntry — name/ok/status, plus the session-reaper's
     // honest deleted count when the body carried one) instead of the old
     // inline name/ok/status mapping.
-    expect(tickSlice).toContain('metadata: { results: ledgerResults }');
+    // v2.165.0 re-anchor: the metadata now names the dispatcher that fired
+    // ('hourly') — the nightly dispatcher writes the same action from
+    // v2.165.0 on, so the card can label which heartbeat it reads.
+    expect(tickSlice).toContain("metadata: { dispatcher: 'hourly', results: ledgerResults }");
   });
 
   it('keeps the partial-failure WARN for severity filtering', () => {

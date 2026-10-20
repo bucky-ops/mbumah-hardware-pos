@@ -34,7 +34,11 @@ describe('the dispatcher - the ledger carries the honest count', () => {
   it('both ledger rows (WARN and INFO) write the same promoted entries', () => {
     expect(dispatcher).toContain('const ledgerResults = results.map(ledgerEntry);');
     const after = dispatcher.split('const ledgerResults = results.map(ledgerEntry);')[1];
-    const metadataWrites = after.match(/metadata: \{ results: ledgerResults \}/g) || [];
+    // v2.165.0 re-anchor: both metadata writes also name the dispatcher
+    // ('hourly') — the nightly dispatcher writes the same action from
+    // v2.165.0 on, so every ledger row says which heartbeat recorded it.
+    const metadataWrites =
+      after.match(/metadata: \{ dispatcher: 'hourly', results: ledgerResults \}/g) || [];
     expect(metadataWrites.length).toBe(2);
     // the OLD inline mapping is gone - one shape, one definition
     expect(dispatcher).not.toContain('results.map((r) => ({ name: r.name, ok: r.ok, status: r.status }))');

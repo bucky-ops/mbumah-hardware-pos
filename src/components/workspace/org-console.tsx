@@ -46,6 +46,10 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { UnifiedConsoleShell } from '@/components/console/unified-console';
 import { useAuthStore } from '@/lib/stores';
 import { authorizedFetchJson } from '@/lib/api';
+// v2.165.0: the Automation pulse's "Last tick" line gains the exact EAT
+// stamp as its tooltip - the same stamp format the payroll surfaces speak
+// (payslip-bundle is client-safe: it imports only csvCell from digest-csv).
+import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
@@ -276,7 +280,15 @@ export function OrgConsole() {
   }
   interface AutomationSummary {
     generatedAt: string;
-    lastTick: { at: string; failedCount: number; subJobs: AutomationSubJob[] } | null;
+    lastTick: {
+      at: string;
+      failedCount: number;
+      subJobs: AutomationSubJob[];
+      /** v2.165.0: which dispatcher fired ('hourly' | 'nightly') - present
+       *  only on ledger rows written by v2.165.0 or newer; older ticks
+       *  omit it and the card renders no source label (never a guess). */
+      dispatcher?: string;
+    } | null;
     failedTicks7d: number;
     secretConfigured: boolean;
     cadence: { vercelSchedule: string; pingerWorkflow: string };
@@ -1062,9 +1074,30 @@ export function OrgConsole() {
             <div className="px-4 py-4 space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <Timer className="h-4 w-4 text-emerald-700" aria-hidden="true" />
-                <span data-testid="automation-last-tick" className="font-medium">
+                {/* v2.165.0: the relative age is the glance read; the tooltip
+                    carries the EXACT EAT stamp ("Mon 20 Oct 2026 · 13:09
+                    EAT") so an operator diffing two ticks never has to
+                    arithmetic their way back from "3h ago". */}
+                <span
+                  data-testid="automation-last-tick"
+                  className="font-medium"
+                  title={`Tick recorded ${formatEatStamp(new Date(automation.lastTick.at))}`}
+                >
                   Last tick {timeAgo(automation.lastTick.at)}
                 </span>
+                {/* v2.165.0: WHICH heartbeat. From v2.165.0 both dispatchers
+                    write the ledger, so the row's own name is the honest
+                    source label; rows older than v2.165.0 lack it and render
+                    nothing (never a guess). Full-opacity muted-foreground —
+                    the card's contrast discipline holds (no alpha families). */}
+                {automation.lastTick.dispatcher && (
+                  <span
+                    data-testid="automation-tick-source"
+                    className="text-xs text-muted-foreground"
+                  >
+                    · {automation.lastTick.dispatcher} dispatcher
+                  </span>
+                )}
                 {automation.lastTick.failedCount > 0 && (
                   <span
                     data-testid="automation-failed-count"
