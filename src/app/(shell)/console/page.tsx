@@ -399,7 +399,11 @@ export default function OrgConsolePage() {
 
           <div id="store-matrix">
             <SectionErrorBoundary sectionName="Store Intelligence Matrix">
-              {summary ? <StoreMatrix stores={summary.stores} onToast={onToast} /> : <UnavailableCard message={summaryError ?? 'Loading store matrix...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
+              {/* v2.179.0: the matrix reads the week — the perStoreTrend block
+                  the page already polls rides down untouched (no second
+                  fetch); the component joins by storeId and degrades to the
+                  calm dash when the block is absent. */}
+              {summary ? <StoreMatrix stores={summary.stores} trend={summary.perStoreTrend} onToast={onToast} /> : <UnavailableCard message={summaryError ?? 'Loading store matrix...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
             </SectionErrorBoundary>
           </div>
           <div id="hr-people">
