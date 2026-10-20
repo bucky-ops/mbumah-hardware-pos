@@ -147,11 +147,11 @@ describe('the branches CSV carries both tables', () => {
 describe('the release surfaces speak 2.152.0', () => {
   it('package.json, changelog and the feed lead with 2.152.0', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.172.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.172.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.172.0');
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.172.0]');
+    expect(pkg.version).toBe('2.173.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.173.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.173.0');
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.173.0]');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.172.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
+    expect(feed.indexOf("'2.173.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
   });
 });

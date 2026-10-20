@@ -15,6 +15,8 @@ import { withErrorBoundary } from '@/lib/logger';
 import { hrSummaryForOrgConsole, hrPerStoreForOrgConsole } from '@/lib/hr/reports';
 import { isHrModuleEnabled } from '@/lib/hr/feature-flag';
 import { hasHrPermission } from '@/lib/hr/permissions';
+import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets } from '@/lib/org/summary-trend';
+import { round2 } from '@/lib/utils/financialMath';
 import type { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +57,13 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
       },
     });
 
-    const [salesByStore, lowStockByStore, overdueRentalsByStore, debtByStore, pendingMpesaByStore, recentAudit] =
+    const windows = trendWindows(today);
+    const TREND_WHERE = {
+      transactionType: 'SALE',
+      paymentStatus: { in: ['COMPLETED', 'PARTIAL'] },
+    };
+
+    const [salesByStore, lowStockByStore, overdueRentalsByStore, debtByStore, pendingMpesaByStore, recentAudit, trendWeek, trendPrior, trendRowsRaw] =
       await Promise.all([
         // Today's revenue per store (SALE type, settled payment statuses)
         rawDb.salesTransaction.groupBy({
@@ -107,6 +115,24 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
             timestamp: true,
           },
         }),
+        // v2.173.0: the 7-day trend — current-week totals (gross).
+        rawDb.salesTransaction.aggregate({
+          where: { ...TREND_WHERE, createdAt: { gte: windows.weekAgo } },
+          _sum: { totalAmount: true },
+          _count: { _all: true },
+        }),
+        // v2.173.0: the prior-week totals the variance compares against.
+        rawDb.salesTransaction.aggregate({
+          where: { ...TREND_WHERE, createdAt: { gte: windows.twoWeeksAgo, lt: windows.weekAgo } },
+          _sum: { totalAmount: true },
+          _count: { _all: true },
+        }),
+        // v2.173.0: the per-day rows both sparklines bucket (revenue sums
+        // gross totalAmount; transactions count the same rows 1 each).
+        rawDb.salesTransaction.findMany({
+          where: { ...TREND_WHERE, createdAt: { gte: windows.weekAgo } },
+          select: { createdAt: true, totalAmount: true },
+        }),
       ]);
 
     const revenueMap = new Map(
@@ -144,6 +170,38 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
       { revenue: 0, transactions: 0, lowStock: 0, overdueRentals: 0, debtOutstanding: 0, pendingMpesa: 0 },
     );
 
+    // v2.173.0: the 7-day trend block — GROSS by contract. The trend
+    // decorates the "Revenue today" StatCard on THIS surface, whose value
+    // is the gross `_sum.totalAmount` above; a net-of-tax spark under a
+    // gross headline would be a lying adjacency. (The expert console's
+    // kpi-summary computes revenue NET of tax — a pre-existing cross-surface
+    // divergence between the two "Revenue" labels, recorded in v2.173.0,
+    // deliberately not reconciled here.) The card hides the variance badge
+    // when priorWeekTotal is 0 — no prior data means NO comparison, never
+    // a fabricated "+0%".
+    const trendRows = trendRowsRaw.map((r) => ({
+      createdAt: r.createdAt,
+      amount: Number(r.totalAmount),
+    }));
+    const revenueWeek = round2(Number(trendWeek._sum.totalAmount ?? 0));
+    const revenuePrior = round2(Number(trendPrior._sum.totalAmount ?? 0));
+    const txWeek = trendWeek._count._all;
+    const txPrior = trendPrior._count._all;
+    const trend = {
+      revenue: {
+        spark: sparkBuckets(trendRows, windows.startToday, TREND_DAYS),
+        weekTotal: revenueWeek,
+        priorWeekTotal: revenuePrior,
+        variancePct: variancePct(revenueWeek, revenuePrior),
+      },
+      transactions: {
+        spark: countBuckets(trendRows, windows.startToday, TREND_DAYS),
+        weekTotal: txWeek,
+        priorWeekTotal: txPrior,
+        variancePct: variancePct(txWeek, txPrior),
+      },
+    };
+
     // EMS v2.20.0 (spec Phase 4.8): HR tiles for the organization console —
     // headcount, month employment cost, absence rate, payroll status, expiry
     // alerts. Computed only when the HR module is on and the caller holds an
@@ -172,6 +230,7 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
       data: {
         generatedAt: new Date().toISOString(),
         totals,
+        trend,
         hr,
         hrPerStore,
         stores: storeRows,

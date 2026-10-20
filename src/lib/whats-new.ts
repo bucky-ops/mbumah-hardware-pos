@@ -80,6 +80,14 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.173.0',
+    title: 'The first screen learns to trend',
+    bullets: [
+      'The Revenue and Transactions tiles on the Organization Console now draw the week\u2019s shape \u2014 a 7-day sparkline, the week-vs-prior-week percentage, and the two weekly totals under your today numbers.',
+      'Honest by construction: with no prior-week data the percentage simply stays hidden \u2014 the console never shows a made-up \u201c+0%\u201d.',
+    ],
+  },
+  {
     version: '2.172.0',
     title: 'The card expects the tick',
     bullets: [
