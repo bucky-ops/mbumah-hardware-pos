@@ -57,7 +57,7 @@ function FloatingParticles() {
   []);
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+    <div aria-hidden="true" className="absolute inset-0 pointer-events-none overflow-hidden">
       {particles.map((p) => (
         <div
           key={p.id}
@@ -123,10 +123,10 @@ export function LoginScreen() {
       <FloatingParticles />
 
       {/* Dot grid pattern overlay */}
-      <div className="absolute inset-0 dot-grid-pattern pointer-events-none" />
+      <div aria-hidden="true" className="absolute inset-0 dot-grid-pattern pointer-events-none" />
 
       {/* Decorative hardware pattern - very subtle */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+      <div aria-hidden="true" className="absolute inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute top-10 left-10"><Wrench className="h-24 w-24 text-white" /></div>
         <div className="absolute top-32 right-20"><Hammer className="h-16 w-16 text-white" /></div>
         <div className="absolute bottom-20 left-1/4"><Package className="h-20 w-20 text-white" /></div>
@@ -136,7 +136,13 @@ export function LoginScreen() {
         <div className="absolute bottom-60 right-10"><Package className="h-14 w-14 text-white -rotate-12" /></div>
       </div>
 
-      <motion.div
+      {/* v2.160.0: the content column is a <main> landmark — the axe
+          "region" best-practice rule flagged all nine content blocks
+          (tagline, card header, form fields, footer) as living outside
+          every landmark. The column IS the page's primary content, so it
+          becomes main; the decorative background layers stay outside and
+          are now explicitly aria-hidden. */}
+      <motion.main
         className="w-full max-w-md relative z-10"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -415,7 +421,7 @@ export function LoginScreen() {
         >
           {APP_BUILD_LABEL}
         </motion.p>
-      </motion.div>
+      </motion.main>
     </div>
   );
 }

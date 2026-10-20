@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.160.0',
+    title: "The spec's own paths",
+    bullets: [
+      'New: the payroll reports now answer on their spec paths too — /api/payroll/exports/p10, /api/payroll/exports/statutory, and /api/payroll/liability-report.',
+      'Honesty: the three paths are the same handlers as before (nothing re-implemented, nothing drifted) — a mechanical gate now keeps every spec-listed endpoint in place.',
+      'Fixed: the sign-in screen is now a proper page landmark, with the decorative background correctly hidden from assistive tech.',
+      'Improved: typing your password on the sign-in screen shows a clearly visible amber focus ring instead of a barely-there glow.',
+    ],
+  },
+  {
     version: '2.159.0',
     title: 'The dispatcher keeps its hours',
     bullets: [

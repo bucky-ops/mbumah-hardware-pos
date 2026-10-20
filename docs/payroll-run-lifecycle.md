@@ -94,6 +94,12 @@ of re-deciding them. Each contract names the release that set it.
 - The run dialog says so: a `b2c-auto-recovery-note` truth line renders on
   posted/locked runs with the disburse permission — the backoff chips are
   advisory, not the only path home.
+- The sweep is dispatched hourly — see `docs/cron-operations.md` for the
+  production cadence story (Vercel's daily 03:00 UTC tick + the hourly
+  GitHub Actions pinger), the `CRON_SECRET` arming contract, and the tick
+  ledger / org-console Automation pulse card that make a healthy dispatch
+  distinguishable from a silent one. The backoff windows (2m–30m) only
+  regain their designed meaning once the hourly cadence is armed.
 
 ## The tabs contrast sweep (v2.155.0)
 
@@ -134,3 +140,21 @@ of re-deciding them. Each contract names the release that set it.
   the note says so). RFC-4180 quoting, generated stamp, raw numbers.
 - The export note links the live blob ("Open") after download; one blob
   alive at a time; the URL is revoked on re-export.
+
+## The spec's own paths (v2.160.0)
+
+- Phase 4.6 literal spec-path parity is COMPLETE: the spec's
+  `/api/payroll/exports/p10`, `/api/payroll/exports/statutory`, and
+  `/api/payroll/liability-report` routes now exist. Each is a RE-EXPORT of
+  its canonical handler (`/api/hr/reports/p10` and
+  `/api/hr/reports/statutory-liability`) — same guard, same roles, same
+  audit rows, zero duplicated logic, so the alias can never drift.
+- Every Phase 4.6 and Phase 4.7 endpoint and page from the spec's
+  "Create:" lists now exists on disk; `scripts/verify-spec-paths.mjs` is
+  the mechanical gate that keeps it true (33 paths + the three alias
+  re-export bindings; run it standalone or via `npm run verify:v2-160-0`).
+- The login front door gained its `<main>` landmark the same round — the
+  axe best-practice "region" rule (9 flagged blocks) is closed, the
+  decorative background layers are aria-hidden, and the input focus pulse
+  is raised from ambient-glow alphas (0.15/0.25) to a visible keyboard
+  beacon (0.35/0.5).
