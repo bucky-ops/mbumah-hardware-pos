@@ -196,9 +196,21 @@ describe('the card contract - the 7d column and the door', () => {
   });
 
   it('the branches table gains the 7d trend column, beside the revenue column it decorates', () => {
-    expect(card).toContain('>7d trend</th>');
-    expect(card.indexOf('>Revenue today</th>')).toBeLessThan(card.indexOf('>7d trend</th>'));
-    expect(card.indexOf('>7d trend</th>')).toBeLessThan(card.indexOf('>Txns</th>'));
+    // v2.182.0 pin evolution (deliberate): the branches table's headers are
+    // now DRIVEN by the BRANCH_TABLE_COLS spec (sortable, resizable,
+    // hideable — the matrix's owner vocabulary), so the header text lives
+    // in the spec, not in literal <th> markup. The column ORDER the old
+    // pins guarded is the spec's array order: revenue, then week, then
+    // txns — the same vocabulary, one place.
+    expect(card).toContain("{ key: 'revenue', label: 'Revenue today'");
+    expect(card).toContain("{ key: 'week', label: '7d trend'");
+    expect(card).toContain("{ key: 'txns', label: 'Txns'");
+    expect(card.indexOf("{ key: 'revenue', label: 'Revenue today'")).toBeLessThan(
+      card.indexOf("{ key: 'week', label: '7d trend'"),
+    );
+    expect(card.indexOf("{ key: 'week', label: '7d trend'")).toBeLessThan(
+      card.indexOf("{ key: 'txns', label: 'Txns'"),
+    );
   });
 
   it('the row joins by storeId — never row order', () => {
@@ -295,9 +307,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0) + this round\u2019s verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.181.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.181.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.181.0');
+    expect(pkg.version).toBe('2.182.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.182.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.182.0');
     expect(pkg.scripts['verify:v2-175-0']).toBe('node scripts/verify-v2-175-0.mjs');
   });
 });

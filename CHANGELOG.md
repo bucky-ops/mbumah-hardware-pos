@@ -2,6 +2,26 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.182.0] The branches table remembers
+
+The org dashboard's branches table has been the org console's OTHER dense table since v2.149.0, and the Store Intelligence Matrix — its twin across the page — learned to sort (v2.180.0) and to remember (v2.181.0) while it stayed stock: arrival order, fixed columns, comfortable rows, every choice forgotten. This release the branches table learns the matrix's full owner vocabulary — sortable headers, hideable columns, drag-resizable widths and a compact-rows density — and remembers all of it through the SAME kind of versioned, corrupt-tolerant localStorage spine, under the table's OWN key so the two tables never share bytes.
+
+### Added
+- **`src/lib/org/branches-table-prefs.ts` (NEW)**: the branches table's spine — the matrix spine's twin (same honesty contract carried over verbatim) under the single key `mbumah.branches-table.prefs` carrying `v: 1` plus `widths`, `visible`, `sort` and `dense`. Pure (storage INJECTED), CORRUPT-TOLERANT by construction (garbage JSON, unknown version, non-object payload, hostile storage, quota refusal → the calm empty prefs; field-by-field validation keeps whatever is provably sound), BOUNDED (widths clamp 40–2000px, entry caps 32, key length 48).
+- **`BRANCH_TABLE_COLS` — the ONE column spec**: the driven header, the visibility menu and the resize handler all read the same array (key/label/width/min/align/sortable for the nine columns); `workspace` stays unsortable (an action cell is not data); `week` sorts through the SAME by-storeId join its cells speak.
+- **Sortable headers**: every data column's header is a real `<button>` driven by the matrix's OWN comparator (`sortMatrixRows` / `nextSortState` reused verbatim — one sort vocabulary across BOTH dense tables; numbers loudest-first, text A→Z, a branch with no week entry sorts LAST in both directions). The visible state rides the `BranchSortGlyph` (orange arrows when active, a muted chevron pair on hover/focus); the accessible state rides real `aria-sort` values on each th. Null sort → the API's arrival order, copied.
+- **The export follows the sort**: `exportBranchesCsv` now maps the SAME `branchRows` memo the table body reads — the file mirrors what the owner sees (the matrix's v2.180.0 rule carried across the page). The other CSV sections keep their own joins.
+- **Hideable + resizable columns**: every cell wraps in its column's visibility so a hidden column's td simply does not render; the header carries the matrix's drag-resize separator recipe (per-column min floor, saved width wins over the spec default, the drag lands as ONE debounced save).
+- **The Compact-rows toggle**: the fourth tunable dimension — `[&_td]:px-2 [&_td]:py-1 [&_th]:py-1` pulls the padding in without touching a render body; `aria-pressed` carries the state and the orange pressed family marks it active.
+- **The Columns menu speaks the memory**: a hint line ("Sort, hidden columns, widths and density save to this browser automatically.") plus a muted **Reset layout** item (RotateCcw) that restores stock and clears the key; the visible, polite `org-console-layout-note` line confirms the actions that have no other surface.
+- **Restore after hydration + the debounced write-back**: stock first paint, saved layout second (`branchRestored` ref gates the write-back); every choice lands 250ms after the last change settles; a stock layout CLEARS the key outright; a refused save is silent.
+- **Docs**: `multi-store-workspaces.md` gains the branches-table-remembers bullet and the `| Branches table · layout memory |` KPI row.
+
+### Tests
+- `src/tests/branches-table-prefs-v2182.test.ts` (NEW): the spine EXECUTED (round-trip, exact payload key set, clamping band, entry caps, junk dropping, unknown version/garbage/hostile storage → calm defaults, removeItem-less clear, save re-sanitizes), the component contract (spine import, restore effect source, SSR guards, debounce + stock-clear fork, Compact button + dense override, the Columns menu trio, the comparator reuse, the CSV-sorted-rows wiring, the column spec order, the visibility wrappers), the docs rows, and the release surfaces.
+- `trend-doors-v2175`'s header pins evolved deliberately: the branches table's headers are now DRIVEN by `BRANCH_TABLE_COLS`, so the column-order pins moved from literal `<th>` markup to the spec's array order (same intent, one place).
+- The EIGHT prior-round suites' package pins evolved to 2.182.0 (the treadmill tax, paid); the six head-pin suites re-anchored by `scripts/reanchor-head-pins.mjs` with the new counters (71/72/73/104).
+
 ## [2.181.0] The matrix remembers
 
 The Store Intelligence Matrix has been owner-tunable since v2.18.3 — drag-resizable columns, hideable columns — and sortable since v2.180.0, but every one of those choices lived in component state and died with the panel: a reload, a tab switch, or a navigation reset the owner's matrix back to stock. This release the matrix remembers: ONE versioned, corrupt-tolerant localStorage spine carries every owner-tunable choice across reloads, plus a fourth tunable dimension (compact-rows density) and a visible escape hatch (Reset layout).

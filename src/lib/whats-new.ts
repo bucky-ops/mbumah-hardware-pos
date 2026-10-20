@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.182.0',
+    title: 'The branches table remembers',
+    bullets: [
+      'The dashboard\u2019s branches table now matches the Store Intelligence Matrix: every column header sorts (click to sort, click again to flip), columns can be hidden, and a Compact toggle fits roughly a third more rows on screen.',
+      'Column widths can be dragged to fit \u2014 and every choice (sort, hidden columns, widths, density) survives a reload, saved quietly in this browser under its own key.',
+      'The CSV export follows the sort so the file always mirrors what\u2019s on screen, and Columns \u203a Reset layout puts the table back to stock in one click.',
+    ],
+  },
+  {
     version: '2.181.0',
     title: 'The matrix remembers',
     bullets: [

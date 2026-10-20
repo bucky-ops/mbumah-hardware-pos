@@ -10,14 +10,17 @@
 // safe URL exists (missing slug) a calm inline message replaces the button
 // instead of opening a broken placeholder (/stores/<undefined>) tab.
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
+  ArrowDown,
   ArrowDownRight,
+  ArrowUp,
   ArrowUpRight,
   Building2,
   CalendarClock,
   ChevronDown,
+  ChevronsUpDown,
   CircleDollarSign,
   Clock,
   Download,
@@ -26,7 +29,10 @@ import {
   PackageOpen,
   ReceiptText,
   RefreshCw,
+  RotateCcw,
+  Rows3,
   ShieldAlert,
+  SlidersHorizontal,
   Timer,
   UserCog,
   Users,
@@ -64,6 +70,27 @@ import {
 // expert console's KPI row speaks, reused so both consoles draw the same
 // shape language (aria-hidden svg, pulse dot on the last point).
 import { Sparkline, WeekDeltaChip, weekDeltaWords } from '@/components/org/primitives';
+// v2.182.0: the branches table's owner vocabulary — the matrix's Checkbox +
+// DropdownMenu recipe for the Columns menu, the ONE comparator the matrix
+// sorts by (reused verbatim — one sort vocabulary across BOTH dense
+// tables), and the branches table's own prefs spine (the matrix spine's
+// twin under its own key, so the two tables never share bytes).
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { nextSortState, sortMatrixRows, type MatrixSortState } from '@/lib/org/store-matrix-sort';
+import {
+  BRANCHES_TABLE_PREFS_VERSION,
+  clearBranchesTablePrefs,
+  loadBranchesTablePrefs,
+  saveBranchesTablePrefs,
+} from '@/lib/org/branches-table-prefs';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
@@ -90,6 +117,56 @@ import { useWorkspaceStore, type WorkspaceStoreRef } from '@/lib/workspace/works
 // inherit, prose bubbles must opt back out.
 const HINT_BUBBLE =
   'pointer-events-none absolute left-0 top-full z-20 mt-1.5 hidden w-max max-w-[16rem] rounded-md border bg-popover px-2 py-1 text-[11px] font-normal leading-snug text-popover-foreground shadow-md group-focus-visible:block';
+
+/**
+ * v2.182.0: the branches table's header sort glyph — the SAME visible
+ * vocabulary the Store Intelligence Matrix wears since v2.180.0 (one sort
+ * language across BOTH dense tables). An active sort speaks in the
+ * console's orange accent (up for asc, down for desc); a quiet column
+ * shows NOTHING at rest and only reveals the muted chevron pair on hover
+ * or keyboard focus — the affordance is a whisper, not a shout.
+ * aria-hidden: the accessible state rides aria-sort on the th, never this
+ * glyph.
+ */
+function BranchSortGlyph({ state }: { state: 'asc' | 'desc' | 'none' }) {
+  if (state === 'asc') return <ArrowUp className="h-3 w-3 text-orange-500" aria-hidden="true" />;
+  if (state === 'desc') return <ArrowDown className="h-3 w-3 text-orange-500" aria-hidden="true" />;
+  return (
+    <ChevronsUpDown
+      className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      aria-hidden="true"
+    />
+  );
+}
+
+/**
+ * v2.182.0: the branches table's column spec — the ONE place that names
+ * the table's columns (the driven header reads it; the visibility menu
+ * walks it; the resize handler resolves widths from it). Defaults are the
+ * stock auto-layout's honest approximations; an owner's saved width wins
+ * over the default through the prefs spine. `workspace` stays unsortable
+ * (an action cell is not data); `week` sorts through the SAME by-storeId
+ * join its cells speak.
+ */
+interface BranchColDef {
+  key: string;
+  label: string;
+  width: number;
+  min: number;
+  align?: 'right';
+  sortable: boolean;
+}
+const BRANCH_TABLE_COLS: BranchColDef[] = [
+  { key: 'branch', label: 'Branch', width: 220, min: 150, sortable: true },
+  { key: 'revenue', label: 'Revenue today', width: 124, min: 96, align: 'right', sortable: true },
+  { key: 'week', label: '7d trend', width: 112, min: 92, sortable: true },
+  { key: 'txns', label: 'Txns', width: 72, min: 56, align: 'right', sortable: true },
+  { key: 'low', label: 'Low stock', width: 88, min: 64, align: 'right', sortable: true },
+  { key: 'overdue', label: 'Overdue rentals', width: 118, min: 84, align: 'right', sortable: true },
+  { key: 'debt', label: 'Debt', width: 108, min: 84, align: 'right', sortable: true },
+  { key: 'mpesa', label: 'M-Pesa pending', width: 122, min: 88, align: 'right', sortable: true },
+  { key: 'workspace', label: 'Workspace', width: 250, min: 210, sortable: false },
+];
 
 interface OrgSummaryStore extends WorkspaceStoreRef {
   code: string | null;
@@ -477,6 +554,79 @@ export function OrgConsole() {
   const [exportUrl, setExportUrl] = useState('');
   const [exporting, setExporting] = useState(false);
   const exportUrlRef = useRef('');
+  // v2.182.0: the branches table remembers — the four owner-tunable
+  // dimensions (widths since this release, visibility, sort, compact-rows
+  // density) ride the SAME versioned, corrupt-tolerant localStorage spine
+  // the matrix got in v2.181.0, under the table's OWN key
+  // (mbumah.branches-table.prefs) so the two tables never share bytes and
+  // resetting one can never surprise the other. Restore happens AFTER
+  // hydration (server-stock first paint, saved layout second); writes are
+  // debounced so a column drag cannot thrash storage; a stock layout
+  // clears the key outright; and the Columns menu grows a Reset layout
+  // action plus a hint line that says the memory exists.
+  const [branchWidths, setBranchWidths] = useState<Record<string, number>>({});
+  const [branchVisible, setBranchVisible] = useState<Record<string, boolean>>({});
+  const [branchSort, setBranchSort] = useState<MatrixSortState | null>(null);
+  const [branchDense, setBranchDense] = useState(false);
+  // v2.182.0: gates the write-back until the restore has run — the mount
+  // effect's own setState calls must never be mistaken for owner choices.
+  const branchRestored = useRef(false);
+  const branchDragging = useRef<{ key: string; startX: number; startW: number } | null>(null);
+  // v2.182.0: the visible, polite confirmation for the actions that have
+  // no other surface (Reset layout) — the same one-line-note pattern the
+  // export speaks, never an alert().
+  const [branchLayoutNote, setBranchLayoutNote] = useState('');
+
+  // v2.182.0: ONE restore after hydration. The server renders the stock
+  // table (the lib is pure and storage-less under SSR); the client's first
+  // paint matches it; THEN the saved layout takes over — the same
+  // default-then-restore ordering the matrix spine speaks. The restore
+  // defers to a macrotask so setState never runs synchronously inside the
+  // effect body (the react-hooks/set-state-in-effect rule — the same shape
+  // chrome.tsx's release pill speaks for its localStorage read): by the
+  // time the macrotask runs, hydration has committed, so the ordering
+  // contract holds.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      const storage = typeof window === 'undefined' ? null : window.localStorage;
+      const prefs = loadBranchesTablePrefs(storage);
+      setBranchWidths(prefs.widths);
+      setBranchVisible(prefs.visible);
+      setBranchSort(prefs.sort);
+      setBranchDense(prefs.dense);
+      branchRestored.current = true;
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  // v2.182.0: the debounced write-back — every owner choice lands 250ms
+  // after the last change settles (a column drag repaints dozens of
+  // widths; storage takes ONE). A stock layout clears the key outright
+  // (nothing saved is the honest shape of "no customizations"), anything
+  // else saves the whole payload through the lib — the ONE writer of the
+  // bytes. A refused save (quota, privacy mode) is silent: the table
+  // forgets on the next reload exactly as it always did, and never nags.
+  useEffect(() => {
+    if (!branchRestored.current) return;
+    const t = setTimeout(() => {
+      const storage = typeof window === 'undefined' ? null : window.localStorage;
+      const stock =
+        Object.keys(branchWidths).length === 0 &&
+        Object.keys(branchVisible).length === 0 &&
+        branchSort === null &&
+        branchDense === false;
+      if (stock) clearBranchesTablePrefs(storage);
+      else
+        saveBranchesTablePrefs(storage, {
+          v: BRANCHES_TABLE_PREFS_VERSION,
+          widths: branchWidths,
+          visible: branchVisible,
+          sort: branchSort,
+          dense: branchDense,
+        });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [branchWidths, branchVisible, branchSort, branchDense]);
   // v2.23.0: per-branch HR drill-down visibility (collapsed until asked for —
   // the console opens with the summary tiles; the table is one click away).
   const [hrPerStoreOpen, setHrPerStoreOpen] = useState(false);
@@ -623,6 +773,69 @@ export function OrgConsole() {
     return list.find((b) => b.storeId === store.id) ?? null;
   }
 
+  // v2.182.0: the branches table's tuning helpers — ONE block, defined
+  // once, feeding the driven header, the visibility menu, the resize
+  // handles and the export. The week join is by storeId (never row order,
+  // the same rule the cells speak); a branch with no week entry sorts LAST
+  // in both directions (the comparator's honesty contract — honest
+  // absence never wins a loudest-first sort, never hides in a
+  // smallest-first one either).
+  const branchTrendById = useMemo(
+    () => new Map((summary?.perStoreTrend ?? []).map((t) => [t.storeId, t])),
+    [summary],
+  );
+  // v2.182.0: the rows the table AND the CSV export speak — ONE
+  // comparator, one order, never two (the matrix's v2.180.0 rule, carried
+  // across the page). Null sort state → the API's arrival order, copied.
+  const branchRows = useMemo(
+    () =>
+      summary
+        ? sortMatrixRows(summary.stores, branchSort, (s) => branchTrendById.get(s.id)?.weekTotal)
+        : [],
+    [summary, branchSort, branchTrendById],
+  );
+  const onBranchSort = (key: string) => setBranchSort((prev) => nextSortState(prev, key));
+  const branchAriaSortOf = (key: string): 'ascending' | 'descending' | 'none' =>
+    branchSort?.key === key ? (branchSort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+  const branchShown = BRANCH_TABLE_COLS.filter((c) => branchVisible[c.key] !== false);
+  const branchWidthOf = (c: BranchColDef) => branchWidths[c.key] ?? c.width;
+  // v2.182.0: the drag-resize — the matrix's exact recipe (mousedown on
+  // the header's separator, window-tracked move/up, per-column min floor,
+  // the saved width wins over the default). The drag lands as ONE debounced
+  // save through the persist effect above.
+  const onBranchResizeDown = (key: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    const col = BRANCH_TABLE_COLS.find((c) => c.key === key);
+    if (!col) return;
+    branchDragging.current = { key, startX: e.clientX, startW: branchWidthOf(col) };
+    const move = (ev: MouseEvent) => {
+      if (!branchDragging.current) return;
+      const w = Math.max(
+        col.min,
+        branchDragging.current.startW + ev.clientX - branchDragging.current.startX,
+      );
+      setBranchWidths((prev) => ({ ...prev, [key]: w }));
+    };
+    const up = () => {
+      branchDragging.current = null;
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+  // v2.182.0: Reset layout — every remembered choice back to stock, the
+  // stored key cleared with it (the persist effect sees the stock shape
+  // and keeps the storage honest). The note is the visible, polite
+  // confirmation — the same pattern the export note speaks.
+  const resetBranchLayout = () => {
+    setBranchWidths({});
+    setBranchVisible({});
+    setBranchSort(null);
+    setBranchDense(false);
+    setBranchLayoutNote('Branch table layout reset to defaults');
+  };
+
   // v2.149.0: take the branches table away as CSV — client-side blob, the
   // same shape store-matrix's export uses; numbers export RAW (no thousands
   // separators) so a spreadsheet re-reads them as numbers, and the polite
@@ -708,7 +921,10 @@ export function OrgConsole() {
       priorWeekTotal: t.priorWeekTotal,
     }));
     const csv = buildBranchesCsv(
-      summary.stores.map((s) => ({
+      // v2.182.0: the export reads the SORTED rows — the file mirrors what
+      // the owner sees, arrival order when nothing is sorted (the matrix's
+      // v2.180.0 rule, one vocabulary across both dense tables).
+      branchRows.map((s) => ({
         name: s.name,
         code: s.code ?? '',
         location: s.location ?? '',
@@ -1192,6 +1408,65 @@ export function OrgConsole() {
           <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">Branches ({summary.stores.length})</h2>
             <div className="flex items-center gap-2">
+              {/* v2.182.0: the branches table grows the matrix's owner
+                  vocabulary — a Compact toggle (the fourth tunable
+                  dimension, aria-pressed carrying the state, the orange
+                  pressed family marking it active) and a Columns menu
+                  (visibility checkboxes over the ONE column spec, a hint
+                  line that says the memory exists, and a muted Reset
+                  layout escape hatch). The layout note is the polite,
+                  visible confirmation for the actions that have no other
+                  surface — the same one-line pattern the export note
+                  speaks. */}
+              <p aria-live="polite" data-testid="org-console-layout-note" className="text-xs text-muted-foreground">
+                {branchLayoutNote}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className={`h-7 text-[11px] ${branchDense ? 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100' : ''}`}
+                aria-pressed={branchDense}
+                title={branchDense ? 'Compact rows on — click for comfortable rows (saved with your layout)' : 'Compact rows — denser table, saved with your layout'}
+                onClick={() => setBranchDense((d) => !d)}
+              >
+                <Rows3 className="mr-1 h-3 w-3" aria-hidden="true" /> Compact
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-7 text-[11px]">
+                    <SlidersHorizontal className="mr-1 h-3 w-3" aria-hidden="true" /> Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
+                  <DropdownMenuLabel>Column visibility</DropdownMenuLabel>
+                  {/* v2.182.0: the hint that says the memory exists — sort,
+                      hidden columns, widths and density all save to this
+                      browser, muted-foreground family (the a11y pair). */}
+                  <p className="px-2 pb-1.5 text-[10px] leading-4 text-muted-foreground">
+                    Sort, hidden columns, widths and density save to this browser automatically.
+                  </p>
+                  {BRANCH_TABLE_COLS.map((c) => (
+                    <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted">
+                      <Checkbox
+                        checked={branchVisible[c.key] !== false}
+                        onCheckedChange={(v) => setBranchVisible((p) => ({ ...p, [c.key]: Boolean(v) }))}
+                      />
+                      {c.label}
+                    </label>
+                  ))}
+                  {/* v2.182.0: Reset layout — the owner's escape hatch from
+                      every remembered choice, muted by design (an exit,
+                      not an invite). */}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={resetBranchLayout}
+                    title="Restore the stock table and clear the saved layout from this browser"
+                    className="text-[11px] text-muted-foreground focus:text-foreground"
+                  >
+                    <RotateCcw className="mr-2 h-3 w-3" aria-hidden="true" /> Reset layout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <p aria-live="polite" data-testid="org-console-export-note" className="text-xs text-muted-foreground">
                 {exportNote}
                 {/* v2.154.0: the follow-up — the fresh blob opens in a new tab,
@@ -1235,30 +1510,60 @@ export function OrgConsole() {
               drill-down above (measured: the table's 978px min-content pushed
               the console to 1012px at 390 viewport); tabIndex names + focuses
               the scrolling region once it actually scrolls on a phone. */}
+          {/* v2.182.0: the branches table learns the matrix's full owner
+              vocabulary — sortable headers (the ONE comparator, aria-sort
+              carrying the state), drag-resizable widths (the separator
+              recipe, defaults from the column spec, saved widths winning
+              through the prefs spine), hideable columns and a compact
+              density. The v2.175.0 comment rides with the 7d trend column
+              it describes. */}
+          {/* v2.175.0: the week's shape per branch — sits beside the
+              revenue column it decorates, same gross vocabulary. */}
           <div
             className="min-w-0 overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             role="region"
             tabIndex={0}
             aria-label="Branches, scrollable table"
           >
-            <table className="w-full text-sm">
+            <table className={`w-full text-sm${branchDense ? ' [&_td]:px-2 [&_td]:py-1 [&_th]:py-1' : ''}`}>
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="px-4 py-2 font-medium">Branch</th>
-                  <th className="px-4 py-2 font-medium text-right">Revenue today</th>
-                  {/* v2.175.0: the week's shape per branch — sits beside the
-                      revenue column it decorates, same gross vocabulary. */}
-                  <th className="px-4 py-2 font-medium">7d trend</th>
-                  <th className="px-4 py-2 font-medium text-right">Txns</th>
-                  <th className="px-4 py-2 font-medium text-right">Low stock</th>
-                  <th className="px-4 py-2 font-medium text-right">Overdue rentals</th>
-                  <th className="px-4 py-2 font-medium text-right">Debt</th>
-                  <th className="px-4 py-2 font-medium text-right">M-Pesa pending</th>
-                  <th className="px-4 py-2 font-medium text-right">Workspace</th>
+                  {branchShown.map((c) => (
+                    <th
+                      key={c.key}
+                      style={{ width: branchWidthOf(c), minWidth: branchWidthOf(c) }}
+                      className={`px-4 py-2 font-medium ${c.align === 'right' ? 'text-right' : ''}`}
+                      aria-sort={branchAriaSortOf(c.key)}
+                    >
+                      <div className={`flex items-center gap-1 ${c.align === 'right' ? 'justify-end' : ''}`}>
+                        {c.sortable ? (
+                          <button
+                            type="button"
+                            onClick={() => onBranchSort(c.key)}
+                            className={`focus-ring group -ml-1 flex items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-muted ${
+                              branchSort?.key === c.key ? 'font-semibold text-foreground' : ''
+                            }`}
+                          >
+                            <span className="whitespace-nowrap">{c.label}</span>
+                            <BranchSortGlyph state={branchSort?.key === c.key ? branchSort.dir : 'none'} />
+                          </button>
+                        ) : (
+                          <span className="whitespace-nowrap">{c.label}</span>
+                        )}
+                        <span
+                          role="separator"
+                          aria-orientation="vertical"
+                          className="ml-1 h-4 w-1 cursor-col-resize rounded bg-border hover:bg-orange-400"
+                          onMouseDown={(e) => onBranchResizeDown(c.key, e)}
+                          title="Drag to resize"
+                        />
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {summary.stores.map((store) => {
+                {branchRows.map((store) => {
                   const inactive = store.status !== 'ACTIVE';
                   // v2.175.0: this branch's 7-day revenue spark, joined by
                   // storeId (never row order). Absent payload (an older
@@ -1300,6 +1605,11 @@ export function OrgConsole() {
                   });
                   return (
                     <tr key={store.id} className="border-b last:border-0 hover:bg-muted/40">
+                      {/* v2.182.0: every cell wraps in its column's
+                          visibility — a hidden column's td simply does not
+                          render, so the row stays a row (never an empty
+                          gap) and the header stays in step. */}
+                      {branchVisible.branch !== false && (
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span
@@ -1316,7 +1626,10 @@ export function OrgConsole() {
                           </div>
                         </div>
                       </td>
+                      )}
+                      {branchVisible.revenue !== false && (
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.todayRevenue)}</td>
+                      )}
                       {/* v2.175.0: the branch's 7-day revenue spark — the SAME
                           Sparkline primitive the header cards speak, muted
                           slate so a table full of them never out-screams the
@@ -1331,6 +1644,7 @@ export function OrgConsole() {
                           sr-only sentence speaks the verdict so the base
                           clause keeps its exact shape. No prior week → no
                           chip, no words, nothing fabricated. */}
+                      {branchVisible.week !== false && (
                       <td className="w-[84px] px-4 py-3">
                         {storeTrend ? (
                           <div
@@ -1348,11 +1662,23 @@ export function OrgConsole() {
                           </span>
                         )}
                       </td>
+                      )}
+                      {branchVisible.txns !== false && (
                       <td className="px-4 py-3 text-right tabular-nums">{store.todayTransactions}</td>
+                      )}
+                      {branchVisible.low !== false && (
                       <td className={`px-4 py-3 text-right tabular-nums ${store.lowStockCount > 0 ? 'text-amber-700 font-medium dark:text-amber-400' : ''}`}>{store.lowStockCount}</td>
+                      )}
+                      {branchVisible.overdue !== false && (
                       <td className={`px-4 py-3 text-right tabular-nums ${store.overdueRentals > 0 ? 'text-red-600 font-medium' : ''}`}>{store.overdueRentals}</td>
+                      )}
+                      {branchVisible.debt !== false && (
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.debtOutstanding)}</td>
+                      )}
+                      {branchVisible.mpesa !== false && (
                       <td className="px-4 py-3 text-right tabular-nums">{store.pendingMpesa}</td>
+                      )}
+                      {branchVisible.workspace !== false && (
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {href ? (
@@ -1413,6 +1739,7 @@ export function OrgConsole() {
                           </Button>
                         </div>
                       </td>
+                      )}
                     </tr>
                   );
                 })}
