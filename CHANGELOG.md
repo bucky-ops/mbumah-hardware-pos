@@ -2,6 +2,17 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.184.0] The drill-down heals
+
+A post-release E2E pass on the shipped v2.183.0 build caught the one promise the drill-down's memory had not yet kept: a corrupt payload degraded to the calm stock table on load (nothing threw, nothing lied), but the corrupt BYTES stayed in storage until the next owner choice — while both siblings self-heal to an absent key on reload. The gap was structural: the siblings' restore always hands back a FRESH widths object, so their write-back's stock fork runs on every load; the drill-down has no widths by the documented restraint, so a stock-shaped restore changed nothing by reference and the debounced write-back never fired. This release the restore bumps ONE counter — the write-back's post-restore pulse — and the stock fork clears whatever junk it finds, the siblings' self-heal carried over verbatim.
+
+### Fixed
+- **The corrupt-byte self-heal (org-console.tsx)**: the restore macrotask now also calls `setHrRestoreTick((t) => t + 1)`, and the write-back's deps carry the tick — ONE post-restore pulse guarantees the stock fork runs after every restore, so corrupt storage is cleared to absent ~250ms after load, exactly as the matrix (v2.181.0) and the branches table (v2.182.0) heal. A valid non-stock restore is unaffected (its deps change anyway; the pulse adds one idempotent re-save); a stock no-storage restore performs one no-op clear.
+
+### Tests
+- `hr-drilldown-prefs-v2183`'s write-back pin evolved deliberately (the deps line carries `hrRestoreTick`; the tick's declaration and bump are pinned) with the reasoning written where the pin lives.
+- The TEN prior-round suites' package pins evolved to 2.184.0 (the treadmill tax, paid); the six head-pin suites re-anchored with the new counters (73/74/75/106).
+
 ## [2.183.0] The drill-down remembers
 
 The org dashboard's HR drill-down — "People & payroll by branch", the console's THIRD dense table since v2.23.0 — has watched its two siblings learn the owner vocabulary (the matrix: sortable, hideable, resizable, remembering in v2.180.0–v2.181.0; the branches table: the full set in v2.182.0) while it stayed stock: arrival order, comfortable rows, and a door that forgot it was ever opened. This release the drill-down joins the vocabulary — a sortable driven header through its OWN pure comparator, a Compact-rows density, and a versioned, corrupt-tolerant localStorage spine under its OWN key that remembers the open door, the sort and the density across reloads.

@@ -692,11 +692,24 @@ export function OrgConsole() {
   // other surface (Reset) — the same one-line-note pattern the branches
   // layout note speaks, never an alert().
   const [hrLayoutNote, setHrLayoutNote] = useState('');
+  // v2.184.0: the write-back's post-restore pulse. The restore's setStates
+  // only change the deps when the saved layout differs from stock — a
+  // corrupt payload restores to the SAME stock shape (booleans and a null,
+  // all reference-equal) and the write-back would never fire, leaving the
+  // corrupt bytes sitting in storage until the next owner choice. The
+  // siblings never hit this (their restore always hands back a FRESH widths
+  // object); the drill-down has no widths by the documented restraint, so
+  // the restore bumps ONE counter instead — the write-back runs once after
+  // every restore, and the stock fork clears whatever junk it finds.
+  const [hrRestoreTick, setHrRestoreTick] = useState(0);
 
   // v2.183.0: ONE restore after hydration — the branches spine's exact
   // shape (default-then-restore ordering; the macrotask deferral keeps
   // setState out of the effect body per the react-hooks/set-state-in-effect
-  // rule, the house pattern since v2.182.0).
+  // rule, the house pattern since v2.182.0). v2.184.0: the restore bumps
+  // the write-back's tick (inside the same macrotask) so a stock-shaped
+  // restore — corrupt bytes included — still walks the stock fork and
+  // clears the key, the siblings' self-heal carried over verbatim.
   useEffect(() => {
     const id = window.setTimeout(() => {
       const storage = typeof window === 'undefined' ? null : window.localStorage;
@@ -704,6 +717,7 @@ export function OrgConsole() {
       setHrPerStoreOpen(prefs.open);
       setHrSort(prefs.sort);
       setHrDense(prefs.dense);
+      setHrRestoreTick((t) => t + 1);
       hrRestored.current = true;
     }, 0);
     return () => window.clearTimeout(id);
@@ -714,6 +728,9 @@ export function OrgConsole() {
   // (the door closed + no sort + comfortable rows is the honest shape of
   // "no customizations"); anything else saves the whole payload through
   // the lib — the ONE writer of the bytes. A refused save is silent.
+  // v2.184.0: the deps carry the restore tick — the post-restore pulse
+  // that guarantees the stock fork (and so the corrupt-byte self-heal)
+  // runs even when the restore changed nothing by reference.
   useEffect(() => {
     if (!hrRestored.current) return;
     const t = setTimeout(() => {
@@ -729,7 +746,7 @@ export function OrgConsole() {
         });
     }, 250);
     return () => clearTimeout(t);
-  }, [hrPerStoreOpen, hrSort, hrDense]);
+  }, [hrRestoreTick, hrPerStoreOpen, hrSort, hrDense]);
   // v2.159.0: the Automation pulse card — the last cron dispatch tick from
   // the ledger (GET /api/org/automation, ORG_ROLES parity with the summary).
   // Additive by contract: a refused or failed read renders an honest error
