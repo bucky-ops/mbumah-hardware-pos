@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.167.0',
+    title: 'The hints reach the keyboard',
+    bullets: [
+      'The Automation card\u2019s sub-job hints and failed-tick times are no longer mouse-only — keyboard focus and screen readers get the same words.',
+      'Focusable chips now show a clear green or red focus ring when you tab to them.',
+      'The cron guide\u2019s sub-job register now lists all nine jobs, including the three that ride the nightly tick.',
+    ],
+  },
+  {
     version: '2.166.0',
     title: 'The chips explain themselves',
     bullets: [
