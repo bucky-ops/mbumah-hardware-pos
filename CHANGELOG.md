@@ -2,6 +2,16 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.158.0] The wake-up call gets through
+
+The round's real bug find, caught by probing the freshly-shipped sweep route: the edge proxy 401'd every cron tick — in production — since the workspace proxy landed.
+
+### Fixed
+- **The cron pass-through** (`src/proxy.ts` Layer 5): Vercel Cron sends UNAUTHENTICATED GETs; every `/api/cron/*` route carries its own `x-cron-secret` gate (403 on a wrong secret, fail-open with a WARN systemLog when `CRON_SECRET` is unset — the documented, deliberate route contract), but the edge auth layer 401'd every tick BEFORE the route gate ran. `/api/cron/outbox`, `/api/cron/hourly`, `/api/cron/b2c-recovery` all measured 401 on the production deployment (and the siblings since the proxy landed): the hourly dispatcher, its folded sub-jobs (outbox pump fallback, etims-retry, debt-reminders, payments-sweeper) and the v2.155.0 B2C auto-recovery sweep never fired in production. The fix passes `/api/cron/` through to the in-file gates — zero new trust at the edge (GET-only handlers, rate limiting intact, wrong secrets still 403 in-route, defense in depth preserved).
+
+### Tests
+- Full suite 3149/3149 (160 files); verify-v2-158-0 pinning the pass-through guard shape (the cron check precedes the session check, the route-level secret gates untouched).
+
 ## [2.157.0] The last alphas go home
 
 The fifth consecutive lesson-64 re-audit layer — and the last: the remaining muted-alpha tokens and two emerald fills.
