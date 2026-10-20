@@ -15,6 +15,16 @@
 // computed by the SAME weekDelta classifier the chips speak. The workspace
 // modal's POS tab gains the week at the top — one week, one vocabulary,
 // three surfaces.
+//
+// v2.180.0 — the matrix learns to sort: every data column's header is a
+// real button (click to sort, click again to flip), driven by the ONE pure
+// comparator (src/lib/org/store-matrix-sort.ts) — numbers loudest-first,
+// text A→Z, and a store with NO week sorts LAST in both directions (honest
+// absence never wins, never hides as a zero). The visible state rides the
+// header glyphs (orange when active, a hover-only chevron pair when not)
+// and the accessible state rides aria-sort on each th. The table body AND
+// the CSV export read the same sorted rows — the file is the offline twin
+// of what the owner SEES, not of some other order.
 
 import { useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -24,9 +34,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Download, ExternalLink, FileText, LayoutGrid, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { Download, ExternalLink, FileText, LayoutGrid, ShieldCheck, SlidersHorizontal, ArrowUp, ArrowDown, ChevronsUpDown } from 'lucide-react';
 import { Sparkline, WeekDeltaChip, kes, num, weekDeltaWords, type StoreRow } from './primitives';
 import { buildStoreMatrixCsv } from '@/lib/org/store-matrix-csv';
+import { nextSortState, sortMatrixRows, type MatrixSortState } from '@/lib/org/store-matrix-sort';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 
 /**
@@ -58,6 +69,26 @@ const storeCode = (s: StoreRow) => s.code ?? s.slug ?? s.id.slice(0, 3);
 const workspaceHref = (s: StoreRow) =>
   buildStoreWorkspaceUrl({ id: s.id, slug: s.slug, subdomain: s.subdomain }, { page: 'dashboard', forcePath: true });
 
+/**
+ * v2.180.0: the header's sort glyph — the ONE visible vocabulary for the
+ * sort state. Active sorts speak in the console's orange accent (up for
+ * asc, down for desc); an inactive column shows NOTHING at rest (a quiet
+ * header stays quiet) and only reveals the muted up/down chevron pair on
+ * hover or keyboard focus — the affordance is a whisper, not a shout.
+ * aria-hidden: the accessible state rides aria-sort on the th, never this
+ * glyph.
+ */
+function SortGlyph({ state }: { state: 'asc' | 'desc' | 'none' }) {
+  if (state === 'asc') return <ArrowUp className="h-3 w-3 text-orange-500" aria-hidden="true" />;
+  if (state === 'desc') return <ArrowDown className="h-3 w-3 text-orange-500" aria-hidden="true" />;
+  return (
+    <ChevronsUpDown
+      className="h-3 w-3 text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      aria-hidden="true"
+    />
+  );
+}
+
 export function StoreMatrix({
   stores,
   trend,
@@ -71,6 +102,10 @@ export function StoreMatrix({
   const [widths, setWidths] = useState<Record<string, number>>({});
   const [visible, setVisible] = useState<Record<string, boolean>>({});
   const [wsStore, setWsStore] = useState<StoreRow | null>(null);
+  // v2.180.0: the ONE active sort — null reads as the API's arrival order.
+  // The lib owns the semantics (default directions, the flip, absence last);
+  // the component only stores what the lib returns.
+  const [sortState, setSortState] = useState<MatrixSortState | null>(null);
   const dragging = useRef<{ key: string; startX: number; startW: number } | null>(null);
 
   // v2.179.0: the week join — by storeId, never row order (the same rule
@@ -81,6 +116,18 @@ export function StoreMatrix({
     () => new Map((trend ?? []).map((t) => [t.storeId, t])),
     [trend],
   );
+
+  // v2.180.0: the rows the table AND the export speak — ONE comparator, one
+  // order, never two. A store with no week entry sorts LAST on the week
+  // column in both directions (the lib's honesty contract); every other
+  // column reads its own field. Null state → arrival order, copied.
+  const sortedStores = useMemo(
+    () => sortMatrixRows(stores, sortState, (s) => trendById.get(s.id)?.weekTotal),
+    [stores, sortState, trendById],
+  );
+  const onSort = (key: string) => setSortState((prev) => nextSortState(prev, key));
+  const ariaSortOf = (key: string): 'ascending' | 'descending' | 'none' =>
+    sortState?.key === key ? (sortState.dir === 'asc' ? 'ascending' : 'descending') : 'none';
 
   const cols: ColDef[] = useMemo(
     () => [
@@ -147,9 +194,11 @@ export function StoreMatrix({
   // v2.179.0: the file is built by the PURE lib (src/lib/org/store-matrix-csv.ts)
   // — the one writer of these bytes — and the toast counts the week it
   // carried, the same parity move the branches export made in v2.178.0.
+  // v2.180.0: the export reads the SORTED rows — the file mirrors what the
+  // owner sees, arrival order when nothing is sorted.
   const exportCsv = () => {
     const csv = buildStoreMatrixCsv(
-      stores.map((s) => ({
+      sortedStores.map((s) => ({
         id: s.id,
         code: storeCode(s),
         status: s.status,
@@ -212,10 +261,40 @@ export function StoreMatrix({
           <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur">
             <TableRow className="hover:bg-transparent">
               {shown.map((c) => (
-                <TableHead key={c.key} style={{ width: wOf(c), minWidth: wOf(c) }} className={c.align === 'right' ? 'text-right' : ''}>
+                <TableHead
+                  key={c.key}
+                  style={{ width: wOf(c), minWidth: wOf(c) }}
+                  className={c.align === 'right' ? 'text-right' : ''}
+                  aria-sort={ariaSortOf(c.key)}
+                >
                   <div className="flex items-center gap-1">
-                    {c.align !== 'right' && <span className="whitespace-nowrap" title={c.hint}>{c.label}</span>}
-                    {c.align === 'right' && <span className="ml-auto whitespace-nowrap" title={c.hint}>{c.label}</span>}
+                    {c.key === 'actions' && <span className="whitespace-nowrap">{c.label}</span>}
+                    {c.key !== 'actions' && c.align !== 'right' && (
+                      <button
+                        type="button"
+                        onClick={() => onSort(c.key)}
+                        title={c.hint}
+                        className={`focus-ring group -ml-1 flex items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-100 ${
+                          sortState?.key === c.key ? 'font-semibold text-slate-900' : ''
+                        }`}
+                      >
+                        <span className="whitespace-nowrap">{c.label}</span>
+                        <SortGlyph state={sortState?.key === c.key ? sortState.dir : 'none'} />
+                      </button>
+                    )}
+                    {c.key !== 'actions' && c.align === 'right' && (
+                      <button
+                        type="button"
+                        onClick={() => onSort(c.key)}
+                        title={c.hint}
+                        className={`focus-ring group ml-auto flex items-center gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-slate-100 ${
+                          sortState?.key === c.key ? 'font-semibold text-slate-900' : ''
+                        }`}
+                      >
+                        <span className="whitespace-nowrap">{c.label}</span>
+                        <SortGlyph state={sortState?.key === c.key ? sortState.dir : 'none'} />
+                      </button>
+                    )}
                     <span
                       role="separator"
                       aria-orientation="vertical"
@@ -229,7 +308,7 @@ export function StoreMatrix({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {stores.map((s, i) => (
+            {sortedStores.map((s, i) => (
               <TableRow key={s.id} className="anim-slide-fade" style={{ animationDelay: `${i * 70}ms` }}>
                 {shown.map((c) => (
                   <TableCell key={c.key} className={c.align === 'right' ? 'text-right' : ''}>{c.render(s)}</TableCell>
