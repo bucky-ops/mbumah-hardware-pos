@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.187.0',
+    title: 'The modal learns the lens',
+    bullets: [
+      'The revenue drill-down now carries a Gross/Net switch. Gross stays the default \u2014 the same till face the headline speaks \u2014 and flipping to Net redraws the whole modal: the chart, Today, the 7-day total, the prior week and the daily average, all shown net of VAT.',
+      'The green VAT line grew a week-over-week verdict, so you can see at a glance whether this week\u2019s tax take is up or down on last week\u2019s.',
+      'Branch rows speak the gross face only \u2014 per-branch VAT is not recorded \u2014 so while the Net lens is on they step aside with an honest note instead of inventing numbers.',
+    ],
+  },
+  {
     version: '2.186.0',
     title: 'The reviewer roster rides',
     bullets: [

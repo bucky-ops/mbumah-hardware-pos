@@ -2,6 +2,25 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.187.0] The modal learns the lens
+
+v2.185.0 reconciled the two revenues: the headline is GROSS of tax on both org surfaces, and the analyst's net/VAT view moved under an explicitly-labeled ribbon. But the lens stayed a strip — one week tax figure, one net figure — while the modal's chart and stat grid spoke only the gross face, and `taxPriorWeekTotal` had no consumer at all. This release the lens deepens into a full second face of the SAME read.
+
+### Added
+- **`netSpark` on /api/org/kpi-summary**: the per-day net-of-VAT buckets, filled alongside the gross buckets in the SAME loop over the SAME rows (`sparkRows` has selected `taxAmount` since v2.185.0 — ZERO extra queries, two faces of one read computed in one pass). `spark` keeps its exact gross shape; the two faces never share a variable.
+- **`netTodayTotal` and `netPriorWeekTotal`**: the missing net windows, computed from the aggregates the route already fetched (plain number subtraction — `toDec(null) → 0` guards an aggregate without tax). Every cell of the modal's stat grid can now follow the lens, and the ribbon's new week-over-week chip gives `taxPriorWeekTotal` its first consumer.
+- **The Gross/Net lens toggle in the revenue drill-down modal** (`kpi-row.tsx`): an accessible grouped control (`role="group"`, `aria-pressed`) that renders ONLY when the payload carried the per-day net buckets — an older cached answer keeps the calm gross modal exactly as v2.185.0 drew it, never a broken control. Gross is the default and stays the contract; the net line wears violet (`#8b5cf6`) so a glance can never mistake the two faces; the title follows the lens ("Revenue trend (gross)" / "Revenue trend (net)"); the net stat grid mirrors the gross grid cell for cell with `??` guards (never a NaN).
+- **The honest branch absence in the net lens**: the per-branch week rides `/api/org/summary`, which carries no per-branch tax — so in the net lens the branch rows step aside for one honest line ("net by branch is not on the wire") instead of fabricating numbers. Flip back to Gross to compare branches.
+- **The VAT week-over-week chip in the ribbon**: quiet, arrowed, and honest about a zero prior (the WeekDeltaChip honesty rule — no invented %). Emerald when VAT rose, red when it fell, calm when flat.
+
+### Changed
+- **docs/multi-store-workspaces.md** trend row records the deepening: the explicit toggle, the zero-extra-query derivation, and the gross headline staying untouched.
+
+### Tests
+- NEW `src/tests/revenue-net-lens-v2187.test.ts` (18 tests): the net buckets pinned INTO the same pass, the gross spark pinned UNTOUCHED, the additive names, the tolerance gates, the violet line, the honest branch absence, the WoW honesty rule, and the version.
+- The six head-pin suites re-anchored with the new counters (76/77/78/109); prior pkg pins ride to 2.187.0 (the treadmill tax).
+- `verify:v2-187-0` wired — fresh verify script per the house convention.
+
 ## [2.186.0] The reviewer roster rides
 
 The desk's morning note answered "how many" and "who won" — the distinct-reviewer count and the top-reviewer chip — but never shipped the FULL per-reviewer roster: the read has computed the `reviewerDigest` map since v2.67.0 and kept the rows to itself. This release the rows ride end to end: the payload exposes them, the digest strip draws them, and the branches CSV files them.

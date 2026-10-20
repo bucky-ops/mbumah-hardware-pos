@@ -15,6 +15,13 @@
 //   ADDITIVELY (`taxWeekTotal`, `taxPriorWeekTotal`, `netWeekTotal`) so
 //   the analyst keeps the VAT lens under an explicitly-labeled ribbon —
 //   no surface ever again ships two numbers under one name.
+//   v2.187.0 (the lens deepens): the drill-down modal grows an explicit
+//   Gross/Net lens toggle backed by `netSpark` (the per-day net-of-VAT
+//   buckets, from the SAME rows the gross spark already reads — sparkRows
+//   has selected `taxAmount` since v2.185.0, so this is ZERO extra
+//   queries), plus `netTodayTotal` and `netPriorWeekTotal` so every cell
+//   of the modal's stat grid can follow the lens. `spark` stays the gross
+//   till face — the headline contract is untouched.
 //
 // HEALTH MODEL (adapted from the sandbox lineage, demo target removed):
 //   revenue  0-100  this week vs PRIOR week (capped; prior=0 and sales -> 100)
@@ -106,6 +113,13 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     const taxWeek = round2(toDec(weekAgg._sum.taxAmount));
     const taxPrior = round2(toDec(priorAgg._sum.taxAmount));
     const netWeek = round2(revWeek - taxWeek);
+    // v2.187.0: the remaining net windows — today and prior week — so the
+    // modal's whole stat grid can follow the lens. Plain number subtraction
+    // (the gross path's Decimal-minus pin stays; toDec(null) -> 0 guards an
+    // aggregate without tax). Additive fields under NEW names: nothing that
+    // reads `today`/`priorWeekTotal` re-keys.
+    const netToday = round2(toDec(todayAgg._sum.totalAmount).toNumber() - toDec(todayAgg._sum.taxAmount).toNumber());
+    const netPrior = round2(toDec(priorAgg._sum.totalAmount).toNumber() - toDec(priorAgg._sum.taxAmount).toNumber());
     const txToday = todayAgg._count._all;
     const txWeek = weekAgg._count._all;
     const txPrior = priorAgg._count._all;
@@ -113,18 +127,24 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     const txVariancePct = txPrior > 0 ? round2(((txWeek - txPrior) / txPrior) * 100) : 0;
 
     // 7-day gross-revenue sparkline (oldest -> newest) — the same till face
-    // as the headline, per the v2.185.0 reconciliation.
+    // as the headline, per the v2.185.0 reconciliation. v2.187.0: the SAME
+    // rows also fill the NET buckets (gross − tax per day) so the modal's
+    // lens toggle never costs a second query — two faces of one read,
+    // computed in one pass.
     const sparkBuckets = new Array<number>(7).fill(0);
+    const netBuckets = new Array<number>(7).fill(0);
     for (let i = 0; i < 7; i++) {
       const dayStart = new Date(startToday.getTime() - (6 - i) * DAY_MS);
       const dayEnd = new Date(dayStart.getTime() + DAY_MS);
       for (const row of sparkRows) {
         if (row.createdAt >= dayStart && row.createdAt < dayEnd) {
           sparkBuckets[i] += toDec(row.totalAmount).toNumber();
+          netBuckets[i] += toDec(row.totalAmount).toNumber() - toDec(row.taxAmount).toNumber();
         }
       }
     }
     const spark = sparkBuckets.map((v) => round2(v));
+    const netSpark = netBuckets.map((v) => round2(v));
 
     // ── Debt: org-wide outstanding + aging buckets (precomputed column) ─────
     const debtGrouped = await rawDb.debtLedger.groupBy({
@@ -333,6 +353,11 @@ async function orgKpiSummaryHandler(): Promise<Response> {
             taxWeekTotal: taxWeek,
             taxPriorWeekTotal: taxPrior,
             netWeekTotal: netWeek,
+            // v2.187.0: the lens deepens — per-day net buckets + the missing
+            // net windows, all additive under NEW names.
+            netTodayTotal: netToday,
+            netPriorWeekTotal: netPrior,
+            netSpark,
           },
           transactions: { today: txToday, weekTotal: txWeek, priorWeekTotal: txPrior, variancePct: txVariancePct },
           lowStock: { count: lowStock },
