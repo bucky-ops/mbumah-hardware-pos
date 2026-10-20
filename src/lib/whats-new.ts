@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.158.0',
+    title: 'The wake-up call gets through',
+    bullets: [
+      'Fixed: the nightly and hourly background jobs were being turned away at the door — they work again.',
+      'That includes the M-Pesa recovery sweep, the eTIMS retry queue, the payment sweeps, and the debt reminders.',
+      'Nothing changed about the secrets: the jobs still authenticate themselves at their own door.',
+    ],
+  },
+  {
     version: '2.157.0',
     title: 'The last alphas go home',
     bullets: [

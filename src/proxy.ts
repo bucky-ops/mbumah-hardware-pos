@@ -409,7 +409,22 @@ export async function proxy(request: NextRequest) {
   // Layer 5: Authentication
   const isPublicPath = PUBLIC_PATHS.some(p => pathname.startsWith(p));
 
-  if (!isPublicPath) {
+  // v2.158.0: the cron pass-through. Vercel Cron sends UNAUTHENTICATED GETs
+  // from server-side infrastructure — there is no session to present. Every
+  // /api/cron/* route was written with its own x-cron-secret gate
+  // (verifyCronSecret: 403 on a wrong secret, fail-open with a WARN
+  // systemLog when CRON_SECRET is unset — Vercel Cron cannot send per-run
+  // secrets on all plans), but this edge gate 401'd every cron tick BEFORE
+  // the route gate ever ran: the hourly dispatcher, its folded sub-jobs
+  // (outbox pump fallback, etims-retry, debt-reminders, payments-sweeper)
+  // and the v2.155.0 B2C auto-recovery sweep all silently 401'd in
+  // production since the workspace proxy landed. The fix passes cron paths
+  // through to their in-file gates — defense in depth preserved, zero new
+  // trust at the edge (GET-only handlers; rate limiting above still applies;
+  // a wrong secret still 403s inside the route).
+  const isCronPath = pathname.startsWith('/api/cron/');
+
+  if (!isPublicPath && !isCronPath) {
     // v2.18.9 CORRECTION: accept the v2.16.0 workspace session cookie
     // (mbt_token) as well as the Authorization header. getSessionFromRequest
     // already resolves "header wins, cookie is a bootstrap fallback", but
