@@ -266,11 +266,13 @@ describe('the card contract - the 7d column and the door', () => {
     // lib stays server/pure-side; primitives owns the client vocabulary).
     expect(card).toContain("import { Sparkline, WeekDeltaChip, weekDeltaWords } from '@/components/org/primitives';");
     expect(card).not.toContain("from '@/lib/org/summary-trend'");
-    // v2.191.0 pin evolution (deliberate): the import grew the shared
-    // run-deep-link builder — the drill-down's payroll cell became the
-    // same door the People & Payroll panel opens (reasoning comment where
-    // the pin lives; the card still imports NO trend lib).
-    expect(card).toContain("import { buildPeoplePayrollDeepLink, buildRunDeepLinkHref } from '@/lib/workspace/links';");
+    // v2.192.0 pin evolution (deliberate): the import grew the alerts-door
+    // builders (buildExpiringEmployeesHref, buildOverdueAssetsHref) and went
+    // multi-line — the drill-down's alerts cell opened the same role-gated
+    // doors the People & Payroll panel opens, reusing the ONE link-lib
+    // writers (reasoning comment where the pin lives; the card still
+    // imports NO trend lib).
+    expect(card).toContain("import {\n  buildExpiringEmployeesHref,\n  buildOverdueAssetsHref,\n  buildPeoplePayrollDeepLink,\n  buildRunDeepLinkHref,\n} from '@/lib/workspace/links';");
   });
 });
 
@@ -311,9 +313,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0) + this round\u2019s verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.191.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.191.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.191.0');
+    expect(pkg.version).toBe('2.192.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.192.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.192.0');
     expect(pkg.scripts['verify:v2-175-0']).toBe('node scripts/verify-v2-175-0.mjs');
   });
 });
