@@ -947,19 +947,24 @@
   animation: border-shimmer 4s ease-in-out infinite;
 }
 
-/* Input focus glow effect */
+/* Input focus glow effect.
+   v2.160.0: the pulse ring was raised from 0.15/0.25 alpha to 0.35/0.5 and
+   the focused border from 0.5 to 0.7 — the old ring was a soft ambient glow
+   that barely registered as a FOCUS indicator (measured ~1.6:1 against the
+   glass card). Same amber hue, same 2s pulse; now the keyboard beacon is
+   actually visible on the login front door. */
 @keyframes input-focus-glow {
   0%, 100% {
-    box-shadow: 0 0 0 2px oklch(0.68 0.18 55 / 0.15);
+    box-shadow: 0 0 0 2px oklch(0.68 0.18 55 / 0.35);
   }
   50% {
-    box-shadow: 0 0 0 3px oklch(0.68 0.18 55 / 0.25);
+    box-shadow: 0 0 0 3px oklch(0.68 0.18 55 / 0.5);
   }
 }
 
 .login-input:focus {
   animation: input-focus-glow 2s ease-in-out infinite;
-  border-color: oklch(0.68 0.18 55 / 0.5);
+  border-color: oklch(0.68 0.18 55 / 0.7);
 }
 
 /* Dot grid pattern overlay */

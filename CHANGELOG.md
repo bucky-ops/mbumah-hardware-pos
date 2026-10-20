@@ -2,6 +2,21 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.160.0] The spec's own paths
+
+Phase 4.6 literal spec-path parity closes — the EMS spec's three payroll report routes now exist verbatim — and the login front door closes its last a11y finding.
+
+### Added
+- **The three spec-path alias routes** (`src/app/api/payroll/exports/p10/route.ts`, `src/app/api/payroll/exports/statutory/route.ts`, `src/app/api/payroll/liability-report/route.ts`): each RE-EXPORTS its canonical handler (`/api/hr/reports/p10` and `/api/hr/reports/statutory-liability`) — same guard, same roles, same audit rows, same CSV, zero duplicated logic, so the spec path and the canonical path can never drift. The handlers only read query params, never the request path, so behavior is byte-identical.
+- **`scripts/verify-spec-paths.mjs`**: the mechanical half of the spec governance contract — asserts every Phase 4.6 and Phase 4.7 path from the spec's "Create:" lists exists on disk (33 paths: 25 API routes + 8 pages), and that the three aliases still re-export their canonical handlers by resolving the import specifier to the canonical module. Wired into `npm run verify:v2-160-0`.
+
+### Changed
+- **The login screen is a landmark** (`src/components/login-screen.tsx`): the content column becomes a `<main>` landmark — the axe best-practice "region" rule had flagged all nine content blocks (tagline, card header, form fields, footer) as living outside every landmark; the decorative background layers (particles, dot grid, hardware icons) are now explicitly `aria-hidden`.
+- **The keyboard beacon is visible** (`src/app/globals.css`): the `.login-input:focus` pulse ring rises from ambient-glow alphas (0.15/0.25 — measured ~1.6:1 against the glass card, a halo rather than an indicator) to 0.35/0.5, and the focused border from 0.5 to 0.7 alpha. Same amber hue, same 2s pulse.
+
+### Docs
+- `docs/payroll-run-lifecycle.md`: the B2C section now points at `docs/cron-operations.md` for the production cadence story (the backoff windows only regain meaning once the hourly pinger is armed), and a "The spec's own paths (v2.160.0)" section records the alias re-export shape and the parity gate.
+
 ## [2.159.0] The dispatcher keeps its hours
 
 v2.158.0 made the production cron reachable; this release makes it PUNCTUAL and VISIBLE — the designed hourly cadence gets an off-Vercel keeper, and every tick leaves a ledger row a human can read.
