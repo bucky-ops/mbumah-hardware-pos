@@ -2,6 +2,19 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.169.0] The pill names the heartbeat
+
+The failed-tick sentence dated every red tick but never said WHICH heartbeat failed. Since v2.165.0 every ledger row names its dispatcher — the sentence now says so, and the axe-incomplete question on the console's quiet grey buttons is answered with arithmetic instead of a repaint.
+
+### Added
+- **`GET /api/org/automation` returns `failedTickDispatchers`** — a parallel array (same order/length as `failedTickStamps`, null where a row predates v2.165.0 or carries no name), read tolerantly from each row's own TOP-LEVEL `metadata.dispatcher` (the field v2.165.0 standardized on every ledger row). The findMany's select grows the metadata column — one field on ≤10 rows, same window, same cap. This is NOT the coupling the v2.167.0 assessment declined (that idea rode the stamps on the dispatchers' INTERNAL result shapes); the distinction is pinned in a dated comment and in tests.
+- **The pill's sentence grows a parenthetical per named stamp**: `Failed ticks: Tue 20 Oct 2026 · 06:48 EAT (hourly) · …` — the single-source `failedTickTooltip` helper now maps stamps then zips the parallel array by index (a null, an out-of-range index, or an older response without the array renders the bare stamp, never a guess). The v2.167.0 helper pins (the guard, the stamps map, the "and N more" comparison) are preserved verbatim; title, tab stop, sr-only and the visible bubble all upgrade together.
+- **The muted-button family is computed, not guessed** (`docs/a11y/contrast-math.md` + `scripts/contrast-math-muted-button-v169.mjs`): the HR per-store expand button family (`bg-muted/40` + `text-muted-foreground`, hover `/70`) had been an axe "incomplete" since the alpha rounds — computed per the recipe: light rest **5.73:1**, light hover **5.53:1**, dark rest **5.48:1**, dark hover **5.29:1** — all four corners clear 4.5:1. Reviewed-passing: no code change, the numbers are the deliverable.
+- **The shell-bubble sweep is assessed on the record** (the v2.168.0 option #1): after v2.168's link sweep, the org console's remaining title-only surfaces are either NON-interactive (badges, status chips — not tab stops by design, so focus bubbles do not apply) or REDUNDANT (the "Open branch workspace" links' visible text already carries the full intent). The recipe stays LINK-scoped; recorded in the round's test suite and worklog.
+
+### Tests
+- `src/tests/pill-names-heartbeat-v2169.test.ts` (NEW, 10 tests): the API's metadata select + tolerant dispatcher guards + parallel exposure + read-only, the dated not-the-coupling comment, the card's interface field + verbatim v2.167 helper pins + parenthetical contract, the four tooltip surfaces, the doc chronology, and the contrast-math deliverable.
+
 ## [2.168.0] The hints become visible
 
 v2.167.0 made the card's hints keyboard-REACHABLE — a focus ring says "here", not "why". This round the sentence itself becomes visible at the moment of focus, the card's self-explaining suffixes gain their own tooltips, and the org console's remaining title-only links learn to speak.

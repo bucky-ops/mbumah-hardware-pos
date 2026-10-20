@@ -79,3 +79,22 @@ script.
   "reviewed-passing" in the round's worklog entry, with the measured
   ratios — so the next axe run's identical incomplete is a known quantity,
   not a re-opened investigation.
+
+## Reviewed-passing: the org console's muted-button family (v2.169.0)
+
+The HR per-store expand button and its siblings (`bg-muted/40` +
+`text-muted-foreground`, hover `bg-muted/70`) have been axe "incompletes"
+since the alpha-token rounds — uncomputed, not unbroken. Computed with the
+recipe by `scripts/contrast-math-muted-button-v169.mjs` (committed):
+
+| surface        | ratio  | verdict |
+| -------------- | ------ | ------- |
+| light rest /40 | 5.73:1 | pass    |
+| light hover /70| 5.53:1 | pass    |
+| dark rest /40  | 5.48:1 | pass    |
+| dark hover /70 | 5.29:1 | pass    |
+
+All four corners clear the 4.5:1 small-text bar with margin (the 12px
+button label). The family stays as-is — no code change, the numbers are
+the deliverable — and the next axe run's identical incomplete is a known
+quantity.

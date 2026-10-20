@@ -64,12 +64,34 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
       rawDb.systemLog.findMany({
         where: { action: PARTIAL_FAILURE_ACTION, createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
+        select: { createdAt: true, metadata: true },
         take: 10,
       }),
     ]);
 
     const failedTickStamps = failedTicks.map((r) => r.createdAt.toISOString());
+    // v2.169.0: WHICH heartbeat failed, per stamp — the parallel array reads
+    // each row's own TOP-LEVEL metadata.dispatcher (v2.165.0 standardized it
+    // on every ledger row). This is NOT the coupling the v2.167.0 assessment
+    // above declined: that idea rode the stamps on the dispatchers' INTERNAL
+    // result shapes (`results` / `ledgerResults`); this reads the ONE
+    // standardized field, tolerantly — a row that predates v2.165.0 or
+    // carries garbage maps to null and the card renders the bare stamp,
+    // never a guess. Same order/length as failedTickStamps, so the card can
+    // zip them by index without re-sorting.
+    const failedTickDispatchers: (string | null)[] = failedTicks.map((r) => {
+      if (!r.metadata) return null;
+      try {
+        const parsed: unknown = JSON.parse(r.metadata);
+        const d =
+          parsed && typeof parsed === 'object'
+            ? (parsed as { dispatcher?: unknown }).dispatcher
+            : undefined;
+        return typeof d === 'string' && d.trim().length > 0 ? d : null;
+      } catch {
+        return null;
+      }
+    });
 
     // The metadata column is a JSON string by contract (v2.159.0 dispatcher
     // writes { results: SubJobResult[] }; v2.165.0 adds the dispatcher's
@@ -135,6 +157,10 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
         // (ISO, newest first, ≤10; the honest "and N more" lives on the
         // card where the count is already known).
         failedTickStamps,
+        // v2.169.0: the parallel dispatcher array (same order/length as
+        // failedTickStamps; null where the row predates v2.165.0 or carries
+        // no name) — the pill's sentence says WHICH heartbeat failed.
+        failedTickDispatchers,
         // Honest tick-gate posture, read server-side: while CRON_SECRET is
         // unset the dispatcher accepts unauthenticated ticks (fail-open with
         // a WARN systemLog) — the card says so in amber until the human
