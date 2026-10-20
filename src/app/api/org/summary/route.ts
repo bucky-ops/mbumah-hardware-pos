@@ -15,7 +15,7 @@ import { withErrorBoundary } from '@/lib/logger';
 import { hrSummaryForOrgConsole, hrPerStoreForOrgConsole } from '@/lib/hr/reports';
 import { isHrModuleEnabled } from '@/lib/hr/feature-flag';
 import { hasHrPermission } from '@/lib/hr/permissions';
-import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets, topMover } from '@/lib/org/summary-trend';
+import { TREND_DAYS, trendWindows, variancePct, sparkBuckets, countBuckets, topMover, storeSparks } from '@/lib/org/summary-trend';
 import { round2 } from '@/lib/utils/financialMath';
 import type { NextRequest } from 'next/server';
 
@@ -129,9 +129,11 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
         }),
         // v2.173.0: the per-day rows both sparklines bucket (revenue sums
         // gross totalAmount; transactions count the same rows 1 each).
+        // v2.175.0: the select gains storeId — the SAME rows feed the
+        // per-branch table sparks, so no second findMany is spent.
         rawDb.salesTransaction.findMany({
           where: { ...TREND_WHERE, createdAt: { gte: windows.weekAgo } },
-          select: { createdAt: true, totalAmount: true },
+          select: { createdAt: true, totalAmount: true, storeId: true },
         }),
         // v2.174.0: per-store CURRENT-week slices — BOTH mover metrics
         // (gross amount + count) come from this ONE groupBy.
@@ -198,6 +200,7 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
     const trendRows = trendRowsRaw.map((r) => ({
       createdAt: r.createdAt,
       amount: Number(r.totalAmount),
+      storeId: r.storeId,
     }));
     const revenueWeek = round2(Number(trendWeek._sum.totalAmount ?? 0));
     const revenuePrior = round2(Number(trendPrior._sum.totalAmount ?? 0));
@@ -218,12 +221,22 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
       storeName: s.name,
       current: curMap.get(s.id)?.amount ?? 0,
       prior: priMap.get(s.id)?.amount ?? 0,
+      // v2.175.0: identity pass-throughs — the winner rides them so the
+      // card can deep-link through the SAME safe resolver the branches
+      // table speaks. A null slug flows through and the card falls back
+      // to plain text (the safe-builder contract: no safe URL, no link).
+      slug: s.slug,
+      subdomain: s.subdomain,
+      isActive: s.status === 'ACTIVE',
     }));
     const txSlices = stores.map((s) => ({
       storeId: s.id,
       storeName: s.name,
       current: curMap.get(s.id)?.count ?? 0,
       prior: priMap.get(s.id)?.count ?? 0,
+      slug: s.slug,
+      subdomain: s.subdomain,
+      isActive: s.status === 'ACTIVE',
     }));
     const revenueMover = topMover(revSlices);
     const txMover = topMover(txSlices);
@@ -247,6 +260,18 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
           : null,
       },
     };
+
+    // v2.175.0: the branches table learns the week's shape — one revenue
+    // spark PER branch, bucketed from the SAME row set the header sparks
+    // speak (the findMany above gained storeId in its select; no second
+    // read). Additive: `perStoreTrend` keys by storeId so the card can
+    // join it against summary.stores without relying on row order, and a
+    // branch with an empty week draws the honest flat line (zeros).
+    const perStoreTrend = stores.map((s) => ({
+      storeId: s.id,
+      spark: storeSparks(trendRows, s.id, windows.startToday, TREND_DAYS),
+      weekTotal: round2(curMap.get(s.id)?.amount ?? 0),
+    }));
 
     // EMS v2.20.0 (spec Phase 4.8): HR tiles for the organization console —
     // headcount, month employment cost, absence rate, payroll status, expiry
@@ -277,6 +302,7 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
         generatedAt: new Date().toISOString(),
         totals,
         trend,
+        perStoreTrend,
         hr,
         hrPerStore,
         stores: storeRows,

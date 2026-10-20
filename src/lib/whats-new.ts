@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.175.0',
+    title: 'The week reaches every branch row',
+    bullets: [
+      'The branches table now carries a \u201c7d trend\u201d column \u2014 each branch draws its own seven-day revenue sparkline, read from the same week of sales the headline cards use, with the week total on hover.',
+      'The top mover\u2019s name opens the branch: when the workspace link can be built safely the name becomes a real door (new tab, underlined, keyboard-visible focus ring); when it can\u2019t, the name stays honest plain text.',
+      'A branch with a quiet week draws a flat line, and a console from before this release shows a calm dash \u2014 the table never invents a shape it wasn\u2019t told.',
+    ],
+  },
+  {
     version: '2.174.0',
     title: 'The trend names which branch moved',
     bullets: [
