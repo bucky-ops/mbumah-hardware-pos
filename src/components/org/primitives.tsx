@@ -40,6 +40,15 @@ export interface OrgSummaryData {
     pendingMpesa: number;
   };
   stores: StoreRow[];
+  /**
+   * v2.176.0: per-branch 7-day revenue sparks — the SAME additive block
+   * /api/org/summary has ridden since v2.175.0 (`storeId` joined by id,
+   * never row order; `spark` = the branch's own 7-bucket gross revenue;
+   * `weekTotal` for the tooltip). TOLERANT — optional + nullable: an older
+   * cached response degrades to a muted "—", never a crash or a fabricated
+   * shape (the org dashboard's branches table speaks the same contract).
+   */
+  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number }> | null;
   /** v2.23.0: per-branch HR drill-down rows (ORG scope + HR module on only). */
   hrPerStore?: Array<{
     storeId: string;

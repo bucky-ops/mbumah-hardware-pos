@@ -287,11 +287,11 @@ describe('the release surfaces', () => {
     expect(feed.indexOf('2.175.0')).toBeLessThan(feed.indexOf('2.174.0'));
   });
 
-  it('package.json leads 2.175.0 in all three slots + the verify script', () => {
+  it('package.json leads the current version in all three slots (re-anchored for 2.176.0) + this round\u2019s verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.175.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.175.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.175.0');
+    expect(pkg.version).toBe('2.176.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.176.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.176.0');
     expect(pkg.scripts['verify:v2-175-0']).toBe('node scripts/verify-v2-175-0.mjs');
   });
 });

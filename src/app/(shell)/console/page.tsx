@@ -24,7 +24,7 @@ import { ExpertModules } from '@/components/org/experts';
 import { KpiRow } from '@/components/org/kpi-row';
 import { ChangelogModal, CommandPalette, ConsoleFooter, ConsoleHeader, LoginDialog, ShortcutsModal, type SessionUser } from '@/components/org/chrome';
 import { SectionErrorBoundary } from '@/components/error-boundary';
-import { KenyaMap, kes, num, timeAgo, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
+import { KenyaMap, Sparkline, kes, num, timeAgo, type DeskActivityData, type DeskActivityFilter, type KpiSummaryData, type OrgSummaryData, type StoreRow } from '@/components/org/primitives';
 import { authorizedFetchJson } from '@/lib/api';
 import { buildStoreWorkspaceUrl } from '@/lib/workspace/links';
 import { PeoplePayrollByBranch, PeoplePayrollUnavailable } from '@/components/finance/people-payroll-by-branch';
@@ -306,6 +306,30 @@ export default function OrgConsolePage() {
                 </div>
                 <p className="mt-1.5 truncate text-[12px] font-semibold text-slate-800">{s.name}</p>
                 <p className="text-[10px] text-slate-500">{kes(s.todayRevenue)} · {s.todayTransactions} txns</p>
+                {/* v2.176.0: this branch's 7-day spark — the SAME muted slate
+                    vocabulary the org dashboard's branches table speaks
+                    (72×20, #64748b), joined by storeId (never row order).
+                    The week total rides the title tooltip + an sr-only clause
+                    (the svg is aria-hidden decoration); an older cached
+                    summary without perStoreTrend — or a missing entry —
+                    keeps a calm dash row at the same height, never a
+                    fabricated shape. */}
+                {(() => {
+                  const storeTrend = summary?.perStoreTrend?.find((t) => t.storeId === s.id) ?? null;
+                  return storeTrend ? (
+                    <div
+                      className="mt-1.5 flex w-[76px] items-center"
+                      title={`7-day revenue ${kes(storeTrend.weekTotal)} (gross)`}
+                    >
+                      <Sparkline data={storeTrend.spark} stroke="#64748b" width={72} height={20} />
+                      <span className="sr-only">7-day revenue {kes(storeTrend.weekTotal)}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-1.5 flex min-h-[20px] items-center" aria-hidden="true">
+                      <span className="text-[10px] text-muted-foreground">—</span>
+                    </div>
+                  );
+                })()}
               </button>
             ))}
             {summaryError && (
@@ -317,7 +341,18 @@ export default function OrgConsolePage() {
 
           <div id="kpi-row">
             <SectionErrorBoundary sectionName="KPI Command Row">
-              {kpi ? <KpiRow data={kpi} /> : <UnavailableCard message={kpiError ?? 'Loading organization KPIs...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
+              {kpi ? (
+                <KpiRow
+                  data={kpi}
+                  /* v2.176.0: the per-branch week rides in from the SAME
+                     /api/org/summary response the strip already reads —
+                     no second fetch; null (branch manager without matrix
+                     access, or an older cached answer) keeps the modal's
+                     org-wide story only. */
+                  perStoreTrend={summary?.perStoreTrend ?? null}
+                  stores={stores}
+                />
+              ) : <UnavailableCard message={kpiError ?? 'Loading organization KPIs...'} onSignIn={() => setLoginOpen(true)} showSignIn={needsAuth && !signedIn} />}
             </SectionErrorBoundary>
           </div>
 
