@@ -80,6 +80,14 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.172.0',
+    title: 'The card expects the tick',
+    bullets: [
+      'The Automation card no longer stops at \u201cLast tick 3h ago\u201d \u2014 it now names when the NEXT tick is due (in both UTC and EAT) and whether the heartbeat is on time.',
+      'While CRON_SECRET is unset the line stays quiet and points at Vercel\u2019s daily slot instead of crying wolf; once armed, a heartbeat running past its 15-minute grace window turns amber with the exact hole named.',
+    ],
+  },
+  {
     version: '2.171.0',
     title: 'The denial names its gate',
     bullets: [
