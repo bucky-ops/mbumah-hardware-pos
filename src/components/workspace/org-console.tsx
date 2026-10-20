@@ -108,8 +108,18 @@ import {
   loadHrDrilldownPrefs,
   saveHrDrilldownPrefs,
 } from '@/lib/org/hr-drilldown-prefs';
-import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
-import { buildPeoplePayrollDeepLink, buildRunDeepLinkHref } from '@/lib/workspace/links';
+// v2.192.0: the drill-down's alerts cell speaks the SAME role-gate contract
+// as the shared panel's ExpiryCell — a door that would 403 is a lie, so the
+// employees-list door hides behind EMPLOYEE_LIST_READ_ROLES and the assets
+// door behind ASSET_LIST_READ_ROLES (the accountant's grant stops at
+// payroll + reports; every other org role may cross both).
+import { ASSET_LIST_READ_ROLES, EMPLOYEE_LIST_READ_ROLES, ORG_SUMMARY_ROLES } from '@/lib/app-config';
+import {
+  buildExpiringEmployeesHref,
+  buildOverdueAssetsHref,
+  buildPeoplePayrollDeepLink,
+  buildRunDeepLinkHref,
+} from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
 // Type-only import: erased at compile time, so the server-only diagnostics
 // data layer never enters the client bundle.
@@ -1694,8 +1704,112 @@ export function OrgConsole() {
                                   );
                                 })()}
                               </td>
-                              <td className={`px-3 py-2 text-right tabular-nums ${alerts > 0 ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
-                                {alerts}
+                              <td className="px-3 py-2 text-right tabular-nums">
+                                {(() => {
+                                  // v2.192.0: the alerts cell speaks the shared panel's
+                                  // SPLIT vocabulary (v2.113.0/v2.114.0) — the count stops
+                                  // being an undifferentiated sum and each half becomes the
+                                  // door the role can actually cross: documents → the
+                                  // employees list pre-filtered to expiring documents for
+                                  // the branch; overdue assets → the assets list
+                                  // pre-filtered. The gates are the shared panel's OWN
+                                  // (EMPLOYEE_LIST_READ_ROLES / ASSET_LIST_READ_ROLES) —
+                                  // for the org console's audience that means SUPER_ADMIN
+                                  // and STORE_OWNER see both doors, ACCOUNTANT (whose grant
+                                  // stops at payroll + reports) sees the exact plain-text
+                                  // cell this release replaces — a door that 403s is a
+                                  // lie. The builders are the ONE writers of the deep-link
+                                  // shapes (REUSED, never re-derived); zero halves never
+                                  // render as links; the CSV keeps its v2.152.0 sum shape
+                                  // — doors do not belong in files.
+                                  const docs = row.expiryAlerts.documentsExpiring90Days;
+                                  const assets = row.expiryAlerts.assetsOverdue;
+                                  const role = user?.role || '';
+                                  const canOpenDocs = EMPLOYEE_LIST_READ_ROLES.includes(role);
+                                  const canOpenAssets = ASSET_LIST_READ_ROLES.includes(role);
+                                  const doorClass =
+                                    'inline-flex items-center gap-1 rounded-md font-semibold text-amber-700 underline-offset-2 transition-colors hover:text-orange-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400';
+                                  const docTitle = `Documents expiring within 90 days: ${docs} — open the branch's employees list pre-filtered`;
+                                  const docTitlePlain = `Documents expiring within 90 days: ${docs}`;
+                                  const assetsTitle = `Overdue asset assignments: ${assets} — open the branch's assets list pre-filtered`;
+                                  if (docs > 0 && canOpenDocs) {
+                                    return (
+                                      <span className="inline-flex items-center justify-end gap-1.5">
+                                        <a
+                                          href={buildExpiringEmployeesHref(row.storeId)}
+                                          data-testid="org-console-hr-docs-door"
+                                          aria-label={`${docs} document${docs === 1 ? '' : 's'} expiring within 90 days at ${row.storeName} — open the pre-filtered employees list`}
+                                          title={docTitle}
+                                          className={doorClass}
+                                        >
+                                          {docs}
+                                          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                        </a>
+                                        {assets > 0 && canOpenAssets && (
+                                          <a
+                                            href={buildOverdueAssetsHref(row.storeId)}
+                                            data-testid="org-console-hr-assets-door"
+                                            aria-label={`${assets} overdue asset assignment${assets === 1 ? '' : 's'} at ${row.storeName} — open the pre-filtered assets list`}
+                                            title={assetsTitle}
+                                            className={doorClass}
+                                          >
+                                            +{assets}
+                                            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                          </a>
+                                        )}
+                                        {assets > 0 && !canOpenAssets && (
+                                          <span
+                                            className="text-xs text-muted-foreground"
+                                            title={`Overdue asset assignments: ${assets} — see the Assets page`}
+                                          >
+                                            +{assets}
+                                          </span>
+                                        )}
+                                      </span>
+                                    );
+                                  }
+                                  // No documents door (zero docs or a role the list
+                                  // would 403): the assets half can still be the door
+                                  // when the role may cross it — the shared panel's exact
+                                  // degradation ladder, mirrored.
+                                  if (assets > 0 && canOpenAssets) {
+                                    return (
+                                      <span className="inline-flex items-center justify-end gap-1.5">
+                                        {docs > 0 && (
+                                          <span className="font-semibold text-amber-700 dark:text-amber-400" title={docTitlePlain}>
+                                            {docs}
+                                          </span>
+                                        )}
+                                        {docs > 0 && (
+                                          <span className="text-muted-foreground" aria-hidden="true">
+                                            +
+                                          </span>
+                                        )}
+                                        <a
+                                          href={buildOverdueAssetsHref(row.storeId)}
+                                          data-testid="org-console-hr-assets-door"
+                                          aria-label={`${assets} overdue asset assignment${assets === 1 ? '' : 's'} at ${row.storeName} — open the pre-filtered assets list`}
+                                          title={assetsTitle}
+                                          className={doorClass}
+                                        >
+                                          {assets}
+                                          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                        </a>
+                                      </span>
+                                    );
+                                  }
+                                  const title = `Expiring documents (90 days): ${docs} - overdue asset assignments: ${assets}`;
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center justify-end gap-1 ${
+                                        alerts > 0 ? 'font-semibold text-amber-700 dark:text-amber-400' : 'text-muted-foreground'
+                                      }`}
+                                      title={title}
+                                    >
+                                      {alerts}
+                                    </span>
+                                  );
+                                })()}
                               </td>
                             </tr>
                           );

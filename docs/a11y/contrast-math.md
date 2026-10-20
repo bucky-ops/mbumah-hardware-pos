@@ -153,3 +153,43 @@ bright `-300` text). Light amber is again the family's tightest corner
 (4.87:1, the amber family's recurring signature). The badges stay
 as-is — no code change, the numbers are the deliverable — and the next
 axe run's identical incomplete on these chips is a known quantity.
+
+## Reviewed-passing: the desk digest's avatar + status-chip families (v2.192.0)
+
+The desk DIGEST panel (org dashboard, `panels.tsx` DeskActivity) wears two
+chip families the report page's v2.190.0 table does not cover: the
+per-reviewer avatar pills on THIS surface (the panel paints its ground
+LITERALLY — `dark:bg-slate-900` on the section class, `bg-white` in light —
+so the v2.190.0 numbers only transfer if the literal ground equals the card
+token), and the timeline's four DESK_STATUS_CHIP statuses (PENDING amber,
+APPROVED emerald, REJECTED rose, CANCELLED slate — light the opaque `-50`
+chip, dark `{c}-500/10` or slate `-800/60` over the literal ground, with
+the timeline row's own hover tint UNDER the translucent chip). Computed by
+`scripts/contrast-math-digest-avatars-v2192.mjs` (committed; the ground
+asserted FROM the component source, palette from the INSTALLED theme.css).
+The chips are 10px text → 4.5:1 applies:
+
+| family                    | light            | dark calm        | dark hover       | dark drilled |
+| ------------------------- | ---------------- | ---------------- | ---------------- | ------------ |
+| avatar emerald            | 4.73:1 pass      | 8.41:1 pass      | 7.61:1 pass      | 7.10:1 pass  |
+| avatar sky                | 5.10:1 pass      | 7.77:1 pass      | 7.04:1 pass      | 6.60:1 pass  |
+| avatar violet             | 6.13:1 pass      | 7.74:1 pass      | 7.06:1 pass      | 6.80:1 pass  |
+| avatar amber              | **4.54:1** pass  | 8.69:1 pass      | 7.86:1 pass      | 7.53:1 pass  |
+| avatar rose               | 5.04:1 pass      | 7.84:1 pass      | 7.21:1 pass      | 7.10:1 pass  |
+| avatar teal               | 4.79:1 pass      | 8.60:1 pass      | 7.78:1 pass      | 7.26:1 pass  |
+| status PENDING (amber)    | 4.87:1 pass      | 10.63:1 pass     | 9.81:1 pass      | —            |
+| status APPROVED (emerald) | 5.09:1 pass      | 10.16:1 pass     | 9.38:1 pass      | —            |
+| status REJECTED (rose)    | 5.51:1 pass      | 8.70:1 pass      | 8.11:1 pass      | —            |
+| status CANCELLED (slate)  | **4.55:1** pass  | 6.08:1 pass      | 5.88:1 pass      | —            |
+
+**36/36 families pass** the small-text bar. The avatar columns land
+number-for-number on the v2.190.0 table — the literal `dark:bg-slate-900`
+ground IS the card token (the transfer is now proven, not assumed), and
+the light `-100` chips stay stack-independent. The status chips are the
+new numbers: dark margins wide (the deep ground under the bright `-300`
+text), light CANCELLED slate the tightest status corner at 4.55:1 with
+light amber right behind (4.87:1 — the amber family's recurring
+signature). The unknown-status fallback reuses the CANCELLED shape, so it
+is covered by that row. The chips stay as-is — no code change, the
+numbers are the deliverable — and the next axe run's identical
+incomplete on these alphas is a known quantity.

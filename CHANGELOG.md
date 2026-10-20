@@ -2,6 +2,20 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.192.0] The drill-down opens the alerts
+
+The org dashboard's HR drill-down has worn its "Expiry alerts" cell as an undifferentiated SUM since v2.23.0 — documents expiring in 90 days plus overdue asset assignments, amber when positive — while the SHARED "People & payroll by branch" panel's `ExpiryCell` has split the count into its two honest halves and opened each as a ROLE-GATED door since v2.113.0 (documents) and v2.114.0 (assets). Both surfaces read the SAME `/api/org/summary` `hrPerStore` block, whose `expiryAlerts` has carried both halves all along; the drill-down simply summed them away. This release the drill-down's cell mirrors the shared panel's split vocabulary, and the desk digest's chip families carry their contrast-math numbers.
+
+### Added
+- **The two role-gated doors** (`org-console.tsx`): the drill-down's alerts cell now renders each half as the door the role can actually cross — documents → `/hr/employees?expiring=90&storeId=<id>` (the pre-filtered employees list, gated on `EMPLOYEE_LIST_READ_ROLES`), overdue assets → `/hr/assets?overdue=1&storeId=<id>` (the pre-filtered assets list, gated on `ASSET_LIST_READ_ROLES`) — with the spoken label naming count and branch, the breakdown in the title, the shared panel's `+N` assets vocabulary, and the house door affordance (amber alert voice, orange hover, the orange focus ring). The builders are the ONE writers of the deep-link shapes — reused, never re-derived.
+- **The honest gates**: for the org console's audience (SUPER_ADMIN, STORE_OWNER, ACCOUNTANT) the accountant — whose grant stops at payroll + reports — sees the exact plain-text cell this release replaces (the sum, the amber voice, now with the breakdown in the title). A door that 403s is a lie. Zero halves never render as links; a branch whose docs half is gated but whose assets half may open keeps the shared panel's degradation ladder (docs plain, separator, assets door).
+- **The digest families' numbers** (`scripts/contrast-math-digest-avatars-v2192.mjs` + `docs/a11y/contrast-math.md`): the desk digest's avatar-hue family re-derived on the digest panel's LITERAL `dark:bg-slate-900` ground (asserted from the component source — the v2.190.0 card-token transfer is now proven, not assumed) plus the timeline's four DESK_STATUS_CHIP statuses' first numbers (the dark chips composite over the calm AND hover row tints). **36/36 families pass** the 4.5:1 small-text bar; light CANCELLED slate the tightest status corner (4.55:1), light amber the tightest avatar corner (4.54:1, the recurring signature). Reviewed-passing — no code change, the numbers are the deliverable.
+
+### Tests
+- NEW `src/tests/hr-alerts-doors-v2192.test.ts`: the gates and builders executed (the ONE source of both shapes); the doors' markup, spoken labels, affordance, and the honest degradation ladder pinned; the CSV's sum shape pinned (no builders, no hrefs in files); the shared panel's own doors pinned untouched; the v2.191.0 run door and v2.190.0 rank machinery pinned HOLDING; the a11y surfaces; the release surfaces.
+- Head-pin counters re-anchored (81/82/83/114); prior suites' pkg pins ride to 2.192.0 (the treadmill tax).
+- `verify:v2-192-0` wired — fresh verify script per the house convention.
+
 ## [2.191.0] The drill-down opens the run
 
 The org dashboard's HR drill-down has worn its "Latest payroll" cell as plain text since v2.23.0, while the SHARED "People & payroll by branch" panel's `LatestRunCell` has been a real door since v2.113.0 — one click opens `/hr/payroll?run=<id>` and the run-detail dialog. Both surfaces read the SAME `/api/org/summary` `hrPerStore` block, whose `latestPayroll` has carried `runId` since v2.113.0; the drill-down's local type simply never spoke it. This release the drill-down's cell mirrors the shared panel's affordance, and the cell's status-badge families carry their contrast-math numbers.

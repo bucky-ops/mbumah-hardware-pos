@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.192.0',
+    title: 'The drill-down opens the alerts',
+    bullets: [
+      'The \u201cExpiry alerts\u201d cell in the org dashboard\u2019s People & payroll by branch table now splits into its two halves \u2014 expiring documents and overdue assets \u2014 and each half is a door: click the documents number to open that branch\u2019s employees list pre-filtered, the \u201c+assets\u201d number to open its assets list pre-filtered.',
+      'The doors respect your role exactly as the shared People & Payroll panel always has \u2014 if a list would turn you away, the cell keeps its calm number instead of a door that lies.',
+      'Hover either number for the breakdown, and rest easy: the CSV export stays exactly as it was.',
+      'The desk digest\u2019s reviewer colours and request-status chips carry their audited contrast numbers \u2014 every combination passes the accessibility bar in light and dark mode.',
+    ],
+  },
+  {
     version: '2.191.0',
     title: 'The drill-down opens the run',
     bullets: [

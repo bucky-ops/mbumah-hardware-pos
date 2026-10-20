@@ -103,12 +103,15 @@ describe('the org console amber family passes at cell size', () => {
     // cells need 4.5:1 (they are NOT large text); only the text-xl KPI
     // value squeaked by on large-text 3:1 with a thin margin.
     expect(org().match(/text-amber-600/g)?.length ?? 0).toBe(0);
-    // seven dark-paired mounts total: four from this round (KPI icon, KPI
+    // eight dark-paired mounts total: four from this round (KPI icon, KPI
     // value, absence cell, expiry cell) + two that predate it (the
     // diagnostics banner chip + the missing-columns line) + the v2.154.0
-    // export note's Open link; the low-stock cell words its classes
+    // export note's Open link + ONE net new from v2.192.0: the alerts
+    // cell's split absorbed the old single conditional class into two
+    // adjacent mounts (the docs-beside-assets-door branch + the plain
+    // fallback), so 7 + 2 - 1 = 8; the low-stock cell words its classes
     // differently and is pinned separately.
-    expect(org().match(/text-amber-700 dark:text-amber-400/g)?.length).toBe(7);
+    expect(org().match(/text-amber-700 dark:text-amber-400/g)?.length).toBe(8);
     expect(org()).toContain("tone === 'warn' ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'");
     expect(org()).toContain('text-amber-700 font-medium dark:text-amber-400');
   });
