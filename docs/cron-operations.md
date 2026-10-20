@@ -182,6 +182,24 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
   EVERY listed refusal names the same gate and the list is complete,
   the pill itself appends `· hourly` / `· nightly`; mixed or unknown
   gates render no suffix, never a guess.
+- **The card expects the tick (v2.172.0)**: the "Last tick 3h ago" line
+  is history — the card now also answers "when is the NEXT tick due,
+  and is the heartbeat on time?". A pure lib (`src/lib/org/tick-expectation.ts`)
+  computes the expectation from the ledger read's own anchors
+  (`generatedAt` is the server's clock — the browser's never enters the
+  math), `lastTick.at`, and the real cadences. Three states, three
+  voices the card already speaks: **on-time** (emerald, "Next tick due
+  13:00 UTC (16:00 EAT) — the hourly dispatcher's slot"), **overdue**
+  (amber, "Heartbeat overdue — no tick since 14:00 UTC (17:00 EAT),
+  5m past the 15-minute grace window" — fired only once `now` runs past
+  slot + 15 min AND no tick of any dispatcher has landed since the slot
+  began), and **unarmed** (muted, "Pinger not armed — the next expected
+  tick is Vercel's daily slot 03:00 UTC (…EAT)" — while CRON_SECRET is
+  unset nothing pings the hourly dispatcher, so an overdue hour is not
+  an incident and the line never cries wolf). "No tick" is ledger-level
+  (either dispatcher counts — the source label names which one last
+  fired); the API's cadence object gains `vercelHourUtc: 3` so the card
+  consumes the daily slot as a number instead of parsing a cron string.
 - `failedTicks7d`: partial-failure rows in the last 7 days.
 - `deniedTicks7d` (v2.170.0): refused ticks in the same 7-day window —
   the amber companion to the green "tick gate armed" posture (a green
@@ -192,8 +210,10 @@ ACCOUNTANT, parity with `/api/org/summary`; read-only over `rawDb` under
 - `secretConfigured`: whether `CRON_SECRET` is set server-side — the honest
   tick-gate posture (fail-open ticks render the amber "CRON_SECRET unset"
   badge until the human arms the gate).
-- `cadence`: the vercel.json schedule and the pinger workflow name — the
-  card's truth line names both schedulers.
+- `cadence`: the vercel.json schedule, the pinger workflow name, and
+  (v2.172.0) `vercelHourUtc` — the daily slot's UTC hour as a number the
+  card's expectation line consumes; the card's truth line names both
+  schedulers.
 
 The org console card renders every state honestly: loading skeletons, an
 empty state before the first tick, an error state with Retry (a read

@@ -2,6 +2,18 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.172.0] The card expects the tick
+
+"Last tick 3h ago" was history; the operator still had to arithmetic their way to "is the heartbeat on time?". This release the Automation card answers it directly, computed from the ledger read's own anchors so the browser clock never enters the math.
+
+### Added
+- **`src/lib/org/tick-expectation.ts` (NEW, pure)**: the next-tick expectation — three honest states. **On-time** (emerald): "Next tick due 13:00 UTC (16:00 EAT) — the hourly dispatcher's slot." **Overdue** (amber): fires only once `now` runs past the current top-of-hour slot + a 15-minute grace window AND no tick of any dispatcher has landed since the slot began — "Heartbeat overdue — no tick since 14:00 UTC (17:00 EAT), 5m past the 15-minute grace window." **Unarmed** (muted): while CRON_SECRET is unset nothing pings the hourly dispatcher, so the line names Vercel's daily slot ("Pinger not armed — the next expected tick is Vercel's daily slot 03:00 UTC (Wed 21 Oct 2026 · 06:00 EAT)") and never cries wolf.
+- **`GET /api/org/automation` cadence object gains `vercelHourUtc: 3`** — the daily slot's UTC hour as a number the card consumes without parsing a cron string (tolerated optional on the card for older responses, default 3 in the lib).
+- **The card renders the expectation line** (`data-testid="automation-expectation"`, role="note") under the Last-tick row: a solid state dot (decorative, aria-hidden) + the full sentence as visible text — no tooltip, no tab stop, nothing compressed, so the pill machinery has nothing to add.
+
+### Tests
+- `src/tests/card-expects-tick-v2172.test.ts` (NEW, 17 tests): the slot/next-slot/Vercel-slot math EXECUTED (boundaries: exact instants roll, grace flips at the millisecond), the three sentences byte-pinned in both timezones, posture deferral, tolerance (absent vercelHourUtc, unparseable anchors), class families, the wire anchors, the render contract, and the doc chronology.
+
 ## [2.171.0] The denial names its gate
 
 v2.170.0 made the refused tick visible — but the sentence said only THAT the gate refused, not WHICH one. The rows already carry `metadata.path`, so the refusal feed gets the same shape the failed ticks have had since v2.166/v2.169.

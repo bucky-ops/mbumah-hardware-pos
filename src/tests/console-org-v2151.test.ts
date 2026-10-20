@@ -36,9 +36,9 @@ describe('the last slate-400 family is swept', () => {
 
   it('the release surfaces speak 2.152.0 (re-anchored per release)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.171.0');
-    expect(readRepo('CHANGELOG.md')).toContain('## [2.171.0]');
+    expect(pkg.version).toBe('2.172.0');
+    expect(readRepo('CHANGELOG.md')).toContain('## [2.172.0]');
     const feed = readRepo('src/lib/whats-new.ts');
-    expect(feed.indexOf("'2.171.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
+    expect(feed.indexOf("'2.172.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
   });
 });

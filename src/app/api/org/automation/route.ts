@@ -222,7 +222,14 @@ async function orgAutomationHandler(_request: NextRequest): Promise<Response> {
         // a WARN systemLog) — the card says so in amber until the human
         // arms the gate.
         secretConfigured: Boolean(process.env.CRON_SECRET),
-        cadence: { vercelSchedule: '0 3 * * *', pingerWorkflow: 'cron-hourly.yml' },
+        // v2.172.0: the UTC hour of the daily Vercel slot as a NUMBER the
+        // card's expectation math can consume without parsing a cron
+        // string; vercelSchedule stays the human-readable doc surface.
+        cadence: {
+          vercelSchedule: '0 3 * * *',
+          pingerWorkflow: 'cron-hourly.yml',
+          vercelHourUtc: 3,
+        },
       },
     });
   });

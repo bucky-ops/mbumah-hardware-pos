@@ -50,6 +50,15 @@ import { authorizedFetchJson } from '@/lib/api';
 // stamp as its tooltip - the same stamp format the payroll surfaces speak
 // (payslip-bundle is client-safe: it imports only csvCell from digest-csv).
 import { formatEatStamp } from '@/lib/hr/payroll/payslip-bundle';
+// v2.172.0: the heartbeat EXPECTATION — pure math (slots, grace, EAT
+// clocks) that turns "Last tick 3h ago" into "when is the next tick due,
+// and is the heartbeat on time". Anchored on the server's generatedAt,
+// never the browser clock.
+import {
+  nextTickExpectation,
+  expectationDotClass,
+  expectationTextClass,
+} from '@/lib/org/tick-expectation';
 import { ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import { buildPeoplePayrollDeepLink } from '@/lib/workspace/links';
 import { buildBranchesCsv, type BranchDeskCsvBlock } from '@/lib/org/branches-csv';
@@ -349,7 +358,11 @@ export function OrgConsole() {
     deniedTickStamps?: string[];
     deniedTickGates?: (string | null)[];
     secretConfigured: boolean;
-    cadence: { vercelSchedule: string; pingerWorkflow: string };
+    /** v2.172.0: the UTC hour of Vercel's daily slot, as a number — the
+     *  expectation math consumes it without parsing a cron string.
+     *  Optional for older responses; the lib's documented default (3)
+     *  keeps the sentence honest either way. */
+    cadence: { vercelSchedule: string; pingerWorkflow: string; vercelHourUtc?: number };
   }
   const [automation, setAutomation] = useState<AutomationSummary | null>(null);
   const [automationPhase, setAutomationPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>(
@@ -1308,6 +1321,41 @@ export function OrgConsole() {
                   </span>
                 )}
               </div>
+              {/* v2.172.0: the card EXPECTS the tick. The Last-tick line
+                  above is history ("3h ago"); this line is the honest
+                  answer to "when is the next one due, and is the
+                  heartbeat on time?" — computed once from the ledger
+                  read's own anchors (generatedAt is the server's clock;
+                  the browser's never enters the math). The sentence is
+                  the full visible text, so unlike the compressed pills
+                  it needs no tooltip and no tab stop: role="note" is
+                  read by screen readers as-is, and the state dot is
+                  decorative (aria-hidden). Tint families: emerald
+                  on-time, amber overdue, muted unarmed — the same three
+                  voices the rest of the card speaks. */}
+              {(() => {
+                const expectation = nextTickExpectation({
+                  lastTickAt: automation.lastTick.at,
+                  generatedAt: automation.generatedAt,
+                  secretConfigured: automation.secretConfigured,
+                  vercelHourUtc: automation.cadence.vercelHourUtc,
+                });
+                if (!expectation) return null;
+                return (
+                  <p
+                    role="note"
+                    data-testid="automation-expectation"
+                    className={`flex items-center gap-1.5 text-xs ${expectationTextClass(expectation.state)}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      data-testid="automation-expectation-dot"
+                      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${expectationDotClass(expectation.state)}`}
+                    />
+                    <span>{expectation.text}</span>
+                  </p>
+                );
+              })()}
               {automation.lastTick.subJobs.length > 0 ? (
                 <ul
                   data-testid="automation-subjob-list"
