@@ -2,6 +2,30 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.205.0] The reports learn to speak, honestly
+
+Two arcs in one round, both born from the worklog's own audit queue — the reports tab (the compliance-adjacent surface an accountant lives in) was the last tab whose charts rode silent pictures AND the only tab still fabricating figures in code. Zero new queries; every fix composes or removes, never invents.
+
+### Fixed — THE HONESTY PASS (fabricated data deleted)
+- **The quick-stat change chips died**: all four cards (Today Revenue / Today Sales / Low Stock / Outstanding Debt) rendered HARDCODED change percentages (+12.5% / +8.3% / −5.0% / +3.2%) as if they were recorded data, with arrow indicators. Deleted. In their place each card speaks a REAL companion from the same dashboard wire: the revenue card names the day's loudest payment method with its take, the sales card speaks the real average per sale, the low-stock card adds the out-of-stock count in the -700 voice when it is nonzero, and the debt card carries an honest window note.
+- **The fabricated sales comparison died**: the sales report's Total Revenue and Transactions cards computed a "previous period" from `Math.random()` (70–110% of the real total) and rendered the delta as a real % change. The block is gone; the cards speak `avgTransactionValue` and `totalTax` — real wire figures.
+- **The hourly chart shows the day's REAL hours**: the "daily/hourly breakdown" was `Math.random()` per render, labeled "mock" only in code. It now maps `hourlySalesBreakdown` off the tab's ALREADY-FETCHED `GET /api/dashboard` wire (live-verified on the seeded day: 10AM Ksh 7,500 / 11AM Ksh 43,000 / 12PM 0), business hours 8AM–6PM, quiet hours kept honestly at zero. The changeIndicator/changeColor helpers died with their only callers, and a source comment warns the next round: a change chip without a real previous period is a fabrication.
+
+### Added — THE ARIA SWEEP (every picture speaks)
+- **`src/lib/report-voices.ts`** — the one-writer voice module: seven pure composers (`composeSeriesVoice`, `composeLoudestVoice`, `composeHourlyVoice`, `composeStockHealthVoice`, `composeProductsVoice`, `composeForecastVoice`, `composeNamedTotalsVoice`), all unit-testable without rendering the 2,800-line tab, all taking pre-formatted figures so the tab keeps ONE currency voice (Ksh — the v2.201.1 lesson scoped here). The zero-day law holds: quiet hours say "no sales", a total of nothing never speaks, NaN can never ride into an aria (pinned).
+- **The three SVG charts speak** (valuation, hourly, top products — bar AND line variants): `role="img"` with every named point in caller order, its figure and its honest share of the whole; hourly quiet hours speak "no sales"; the loudest hour is named.
+- **The five recharts surfaces speak**: the growing/declining product bars (named rows with real growth % + revenue or units-left), the forecast area (predicted points in order + the dashed bounds band named once; the wire carries no method field so none is spoken), the top-customers chart and the rental revenue-by-status chart (semicolon rows with shares + total). The stock-health gauge speaks its verdict with the real healthy/low/out-of-stock counts.
+
+### Style (mandatory)
+- **The bars stopped hiding**: SVGBarChart's `opacity-80` dimming died (the v2.204.0 lesson — a dimmed mark is a ghost); hover now brightens instead. The value labels and axis labels grew 8px → 9px, and every numeric label rides `tabular-nums` so the figures align in columns.
+- **The bar chart grew a grounding baseline** (a muted non-essential rule) and the line chart's points gained hover-title parity with the bars.
+- The quick-stat sub-lines got a consistent 10px muted voice (the out-of-stock warning in red-700, 5.94:1 on white).
+
+### Tests
+- NEW `src/tests/reports-honest-voices-v2205.test.ts` (27 tests): the fabrication ban (no Math.random, no salesComparison, no hardcoded chips, no orphaned helpers — CODE-only scan, comments stripped per the v2.204.0 lesson), the real-wire replacements, all eleven aria mounts, the one-currency-voice guard for the composed arias, and the voice module's unit contracts (order, shares, quiet-hour law, empty step-asides, NaN poisoning).
+- Prior suites' pkg pins ride to 2.205.0 (the treadmill tax, 107 assertion lines); the head-pin counters re-anchored 95/96/97/128 → 96/97/98/129; whats-new heads the 2.205.0 entry.
+- `verify:v2-205-0` wired — see `scripts/verify-v2-205-0.mjs`. FULL vitest, lint, voice lint, build gates green before push; pre-merge E2E on the accountant persona (the Reports tab is role-gated — recorded in the worklog).
+
 ## [2.204.0] The pictures learn to speak
 
 The graphics-bar audit. The v2.203.0 round caught ONE sub-3:1 line (the forecast dash at 2.15:1) and this round measured the WHOLE app's meaning-bearing graphics against the same WCAG 2.x non-text 3:1 bar — and found the -500 family failing everywhere it painted a mark on the white card ground. Worse, two places painted TEXT with a GRAPHIC color (the health score numbers, the analytics donut's percentage cells) — text needs 4.5:1, so no -600 mark voice could ever be enough there. And five chart species never spoke their data at all. Zero new queries; every voice composes what the wire already carries.

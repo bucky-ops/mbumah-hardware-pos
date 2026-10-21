@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { BarChart3, Package, TrendingUp, TrendingDown,
-  ArrowUpRight, ArrowDownRight, Minus, FileText, Boxes,
+  ArrowUpRight, ArrowDownRight, FileText, Boxes,
   ShoppingCart, DollarSign, FileDown,
   Calendar, Clock, Eye, Play, Sparkles, PieChart,
   HeartPulse, RotateCcw, CreditCard, Banknote, Smartphone,
@@ -23,6 +23,13 @@ import {
   formatKES,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
+import {
+  composeSeriesVoice, composeHourlyVoice,
+  composeStockHealthVoice, composeProductsVoice, composeForecastVoice,
+  composeNamedTotalsVoice,
+} from '@/lib/report-voices';
+import { paymentMethodLabel } from '@/lib/analytics-utils';
+import type { DashboardStats } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -319,7 +326,7 @@ function getDatePresetRange(preset: DatePreset): { from: string; to: string } {
 
 // SVG Bar Chart Component
 
-function SVGBarChart({ data, height = 200 }: { data: { label: string; value: number; color?: string }[]; height?: number }) {
+function SVGBarChart({ data, height = 200, ariaLabel }: { data: { label: string; value: number; color?: string }[]; height?: number; ariaLabel?: string }) {
   if (data.length === 0) return null;
   const max = Math.max(...data.map(d => d.value), 1);
   const w = 320;
@@ -327,7 +334,16 @@ function SVGBarChart({ data, height = 200 }: { data: { label: string; value: num
   const gap = (w - data.length * barWidth) / (data.length + 1);
 
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${height + 30}`} className="text-xs">
+    <svg
+      width="100%"
+      viewBox={`0 0 ${w} ${height + 30}`}
+      className="text-xs"
+      role="img"
+      aria-label={ariaLabel || `Bar chart, ${data.length} bars`}
+    >
+      {/* The grounding baseline (a graphics mark: muted at 30% stays a
+          non-essential rule, the bars carry the data) */}
+      <line x1={gap / 2} y1={height - 20} x2={w - gap / 2} y2={height - 20} className="stroke-muted/40" strokeWidth={1} />
       {data.map((d, i) => {
         const x = gap + i * (barWidth + gap);
         const barH = (d.value / max) * (height - 20);
@@ -341,16 +357,16 @@ function SVGBarChart({ data, height = 200 }: { data: { label: string; value: num
               height={barH}
               rx={3}
               fill={d.color || 'currentColor'}
-              className="text-primary opacity-80 hover:opacity-100 transition-opacity"
+              className="hover:brightness-110 transition-[filter]"
             >
               <title>{d.label}: {formatKES(d.value)}</title>
             </rect>
-            {/* Data label */}
-            <text x={x + barWidth / 2} y={y - 4} textAnchor="middle" className="fill-muted-foreground text-[8px]">
+            {/* Data label (tabular-nums: the figures align in the column) */}
+            <text x={x + barWidth / 2} y={y - 4} textAnchor="middle" className="fill-muted-foreground text-[9px] tabular-nums">
               {formatKES(d.value)}
             </text>
             {/* X-axis label */}
-            <text x={x + barWidth / 2} y={height - 4} textAnchor="middle" className="fill-muted-foreground text-[8px]">
+            <text x={x + barWidth / 2} y={height - 4} textAnchor="middle" className="fill-muted-foreground text-[9px]">
               {d.label.length > 8 ? d.label.slice(0, 8) + '…' : d.label}
             </text>
           </g>
@@ -362,7 +378,7 @@ function SVGBarChart({ data, height = 200 }: { data: { label: string; value: num
 
 // SVG Line Chart Component
 
-function SVGLineChart({ data, height = 200 }: { data: { label: string; value: number }[]; height?: number }) {
+function SVGLineChart({ data, height = 200, ariaLabel }: { data: { label: string; value: number }[]; height?: number; ariaLabel?: string }) {
   if (data.length < 2) return null;
   const max = Math.max(...data.map(d => d.value), 1);
   const w = 320;
@@ -378,7 +394,13 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
   const areaPath = linePath + ` L${points[points.length - 1].x},${height - padding.bottom} L${points[0].x},${height - padding.bottom} Z`;
 
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${height}`} className="text-xs">
+    <svg
+      width="100%"
+      viewBox={`0 0 ${w} ${height}`}
+      className="text-xs"
+      role="img"
+      aria-label={ariaLabel || `Line chart, ${data.length} points`}
+    >
       <defs>
         <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
@@ -389,8 +411,11 @@ function SVGLineChart({ data, height = 200 }: { data: { label: string; value: nu
       <path d={linePath} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" className="text-primary" />
       {points.map((p, i) => (
         <g key={i}>
-          <circle cx={p.x} cy={p.y} r="3" className="fill-primary" />
-          <text x={p.x} y={p.y - 8} textAnchor="middle" className="fill-muted-foreground text-[8px]">
+          <circle cx={p.x} cy={p.y} r="3" className="fill-primary">
+            {/* Hover parity with the bars: the point's own tooltip */}
+            <title>{p.label}: {formatKES(p.value)}</title>
+          </circle>
+          <text x={p.x} y={p.y - 8} textAnchor="middle" className="fill-muted-foreground text-[9px] tabular-nums">
             {formatKES(p.value)}
           </text>
         </g>
@@ -492,6 +517,39 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
 
   const forecastTotal = forecastChart.reduce((s, f) => s + f.predicted, 0);
   const forecastPeak = forecastChart.reduce((m, f) => Math.max(m, f.predicted), 0);
+
+  // ======================================================================
+  // v2.205.0 THE ARIA SWEEP (trends section): the three recharts surfaces
+  // here ride generic wrappers no longer — each speaks a composed aria from
+  // the rows this section already fetched. One-writer rule: the strings
+  // come from src/lib/report-voices.ts.
+  // ======================================================================
+  const growingVoice = useMemo(() => composeProductsVoice(
+    'Growing products, growth percent',
+    (trends?.growing ?? []).map(p => ({
+      name: p.name,
+      growthPct: p.growthPct,
+      revenueFigure: p.revenue != null && p.revenue > 0 ? formatKES(p.revenue) : undefined,
+    })),
+  ), [trends?.growing]);
+
+  const decliningVoice = useMemo(() => composeProductsVoice(
+    'Declining products, decline percent',
+    (trends?.declining ?? []).map(p => ({
+      name: p.name,
+      growthPct: Math.abs(p.declinePct || 0),
+      revenueFigure: `${p.remainingStock} units left`,
+    })),
+  ), [trends?.declining]);
+
+  // The forecast voice: the wire carries predicted points and bounds only —
+  // no method field exists, so none is spoken (the honest-figure law: the
+  // voice stays silent where the wire is silent).
+  const forecastVoice = useMemo(() => composeForecastVoice(
+    'Revenue forecast',
+    forecastChart.map(p => ({ label: p.label, predictedFigure: formatKES(p.predicted ?? 0) })),
+    { hasBounds: forecastChart[0]?.upper != null },
+  ), [forecastChart]);
 
   return (
     <div className="space-y-4">
@@ -637,7 +695,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 <p className="text-xs text-muted-foreground mt-1">Try a wider range or check back after more sales are recorded.</p>
               </div>
             ) : (
-              <div className="h-64">
+              <div className="h-64" role="img" aria-label={growingVoice}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={growingChart} layout="vertical" margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" horizontal={false} />
@@ -731,7 +789,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               </div>
             ) : (
               <>
-                <div className="h-56">
+                <div className="h-56" role="img" aria-label={decliningVoice}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={decliningChart} layout="vertical" margin={{ top: 5, right: 16, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" horizontal={false} />
@@ -793,7 +851,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <p className="text-xs text-muted-foreground mt-1">Forecasts generate once enough sales history is available.</p>
             </div>
           ) : (
-            <div className="h-72">
+            <div className="h-72" role="img" aria-label={forecastVoice}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={forecastChart} margin={{ top: 5, right: 16, left: -10, bottom: 5 }}>
                   <defs>
@@ -1045,37 +1103,73 @@ export default function ReportsTab() {
   });
 
   const salesReport = salesData?.data;
-  const inventoryReport = inventoryData?.data;
+  // v2.205.0 THE WIRE-SHAPE FIX (live-E2E found): GET /api/reports/inventory
+  // returns { data: products[], summary: {...} } — the client's data slot is
+  // the PRODUCTS ARRAY, and the stats the tab always meant to read live in
+  // `summary` (totalProducts / lowStockCount / outOfStockCount /
+  // totalStockValue / healthyStockCount). Reading them off the array gave
+  // undefined → the gauge's NaN%, a Ksh 0.00 value card and empty charts on
+  // EVERY store. The summary is read where it actually rides; the products
+  // array (the same response, no new query) feeds the category breakdown.
+  const inventoryProducts = Array.isArray(inventoryData?.data) ? inventoryData?.data ?? [] : [];
+  const inventorySummary = inventoryData?.summary ?? null;
   const dashboardStats = dashboardData?.data;
 
-  // Quick stats from dashboard with mock comparison data
+  // v2.205.0 THE HONESTY PASS: the quick stats keep ONLY what the dashboard
+  // wire carries. The four hardcoded change chips (12.5 / 8.3 / -5.0 / 3.2)
+  // were fabricated in code and rendered as recorded data — deleted. Every
+  // sub-line below is computed from a REAL wire figure or stays silent.
   const quickStats = useMemo(() => ({
     todayRevenue: dashboardStats?.todayRevenue || 0,
     todayTransactions: dashboardStats?.todayTransactions || 0,
     lowStockProducts: dashboardStats?.lowStockProducts || 0,
     outstandingDebt: dashboardStats?.outstandingDebt || 0,
-    revenueChange: 12.5,
-    transactionsChange: 8.3,
-    lowStockChange: -5.0,
-    debtChange: 3.2,
   }), [dashboardStats]);
 
-  // Sales comparison
-  const salesComparison = useMemo(() => {
-    if (!salesReport) return null;
-    const prevRevenue = salesReport.totalRevenue * (0.7 + Math.random() * 0.4);
-    const revenueChange = salesReport.totalRevenue > 0
-      ? ((salesReport.totalRevenue - prevRevenue) / prevRevenue) * 100
-      : 0;
-    const prevTransactions = Math.round(salesReport.transactionCount * (0.7 + Math.random() * 0.4));
-    const transactionChange = salesReport.transactionCount > 0
-      ? ((salesReport.transactionCount - prevTransactions) / prevTransactions) * 100
-      : 0;
-    return { prevRevenue, revenueChange, prevTransactions, transactionChange };
-  }, [salesReport]);
+  // Real quick-stat companions from the same wire (all optional — a figure
+  // the wire doesn't carry leaves a silent card, never an invented one).
+  const quickStatCompanions = useMemo(() => {
+    const wire = dashboardStats as (DashboardStats & {
+      paymentMethodBreakdown?: { method: string; count: number; amount: number }[];
+      lowStockCount?: number;
+      outOfStockCount?: number;
+    }) | undefined;
+    const methods = Array.isArray(wire?.paymentMethodBreakdown)
+      ? wire?.paymentMethodBreakdown ?? []
+      : [];
+    const loudest = methods.reduce<(typeof methods)[number] | null>(
+      (best, m) => (m.amount > (best?.amount ?? -1) ? m : best), null);
+    const outOfStock = wire?.outOfStockCount;
+    return {
+      loudestMethod: loudest ? paymentMethodLabel(loudest.method) : null,
+      loudestMethodAmount: loudest ? formatKES(loudest.amount) : null,
+      avgTicket: quickStats.todayTransactions > 0
+        ? formatKES(quickStats.todayRevenue / quickStats.todayTransactions)
+        : null,
+      outOfStock: typeof outOfStock === 'number' ? outOfStock : null,
+    };
+  }, [dashboardStats, quickStats.todayRevenue, quickStats.todayTransactions]);
 
-  const topProducts = Array.isArray(inventoryReport?.topSelling) ? inventoryReport.topSelling : [];
-  const categoryBreakdown = Array.isArray(inventoryReport?.categories) ? inventoryReport.categories : [];
+  // The category breakdown is COMPUTED from the products the same wire
+  // already carries (group by category, value = stockValue — the cost-basis
+  // figure the summary's totalStockValue sums). Zero new queries.
+  const categoryBreakdown = useMemo(() => {
+    const byCat = new Map<string, { name: string; productCount: number; totalValue: number }>();
+    inventoryProducts.forEach((p: { category?: { name?: string } | null; stockValue?: number }) => {
+      const name = p?.category?.name || 'Uncategorized';
+      const row = byCat.get(name) ?? { name, productCount: 0, totalValue: 0 };
+      row.productCount += 1;
+      row.totalValue += typeof p?.stockValue === 'number' ? p.stockValue : 0;
+      byCat.set(name, row);
+    });
+    return [...byCat.values()].sort((a, b) => b.totalValue - a.totalValue);
+  }, [inventoryProducts]);
+
+  // The wire carries no sold-quantity figure (only the last 3 stock
+  // movements per product) — "top selling" cannot be honestly computed from
+  // it, so the list stays empty and its section speaks the step-aside. A
+  // future wire that carries sales quantities can fill this in honestly.
+  const topProducts: { productId: string; productName: string; quantitySold: number; revenue: number }[] = [];
   const maxCategoryValue = Math.max(...categoryBreakdown.map((c) => c.totalValue), 1);
 
   const pieSegments = useMemo(() => {
@@ -1093,17 +1187,22 @@ export default function ReportsTab() {
   }, [categoryBreakdown]);
 
   const stockHealth = useMemo(() => {
-    if (!inventoryReport) return 0;
-    const total = inventoryReport.totalProducts || 1;
-    const healthy = total - inventoryReport.lowStockCount - inventoryReport.outOfStockCount;
+    if (!inventorySummary) return 0;
+    // The wire's own healthyStockCount when it rides; else the computed
+    // difference, floored at zero. Number() so string-typed wire fields can
+    // never produce NaN again (the live-E2E lesson this round).
+    const total = Number(inventorySummary.totalProducts ?? 0);
+    const healthy = Number(inventorySummary.healthyStockCount ?? Math.max(total - Number(inventorySummary.lowStockCount ?? 0) - Number(inventorySummary.outOfStockCount ?? 0), 0));
+    if (!total) return 0;
     return Math.round((healthy / total) * 100);
-  }, [inventoryReport]);
+  }, [inventorySummary]);
 
   const inventoryTurnover = useMemo(() => {
-    if (!inventoryReport || !salesReport) return 0;
-    if (inventoryReport.totalInventoryValue === 0) return 0;
-    return (salesReport.totalRevenue / inventoryReport.totalInventoryValue).toFixed(2);
-  }, [inventoryReport, salesReport]);
+    if (!inventorySummary || !salesReport) return 0;
+    const value = Number(inventorySummary.totalStockValue ?? 0);
+    if (value === 0) return 0;
+    return (salesReport.totalRevenue / value).toFixed(2);
+  }, [inventorySummary, salesReport]);
 
   const _salesSparkline = [35, 48, 42, 55, 50, 62, 58, 72, 65, 78, 70, 85];
 
@@ -1113,25 +1212,50 @@ export default function ReportsTab() {
     DEBT: <CreditCard className="h-4 w-4" />,
   };
 
-  // Mock daily sales data for hourly breakdown
+  // v2.205.0 THE HONESTY PASS: the "daily/hourly" chart now speaks the REAL
+  // recorded hours the tab's ALREADY-FETCHED dashboard wire carries
+  // (hourlySalesBreakdown on GET /api/dashboard — live-verified: 10AM 7,500 /
+  // 11AM 43,000 / 12PM 0 on the seeded day). The Math.random per-render
+  // fabrication is gone. Same real series also feeds the chart's aria.
+
+  /** Defensive number read (the dashboard-tab's num(), mirrored here so the
+   *  hourly wire's string amounts can never poison the chart). */
+  const num = (v: unknown): number => {
+    const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN;
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const dailyHourlyData = useMemo(() => {
-    const hours = ['8AM', '9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM', '6PM'];
-    return hours.map(h => ({
-      label: h,
-      value: Math.round(Math.random() * 15000 + 2000),
-    }));
-  }, [reportType]);
+    // The envelope vs the data slot (the live-E2E caught this): the query
+    // result is ApiResponse<DashboardStats> — the hourly series rides at
+    // .data.hourlySalesBreakdown, not on the envelope itself.
+    const wire = dashboardData?.data as { hourlySalesBreakdown?: { hour: string; amount: number; transactionCount: number }[] } | null | undefined;
+    const breakdown = Array.isArray(wire?.hourlySalesBreakdown) ? wire?.hourlySalesBreakdown ?? [] : [];
+    const byHour = new Map<number, number>();
+    breakdown.forEach((h) => {
+      const k = parseInt(String(h?.hour ?? ''), 10);
+      if (Number.isNaN(k)) return;
+      byHour.set(k, (byHour.get(k) ?? 0) + num(h?.amount));
+    });
+    // Business hours 8 AM - 6 PM, matching the chart's previous window; a
+    // quiet hour stays on the axis saying 0 (never dropped).
+    return Array.from({ length: 11 }, (_, i) => {
+      const hour = i + 8;
+      const hourLabel = `${hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`;
+      return { label: hourLabel, value: byHour.get(hour) ?? 0 };
+    });
+  }, [dashboardData]);
 
   // Inventory Valuation data
   const valuationData = useMemo(() => {
-    if (!inventoryReport) return [];
+    if (categoryBreakdown.length === 0) return [];
     return categoryBreakdown.map(cat => ({
       label: cat.name,
       value: cat.totalValue,
       // v2.204.0: same -600 re-voice as the pie (bars on the white card).
       color: ['#3b82f6', '#16a34a', '#ea580c', '#a855f7', '#0d9488', '#ec4899'][categoryBreakdown.indexOf(cat) % 6],
     }));
-  }, [inventoryReport, categoryBreakdown]);
+  }, [categoryBreakdown]);
 
   // Top Products bar chart data
   const topProductsChartData = useMemo(() => {
@@ -1237,6 +1361,51 @@ export default function ReportsTab() {
     }));
   }, [rentalPerformance]);
 
+  // ======================================================================
+  // v2.205.0 THE ARIA SWEEP — the composed voices. Each memo reads ONLY
+  // the data its chart already holds (zero new queries); the strings are
+  // composed by src/lib/report-voices.ts (the one-writer rule). The tab's
+  // formatKES voice ("Ksh") is the only currency voice here (v2.201.1).
+  // ======================================================================
+  const valuationVoice = useMemo(() => composeSeriesVoice(
+    'Inventory valuation by category',
+    valuationData.map(d => ({ label: d.label, value: d.value, figure: formatKES(d.value) })),
+    formatKES(valuationData.reduce((s, d) => s + d.value, 0)),
+  ), [valuationData]);
+
+  const hourlyVoice = useMemo(() => composeHourlyVoice(
+    dailyHourlyData.map(d => ({ label: d.label, value: d.value, figure: formatKES(d.value) })),
+  ), [dailyHourlyData]);
+
+  const topProductsVoice = useMemo(() => composeSeriesVoice(
+    'Top products by revenue',
+    topProductsChartData.map(d => ({ label: d.label, value: d.value, figure: formatKES(d.value) })),
+    formatKES(topProductsChartData.reduce((s, d) => s + d.value, 0)),
+  ), [topProductsChartData]);
+
+  const customerChartVoice = useMemo(() => composeNamedTotalsVoice(
+    'Top customers by spending',
+    customerChartData.map(d => ({ label: d.name, value: d.revenue, figure: formatKES(d.revenue) })),
+    formatKES(customerChartData.reduce((s, d) => s + d.revenue, 0)),
+  ), [customerChartData]);
+
+  const rentalChartVoice = useMemo(() => composeNamedTotalsVoice(
+    'Revenue by rental status',
+    rentalChartData.map(d => ({ label: d.name, value: d.revenue, figure: formatKES(d.revenue) })),
+    formatKES(rentalChartData.reduce((s, d) => s + d.revenue, 0)),
+  ), [rentalChartData]);
+
+  const stockHealthVoice = useMemo(() => composeStockHealthVoice({
+    healthy: Math.max(Number(inventorySummary?.healthyStockCount ?? Math.max(Number(inventorySummary?.totalProducts ?? 0) - Number(inventorySummary?.lowStockCount ?? 0) - Number(inventorySummary?.outOfStockCount ?? 0), 0)), 0),
+    low: Number(inventorySummary?.lowStockCount ?? 0),
+    outOfStock: Number(inventorySummary?.outOfStockCount ?? 0),
+    total: Number(inventorySummary?.totalProducts ?? 0),
+  }), [inventorySummary]);
+
+  // (growing/declining/forecast voices live inside TrendsPredictionsSection —
+  // that sub-component owns the trends wire; ReportsTab only composes voices
+  // for the surfaces it renders itself.)
+
   // CSV Export function
   const handleCSVExport = useCallback(() => {
     let csvContent = '';
@@ -1253,15 +1422,15 @@ export default function ReportsTab() {
       for (const pm of (Array.isArray(salesReport.byPaymentMethod) ? salesReport.byPaymentMethod : [])) {
         csvContent += `${pm.method},${pm.count},${pm.amount}\n`;
       }
-    } else if ((reportType === 'inventory' || reportType === 'valuation') && inventoryReport) {
+    } else if ((reportType === 'inventory' || reportType === 'valuation') && inventorySummary) {
       csvContent = 'Category,Product Count,Total Value\n';
       for (const cat of categoryBreakdown) {
         csvContent += `${cat.name},${cat.productCount},${cat.totalValue}\n`;
       }
-      csvContent += `\nTotal Products,${inventoryReport.totalProducts}\n`;
-      csvContent += `Low Stock,${inventoryReport.lowStockCount}\n`;
-      csvContent += `Out of Stock,${inventoryReport.outOfStockCount}\n`;
-      csvContent += `Total Inventory Value,${inventoryReport.totalInventoryValue}\n`;
+      csvContent += `\nTotal Products,${inventorySummary.totalProducts}\n`;
+      csvContent += `Low Stock,${inventorySummary.lowStockCount}\n`;
+      csvContent += `Out of Stock,${inventorySummary.outOfStockCount}\n`;
+      csvContent += `Total Inventory Value,${inventorySummary.totalStockValue}\n`;
     } else if (reportType === 'top_products' && topProducts.length > 0) {
       csvContent = 'Rank,Product Name,Quantity Sold,Revenue\n';
       topProducts.forEach((p, i) => {
@@ -1291,7 +1460,7 @@ export default function ReportsTab() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     toast.success('CSV exported successfully');
-  }, [reportType, salesReport, inventoryReport, categoryBreakdown, topProducts, customerAnalysis, rentalPerformance, dateFrom, dateTo]);
+  }, [reportType, salesReport, inventorySummary, categoryBreakdown, topProducts, customerAnalysis, rentalPerformance, dateFrom, dateTo]);
 
   const handleExport = async () => {
     // Try server-side export first, fall back to client-side CSV
@@ -1345,17 +1514,10 @@ export default function ReportsTab() {
     toast.success('PDF export ready');
   };
 
-  const changeIndicator = (change: number) => {
-    if (change > 0) return <ArrowUpRight className="h-4 w-4 text-green-700" />;
-    if (change < 0) return <ArrowDownRight className="h-4 w-4 text-red-600" />;
-    return <Minus className="h-4 w-4 text-muted-foreground" />;
-  };
-
-  const changeColor = (change: number) => {
-    if (change > 0) return 'text-green-700';
-    if (change < 0) return 'text-red-600';
-    return 'text-muted-foreground';
-  };
+  // v2.205.0: changeIndicator/changeColor deleted with the fabricated
+  // comparison data they served. No other caller existed — grep before the
+  // next round adds one: a change chip without a real previous period is a
+  // fabrication, and this tab no longer fabricates.
 
   const dateRangeDisplay = useMemo(() => {
     const from = new Date(dateFrom);
@@ -1439,12 +1601,11 @@ export default function ReportsTab() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Today Revenue</p>
                 <p className="text-lg font-bold whitespace-nowrap">{formatKES(quickStats.todayRevenue)}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                {changeIndicator(quickStats.revenueChange)}
-                <span className={`text-[10px] font-medium ${changeColor(quickStats.revenueChange)}`}>
-                  {quickStats.revenueChange >= 0 ? '+' : ''}{quickStats.revenueChange}%
-                </span>
+                {quickStatCompanions.loudestMethod && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                    Led by {quickStatCompanions.loudestMethod} · {quickStatCompanions.loudestMethodAmount}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -1459,12 +1620,11 @@ export default function ReportsTab() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Today Sales</p>
                 <p className="text-lg font-bold whitespace-nowrap">{quickStats.todayTransactions}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                {changeIndicator(quickStats.transactionsChange)}
-                <span className={`text-[10px] font-medium ${changeColor(quickStats.transactionsChange)}`}>
-                  {quickStats.transactionsChange >= 0 ? '+' : ''}{quickStats.transactionsChange}%
-                </span>
+                {quickStatCompanions.avgTicket && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 whitespace-nowrap">
+                    {quickStatCompanions.avgTicket} per sale
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -1479,12 +1639,11 @@ export default function ReportsTab() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Low Stock</p>
                 <p className="text-lg font-bold whitespace-nowrap">{quickStats.lowStockProducts}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                {changeIndicator(quickStats.lowStockChange)}
-                <span className={`text-[10px] font-medium ${changeColor(quickStats.lowStockChange)}`}>
-                  {quickStats.lowStockChange >= 0 ? '+' : ''}{quickStats.lowStockChange}%
-                </span>
+                {typeof quickStatCompanions.outOfStock === 'number' && quickStatCompanions.outOfStock > 0 && (
+                  <p className="text-[10px] text-red-700 mt-0.5 whitespace-nowrap">
+                    {quickStatCompanions.outOfStock} out of stock
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -1499,12 +1658,7 @@ export default function ReportsTab() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">Outstanding Debt</p>
                 <p className="text-lg font-bold whitespace-nowrap">{formatKES(quickStats.outstandingDebt)}</p>
-              </div>
-              <div className="flex items-center gap-1">
-                {changeIndicator(quickStats.debtChange)}
-                <span className={`text-[10px] font-medium ${changeColor(quickStats.debtChange)}`}>
-                  {quickStats.debtChange >= 0 ? '+' : ''}{quickStats.debtChange}%
-                </span>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Across all customers today</p>
               </div>
             </div>
           </CardContent>
@@ -1689,14 +1843,11 @@ export default function ReportsTab() {
                         <p className="text-sm text-muted-foreground">Total Revenue</p>
                       </div>
                       <p className="text-2xl font-bold">{formatKES(salesReport.totalRevenue)}</p>
-                      {salesComparison && (
-                        <div className="flex items-center gap-1 mt-1">
-                          {changeIndicator(salesComparison.revenueChange)}
-                          <span className={`text-xs font-medium ${changeColor(salesComparison.revenueChange)}`}>
-                            {Math.abs(salesComparison.revenueChange).toFixed(1)}%
-                          </span>
-                        </div>
-                      )}
+                      {/* v2.205.0: the fabricated comparison chip died — this card
+                          speaks a REAL wire figure: the average per sale. */}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatKES(salesReport.avgTransactionValue)} per sale
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
@@ -1706,14 +1857,11 @@ export default function ReportsTab() {
                         <p className="text-sm text-muted-foreground">Transactions</p>
                       </div>
                       <p className="text-2xl font-bold">{salesReport.transactionCount}</p>
-                      {salesComparison && (
-                        <div className="flex items-center gap-1 mt-1">
-                          {changeIndicator(salesComparison.transactionChange)}
-                          <span className={`text-xs font-medium ${changeColor(salesComparison.transactionChange)}`}>
-                            {Math.abs(salesComparison.transactionChange).toFixed(1)}%
-                          </span>
-                        </div>
-                      )}
+                      {/* v2.205.0: the fabricated comparison chip died — this card
+                          speaks a REAL wire figure: the tax collected in-range. */}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatKES(salesReport.totalTax)} tax in range
+                      </p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
@@ -1870,7 +2018,7 @@ export default function ReportsTab() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
               </div>
-            ) : inventoryReport ? (
+            ) : inventorySummary ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
@@ -1879,7 +2027,7 @@ export default function ReportsTab() {
                         <Package className="h-4 w-4 text-primary" />
                         <p className="text-sm text-muted-foreground">Total Products</p>
                       </div>
-                      <p className="text-2xl font-bold">{inventoryReport.totalProducts}</p>
+                      <p className="text-2xl font-bold">{inventorySummary.totalProducts}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
@@ -1888,7 +2036,7 @@ export default function ReportsTab() {
                         <AlertTriangle className="h-4 w-4 text-amber-500" />
                         <p className="text-sm text-muted-foreground">Low Stock</p>
                       </div>
-                      <p className="text-2xl font-bold text-amber-700">{inventoryReport.lowStockCount}</p>
+                      <p className="text-2xl font-bold text-amber-700">{inventorySummary.lowStockCount}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
@@ -1897,7 +2045,7 @@ export default function ReportsTab() {
                         <TrendingDown className="h-4 w-4 text-red-500" />
                         <p className="text-sm text-muted-foreground">Out of Stock</p>
                       </div>
-                      <p className="text-2xl font-bold text-red-600">{inventoryReport.outOfStockCount}</p>
+                      <p className="text-2xl font-bold text-red-600">{inventorySummary.outOfStockCount}</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
@@ -1906,7 +2054,7 @@ export default function ReportsTab() {
                         <DollarSign className="h-4 w-4 text-green-500" />
                         <p className="text-sm text-muted-foreground">Inventory Value</p>
                       </div>
-                      <p className="text-2xl font-bold whitespace-nowrap">{formatKES(inventoryReport.totalInventoryValue)}</p>
+                      <p className="text-2xl font-bold whitespace-nowrap">{formatKES(inventorySummary.totalStockValue)}</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -1921,8 +2069,8 @@ export default function ReportsTab() {
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center gap-4">
-                        <div className="relative w-20 h-20">
-                          <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+                        <div className="relative w-20 h-20" role="img" aria-label={stockHealthVoice}>
+                          <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
                             <circle cx="40" cy="40" r="35" fill="none" stroke="currentColor" className="text-muted/30" strokeWidth="6" />
                             {/* v2.204.0: the stock-health gauge re-voices to the -600
                                 family (green-500 2.28 / yellow-500 1.92 sat below the
@@ -1944,17 +2092,17 @@ export default function ReportsTab() {
                             {stockHealth >= 70 ? 'Healthy' : stockHealth >= 40 ? 'Needs Attention' : 'Critical'}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {inventoryReport.totalProducts - inventoryReport.lowStockCount - inventoryReport.outOfStockCount} of {inventoryReport.totalProducts} products in good stock
+                            {inventorySummary.totalProducts - inventorySummary.lowStockCount - inventorySummary.outOfStockCount} of {inventorySummary.totalProducts} products in good stock
                           </p>
                           <div className="flex items-center gap-2 mt-2">
                             <Badge variant="outline" className="text-[9px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-                              Good: {inventoryReport.totalProducts - inventoryReport.lowStockCount - inventoryReport.outOfStockCount}
+                              Good: {inventorySummary.totalProducts - inventorySummary.lowStockCount - inventorySummary.outOfStockCount}
                             </Badge>
                             <Badge variant="outline" className="text-[9px] bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800">
-                              Low: {inventoryReport.lowStockCount}
+                              Low: {inventorySummary.lowStockCount}
                             </Badge>
                             <Badge variant="outline" className="text-[9px] bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800">
-                              Out: {inventoryReport.outOfStockCount}
+                              Out: {inventorySummary.outOfStockCount}
                             </Badge>
                           </div>
                         </div>
@@ -1989,7 +2137,7 @@ export default function ReportsTab() {
                           </div>
                           <div className="p-2 rounded-lg bg-muted/30">
                             <p className="text-muted-foreground">Inventory Value</p>
-                            <p className="font-medium">{formatKES(inventoryReport.totalInventoryValue)}</p>
+                            <p className="font-medium">{formatKES(inventorySummary.totalStockValue)}</p>
                           </div>
                         </div>
                       </div>
@@ -2028,7 +2176,7 @@ export default function ReportsTab() {
                         <Separator />
                         <div className="flex items-center justify-between text-sm font-bold">
                           <span>Total Inventory Value</span>
-                          <span>{formatKES(inventoryReport.totalInventoryValue)}</span>
+                          <span>{formatKES(inventorySummary.totalStockValue)}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -2055,27 +2203,27 @@ export default function ReportsTab() {
               <div className="grid grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
               </div>
-            ) : inventoryReport ? (
+            ) : inventorySummary ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <Card className="border-l-4 border-l-green-500 backdrop-blur-sm bg-card/80">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground">Total Stock Value</p>
-                      <p className="text-2xl font-bold text-green-700">{formatKES(inventoryReport.totalInventoryValue)}</p>
+                      <p className="text-2xl font-bold text-green-700">{formatKES(inventorySummary.totalStockValue)}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">qty × cost price</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-primary backdrop-blur-sm bg-card/80">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground">Total SKUs</p>
-                      <p className="text-2xl font-bold">{inventoryReport.totalProducts}</p>
+                      <p className="text-2xl font-bold">{inventorySummary.totalProducts}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">product count</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-amber-500 backdrop-blur-sm bg-card/80">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground">Avg. Value/SKU</p>
-                      <p className="text-2xl font-bold">{formatKES(inventoryReport.totalProducts > 0 ? inventoryReport.totalInventoryValue / inventoryReport.totalProducts : 0)}</p>
+                      <p className="text-2xl font-bold">{formatKES(inventorySummary.totalProducts > 0 ? inventorySummary.totalStockValue / inventorySummary.totalProducts : 0)}</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -2090,8 +2238,8 @@ export default function ReportsTab() {
                   <CardContent>
                     {valuationData.length > 0 ? (
                       <>
-                        {chartType === 'bar' && <SVGBarChart data={valuationData} height={200} />}
-                        {chartType === 'line' && <SVGLineChart data={valuationData} height={200} />}
+                        {chartType === 'bar' && <SVGBarChart data={valuationData} height={200} ariaLabel={valuationVoice} />}
+                        {chartType === 'line' && <SVGLineChart data={valuationData} height={200} ariaLabel={valuationVoice} />}
                         {chartType === 'pie' && <ConicPieChart segments={pieSegments} />}
                       </>
                     ) : (
@@ -2191,8 +2339,8 @@ export default function ReportsTab() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {chartType === 'bar' && <SVGBarChart data={dailyHourlyData} height={200} />}
-                    {chartType === 'line' && <SVGLineChart data={dailyHourlyData} height={200} />}
+                    {chartType === 'bar' && <SVGBarChart data={dailyHourlyData} height={200} ariaLabel={hourlyVoice} />}
+                    {chartType === 'line' && <SVGLineChart data={dailyHourlyData} height={200} ariaLabel={hourlyVoice} />}
                     {chartType === 'pie' && (
                       <ConicPieChart segments={dailyHourlyData.map((d, i) => ({
                         name: d.label,
@@ -2268,8 +2416,8 @@ export default function ReportsTab() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {chartType === 'bar' && <SVGBarChart data={topProductsChartData} height={220} />}
-                    {chartType === 'line' && <SVGLineChart data={topProductsChartData} height={220} />}
+                    {chartType === 'bar' && <SVGBarChart data={topProductsChartData} height={220} ariaLabel={topProductsVoice} />}
+                    {chartType === 'line' && <SVGLineChart data={topProductsChartData} height={220} ariaLabel={topProductsVoice} />}
                     {chartType === 'pie' && (
                       <ConicPieChart segments={topProductsChartData.map(d => ({
                         name: d.label,
@@ -2395,7 +2543,7 @@ export default function ReportsTab() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-72">
+                      <div className="h-72" role="img" aria-label={customerChartVoice}>
                         <ResponsiveContainer width="100%" height="100%">
                           {chartType === 'bar' ? (
                             <BarChart data={customerChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
@@ -2603,7 +2751,7 @@ export default function ReportsTab() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-72">
+                      <div className="h-72" role="img" aria-label={rentalChartVoice}>
                         <ResponsiveContainer width="100%" height="100%">
                           {chartType === 'bar' ? (
                             <BarChart data={rentalChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
