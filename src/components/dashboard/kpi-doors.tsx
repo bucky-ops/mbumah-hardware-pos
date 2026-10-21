@@ -341,7 +341,7 @@ export function DayReceiptsModal({ data, open, onClose }: { data: BranchKpiWire 
           <>
             <section aria-label="Receipts by hour" data-testid="day-receipts-hours" className="mt-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The day by receipts</p>
-              <div className="mt-2 flex h-14 items-end gap-1" role="img" aria-label={`Receipts per hour, 6 AM to 9 PM. Busiest hour ${maxCount > 0 ? formatHour(hourCounts.find((h) => h.count === maxCount)?.hour ?? 6) : '-'} with ${maxCount} receipts.`}>
+              <div className="mt-2 flex h-14 items-end gap-1" role="img" aria-label={`Receipts per hour, 6 AM to 9 PM. Busiest hour ${maxCount > 0 ? formatHour(hourCounts.find((h) => h.count === maxCount)?.hour ?? 6) : '-'} with ${maxCount} ${maxCount === 1 ? 'receipt' : 'receipts'}.`}>
                 {hourCounts.map((h) => (
                   <div
                     key={h.hour}

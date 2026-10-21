@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.201.0',
+    title: 'The debt book and the movers speak',
+    bullets: [
+      'Your branch dashboard’s two quiet cards learned to open: Debt Aging now opens the branch’s debt book — who owes what, how late, and who owes more than twice their lifetime spend — and Top Products opens the day’s movers, rank by rank.',
+      'The debt book speaks the wire’s own alarm: the high-risk debtors are flagged by the rule the server already applied, the aging bar shows honest shares of the book, and the bill count stays the truth when the roster is a window.',
+      'The day’s movers list all ten products the wire names with quantities, revenue and each mover’s honest share — plus the category mix (where the money came from) the dashboard never showed before.',
+      'The readability sweep got the small print back over the bar everywhere on the branch dashboard: the alert count badge, the debt and gift-card chips, the critical alerts and the crisis banner all moved to deeper, clearer voices — light and dark.',
+      'A small screen-reader fix: the receipts-by-hour chart now says “1 receipt” where it used to say “1 receipts”.',
+    ],
+  },
+  {
     version: '2.200.0',
     title: 'The branch row speaks',
     bullets: [

@@ -464,3 +464,53 @@ on the bar containers AND spoken twice beside (the day-ledger-peak
 line, the day-receipts-busiest line, every bucket's count + share) —
 deliberately not asserted: the light fills measure 1.86-2.10:1 by
 design; the dark fills would pass even as graphics (5.08-5.59:1).
+
+## Fixed: the -600 straggler family, closed on the branch dashboard (v2.201.0)
+
+THE SWEEP (predicted by the v2.199.0 stage summary — "a systematic audit
+of every remaining chip may still hide 4.3–4.4 stragglers" — and measured
+by the round's pre-derivation probe, `scripts/probe-quiet-doors-v2201.mjs`,
+BEFORE anything was re-voiced): sixteen small and mid-weight text voices
+on the branch dashboard rode the red-600/rose-600 family over grounds too
+light for them — the exact pairing v2.198.0 found on the Expert OVERDUE
+badge and v2.199.0 found twice more. The five REAL violations, re-voiced
+at source:
+
+- the Alerts COUNT BADGE: white 10px bold on `bg-red-500` — **3.82:1** —
+  → `bg-red-700` = **6.42:1**;
+- the payment-method DEBT chip: `rose-600` on `rose-100` — **3.75:1** —
+  → `rose-700` = **5.04:1**;
+- the GIFT_CARD chip: `slate-500` on `slate-100` — **4.35:1** — →
+  `slate-600` = **6.90:1**;
+- the alert CRITICAL chip: `red-600` on `red-100` — **3.90:1** — →
+  `red-700` = **5.26:1**;
+- the debt-crisis BANNER sub-line and the trend badge's DOWN voice:
+  `red-600` on `red-50` — **4.36:1** (the v2.199.0 login-error pairing,
+  third instance) — → `red-700` = **5.88:1**.
+
+RECORDED HONESTLY as ALIGNMENT, not violation: `red-600` on white
+measures **4.76:1** on the installed palette — it PASSES the 4.5 bar —
+so the KPI card values, the shift drawer's cash-out figure, the
+top-customers' "Owes" line, the high-risk avatar initials and the debt
+figures moved `red-600`/`rose-600` → `-700` as FAMILY ALIGNMENT with the
+chip sweep (the v2.199.0 Store-Matrix precedent: consistency recorded as
+consistency), plus margin against palette drift. The debt book's own
+figures rode in at `rose-600` (a knife-edge **4.51:1** pass) and were
+moved to `rose-700` light / `rose-300` dark (**6.06 / 9.29**) as the same
+alignment.
+
+The new faces — `scripts/contrast-math-branch-doors-v2201.mjs`, **43/43
+checks pass** over the REAL chain (the debt book + the day's movers
+panels paint their dark half from birth — the branch page's next two
+mounts of the dark-panel law): light 4.77-6.90:1 (the risk chip rose-700
+on rose-50 5.04 — the tight corner — the clear line emerald-700 on
+emerald-50 5.09, the figures rose-700 6.06), dark 6.16-16.28:1 over
+slate-900 (chips on their -500/10 stacks, the figures rose-300 9.29).
+The doors' edge/dot hues pass the 3:1 graphics bar (rose-600 4.51,
+violet-600 5.88). The five draft pairs are pinned below the bar in
+REVERSE so the ghosts cannot return silently. The aging bar's segments
+(emerald-500 2.46 / orange-500 2.89 on white) and the cards' hot rings
+(rose-300 1.92) follow the v2.198.0 DOCUMENTED DECORATION law — the
+figures are aria-labeled on the bar containers AND spoken twice beside
+(the bucket cells' dot + label + amount + share; the warning banner; the
+high-risk line) — deliberately not asserted.

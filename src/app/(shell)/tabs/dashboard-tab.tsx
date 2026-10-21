@@ -48,6 +48,7 @@ import {
   type ShiftXRead,
 } from '@/lib/api';
 import { DayLedgerModal, DayReceiptsModal, BasketLadderModal } from '@/components/dashboard/kpi-doors';
+import { DebtBookModal, MoversModal } from '@/components/dashboard/branch-doors';
 import type {
   DashboardStats, TopProduct, ShiftSnapshot, DebtCrisisSummary,
   DashboardAlert, StoreHealthSummary, RevenueTrend7d,
@@ -114,6 +115,16 @@ type DashboardData = DashboardStats & {
   transactions?: { count: number };
   lowStock?: { count: number; low: number; outOfStock: number };
   mySales?: MySaleRow[];
+  // v2.201.0: the movers' door reads the route's category GROUP BY — a
+  // structural subset the wire already carries (the tab's shared interface
+  // predates it); typed optional so legacy constructors stay valid.
+  topSellingCategories?: Array<{
+    categoryId: string;
+    categoryName: string;
+    color: string | null;
+    revenue: number;
+    quantitySold: number;
+  }>;
 };
 
 // Small helpers
@@ -200,7 +211,7 @@ function TrendBadge({ pct }: { pct: number }) {
         up
           ? 'bg-emerald-50 text-emerald-700'
           : down
-            ? 'bg-red-50 text-red-600'
+            ? 'bg-red-50 text-red-700'
             : 'bg-slate-100 text-slate-500'
       }`}
     >
@@ -322,13 +333,13 @@ function DebtCrisisBanner({ crisis, onTab }: { crisis: DebtCrisisSummary; onTab:
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
-          <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden="true" />
+          <AlertTriangle className="h-4 w-4 text-red-700" aria-hidden="true" />
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-red-700">
             {crisis.banner || 'High debt exposure'}
           </p>
-          <p className="mt-0.5 text-xs text-red-600">
+          <p className="mt-0.5 text-xs text-red-700">
             - {num(crisis.debtRatioPercent).toFixed(1)}% of today&rsquo;s sales are on debt
           </p>
         </div>
@@ -689,7 +700,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
                         if (Math.abs(diff) < 0.01) return <span className="text-emerald-700">Balanced</span>;
                         return diff > 0
                           ? <span className="text-amber-700">+{formatKES(diff)} over</span>
-                          : <span className="text-red-600">{formatKES(diff)} short</span>;
+                          : <span className="text-red-700">{formatKES(diff)} short</span>;
                       })()}
                     </div>
                   </div>
@@ -881,12 +892,12 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         label="Stock Alerts"
         value={String(stockTotal)}
         icon={Package}
-        iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}
-        valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-700' : 'text-slate-900'}
+        iconClass={outOfStock > 0 ? 'bg-red-100 text-red-700' : stockTotal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}
+        valueClass={outOfStock > 0 ? 'text-red-700' : stockTotal > 0 ? 'text-amber-700' : 'text-slate-900'}
         sub={
           stockTotal > 0 ? (
             <span>
-              <span className={outOfStock > 0 ? 'font-semibold text-red-600' : ''}>{outOfStock} out</span>
+              <span className={outOfStock > 0 ? 'font-semibold text-red-700' : ''}>{outOfStock} out</span>
               {' · '}
               <span className={lowStock > 0 ? 'font-semibold text-amber-700' : ''}>{lowStock} low</span>
             </span>
@@ -900,12 +911,12 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         label="Outstanding Debt"
         value={formatKES(debtTotal)}
         icon={HandCoins}
-        iconClass="bg-rose-100 text-rose-600"
-        valueClass={debtTotal > 0 ? 'text-rose-600' : 'text-slate-900'}
+        iconClass="bg-rose-100 text-rose-700"
+        valueClass={debtTotal > 0 ? 'text-rose-700' : 'text-slate-900'}
         sub={
           <button
             type="button"
-            className="font-medium text-rose-600 underline-offset-2 hover:underline"
+            className="font-medium text-rose-700 underline-offset-2 hover:underline"
             onClick={() => onTab('debt-management')}
           >
             Tap to view debtors
@@ -978,12 +989,12 @@ function LimitedDashboard({ data }: { data: DashboardData | null }) {
           label="Low Stock"
           value={String(stockTotal)}
           icon={Package}
-          iconClass={outOfStock > 0 ? 'bg-red-100 text-red-600' : stockTotal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}
-          valueClass={outOfStock > 0 ? 'text-red-600' : stockTotal > 0 ? 'text-amber-700' : 'text-slate-900'}
+          iconClass={outOfStock > 0 ? 'bg-red-100 text-red-700' : stockTotal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}
+          valueClass={outOfStock > 0 ? 'text-red-700' : stockTotal > 0 ? 'text-amber-700' : 'text-slate-900'}
           sub={
             stockTotal > 0 ? (
               <span>
-                <span className={outOfStock > 0 ? 'font-semibold text-red-600' : ''}>{outOfStock} out</span>
+                <span className={outOfStock > 0 ? 'font-semibold text-red-700' : ''}>{outOfStock} out</span>
                 {' · '}
                 <span className={low > 0 ? 'font-semibold text-amber-700' : ''}>{low} low</span>
               </span>
@@ -1398,7 +1409,7 @@ function QuickActionsRow({ onTab }: { onTab: (tab: AppTab) => void }) {
               </div>
               <div className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
                 <span className="text-xs text-slate-500">Total cash out</span>
-                <span className="text-sm font-semibold tabular-nums text-red-600">−{formatKES(num(drawerData.totalCashOut))}</span>
+                <span className="text-sm font-semibold tabular-nums text-red-700">−{formatKES(num(drawerData.totalCashOut))}</span>
               </div>
             </div>
           ) : (
@@ -1417,9 +1428,9 @@ function QuickActionsRow({ onTab }: { onTab: (tab: AppTab) => void }) {
 const PM_BADGE: Record<string, string> = {
   CASH: 'bg-emerald-100 text-emerald-700',
   MPESA: 'bg-amber-100 text-amber-700',
-  DEBT: 'bg-rose-100 text-rose-600',
+  DEBT: 'bg-rose-100 text-rose-700',
   SPLIT: 'bg-slate-200 text-slate-600',
-  GIFT_CARD: 'bg-slate-100 text-slate-500',
+  GIFT_CARD: 'bg-slate-100 text-slate-600',
 };
 
 function severityTone(severity: string | null | undefined): string {
@@ -1774,7 +1785,7 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
                 >
                   <div className="flex items-center gap-2.5">
                     <span className="w-5 shrink-0 text-center text-xs font-bold text-slate-500">#{i + 1}</span>
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${highRisk ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${highRisk ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {initialsOf(String(c?.name ?? ''))}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -1794,7 +1805,7 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
                       <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
                         Spent <span className="font-semibold text-slate-700">{formatKES(spend)}</span>
                         {owes > 0 && (
-                          <> · <span className="font-medium text-red-600">Owes {formatKES(owes)}</span></>
+                          <> · <span className="font-medium text-red-700">Owes {formatKES(owes)}</span></>
                         )}
                       </p>
                     </div>
@@ -1822,21 +1833,36 @@ function TopCustomersCard({ data, onTab }: { data: DashboardData | null; onTab: 
 // 9. TOP SELLING PRODUCTS
 
 function TopProductsCard({ data }: { data: DashboardData | null }) {
+  // v2.201.0: the card becomes the day's movers door — the state is
+  // declared BEFORE any early return (the rules-of-hooks law).
+  const [ladder, setLadder] = useState(false);
   const products: TopProduct[] = useMemo(() => {
     const list = Array.isArray(data?.topProducts) ? data.topProducts : [];
     return list.slice(0, 5);
   }, [data]);
+  const allNamed = Array.isArray(data?.topProducts) ? data.topProducts.length : 0;
 
   const maxRevenue = Math.max(...products.map((p) => num(p?.totalRevenue)), 1);
 
   return (
-    <Card className="rounded-2xl border-slate-200 shadow-sm">
+    <>
+    <Card
+      data-testid="branch-movers-card"
+      role="button"
+      tabIndex={0}
+      aria-label="Top selling products - open details"
+      onClick={() => setLadder(true)}
+      onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setLadder(true); } }}
+      className={`relative cursor-pointer overflow-hidden rounded-2xl border-slate-200 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 ${allNamed > 0 ? 'ring-1 ring-slate-300 dark:ring-slate-600' : ''}`}
+    >
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-violet-600" />
+      {allNamed > 0 ? <span aria-hidden="true" className="absolute right-3 top-3 h-2 w-2 rounded-full bg-violet-600 anim-pulse-dot" /> : null}
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
           <Package className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           Top selling products
         </CardTitle>
-        <CardDescription className="text-xs">Today&rsquo;s movers by revenue</CardDescription>
+        <CardDescription className="text-xs">Today&rsquo;s movers by revenue — open the day&rsquo;s movers</CardDescription>
       </CardHeader>
       <CardContent>
         {products.length === 0 ? (
@@ -1873,6 +1899,13 @@ function TopProductsCard({ data }: { data: DashboardData | null }) {
         )}
       </CardContent>
     </Card>
+    <MoversModal
+      products={data?.topProducts ?? null}
+      categories={data?.topSellingCategories ?? null}
+      open={ladder}
+      onClose={() => setLadder(false)}
+    />
+    </>
   );
 }
 
@@ -2002,6 +2035,9 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
 // 11. DEBT AGING SUMMARY
 
 function DebtAgingCard({ data }: { data: DashboardData | null }) {
+  // v2.201.0: the card becomes the debt book door — the state is declared
+  // BEFORE any early return (the rules-of-hooks law).
+  const [book, setBook] = useState(false);
   const crisis: DebtCrisisSummary | null | undefined = data?.debtCrisis;
   const total = num(crisis?.outstandingTotal ?? data?.outstandingDebt);
   const aging = crisis?.aging;
@@ -2027,12 +2063,24 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
     : [];
 
   return (
-    <Card className="rounded-2xl border-slate-200 shadow-sm">
+    <>
+    <Card
+      data-testid="branch-debt-card"
+      role="button"
+      tabIndex={0}
+      aria-label="Debt aging summary - open details"
+      onClick={() => setBook(true)}
+      onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBook(true); } }}
+      className={`relative cursor-pointer overflow-hidden rounded-2xl border-slate-200 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 ${crisis?.warning ? 'ring-1 ring-rose-300 dark:ring-rose-500/40' : ''}`}
+    >
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-rose-600" />
+      {crisis?.warning ? <span aria-hidden="true" className="absolute right-3 top-3 h-2 w-2 rounded-full bg-rose-600 anim-pulse-dot" /> : null}
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
           <CircleDollarSign className="h-4 w-4 text-rose-500" aria-hidden="true" />
           Debt aging summary
         </CardTitle>
+        <CardDescription className="text-xs">Who owes what, how late — open the debt book</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {total <= 0 ? (
@@ -2044,7 +2092,7 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-1">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">Total outstanding</p>
-              <p className="text-lg font-bold tabular-nums text-rose-600">{formatKES(total)}</p>
+              <p className="text-lg font-bold tabular-nums text-rose-700">{formatKES(total)}</p>
             </div>
             {count > 0 && <p className="-mt-2 text-[11px] text-slate-500">{count} outstanding bill{count === 1 ? '' : 's'}</p>}
 
@@ -2086,13 +2134,19 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
         )}
       </CardContent>
     </Card>
+    <DebtBookModal
+      crisis={crisis}
+      open={book}
+      onClose={() => setBook(false)}
+    />
+    </>
   );
 }
 
 // 12. ALERTS & NOTIFICATIONS
 
 function alertSeverityStyle(severity: string): { icon: React.ElementType; circle: string; text: string } {
-  if (severity === 'critical') return { icon: AlertTriangle, circle: 'bg-red-100 text-red-600', text: 'text-red-600' };
+  if (severity === 'critical') return { icon: AlertTriangle, circle: 'bg-red-100 text-red-700', text: 'text-red-700' };
   if (severity === 'warning') return { icon: AlertTriangle, circle: 'bg-amber-100 text-amber-700', text: 'text-amber-700' };
   return { icon: Info, circle: 'bg-slate-100 text-slate-500', text: 'text-slate-500' };
 }
@@ -2136,7 +2190,7 @@ function AlertsCard({ data, onTab }: { data: DashboardData | null; onTab: (tab: 
             <Bell className="h-4 w-4 text-emerald-700" aria-hidden="true" />
             Alerts
             {alertsCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-700 px-1.5 text-[10px] font-bold text-white">
                 {alertsCount > 99 ? '99+' : alertsCount}
               </span>
             )}
