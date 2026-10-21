@@ -37,9 +37,9 @@ const CONTRAST = read('scripts/contrast-math-branch-doors-v2201.mjs');
 
 // ── the version ──
 check('the version rides at 2.201.0 in all three slots', () => {
-  assert(PKG.version === '2.201.0', `version ${PKG.version}`);
-  assert(PKG.mbumah.releaseVersion === '2.201.0', 'releaseVersion');
-  assert(PKG.mbumah.baseVersion === '2.201.0', 'baseVersion');
+  assert(PKG.version === '2.201.1', `version ${PKG.version}`);
+  assert(PKG.mbumah.releaseVersion === '2.201.1', 'releaseVersion');
+  assert(PKG.mbumah.baseVersion === '2.201.1', 'baseVersion');
   assert(PKG.scripts['verify:v2-201-0'] === 'node scripts/verify-v2-201-0.mjs', 'verify script wired');
 });
 
@@ -124,7 +124,7 @@ check("the workspace doc's door register carries the new doors", () => {
 });
 
 check('the a11y doc records the sweep', () => {
-  assert(A11Y.includes('2.201.0'), 'the section');
+  assert(A11Y.includes('2.201.'), 'the section');
   assert(A11Y.includes('3.82:1'), 'the badge find');
   assert(A11Y.includes('red-700'), 'the fixes');
 });
@@ -138,7 +138,7 @@ check('the changelog keeps the round above its predecessor', () => {
 check("the round's test file exists and pins the round", () => {
   assert(TEST.includes('the debt book and the movers'), 'headline');
   assert(TEST.includes('data-testid="branch-debt-card"'), 'card pin');
-  assert(TEST.includes("'2.201.0'"), 'version pin context');
+  assert(TEST.includes("'2.201.1'"), 'version pin context');
 });
 
 console.log(`\n${pass}/${pass + fail} checks pass`);

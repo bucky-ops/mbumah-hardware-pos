@@ -2,6 +2,11 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.201.1] A cleaner debt book voice
+
+### Fixed
+- The debt book and the day's movers spoke one word twice: the risk lines and the movers' meta prefixed "KES" in front of `formatKES`'s own "Ksh" — "KES Ksh 88,400.00" on every named debtor's lifetime-spend line and the movers' headline total. The double prefix is gone; the figures read "Ksh 88,400.00" — same numbers, one currency voice (`branch-doors.tsx`, four template sites). Found by the round's own agent-browser E2E on the seeded Juja Main ledger (the QA step ran against the shipped tag; the fix rides an honest patch, not a rewritten one).
+
 ## [2.201.0] The debt book and the movers speak
 
 The branch KPI row found its three voices in v2.200.0 — and the assessment that picked this round walked the door arc down the page's bottom grid, where TWO cards still rendered their stories in silence even though every figure they could drill into already rode the dashboard wire: the Debt Aging SUMMARY card spoke total + buckets + a bill count while `debtCrisis.customers` carried the wire's top-10 NAMED debtors (name, owes, lifetimeSpend, ratio, highRisk) and `highRiskCount` / `warning` / `banner` carried the alarm; the Top Selling Products card ranked today's movers five deep while the wire names TEN and a category mix (`topSellingCategories`, the route's full GROUP BY over the day's lines) the tab had never read. Both cards become doors; both modals compose the SAME answer the cards show — zero new queries.

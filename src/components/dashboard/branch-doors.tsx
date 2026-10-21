@@ -157,15 +157,15 @@ function debtRows(crisis: NonNullable<BranchDebtWire['debtCrisis']>): Array<{
  */
 function riskVoice(row: { lifetimeSpend: number; ratio: number | null; highRisk: boolean }): { chip: string | null; line: string } {
   if (row.highRisk) {
-    return { chip: 'high risk', line: `owes more than twice their KES ${formatKES(row.lifetimeSpend)} lifetime spend` };
+    return { chip: 'high risk', line: `owes more than twice their ${formatKES(row.lifetimeSpend)} lifetime spend` };
   }
   if (row.ratio != null && row.lifetimeSpend > 0) {
-    return { chip: null, line: `KES ${formatKES(row.lifetimeSpend)} lifetime spend · ${Math.round(row.ratio * 100)}% of it owed` };
+    return { chip: null, line: `${formatKES(row.lifetimeSpend)} lifetime spend · ${Math.round(row.ratio * 100)}% of it owed` };
   }
   if (row.lifetimeSpend <= 0) {
     return { chip: null, line: 'no completed purchases on record' };
   }
-  return { chip: null, line: `KES ${formatKES(row.lifetimeSpend)} lifetime spend` };
+  return { chip: null, line: `${formatKES(row.lifetimeSpend)} lifetime spend` };
 }
 
 /** Shared modal chrome — the branch doors' panel paints its dark half. */
@@ -381,7 +381,7 @@ export function MoversModal({ products, categories, open, onClose }: { products:
             <div>
               <p className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100" data-testid="branch-movers-count">{rows.length} mover{rows.length === 1 ? '' : 's'}</p>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400" data-testid="branch-movers-meta">
-                KES {formatKES(namedTotal)} across the named window · {namedQty} unit{namedQty === 1 ? '' : 's'} sold
+                {formatKES(namedTotal)} across the named window · {namedQty} unit{namedQty === 1 ? '' : 's'} sold
               </p>
               {top ? (
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400" data-testid="branch-movers-top">
