@@ -94,8 +94,13 @@ describe('v2.205.0 arc A — the honesty pass (fabrication ban)', () => {
     expect(tab).toMatch(/row\.totalValue \+= typeof p\?\.stockValue === 'number' \? p\.stockValue : 0/);
   });
 
-  it('top-selling stays honestly empty (the wire carries no sold quantities)', () => {
-    expect(tab).toMatch(/const topProducts: \{ productId: string; productName: string; quantitySold: number; revenue: number \}\[\] = \[\];/);
+  it('top-selling speaks real quantities (v2.206.0 superseded the empty array — the fast-moving wire landed)', () => {
+    // v2.205.0 pinned the honest step-aside: `const topProducts ... = [];`.
+    // v2.206.0 built the wire that comment asked for — the array now rides
+    // the fast-moving aggregation, so the pin rides with it.
+    expect(tab).toMatch(/const topProducts: \{ productId: string; productName: string; quantitySold: number; revenue: number \}\[\] =/);
+    expect(tab).not.toMatch(/const topProducts: \{ productId: string; productName: string; quantitySold: number; revenue: number \}\[\] = \[\];/);
+    expect(tab).toContain('fastMovers');
   });
 });
 

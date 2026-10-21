@@ -28,6 +28,7 @@ interface ProductTrend {
   productName: string;
   sku: string;
   categoryName: string | null;
+  currentStock: number | null;
   recentQty: number;
   previousQty: number;
   recentRevenue: number;
@@ -174,6 +175,7 @@ async function trendsAnalysisHandler(
       name: true,
       sku: true,
       categoryId: true,
+      quantityInStock: true,
       category: { select: { id: true, name: true } },
     },
   });
@@ -184,6 +186,10 @@ async function trendsAnalysisHandler(
         sku: p.sku,
         categoryId: p.categoryId,
         categoryName: p.category?.name ?? null,
+        // v2.206.0: the REAL on-hand stock rides the trend row — the reports
+        // tab's declining list speaks "N units left" and must never invent a
+        // zero (the honest-figure law). Zero extra queries: same findMany.
+        currentStock: p.quantityInStock ?? null,
       },
     ]),
   );
@@ -253,6 +259,7 @@ async function trendsAnalysisHandler(
       productName: e.productName,
       sku: info?.sku ?? '',
       categoryName: info?.categoryName ?? null,
+      currentStock: info?.currentStock ?? null,
       recentQty: e.recentQty.toNumber(),
       previousQty: e.previousQty.toNumber(),
       recentRevenue: e.recentRevenue.toNumber(),

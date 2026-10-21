@@ -96,14 +96,19 @@ export function composeStockHealthVoice(opts: {
  */
 export function composeProductsVoice(title: string, rows: {
   name: string;
-  growthPct: number;
+  /** null = NEW: the product sold this period with no previous-period
+   *  baseline — a growth % of nothing is never spoken (v2.206.0). */
+  growthPct: number | null;
   revenueFigure?: string;
 }[]): string {
   if (rows.length === 0) return `${title} — no products to speak in this range.`;
   const spoken = rows
     .map((r) => {
       const rev = r.revenueFigure ? ` · ${r.revenueFigure}` : '';
-      return `${r.name} +${Math.round(r.growthPct || 0)}%${rev}`;
+      const pct = r.growthPct == null
+        ? 'new this period'
+        : `+${Math.round(r.growthPct || 0)}%`;
+      return `${r.name} ${pct}${rev}`;
     })
     .join(', ');
   return `${title}: ${spoken}.`;

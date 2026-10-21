@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.206.0',
+    title: 'The best-sellers stand up, honestly',
+    bullets: [
+      'Top Products now speaks REAL figures: every rank, quantity and revenue rides the fast-moving aggregation over the range you picked — the honest totals strip (units moved, products sold, revenue) sits above the list, and the empty step-aside is history.',
+      'The Trends view tells the truth about categories and gainers: the share table speaks real revenue and honest shares (the NaN% table is dead), new categories say "new" instead of a fabricated percentage, and the growing list finally shows the products the wire always carried.',
+      'Rank badges learned the contrast law: gold, silver and bronze chips now clear the 4.5:1 text bar, and the rank bars lost their faded ghost fill.',
+      'The HR reports desk dropped its last cascading render — the branch chip\u2019s name is derived now, not re-fetched and reset per click.',
+    ],
+  },
+  {
     version: '2.205.0',
     title: 'The reports learn to speak, honestly',
     bullets: [
