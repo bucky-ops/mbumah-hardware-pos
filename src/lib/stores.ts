@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { AuthUser, CartItem } from './types';
+import type { CurrencyCode } from './money';
 import { authApi } from './api';
 // v2.6.0 CART PERSISTENCE: IndexedDB-backed storage adapter so the cart
 // survives logout, idle timeout, refresh and browser restart.
@@ -368,6 +369,16 @@ interface AppState {
   currentStoreId: string;
   setCurrentStoreId: (id: string) => void;
   /**
+   * THE DISPLAY CURRENCY SLICE (v2.212.0): the field the switcher was born
+   * missing. useCurrency() has selected `s.activeCurrency` / `s.setActiveCurrency`
+   * since the multi-currency feature landed (0cde857), but the store never
+   * carried them — every selection click threw `TypeError: ... is not a
+   * function` (swallowed by the global handler) and the POS stayed silently
+   * KES-locked. Display-only: the canonical accounting currency remains KES.
+   */
+  activeCurrency: CurrencyCode;
+  setActiveCurrency: (currency: CurrencyCode) => void;
+  /**
    * Derive the visual sidebar state from the store + viewport.
    * Returns 'expanded' | 'collapsed' | 'mobile-overlay'.
    */
@@ -387,6 +398,11 @@ export const useAppStore = create<AppState>()(
       setSidebarCollapsed: (collapsed) => set({ isSidebarCollapsed: collapsed }),
       currentStoreId: 'store_juja_main',
       setCurrentStoreId: (id) => set({ currentStoreId: id }),
+      // v2.212.0: the display-currency slice — 'KES' is the honest default
+      // (the canonical accounting currency) and the setter is the ONE write
+      // path the switcher's onSelect has always called.
+      activeCurrency: 'KES',
+      setActiveCurrency: (currency) => set({ activeCurrency: currency }),
       getSidebarState: (isDesktop: boolean): SidebarState => {
         const state = get();
         if (!isDesktop) {
@@ -407,6 +423,11 @@ export const useAppStore = create<AppState>()(
         activeTab: state.activeTab,
         isSidebarCollapsed: state.isSidebarCollapsed,
         currentStoreId: state.currentStoreId,
+        // v2.212.0: the display-currency choice persists with the rest of
+        // the app preferences (mbt_app_store). Browsers whose persisted
+        // state predates the slice keep the 'KES' default via the shallow
+        // persist merge — no migration needed.
+        activeCurrency: state.activeCurrency,
       }),
     },
   ),

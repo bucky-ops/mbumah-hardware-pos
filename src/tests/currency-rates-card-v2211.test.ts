@@ -143,7 +143,9 @@ describe('exchange rates admin card (v2.211.0)', () => {
     expect(section).toMatch(/<AlertDialog /);
     expect(section).toMatch(/Reset to built-in/);
     expect(section).toMatch(/setResetPair\(null\)/);
-    expect(section).toMatch(/toast\.success\('Rate reset — the pair reads its built-in figure again\.'\)/);
+    // v2.212.0: the toast went pair-aware (a custom pair has no built-in to
+    // claim) — the KES branch keeps this exact sentence inside the ternary.
+    expect(section).toMatch(/\? 'Rate reset — the pair reads its built-in figure again\.'/);
   });
 
   it('the reset surfaces the honest 404 as a toast error, never a pretend success', () => {

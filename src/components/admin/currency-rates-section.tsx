@@ -14,9 +14,19 @@
 //   • WRITE: "Set rate" opens a dialog that POSTs one (KES, quote) pair;
 //     the dialog CLOSES on success and the toast speaks the outcome (the
 //     v2.209 lesson: a confirm surface must never outlive its own click).
+//   • TRACK (v2.212.0): "Track a pair" POSTs a pair OUTSIDE the KES family
+//     (the route's own pair enum allows USD/UGX/TZS pivots) — the last
+//     curl-only write finds its surface. The strip's badges carry the
+//     pair's source figure on hover and their own Reset affordance, so a
+//     custom pair can be un-written from the UI too. The honest scope is
+//     spoken where the rows are: the switcher reads KES pairs only.
 //   • UN-WRITE: "Reset to built-in" DELETEs the pair (?base=&quote=) so the
 //     row falls back to the static constant; the honest 404 (nothing to
 //     reset) is surfaced as a toast, never a pretend success.
+//   • ONE WIRE, ONE CACHE (v2.212.0): the read rides the SAME query key
+//     the top-bar switcher observes (ADMIN_CURRENCY_RATES_QUERY_KEY), so a
+//     write here re-renders the switcher's chips and figures without a
+//     remount — two surfaces, one cached truth.
 //   • THE DOOR LAW: mutations are SUPER_ADMIN-only SERVER-side; the client
 //     renders the buttons only for that role and SPEAKS the restriction
 //     where they would have been for every other admin-role eye. Read-only
@@ -32,12 +42,13 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Globe, RefreshCw, RotateCcw, Loader2 } from 'lucide-react';
+import { Globe, RefreshCw, RotateCcw, Loader2, Plus } from 'lucide-react';
 
 import { useAuthStore } from '@/lib/stores';
 import { composeRatesProvenanceVoice } from '@/lib/report-voices';
 import { formatDateTime } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { ADMIN_CURRENCY_RATES_QUERY_KEY } from '@/components/currency-switcher';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,6 +62,9 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -127,10 +141,20 @@ export function CurrencyRatesSection() {
   const [rateInput, setRateInput] = useState('');
   const [resetPair, setResetPair] = useState<{ base: string; quote: string; label: string } | null>(null);
 
+  // TRACK A PAIR (v2.212.0): the custom-pair write. The route's own pair
+  // enum allows non-KES pivots (USD→TZS and siblings) — until now only
+  // curl could write them. State is its OWN dialog (the KES set-rate
+  // dialog's literals stay byte-exact), with the direction spoken where
+  // the number is typed (rate = base units per 1 quote unit).
+  const [trackPairOpen, setTrackPairOpen] = useState(false);
+  const [trackBase, setTrackBase] = useState<string>('USD');
+  const [trackQuote, setTrackQuote] = useState<string>('TZS');
+  const [trackRateInput, setTrackRateInput] = useState('');
+
   // The rates wire: same GET the switcher lazily calls. Config data changes
   // rarely — no timer; a manual refresh + focus refetch cover it.
   const ratesQuery = useQuery({
-    queryKey: ['admin-currency-rates'],
+    queryKey: ADMIN_CURRENCY_RATES_QUERY_KEY,
     queryFn: async (): Promise<RatesWireBody> => {
       const res = await authedFetch('/api/currency/rates');
       if (!res.ok) throw new Error(`The rates wire answered ${res.status}`);
@@ -158,7 +182,7 @@ export function CurrencyRatesSection() {
   );
 
   const invalidateRates = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin-currency-rates'] });
+    void queryClient.invalidateQueries({ queryKey: ADMIN_CURRENCY_RATES_QUERY_KEY });
   };
 
   // WRITE: one (base, quote, rate) upsert. The dialog CLOSES on success
@@ -200,13 +224,47 @@ export function CurrencyRatesSection() {
       }
       return body;
     },
-    onSuccess: () => {
+    onSuccess: (_body, vars) => {
       setResetPair(null);
       invalidateRates();
-      toast.success('Rate reset — the pair reads its built-in figure again.');
+      // THE PAIR-AWARE VOICE (v2.212.0): a KES-pivot pair falls back to its
+      // built-in constant; a custom pair simply leaves the wire — the toast
+      // speaks the truth each kind earns (never a built-in claim for a pair
+      // that never had one).
+      toast.success(vars.base === 'KES'
+        ? 'Rate reset — the pair reads its built-in figure again.'
+        : 'Pair removed — the custom rate has left the wire.');
     },
     onError: (err: Error) => {
       toast.error(err.message || 'The rate could not be reset.');
+    },
+  });
+
+  // TRACK-WRITE (v2.212.0): one non-KES (base, quote, rate) upsert — the
+  // SAME POST contract the set-rate dialog uses, with its OWN toast so the
+  // KES dialog's pinned sentence stays byte-exact and the custom pair's
+  // direction is spoken in ITS true units (base per quote).
+  const setPairMutation = useMutation({
+    mutationFn: async ({ base, quote, rate }: { base: string; quote: string; rate: string }) => {
+      const res = await authedFetch('/api/currency/rates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rates: [{ base, quote, rate, source: 'MANUAL' }] }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok || !body.success) {
+        throw new Error(body.error || `The wire refused the write (${res.status})`);
+      }
+      return body;
+    },
+    onSuccess: (_body, vars) => {
+      setTrackPairOpen(false);
+      setTrackRateInput('');
+      invalidateRates();
+      toast.success(`Pair tracked — 1 ${vars.quote} = ${vars.rate} ${vars.base} is now admin-set.`);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'The pair could not be saved.');
     },
   });
 
@@ -235,6 +293,25 @@ export function CurrencyRatesSection() {
       return;
     }
     setRateMutation.mutate({ base: dialogPair.base, quote: dialogPair.quote, rate: trimmed });
+  };
+
+  // THE PAIR ENUM (v2.212.0): the SAME four codes the route's zod schemas
+  // validate (src/app/api/currency/rates/route.ts — the parity law: the UI
+  // can only offer pairs the wire would accept).
+  const TRACK_PAIR_CODES = ['KES', 'USD', 'UGX', 'TZS'] as const;
+
+  const handleTrackSubmit = () => {
+    if (trackBase === trackQuote) {
+      toast.error('A pair needs two different currencies — the base and the quote cannot match.');
+      return;
+    }
+    const trimmed = trackRateInput.trim();
+    const n = Number(trimmed);
+    if (trimmed === '' || !Number.isFinite(n) || n <= 0) {
+      toast.error('Enter a positive number — a rate of zero or less is not a rate.');
+      return;
+    }
+    setPairMutation.mutate({ base: trackBase, quote: trackQuote, rate: trimmed });
   };
 
   return (
@@ -364,17 +441,54 @@ export function CurrencyRatesSection() {
         )}
 
         {/* Custom pairs (base ≠ KES): stored on the wire but read by no
-            consumer yet — the honest scope, spoken where the rows are. */}
+            consumer yet — the honest scope, spoken where the rows are.
+            Each badge speaks its provenance on hover and (for the admin
+            who can write) carries its own Reset affordance — a custom
+            pair can be un-written from the UI, not only from curl. */}
         {!ratesQuery.isError && customPairs.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-border/50">
             <span className="text-[10px] text-muted-foreground">
               Custom pairs stored (the switcher reads KES pairs only):
             </span>
             {customPairs.map((pair) => (
-              <Badge key={`${pair.base}_${pair.quote}`} variant="outline" className="text-[10px] tabular-nums">
+              <Badge
+                key={`${pair.base}_${pair.quote}`}
+                variant="outline"
+                className="text-[10px] tabular-nums gap-0.5 pr-1"
+                title={`Pair updated ${formatDateTime(pair.updatedAt)} · ${pair.source === 'MANUAL' ? 'admin-set' : pair.source === 'API' ? 'API' : 'built-in'} · 1 ${pair.quote} = ${pair.rate} ${pair.base}`}
+              >
                 {pair.base}→{pair.quote} {pair.rate}
+                {canManageRates && (
+                  <button
+                    type="button"
+                    onClick={() => setResetPair({ base: pair.base, quote: pair.quote, label: `${pair.base}→${pair.quote}` })}
+                    aria-label={`Reset the ${pair.base}→${pair.quote} pair (deletes the stored rate)`}
+                    className="ml-0.5 rounded-full p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <RotateCcw className="h-2.5 w-2.5" aria-hidden />
+                  </button>
+                )}
               </Badge>
             ))}
+          </div>
+        )}
+
+        {/* TRACK A PAIR (v2.212.0): the last curl-only write finds its
+            surface — SUPER_ADMIN can add a non-KES pair from the desk.
+            Other admin roles see the door-law sentence below, as ever. */}
+        {canManageRates && (
+          <div className="pt-0.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => { setTrackRateInput(''); setTrackPairOpen(true); }}
+              disabled={ratesQuery.isError}
+              aria-label="Track a custom currency pair"
+            >
+              <Plus className="h-3 w-3 mr-1" aria-hidden />
+              Track a pair
+            </Button>
           </div>
         )}
 
@@ -441,18 +555,119 @@ export function CurrencyRatesSection() {
         </DialogContent>
       </Dialog>
 
+      {/* THE TRACK-PAIR DIALOG (v2.212.0): its OWN dialog with its OWN
+          direction sentence — rate = base units per 1 quote unit, the pair
+          direction the route stores. The honest scope is spoken here too:
+          the switcher reads KES pairs only, so a tracked pair is stored
+          and shown in the strip, not used by the switcher. */}
+      <Dialog open={trackPairOpen} onOpenChange={(open) => { if (!open) setTrackPairOpen(false); }}>
+        <DialogContent className="sm:max-w-sm" aria-label="Track a currency pair">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Track a currency pair</DialogTitle>
+            <DialogDescription className="text-xs">
+              How many {trackBase} one {trackQuote} equals — the pair direction the rates
+              wire stores. The switcher reads KES pairs only: a tracked pair is stored and
+              shown in the strip below the table until a consumer exists.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="track-base" className="text-xs">Base</Label>
+                <Select
+                  value={trackBase}
+                  onValueChange={(v) => setTrackBase(v)}
+                >
+                  <SelectTrigger id="track-base" aria-label="Base currency" className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRACK_PAIR_CODES.filter((c) => c !== trackQuote).map((c) => (
+                      <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="track-quote" className="text-xs">Quote</Label>
+                <Select
+                  value={trackQuote}
+                  onValueChange={(v) => setTrackQuote(v)}
+                >
+                  <SelectTrigger id="track-quote" aria-label="Quote currency" className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRACK_PAIR_CODES.filter((c) => c !== trackBase).map((c) => (
+                      <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Label htmlFor="track-rate-input" className="text-xs">
+              Rate ({trackBase} per 1 {trackQuote})
+            </Label>
+            <Input
+              id="track-rate-input"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="e.g. 1.18"
+              value={trackRateInput}
+              onChange={(e) => setTrackRateInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleTrackSubmit(); }}
+              className="tabular-nums"
+              aria-describedby="track-pair-preview"
+            />
+            <p id="track-pair-preview" className="text-[10px] text-muted-foreground tabular-nums min-h-[14px]">
+              {trackRateInput.trim() !== '' && Number.isFinite(Number(trackRateInput)) && Number(trackRateInput) > 0
+                ? `1 ${trackQuote} = ${trackRateInput.trim()} ${trackBase} — stored exactly as typed.`
+                : 'Enter a positive number to store the pair.'}
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setTrackPairOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={handleTrackSubmit}
+              disabled={setPairMutation.isPending}
+              aria-label="Save the tracked pair"
+            >
+              {setPairMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" aria-hidden />}
+              Track pair
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* The reset confirm: an AlertDialog (destructive), closed by its own
           action — the v2.209 lesson that a confirm must never outlive the
-          click that answered it. */}
+          click that answered it. Pair-aware (v2.212.0): a KES-pivot pair
+          falls back to its built-in constant; a CUSTOM pair has no built-in
+          to fall back to — the honest sentence says the pair simply leaves
+          the wire. */}
       <AlertDialog open={resetPair !== null} onOpenChange={(open) => { if (!open) setResetPair(null); }}>
         <AlertDialogContent aria-label={`Reset the ${resetPair?.quote ?? ''} rate to built-in`}>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-sm">Reset the {resetPair?.label ?? ''} ({resetPair?.quote ?? ''}) rate?</AlertDialogTitle>
+            <AlertDialogTitle className="text-sm">
+              Reset the {resetPair?.label ?? ''}{resetPair?.base === 'KES' ? ` (${resetPair.quote})` : ''} rate?
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              This deletes the stored override for {resetPair?.base ?? 'KES'}→{resetPair?.quote ?? ''}.
-              The pair falls back to its built-in constant and the switcher&apos;s chip
-              flips back to built-in. The switcher and every display conversion pick
-              the built-in figure immediately.
+              {resetPair?.base === 'KES' || resetPair === null ? (
+                <>
+                  This deletes the stored override for {resetPair?.base ?? 'KES'}→{resetPair?.quote ?? ''}.
+                  The pair falls back to its built-in constant and the switcher&apos;s chip
+                  flips back to built-in. The switcher and every display conversion pick
+                  the built-in figure immediately.
+                </>
+              ) : (
+                <>
+                  This deletes the stored rate for {resetPair.base}→{resetPair.quote}.
+                  A custom pair has no built-in constant to fall back to — the pair
+                  simply leaves the wire and the strip. The switcher never read it,
+                  so no display figure changes.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
