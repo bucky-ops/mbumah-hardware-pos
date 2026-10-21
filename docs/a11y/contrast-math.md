@@ -362,3 +362,33 @@ fills are DOCUMENTED DECORATION, deliberately not asserted: the bar is
 aria-labeled and its figures spoken twice beside it (the card's aria-label;
 the modal's four cells with shares), so asserting amber-400 against the
 track would flatter the math, not inform it.
+
+## Fixed: the rental yard + the Expert OVERDUE badge's re-voice (v2.198.0)
+
+THE DISCOVERY: the Expert panel's rental ledger has voiced its OVERDUE
+badge `text-red-600` on `bg-red-50` since the Expert panel shipped — the
+combination computes **4.36:1**, under the 4.5 bar the badge's 10px text
+must meet. Unnoticed because the badge families were audited as a class
+(v2.191's drill-down badges) on the drills' own -50 grounds — this badge
+sits in the EXPERTS table, a different surface nobody re-measured when the
+rental ledger shipped. v2.198.0 re-voices the badge to **red-700**
+(**5.88:1** — the same voice the debt ledger's overdue status chip already
+speaks) and pins the pre-fix combination below the 4.5 bar in reverse (1
+discovery row).
+
+The new face — `scripts/contrast-math-rental-yard-v2198.mjs`, **49/49
+families pass** over the REAL chain (dialog → panel → strip → chip; the
+yard sections sit outside the panel on the dialog ground): light
+4.51-14.00:1 (the slate-500 voices the tight corners at 4.55; rose strip
+label 6.36, amount 8.09, rentals chip 5.51; status chips 5.88 overdue red
+/ 5.09 active emerald; days chip 5.51; the count rose-700 5.81; the rate
+figure 6.31), dark 6.79-16.28:1 over the slate-900 panel (headline
+rose-400 6.42, strip 8.09-10.63, chip stack 6.47, status chips 9.68 red /
+8.22 emerald on their -500/10 dialog stacks). The card stays white by
+design: the roster chip 5.51:1, the 24px-bold headline takes the 3:1
+large-text bar (rose-600 4.51:1) and so do the icon and the rose edge
+stroke (4.51:1). The breach-age bar's pastel fills are DOCUMENTED
+DECORATION, deliberately not asserted: the bar is aria-labeled and its
+figures spoken twice beside it (the card's aria-label; the modal's four
+cells with shares), so asserting amber-400 against the track would
+flatter the math, not inform it.

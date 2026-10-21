@@ -31,6 +31,20 @@
 // (2.81:1 over white) — below even the 3:1 large-text/non-text bar —
 // since the card shipped; the face re-hues to amber-600 (3.20:1), the
 // discovery pinned in reverse in the round's contrast script.
+// v2.198.0: the overdue tile opens the yard — the row's FIFTH voice, and
+// the door arc's LAST tile (every warning card on the row now speaks).
+// The count the card has shown since v2.176.0 now draws its BREACH-AGE
+// bar (≤7d → 8-30d → 31-60d → 60d+ — amber → orange → rose → red), and
+// the drill-down speaks the rental roster the payload already carried
+// (rentals.items — the Expert panel's ledger wire): each breach its own
+// days-past figure (calendar-day math, local midnight to local midnight),
+// the per-day exposure summed into its own rose strip, the overdue
+// loudest-breach-first, the active rows as the yard's calm half, the
+// roster grouped by the branch that holds it. Zero new queries; the
+// drill-down composes, it never invents. AND the round's honest find:
+// the Expert ledger's OVERDUE badge rode text-red-600 on red-50
+// (4.40:1 — under the 4.5 bar its 10px text must meet); the badge
+// re-voices to red-700 and the discovery is pinned in reverse.
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +81,8 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   const [debtOpen, setDebtOpen] = useState(false);
   // v2.197.0: the reorder-watchlist drill-down — the KPI row's fourth voice.
   const [stockOpen, setStockOpen] = useState(false);
+  // v2.198.0: the rental-yard drill-down — the KPI row's fifth voice.
+  const [yardOpen, setYardOpen] = useState(false);
   // v2.187.0: the modal's lens — GROSS is the default and the contract
   // (v2.185.0); net is an explicit analyst turn, never a second meaning.
   const [lens, setLens] = useState<'gross' | 'net'>('gross');
@@ -272,6 +288,117 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
     return { text: `${pct}%`, cls: 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30' };
   };
 
+  // ── v2.198.0: the rental yard's derivations ─────────────────────────────
+  // Every figure below composes the SAME payload the card already spoke
+  // (data.rentals.items — the Expert panel's ledger wire since the Expert
+  // panel shipped; zero new queries). A runtime answer may lack it (an
+  // older cached answer) — the honest step-aside speaks, the count above
+  // never breaks.
+  const yardReady = Array.isArray(data.rentals?.items);
+  // Did the answer arrive WITHOUT the roster? The modal then speaks its
+  // honest step-aside — the count story above still carries.
+  const yardStale = !yardReady;
+  // Calendar-day math — the dates are ISO strings; the day diff runs
+  // LOCAL midnight to LOCAL midnight so a rental due yesterday speaks
+  // "1d past", never 0.8 of a day. (The modal renders only when open —
+  // a client interaction — so the clock never hydrates two answers.)
+  const startOfLocalDay = (iso: string): number => {
+    const d = new Date(iso);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+  const todayStart = startOfLocalDay(new Date().toISOString());
+  const DAY_MS = 86_400_000;
+  // Days PAST return — floored at 0 (a future date is not negative
+  // overdue); the status field governs the count, this figure the voice.
+  const daysPast = (iso: string): number => Math.max(0, Math.floor((todayStart - startOfLocalDay(iso)) / DAY_MS));
+  // Days UNTIL return (signed) — the active rows' due voice.
+  const daysUntil = (iso: string): number => Math.ceil((startOfLocalDay(iso) - todayStart) / DAY_MS);
+  // The overdue roster — loudest breach first (most days past, then the
+  // costlier daily rate), re-derived client-side so the modal never
+  // depends on the route's ordering choice.
+  const overdueRows = yardReady
+    ? data.rentals.items
+        .filter((r) => r.status === 'OVERDUE')
+        .map((r) => ({ ...r, days: daysPast(r.expectedReturnDate) }))
+        .sort((a, b) => b.days - a.days || b.ratePerDay - a.ratePerDay)
+    : null;
+  // The still-out rows — soonest return first. An ACTIVE row whose date
+  // passed keeps its status (the route counts by status) and its due
+  // voice speaks the honest "past return" — never a negative "due in -1d".
+  const activeRows = yardReady
+    ? data.rentals.items
+        .filter((r) => r.status !== 'OVERDUE')
+        .map((r) => ({ ...r, due: daysUntil(r.expectedReturnDate) }))
+        .sort((a, b) => a.due - b.due)
+    : null;
+  // The breach buckets — the age of the breach, ONE array so the card's
+  // mini bar and the modal's bar + grid speak the same four figures in
+  // the same order (the one-writer rule). Hue deepens with age: amber
+  // ≤7d → orange 8-30d → rose 31-60d → red 60d+ — the face's rose
+  // deepens into the house's hottest (the same scale the debt aging and
+  // the stock severity speak).
+  const yardBuckets: Array<{ key: string; label: string; hue: string; in: (d: number) => boolean }> = [
+    { key: 'd7', label: '≤7d', hue: 'bg-amber-400', in: (d) => d <= 7 },
+    { key: 'd30', label: '8-30d', hue: 'bg-orange-500', in: (d) => d >= 8 && d <= 30 },
+    { key: 'd60', label: '31-60d', hue: 'bg-rose-500', in: (d) => d >= 31 && d <= 60 },
+    { key: 'd60plus', label: '60d+', hue: 'bg-red-500', in: (d) => d > 60 },
+  ];
+  // Each bucket's count over the NAMED overdue roster — ONE derivation
+  // carries the rows AND their counts (the lint-baseline law the stock
+  // face wrote: no bare assertions).
+  const yardSev = overdueRows && overdueRows.length > 0
+    ? {
+        rows: overdueRows,
+        counts: yardBuckets.map((b) => ({ ...b, value: overdueRows.filter((r) => b.in(r.days)).length })),
+      }
+    : null;
+  // Share of the overdue roster — the zero-total honesty rule: an empty
+  // roster renders NO percentage (never an invented "0%" of nothing).
+  const yardShare = (v: number): number | null =>
+    overdueRows != null && overdueRows.length > 0 ? Math.round((v / overdueRows.length) * 1000) / 10 : null;
+  // The exposure face: the daily rates on the overdue rentals, summed —
+  // what the breach costs per day while it sits. Composed from the SAME
+  // rows the bar draws, never re-queried; an empty roster renders no
+  // strip (honest absence, never an empty box).
+  const exposurePerDay = overdueRows?.reduce((acc, r) => acc + r.ratePerDay, 0) ?? 0;
+  // The yard by branch — the same overdue rows grouped by the branch that
+  // holds them, loudest exposure first; an unnamed rental rests under
+  // "Unassigned" — still spoken, never dropped. Derived from the SAME
+  // rows — zero new queries.
+  const branchYard = overdueRows && overdueRows.length > 0
+    ? Object.entries(
+        overdueRows.reduce<Record<string, { perDay: number; count: number }>>((acc, r) => {
+          const name = r.store ?? 'Unassigned';
+          acc[name] = acc[name] ?? { perDay: 0, count: 0 };
+          acc[name].perDay += r.ratePerDay;
+          acc[name].count += 1;
+          return acc;
+        }, {}),
+      )
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.perDay - a.perDay)
+    : null;
+  // The status chip's voices — overdue red, active emerald (the Expert
+  // ledger's own active voice), anything else calm slate.
+  const rentalStatusChip = (status: string): string =>
+    status === 'OVERDUE'
+      ? 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30'
+      : status === 'ACTIVE'
+        ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30'
+        : 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30';
+  // The days chip's voice — an overdue row speaks its breach age; an
+  // active row speaks its due date (or the honest "past return" when the
+  // date passed while the status stayed ACTIVE).
+  const yardDaysChip = (r: { status: string; days?: number; due?: number }): { text: string; cls: string } => {
+    if (r.status === 'OVERDUE') {
+      const d = r.days ?? 0;
+      return { text: d > 0 ? `${d}d past` : 'past return', cls: 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30' };
+    }
+    const d = r.due ?? 0;
+    return { text: d > 0 ? `due in ${d}d` : d === 0 ? 'due today' : 'past return', cls: 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30' };
+  };
+
   return (
     <section aria-label="KPI command row" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {/* Revenue */}
@@ -405,15 +532,59 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
         <p className="mt-2 text-[10px] text-slate-500">at/below reorder level · org-wide</p>
       </button>
 
-      {/* Overdue rentals */}
-      <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${k.overdueRentals.count > 0 ? 'ring-1 ring-red-200' : ''}`}>
-        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Clock3 className="h-3.5 w-3.5 text-red-500" /> Overdue</div>
-        <div className="mt-1 flex items-center gap-2">
-          <CountUp value={k.overdueRentals.count} className={`text-2xl font-bold ${k.overdueRentals.count > 0 ? 'text-red-500' : 'text-slate-700'}`} />
-          {k.overdueRentals.count > 0 && <span className="h-2 w-2 rounded-full bg-red-500 anim-pulse-dot" />}
+      {/* Overdue rentals — v2.198.0: a VOICE, not a tile. The Revenue card
+          told the money's story since v2.173.0, the count face found its
+          week in v2.195.0, the ledger opened in v2.196.0 and the shelf in
+          v2.197.0 while this card showed a bare count in silence — even
+          though the rental roster was already on the wire. The card is now
+          the row's FIFTH button and opens the rental yard; it wears the
+          face's rose edge + live dot (the family vocabulary: orange
+          revenue, blue transactions, red debt, amber stock, rose rentals)
+          and the roster qualifier chip. The breach-age mini bar draws the
+          same honest segments the other voices speak. */}
+      <button
+        onClick={() => setYardOpen(true)}
+        data-testid="overdue-card"
+        className={`focus-ring group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${k.overdueRentals.count > 0 ? 'ring-1 ring-rose-300' : ''}`}
+      >
+        <span className="absolute inset-y-0 left-0 w-1 bg-rose-600" />
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <Clock3 className="h-3.5 w-3.5 text-rose-600" /> Overdue
+            {/* v2.198.0: the roster qualifier — every rental this card and
+                its modal speak is the SAME named roster the Expert panel's
+                rental ledger reads, so the count can never be read as a
+                different book. */}
+            <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-rose-700 ring-1 ring-rose-200" title="The named roster — the same rentals the Expert panel's ledger speaks">roster</span>
+          </span>
+          {k.overdueRentals.count > 0 && <span className="h-2 w-2 rounded-full bg-rose-600 anim-pulse-dot" />}
         </div>
+        <div className="mt-1 flex items-center gap-2">
+          <CountUp value={k.overdueRentals.count} className={`text-2xl font-bold ${k.overdueRentals.count > 0 ? 'text-rose-600' : 'text-slate-700'}`} />
+        </div>
+        {/* v2.198.0: the card learns its shape — the breach-age mini bar,
+            the four buckets drawn as one stacked strip (amber ≤7d →
+            orange 8-30d → rose 31-60d → red 60d+: the deeper the breach,
+            the hotter the hue). Widths are the buckets' honest shares of
+            the NAMED overdue roster; a zero bucket draws nothing and an
+            empty roster draws the calm empty track — never a fabricated
+            segment. Tolerant: an older cached answer without the roster
+            keeps the calm card (no bar), the modal's step-aside speaks. */}
+        {yardSev && k.overdueRentals.count > 0 && (
+          <div
+            className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-slate-100"
+            role="img"
+            aria-label={`Breach ages: ${yardSev.counts.map((b) => `${b.label} ${b.value}`).join(', ')}`}
+          >
+            {yardSev.counts.map((b) =>
+              b.value > 0 && yardSev.rows.length > 0 ? (
+                <span key={b.key} className={b.hue} style={{ width: `${(b.value / yardSev.rows.length) * 100}%` }} />
+              ) : null,
+            )}
+          </div>
+        )}
         <p className="mt-2 text-[10px] text-slate-500">rentals past return</p>
-      </div>
+      </button>
 
       {/* Debt — v2.196.0: a VOICE, not a tile. The Revenue card told the
           money's story since v2.173.0 and the count face found its voice in
@@ -1109,6 +1280,219 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
             <div className="mt-3 border-t border-slate-100 pt-3">
               <p data-testid="lowstock-watchlist-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                 the named watchlist is not on this cached answer — the count story above still speaks. Reload to fetch it.
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.198.0: the rental-yard drill-down — the KPI row's fifth voice,
+          the door arc's LAST tile. The anatomy mirrors the four modals
+          above (panel, bar, grid, strip, rows, branch face) but speaks the
+          YARD: the breach buckets drawn as one composition bar (≤7d →
+          8-30d → 31-60d → 60d+ — the hue deepens with the breach's age),
+          each bucket its own honest share of the overdue roster, the
+          per-day exposure summed into its own rose strip, the overdue
+          rentals loudest-breach-first with status/days chips and the
+          Expert ledger's rate voice, the active rentals as the yard's
+          calm half, and the roster grouped by the branch that holds it.
+          Wears the face's rose so the five modals never merge at a
+          glance. Every figure composes the SAME payload — the drill-down
+          composes, it never invents. */}
+      <Dialog open={yardOpen} onOpenChange={setYardOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-rose-600" /> The rental yard</DialogTitle>
+          </DialogHeader>
+          {/* The panel owns its dark half from birth — the v2.195.0
+              discovery (the DOM composites against the NEAREST painted
+              ancestor) is house law now: every new modal panel paints
+              dark:bg-slate-900 on day one, never a repeat of the
+              invisible-token bug. FIVE panels now paint it. */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">rentals past return</span>
+              <span data-testid="rental-yard-count" className="text-2xl font-bold text-rose-700 dark:text-rose-400">{num(k.overdueRentals.count)}</span>
+            </div>
+            <p data-testid="rental-yard-meta" className="text-[10px] text-slate-500 dark:text-slate-400">
+              {num(data.rentals?.active ?? 0)} active also on the yard
+              {overdueRows ? ` · ${overdueRows.length} named on this answer` : ' · roster not on this cached answer'}
+            </p>
+            {/* The breach-age composition bar — the card's mini bar at
+                reading size: one stacked strip, the grid below spells each
+                bucket's count and its honest share. No stroke, no trend
+                window — a breach has no 7-day story on this payload, so
+                the bar speaks age where the sibling modals draw sparks (a
+                different face wears a different shape). Renders only when
+                the named roster arrived AND holds overdue rows — a clean
+                yard renders the honest clear note below instead of a bar
+                of zeros. */}
+            {yardSev && (
+              <div data-testid="rental-days-bar" className="mt-2">
+                <div
+                  className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                  role="img"
+                  aria-label={`Breach ages: ${yardSev.counts.map((b) => `${b.label} ${b.value}`).join(', ')}`}
+                >
+                  {yardSev.counts.map((b) =>
+                    b.value > 0 ? (
+                      <span key={b.key} className={b.hue} style={{ width: `${(b.value / yardSev.rows.length) * 100}%` }} />
+                    ) : null,
+                  )}
+                </div>
+                {/* The four buckets, each its own cell (no invented merges)
+                    with the bucket's dot so the bar and the grid read as one
+                    shape. The share speaks only when the roster does —
+                    the zero-total honesty rule. */}
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  {yardSev.counts.map((b) => (
+                    <div key={b.key} data-testid={`rental-bucket-${b.key}`}>
+                      <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${b.hue}`} />
+                        {b.label}
+                      </span>
+                      <p className="font-bold text-slate-800 dark:text-slate-100">{num(b.value)}</p>
+                      {yardShare(b.value) != null && <p className="text-[10px] tabular-nums text-slate-500 dark:text-slate-400">{yardShare(b.value)}% of overdue</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* The exposure face — the daily rates on the overdue rentals,
+                summed into its own rose strip (the wow-strips' yard
+                sibling: label, figure, rental-count chip). A clean yard
+                renders nothing here — honest absence, never an empty box. */}
+            {overdueRows && overdueRows.length > 0 && exposurePerDay > 0 && (
+              <div data-testid="rental-exposure-strip" className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-rose-100 bg-rose-50/70 px-2.5 py-1.5 dark:border-rose-500/30 dark:bg-rose-500/10">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300">per-day exposure</span>
+                <span data-testid="rental-exposure-amount" className="text-xs font-semibold tabular-nums text-rose-900 dark:text-rose-200">{kes(exposurePerDay)}/day</span>
+                <span
+                  data-testid="rental-exposure-rentals"
+                  title="Sum of the daily rates on the overdue rentals"
+                  className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-rose-700 ring-1 ring-rose-200 dark:bg-rose-500/20 dark:text-rose-300 dark:ring-rose-500/30"
+                >
+                  across {overdueRows.length} {overdueRows.length === 1 ? 'rental' : 'rentals'}
+                </span>
+              </div>
+            )}
+          </div>
+          {/* The named overdue roster — the rentals the Expert panel's
+              ledger reads, loudest breach first (re-derived here so the
+              modal never depends on the route's ordering choice). Each
+              row: the customer, the item beneath it, the branch line, the
+              status chip (overdue red / active emerald / else calm slate —
+              the Expert ledger's own voices), the days chip in the face's
+              rose, and the rate/day the Expert table speaks. */}
+          {overdueRows && overdueRows.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The named roster</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">deepest breach first — the same rentals the Expert ledger speaks</p>
+              <ul className="space-y-1.5">
+                {overdueRows.map((r) => (
+                  <li key={r.id} data-testid="rental-overdue-row" className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-slate-700 dark:text-slate-200">{r.customer}</span>
+                      <span className="block truncate text-[10px] text-slate-500 dark:text-slate-400">{r.item}{r.store ? ` · ${r.store}` : ''}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ring-1 ${rentalStatusChip(r.status)}`}
+                        title={`Rental status: ${r.status.toLowerCase()}`}
+                      >
+                        {r.status.toLowerCase()}
+                      </span>
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tabular-nums tracking-wide ring-1 ${yardDaysChip(r).cls}`}
+                        title={r.days > 0 ? `${r.days} day${r.days === 1 ? '' : 's'} past the expected return of ${r.expectedReturnDate.slice(0, 10)}` : 'Past its expected return'}
+                      >
+                        {yardDaysChip(r).text}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-rose-700 dark:text-rose-400">{kes(r.ratePerDay)}/d</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The yard's calm half — the still-out rentals the SAME payload
+              carries, soonest return first. The status field governs the
+              count above; these rows wear the Expert ledger's active
+              voice (emerald) and the due chip speaks the honest date
+              ("due in Nd" / "due today" / "past return" when the date
+              passed while the status stayed ACTIVE). A yard with nothing
+              active renders nothing here — honest absence. */}
+          {activeRows && activeRows.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Also on the yard</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">soonest return first — still out, not yet past return</p>
+              <ul className="space-y-1.5">
+                {activeRows.map((r) => (
+                  <li key={r.id} data-testid="rental-active-row" className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-slate-700 dark:text-slate-200">{r.customer}</span>
+                      <span className="block truncate text-[10px] text-slate-500 dark:text-slate-400">{r.item}{r.store ? ` · ${r.store}` : ''}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ring-1 ${rentalStatusChip(r.status)}`}
+                        title={`Rental status: ${r.status.toLowerCase()}`}
+                      >
+                        {r.status.toLowerCase()}
+                      </span>
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tabular-nums tracking-wide ring-1 ${yardDaysChip(r).cls}`}
+                        title={r.due > 0 ? `Expected return ${r.expectedReturnDate.slice(0, 10)}` : r.due === 0 ? 'Expected return is today' : 'Past its expected return — the status still reads active'}
+                      >
+                        {yardDaysChip(r).text}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{kes(r.ratePerDay)}/d</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The yard by branch — the same overdue rows grouped by the
+              branch that holds them, loudest exposure first, with each
+              branch's rental count as its quiet chip. Derived from the
+              SAME rows (zero new queries); an unnamed rental rests under
+              "Unassigned" — still spoken, never dropped. The figure is
+              the branch's per-day exposure — the number a follow-up call
+              needs. */}
+          {branchYard && branchYard.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The yard by branch</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">the same overdue rentals, grouped by the branch that holds them</p>
+              <ul className="space-y-1.5">
+                {branchYard.map((b) => (
+                  <li key={b.name} data-testid="rental-branch-row" className="flex items-center justify-between gap-3">
+                    <span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span
+                        className="rounded bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-slate-500 ring-1 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30"
+                        title="Overdue rentals at this branch"
+                      >
+                        {b.count} {b.count === 1 ? 'rental' : 'rentals'}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-rose-700 dark:text-rose-400">{kes(b.perDay)}/d</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The honest absences: a clean yard says so; an older cached
+              answer without the roster speaks its step-aside — the count
+              story above still carries, never a silent void. */}
+          {yardReady && overdueRows && overdueRows.length === 0 && (
+            <p data-testid="rental-yard-clear" className="mt-3 border-t border-slate-100 pt-3 text-[10px] text-slate-500 dark:text-slate-400">
+              Nothing is past return — the yard is clean.
+            </p>
+          )}
+          {yardStale && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p data-testid="rental-yard-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                the rental roster is not on this cached answer — the count story above still speaks. Reload to fetch it.
               </p>
             </div>
           )}
