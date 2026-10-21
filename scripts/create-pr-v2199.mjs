@@ -43,7 +43,7 @@ const body = [
 ];
 
 const res = execSync(
-  `curl -s -X POST -H "Authorization: Bearer ${TOKEN}" -H "Accept: application/vnd.github+json" ` +
+  `curl -sL -X POST -H "Authorization: Bearer ${TOKEN}" -H "Accept: application/vnd.github+json" ` +
   `-d @- https://api.github.com/repos/${REPO}/pulls`,
   { input: JSON.stringify({ title: 'feat: the pending tile opens the approval desk (v2.199.0)', head: HEAD, base: BASE, body: body.join('\n') }), encoding: 'utf8' },
 );
