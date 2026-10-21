@@ -24,6 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { composeScoreVoice } from '@/lib/report-voices';
 // v2.12.8 (PR C): Audit Trail - second view inside the Security tab.
 import { AuditTrailSection } from '@/components/admin/audit-trail-section';
 
@@ -164,12 +165,18 @@ function SecurityScoreGauge({ score }: { score: number }) {
   const colorClass = score >= 80 ? 'text-green-700' : score >= 50 ? 'text-yellow-700' : 'text-red-700';
   const label = score >= 80 ? 'Good' : score >= 50 ? 'Fair' : 'Poor';
 
+  // v2.207.0: the ring speaks — the fill IS the score, so the aria names the
+  // score, its ceiling and the verdict (composeScoreVoice, report-voices).
+  const gaugeVoice = composeScoreVoice('Security score', score, 100, label);
+
   return (
     <div className="flex flex-col items-center justify-center gap-2">
       <svg
         height={radius * 2}
         width={radius * 2}
         className="transform -rotate-90"
+        role="img"
+        aria-label={gaugeVoice}
       >
         {/* Background circle */}
         <circle

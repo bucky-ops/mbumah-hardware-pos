@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.207.0',
+    title: 'The admin desk tells the truth; the quiet minis speak',
+    bullets: [
+      'The admin health panel now reads REAL system numbers: server uptime, live heap memory, the actual app build, and real session counts off the health wire — the invented CPU/memory/DB figures are gone for good.',
+      'The API response sparkline starts honest: no more fake "last 12 checks" — the average counts only checks that actually ran, and a failed check is recorded, never hidden.',
+      'The little charts learned to talk: the transactions daily trend, the analytics sales trend, the API latency sparkline and the compliance and security rings all speak their numbers aloud now.',
+      'Status colours learned the contrast law across the admin and system-health desks: every bar, dot and badge now clears the same accessibility bar as the rest of the app.',
+      'Latency cards gained a grounding baseline and a marker on the latest check, and captions grew to a readable size with aligned figures.',
+    ],
+  },
+  {
     version: '2.206.0',
     title: 'The best-sellers stand up, honestly',
     bullets: [

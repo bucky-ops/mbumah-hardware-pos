@@ -14,6 +14,9 @@ interface HealthCheck {
   status: 'ok' | 'error' | 'warning';
   detail?: string;
   responseTime?: number;
+  // v2.207.0: the database_stats check's structured counts (additive — the
+  // detail string carries the same numbers in prose for back-compat).
+  counts?: { users: number; products: number; transactions: number; sessions: number };
 }
 
 export async function GET() {
@@ -74,6 +77,11 @@ export async function GET() {
     checks.database_stats = {
       status: 'ok',
       detail: `${users} users, ${products} products, ${transactions} transactions, ${sessions} active sessions`,
+      // v2.207.0: the same counts as STRUCTURED fields (additive — the detail
+      // string stays). The admin desk's health panel used to render invented
+      // "3 active sessions" / "2.4 MB" figures; it now reads the real counts
+      // here instead of parsing the detail string.
+      counts: { users, products, transactions, sessions },
     };
   } catch (error) {
     const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';

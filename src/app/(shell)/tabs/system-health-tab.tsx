@@ -48,6 +48,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { composeScoreVoice } from '@/lib/report-voices';
 
 
 // Types
@@ -211,9 +212,11 @@ function StatusBadge({ status, size = 'sm' }: { status: string; size?: 'sm' | 'm
 // Pulse Indicator
 
 function PulseIndicator({ status }: { status: string }) {
+  // v2.207.0: the status dots ride the measured -600 pairs (emerald-500 2.54
+  // and amber-500 2.15 sat below the 3:1 graphics bar; red-500 3.76 stays).
   const color =
-    status === 'healthy' || status === 'ok' ? 'bg-emerald-500 shadow-emerald-500/50' :
-    status === 'degraded' || status === 'warning' ? 'bg-amber-500 shadow-amber-500/50' :
+    status === 'healthy' || status === 'ok' ? 'bg-emerald-600 shadow-emerald-600/50' :
+    status === 'degraded' || status === 'warning' ? 'bg-amber-600 shadow-amber-600/50' :
     'bg-red-500 shadow-red-500/50';
 
   return (
@@ -466,7 +469,7 @@ export default function SystemHealthTab() {
                     </div>
                     <Progress
                       value={Math.min(100, (status.database.responseTime / 2000) * 100)}
-                      className={`h-2 ${status.database.responseTime > 1000 ? '[&>div]:bg-amber-500' : '[&>div]:bg-emerald-500'}`}
+                      className={`h-2 ${status.database.responseTime > 1000 ? '[&>div]:bg-amber-600' : '[&>div]:bg-emerald-600'}`}
                     />
                     {status.database.stats && (
                       <div className="grid grid-cols-2 gap-2 mt-3">
@@ -566,7 +569,7 @@ export default function SystemHealthTab() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 <Card className="border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20">
                   <CardContent className="p-4 flex items-center gap-3">
-                    <CheckCircle className="h-8 w-8 text-emerald-500" />
+                    <CheckCircle className="h-8 w-8 text-emerald-600" />
                     <div>
                       <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{status.circuitBreakers.closed}</p>
                       <p className="text-xs text-emerald-700 dark:text-emerald-500">Closed (Healthy)</p>
@@ -575,7 +578,7 @@ export default function SystemHealthTab() {
                 </Card>
                 <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
                   <CardContent className="p-4 flex items-center gap-3">
-                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                    <AlertTriangle className="h-8 w-8 text-amber-600" />
                     <div>
                       <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{status.circuitBreakers.halfOpen}</p>
                       <p className="text-xs text-amber-700 dark:text-amber-500">Half-Open (Probing)</p>
@@ -864,7 +867,7 @@ export default function SystemHealthTab() {
                     </ScrollArea>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
-                      <CheckCircle className="h-10 w-10 mx-auto mb-2 text-emerald-500" />
+                      <CheckCircle className="h-10 w-10 mx-auto mb-2 text-emerald-600" />
                       <p className="text-sm font-medium">No DLQ items found</p>
                       <p className="text-xs">All external service calls are processing normally</p>
                     </div>
@@ -883,7 +886,17 @@ export default function SystemHealthTab() {
                   </CardHeader>
                   <CardContent className="flex flex-col items-center">
                     <div className="relative h-36 w-36">
-                      <svg className="h-36 w-36 transform -rotate-90" viewBox="0 0 120 120">
+                      <svg
+                        className="h-36 w-36 transform -rotate-90"
+                        viewBox="0 0 120 120"
+                        role="img"
+                        aria-label={composeScoreVoice(
+                          'Overall compliance score',
+                          status.compliance.overallScore,
+                          100,
+                          status.overallStatus === 'healthy' ? 'healthy' : status.overallStatus === 'degraded' ? 'degraded' : 'unhealthy',
+                        )}
+                      >
                         <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
                           {/* v2.204.0: the gauge arc re-voices to the -600 family
                               on the white card ground (emerald-500 2.54 / amber-500
@@ -910,7 +923,7 @@ export default function SystemHealthTab() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-emerald-500" />
+                        <Shield className="h-4 w-4 text-emerald-600" />
                         <CardTitle className="text-base">ISO 27001</CardTitle>
                       </div>
                       <Badge variant="outline" className="text-xs">Information Security</Badge>
@@ -922,7 +935,7 @@ export default function SystemHealthTab() {
                       <span className="text-sm text-muted-foreground">Score</span>
                       <span className="text-2xl font-bold text-emerald-700">{status.compliance.iso27001Score}%</span>
                     </div>
-                    <Progress value={status.compliance.iso27001Score} className="h-2 [&>div]:bg-emerald-500" />
+                    <Progress value={status.compliance.iso27001Score} className="h-2 [&>div]:bg-emerald-600" />
                     <div className="space-y-1.5">
                       {Object.entries(status.compliance.resilienceStatus).slice(0, 4).map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between text-xs">
@@ -951,7 +964,7 @@ export default function SystemHealthTab() {
                       <span className="text-sm text-muted-foreground">Score</span>
                       <span className="text-2xl font-bold text-teal-600">{status.compliance.iso9001Score}%</span>
                     </div>
-                    <Progress value={status.compliance.iso9001Score} className="h-2 [&>div]:bg-teal-500" />
+                    <Progress value={status.compliance.iso9001Score} className="h-2 [&>div]:bg-teal-600" />
                     <div className="space-y-1.5">
                       {Object.entries(status.compliance.resilienceStatus).slice(4).map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between text-xs">

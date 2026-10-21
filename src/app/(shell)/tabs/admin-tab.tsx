@@ -5,9 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Activity, ArrowRight, Plus, CheckCircle, Loader2,
-  Cpu, HardDrive, Clock, Users, Zap, Trash2, RefreshCw,
+  Cpu, Clock, Users, Zap, Trash2, RefreshCw,
   Database, ShieldCheck, AlertCircle, Info, Bell,
-  Search, ChevronDown, FileDown, Globe,
+  Search, ChevronDown, FileDown, Globe, Package,
   Shield, Wrench, PackageX, AlertOctagon,
   UserCheck, UserX, PlusCircle, MinusCircle,
   Settings, Save, Edit3, UserPlus, X,
@@ -15,6 +15,7 @@ import {
   MessageSquare, Mail, Smartphone, Store,
   KeyRound,
 } from 'lucide-react';
+import { composeLatencyVoice } from '@/lib/report-voices';
 
 import { useAppStore } from '@/lib/stores';
 import {
@@ -67,19 +68,23 @@ function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
 }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
   const status = pct < 50 ? 'good' : pct < 80 ? 'warning' : 'critical';
+  // v2.207.0: every voice rides the measured pairs from the v2.204 probe —
+  // the bar is a MARK (3:1) so green-500 2.28 / yellow-500 1.92 died for
+  // green-600 3.30 / yellow-700 4.93 (red-500 3.76 stays); the status TEXT
+  // needs 4.5:1 so text-yellow-600 died for text-yellow-700.
   const statusColors = {
     good: 'text-green-700',
-    warning: 'text-yellow-600',
+    warning: 'text-yellow-700',
     critical: 'text-red-600',
   };
   const barColors = {
-    good: '[&>div]:bg-green-500',
-    warning: '[&>div]:bg-yellow-500',
+    good: '[&>div]:bg-green-600',
+    warning: '[&>div]:bg-yellow-700',
     critical: '[&>div]:bg-red-500',
   };
   const bgColors = {
-    good: 'bg-green-500',
-    warning: 'bg-yellow-500',
+    good: 'bg-green-600',
+    warning: 'bg-yellow-700',
     critical: 'bg-red-500',
   };
   const cardBg = {
@@ -102,9 +107,9 @@ function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
         </div>
         <Progress value={pct} className={`h-2.5 ${barColors[status]} transition-all duration-500`} />
         <div className="flex items-center justify-between">
-          <span className="text-[9px] text-muted-foreground">{pct.toFixed(0)}% utilization</span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">{pct.toFixed(0)}% utilization</span>
           {lastUpdated && (
-            <span className="text-[9px] text-muted-foreground">Updated {lastUpdated}</span>
+            <span className="text-[10px] text-muted-foreground">Updated {lastUpdated}</span>
           )}
         </div>
       </div>
@@ -114,29 +119,42 @@ function HealthIndicator({ label, value, max, unit, colorClass, lastUpdated }: {
 
 // Mini Sparkline Component (CSS-based)
 
-function MiniSparkline({ data, color = 'text-primary', height = 24 }: {
-  data: number[]; color?: string; height?: number;
+function MiniSparkline({ data, color = 'text-primary', height = 24, ariaLabel }: {
+  data: number[]; color?: string; height?: number; ariaLabel?: string;
 }) {
   if (data.length === 0) return null;
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
   const w = 100;
+  // A single sample has no line to draw (the old (i / (length-1)) math
+  // divided by zero and painted NaN) — a dot on the grounding line speaks.
+  const denom = Math.max(data.length - 1, 1);
+  const pts = data.map((v, i) => ({
+    x: (i / denom) * w,
+    y: height - ((v - min) / range) * (height - 4) - 2,
+  }));
+  const last = pts[pts.length - 1];
 
   return (
-    <svg width={w} height={height} className={color}>
+    <svg
+      width={w} height={height} className={color}
+      role={ariaLabel ? 'img' : undefined}
+      aria-label={ariaLabel}
+      aria-hidden={ariaLabel ? undefined : true}
+    >
+      {/* grounding baseline (non-essential, muted) */}
+      <line x1="0" y1={height - 1} x2={w} y2={height - 1} stroke="currentColor" strokeWidth="1" className="text-muted-foreground/40" />
       <polyline
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
-        points={data.map((v, i) => {
-          const x = (i / (data.length - 1)) * w;
-          const y = height - ((v - min) / range) * (height - 4) - 2;
-          return `${x},${y}`;
-        }).join(' ')}
+        points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
       />
+      {/* the latest check, marked */}
+      <circle cx={last.x} cy={last.y} r="2" fill="currentColor" />
     </svg>
   );
 }
@@ -348,7 +366,7 @@ function StockAdjustmentDialog({ storeId }: { storeId: string }) {
                   <div className="mt-1">
                     <Progress
                       value={Math.min((newStockLevel / (selectedProduct.reorderLevel * 3)) * 100, 100)}
-                      className={`h-1.5 ${newStockLevel > selectedProduct.reorderLevel ? '[&>div]:bg-green-500' : '[&>div]:bg-amber-500'}`}
+                      className={`h-1.5 ${newStockLevel > selectedProduct.reorderLevel ? '[&>div]:bg-green-600' : '[&>div]:bg-amber-600'}`}
                     />
                   </div>
                 )}
@@ -449,7 +467,7 @@ function QuickActions() {
                 <p className="text-sm font-medium">{action.label}</p>
                 <p className="text-[10px] text-muted-foreground">{action.desc}</p>
                 {result && (
-                  <p className={`text-[9px] mt-0.5 ${result.success ? 'text-green-700' : 'text-red-600'}`}>
+                  <p className={`text-[10px] mt-0.5 ${result.success ? 'text-green-700' : 'text-red-600'}`}>
                     {result.success ? '✓' : '✗'} Last: {result.time}
                   </p>
                 )}
@@ -565,7 +583,7 @@ function ActivityFeed({ logs }: { logs: AuditLogItem[] }) {
               </div>
               <p className="text-[10px] text-muted-foreground truncate">{log.message}</p>
               {log.user && (
-                <p className="text-[9px] text-muted-foreground mt-0.5">by {log.user.name}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">by {log.user.name}</p>
               )}
             </div>
             <span className="text-[10px] text-muted-foreground whitespace-nowrap" title={formatDateTime(log.createdAt)}>
@@ -782,12 +800,12 @@ function AuditLogSection({ storeId }: { storeId: string }) {
                       </TableCell>
                       <TableCell className="text-xs font-mono whitespace-nowrap">{formatDateTime(log.createdAt)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[9px] ${getComponentBadge(log.component)}`}>
+                        <Badge variant="outline" className={`text-[10px] ${getComponentBadge(log.component)}`}>
                           {log.component}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[9px] ${getSeverityBadge(log.severity)}`}>
+                        <Badge variant="outline" className={`text-[10px] ${getSeverityBadge(log.severity)}`}>
                           {log.severity}
                         </Badge>
                       </TableCell>
@@ -1085,7 +1103,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
                 </div>
                 <p className="text-[10px] text-muted-foreground">Send SMS alerts for receipts, overdue debts, and low stock</p>
               </div>
-              <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+              <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
                 {notificationSettings.smsEnabled ? 'Active' : 'Disabled'}
               </Badge>
             </div>
@@ -1101,7 +1119,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
                 </div>
                 <p className="text-[10px] text-muted-foreground">Send email reports and daily summaries</p>
               </div>
-              <Badge variant="outline" className="text-[9px] bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+              <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
                 {notificationSettings.emailEnabled ? 'Active' : 'Disabled'}
               </Badge>
             </div>
@@ -1117,7 +1135,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
                 </div>
                 <p className="text-[10px] text-muted-foreground">Send WhatsApp messages for payment confirmations</p>
               </div>
-              <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
+              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">
                 {notificationSettings.whatsappEnabled ? 'Active' : 'Disabled'}
               </Badge>
             </div>
@@ -1142,7 +1160,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
                 </div>
                 <p className="text-[10px] text-muted-foreground">Accept M-Pesa STK Push and paybill payments</p>
               </div>
-              <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+              <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
                 {paymentSettings.mpesaEnabled ? 'Active' : 'Disabled'}
               </Badge>
             </div>
@@ -1157,7 +1175,7 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
                 </div>
                 <p className="text-[10px] text-muted-foreground">Accept cash payments at the counter</p>
               </div>
-              <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
+              <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800">
                 {paymentSettings.cashEnabled ? 'Active' : 'Disabled'}
               </Badge>
             </div>
@@ -1232,11 +1250,11 @@ function ConfigEditor({ storeId: _storeId }: { storeId: string }) {
 // User Management Section (Role Colors + Edit/Deactivate)
 
 const ROLE_STYLES: Record<string, { bg: string; text: string; badge: string; border: string }> = {
-  SUPER_ADMIN: { bg: 'bg-purple-500', text: 'text-white', badge: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800', border: 'border-l-purple-500' },
-  STORE_OWNER: { bg: 'bg-blue-500', text: 'text-white', badge: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', border: 'border-l-blue-500' },
-  BRANCH_MANAGER: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', border: 'border-l-green-500' },
-  CASHIER: { bg: 'bg-amber-500', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-l-amber-500' },
-  ACCOUNTANT: { bg: 'bg-cyan-500', text: 'text-white', badge: 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', border: 'border-l-cyan-500' },
+  SUPER_ADMIN: { bg: 'bg-purple-600', text: 'text-white', badge: 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800', border: 'border-l-purple-500' },
+  STORE_OWNER: { bg: 'bg-blue-600', text: 'text-white', badge: 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', border: 'border-l-blue-500' },
+  BRANCH_MANAGER: { bg: 'bg-green-700', text: 'text-white', badge: 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', border: 'border-l-green-600' },
+  CASHIER: { bg: 'bg-amber-700', text: 'text-white', badge: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800', border: 'border-l-amber-500' },
+  ACCOUNTANT: { bg: 'bg-cyan-700', text: 'text-white', badge: 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', border: 'border-l-cyan-500' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -1388,7 +1406,7 @@ function UserManagement({ storeId }: { storeId: string }) {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">{users.length} users</Badge>
           <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" />
+            <div className="w-1.5 h-1.5 rounded-full bg-green-600 mr-1 animate-pulse" />
             {activeSessions} online
           </Badge>
         </div>
@@ -1510,22 +1528,22 @@ function UserManagement({ storeId }: { storeId: string }) {
                   </div>
                   {/* Online/Offline Status Dot */}
                   <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-card ${
-                    isOnline ? 'bg-green-500' : user.isActive ? 'bg-gray-400' : 'bg-red-400'
+                    isOnline ? 'bg-green-600' : user.isActive ? 'bg-gray-500' : 'bg-red-500'
                   }`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium truncate">{user.name}</p>
-                    <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 border ${style.badge}`}>
+                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 border ${style.badge}`}>
                       {ROLE_LABELS[user.role] || user.role}
                     </Badge>
                     {user.isEngraved && (
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" title="Engraved bootstrap admin - protected from deletion and demotion">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400" title="Engraved bootstrap admin - protected from deletion and demotion">
                         <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> Engraved
                       </Badge>
                     )}
                     {user.mustChangePassword && (
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400" title="First sign-in password rotation pending — the user must set a new password before they can use the app">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400" title="First sign-in password rotation pending — the user must set a new password before they can use the app">
                         <KeyRound className="h-2.5 w-2.5 mr-0.5" /> Rotation due
                       </Badge>
                     )}
@@ -1659,20 +1677,17 @@ export default function AdminTab() {
   const currentStoreId = useAppStore((s) => s.currentStoreId);
   const [logFilter, setLogFilter] = useState({ component: 'all', severity: 'all' });
 
-  // Simulated system health metrics
-  const [uptime, setUptime] = useState(0);
+  // REAL system health (v2.207.0): the four invented constants that used to
+  // live here (CPU 23% / memory 67% / 3 sessions / 2.4 MB DB) are DEAD — a
+  // browser has no CPU wire, so that gauge died with its fabrication, and
+  // everything the panel shows now rides /api/health (uptime, heap/RSS,
+  // version, posture, structured DB counts) plus the live latency checks.
+  // The latency history starts EMPTY: the twelve invented "checks" that
+  // pre-filled this sparkline rendered as a fake "Avg over last 12 checks".
   const [apiResponseTime, setApiResponseTime] = useState(0);
-  const [apiHistory, setApiHistory] = useState<number[]>([120, 95, 140, 110, 85, 130, 100, 115, 90, 105, 125, 98]);
+  const [apiHistory, setApiHistory] = useState<number[]>([]);
   const [lastHealthCheck, setLastHealthCheck] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  useEffect(() => {
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      setUptime(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const measure = async () => {
@@ -1705,6 +1720,10 @@ export default function AdminTab() {
       setLastHealthCheck(new Date().toLocaleTimeString());
     } catch {
       setApiResponseTime(999);
+      // v2.207.0: a failed refresh is a real sample too — the interval's
+      // catch already records 999; the manual path now records it as well
+      // so the sparkline never hides a failure it lived through.
+      setApiHistory(prev => [...prev.slice(-11), 999]);
     }
     setIsRefreshing(false);
     toast.success('Health check refreshed');
@@ -1743,11 +1762,45 @@ export default function AdminTab() {
   const auditLogs = Array.isArray(auditData?.data) ? auditData.data : [];
   const movements = Array.isArray(movementsData?.data) ? movementsData.data : [];
 
-  // Simulated health metrics
-  const memoryUsed = 67;
-  const cpuUsage = 23;
-  const activeSessions = 3;
-  const dbSizeMB = 2.4;
+  // THE HEALTH WIRE (v2.207.0): /api/health is the family's public status
+  // endpoint — process uptime, heap/RSS, app version, deployment posture and
+  // the structured DB counts all ride one GET. 60s refresh matches the
+  // Power-On Self-Test section's cadence.
+  const { data: healthWire } = useQuery({
+    queryKey: ['admin-health-wire'],
+    queryFn: async () => {
+      const res = await authedFetch('/api/health');
+      if (!res.ok) throw new Error(`Health wire answered ${res.status}`);
+      return (await res.json()) as Record<string, unknown>;
+    },
+    refetchInterval: 60_000,
+  });
+  const health = (healthWire ?? {}) as {
+    status?: 'healthy' | 'degraded' | 'unhealthy';
+    responseTime?: string;
+    version?: string;
+    appMode?: string;
+    databaseProvider?: string;
+    uptimeSeconds?: number;
+    memory?: { heapUsedMB?: number; rssMB?: number };
+    checks?: { database_stats?: { counts?: { users?: number; products?: number; transactions?: number; sessions?: number } } };
+  };
+  const dbCounts = health.checks?.database_stats?.counts;
+  const appStatus = health.status === 'healthy'
+    ? { word: 'Healthy', dot: 'bg-green-600', text: 'text-green-700', border: 'border-green-200 dark:border-green-800', bg: 'from-green-50 to-white dark:from-green-900/10 dark:to-card' }
+    : health.status === 'degraded'
+      ? { word: 'Degraded', dot: 'bg-yellow-700', text: 'text-yellow-700', border: 'border-amber-200 dark:border-amber-800', bg: 'from-yellow-50 to-white dark:from-yellow-900/10 dark:to-card' }
+      : health.status === 'unhealthy'
+        ? { word: 'Unhealthy', dot: 'bg-red-500', text: 'text-red-600', border: 'border-red-200 dark:border-red-800', bg: 'from-red-50 to-white dark:from-red-900/10 dark:to-card' }
+        : { word: 'Checking…', dot: 'bg-muted-foreground/40', text: 'text-muted-foreground', border: 'border-border', bg: 'from-muted/30 to-muted/10 dark:from-muted/20 dark:to-card' };
+  // The latency sparkline's one-writer aria: every real sample in order,
+  // extremes named from the same samples (no invented checks, ever).
+  const latencyVoice = useMemo(
+    () => composeLatencyVoice('API response time', apiHistory.map((ms, i) => ({ label: `check ${i + 1}`, value: ms, figure: `${ms}ms` }))),
+    [apiHistory],
+  );
+
+  // Simulated system health metrics — REPLACED (v2.207.0): the wire below.
 
   // Recent error count from audit summary
   const rawAuditResp = auditData as unknown as Record<string, unknown>;
@@ -1779,10 +1832,22 @@ export default function AdminTab() {
                   <AlertCircle className="h-3 w-3 mr-1" /> {recentErrors} errors (24h)
                 </Badge>
               )}
-              <Badge variant="outline" className="text-[10px] bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse" />
-                Operational
-              </Badge>
+              {/* v2.207.0: the verdict rides the REAL wire now — the old badge
+                  painted "Operational" unconditionally, even while the health
+                  endpoint was answering degraded/unhealthy. */}
+              {health.status ? (
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${appStatus.border} ${appStatus.text}`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${appStatus.dot} mr-1.5 animate-pulse`} />
+                  {appStatus.word}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  Checking wire…
+                </Badge>
+              )}
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleRefreshHealth} disabled={isRefreshing}>
                 <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               </Button>
@@ -1794,63 +1859,106 @@ export default function AdminTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left: Progress Bars with Visuals */}
+            {/* Left: REAL wire readings (v2.207.0) */}
             <div className="space-y-3">
-              <HealthIndicator label="CPU Usage" value={cpuUsage} max={100} unit="%" lastUpdated={lastHealthCheck} />
-              <HealthIndicator label="Memory Usage" value={memoryUsed} max={100} unit="%" lastUpdated={lastHealthCheck} />
+              {/* App status — the honest replacement for the invented CPU gauge:
+                  a browser has no CPU wire, but /api/health's verdict is real. */}
+              <div className={`p-3 rounded-xl bg-gradient-to-r ${appStatus.bg} border border-transparent`}>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">App status</span>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${appStatus.dot} ${health.status ? 'animate-pulse' : ''}`} />
+                      <span className={`font-medium ${appStatus.text}`}>{appStatus.word}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      Wire answered in {health.responseTime ?? '—'}
+                      {health.uptimeSeconds != null ? ` · up ${formatUptime(health.uptimeSeconds)}` : ''}
+                    </span>
+                    {lastHealthCheck && (
+                      <span className="text-[10px] text-muted-foreground">Updated {lastHealthCheck}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Memory — REAL heap-of-RSS math off the wire (the old 67% was
+                  invented; this ratio is two measured numbers). */}
+              {health.memory?.rssMB != null && health.memory.rssMB > 0 ? (
+                <HealthIndicator
+                  label="Memory (heap of RSS)"
+                  value={health.memory.heapUsedMB ?? 0}
+                  max={health.memory.rssMB}
+                  unit=" MB"
+                  lastUpdated={lastHealthCheck}
+                />
+              ) : (
+                <div className="p-3 rounded-xl bg-gradient-to-r from-muted/30 to-muted/10 border border-transparent">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Memory (heap of RSS)</span>
+                    <span className="font-medium text-muted-foreground">Measuring…</span>
+                  </div>
+                </div>
+              )}
               <div className="p-3 rounded-xl bg-gradient-to-r from-muted/30 to-muted/10 border border-transparent">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">API Response</span>
                     <div className="flex items-center gap-2">
-                      <MiniSparkline data={apiHistory} color={apiResponseTime > 200 ? 'text-red-500' : 'text-green-700'} height={16} />
-                      <span className={`font-medium ${apiResponseTime > 200 ? 'text-red-600' : 'text-green-700'}`}>
-                        {apiResponseTime}ms
+                      <MiniSparkline data={apiHistory} color={apiResponseTime > 200 ? 'text-red-500' : 'text-green-700'} height={16} ariaLabel={latencyVoice} />
+                      <span className={`font-medium tabular-nums ${apiResponseTime > 200 ? 'text-red-600' : 'text-green-700'}`}>
+                        {apiResponseTime > 0 ? `${apiResponseTime}ms` : '—'}
                       </span>
                     </div>
                   </div>
                   <Progress
-                    value={(apiResponseTime / 500) * 100}
-                    className={`h-2.5 ${apiResponseTime < 100 ? '[&>div]:bg-green-500' : apiResponseTime < 250 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-red-500'} transition-all duration-500`}
+                    value={Math.min((apiResponseTime / 500) * 100, 100)}
+                    className={`h-2.5 ${apiResponseTime < 100 ? '[&>div]:bg-green-600' : apiResponseTime < 250 ? '[&>div]:bg-yellow-700' : '[&>div]:bg-red-500'} transition-all duration-500`}
                   />
-                  <p className="text-[9px] text-muted-foreground">Avg: {Math.round(apiHistory.reduce((a, b) => a + b, 0) / apiHistory.length)}ms over last 12 checks</p>
+                  <p className="text-[10px] text-muted-foreground tabular-nums">
+                    {apiHistory.length === 0
+                      ? 'Measuring — the first live check is in flight'
+                      : `Avg ${Math.round(apiHistory.reduce((a, b) => a + b, 0) / apiHistory.length)}ms over the last ${apiHistory.length} check${apiHistory.length === 1 ? '' : 's'}`}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Right: Stat Cards with Glass Effect */}
+            {/* Right: REAL stat cards (v2.207.0 — the invented DB-size figure
+                died; the card now speaks the build the wire actually runs) */}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-card border border-green-100 dark:border-green-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
                   <Clock className="h-4 w-4 text-green-700" />
                   <span className="text-xs text-muted-foreground">Uptime</span>
                 </div>
-                <p className="text-sm font-bold text-green-700">{formatUptime(uptime)}</p>
-                <p className="text-[10px] text-green-700/70 mt-0.5">Since last restart</p>
+                <p className="text-sm font-bold text-green-700 tabular-nums">{health.uptimeSeconds != null ? formatUptime(health.uptimeSeconds) : '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Since last restart · server process</p>
               </div>
               <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-card border border-blue-100 dark:border-blue-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
-                  <HardDrive className="h-4 w-4 text-blue-600" />
-                  <span className="text-xs text-muted-foreground">DB Size</span>
+                  <Package className="h-4 w-4 text-blue-600" />
+                  <span className="text-xs text-muted-foreground">App build</span>
                 </div>
-                <p className="text-sm font-bold text-blue-600">{dbSizeMB} MB</p>
-                <Progress value={(dbSizeMB / 100) * 100} className="h-1 mt-1 [&>div]:bg-blue-500" />
+                <p className="text-sm font-bold text-blue-600">v{health.version ?? '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{health.databaseProvider ?? '…'} · {health.appMode ?? '…'}</p>
               </div>
               <div className="p-3 rounded-xl bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/20 dark:to-card border border-purple-100 dark:border-purple-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
                   <Users className="h-4 w-4 text-purple-600" />
                   <span className="text-xs text-muted-foreground">Active Sessions</span>
                 </div>
-                <p className="text-sm font-bold text-purple-600">{activeSessions}</p>
-                <p className="text-[10px] text-purple-600/70 mt-0.5">Users online now</p>
+                <p className="text-sm font-bold text-purple-600 tabular-nums">{dbCounts?.sessions != null ? dbCounts.sessions : '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Live auth sessions on the wire</p>
               </div>
               <div className="p-3 rounded-xl bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/20 dark:to-card border border-orange-100 dark:border-orange-900/40 backdrop-blur-sm hover:scale-[1.02] transition-transform">
                 <div className="flex items-center gap-2 mb-1">
                   <Globe className="h-4 w-4 text-orange-600" />
                   <span className="text-xs text-muted-foreground">API Latency</span>
                 </div>
-                <p className="text-sm font-bold text-orange-600">{apiResponseTime}ms</p>
-                <MiniSparkline data={apiHistory} color="text-orange-500" height={12} />
+                <p className="text-sm font-bold text-orange-600 tabular-nums">{apiResponseTime > 0 ? `${apiResponseTime}ms` : '—'}</p>
+                <MiniSparkline data={apiHistory} color="text-orange-600" height={12} ariaLabel={latencyVoice} />
               </div>
             </div>
           </div>

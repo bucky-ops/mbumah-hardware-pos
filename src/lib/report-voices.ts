@@ -137,3 +137,83 @@ export function composeNamedTotalsVoice(title: string, entries: VoiceEntry[], to
   const rows = entries.map((e) => `${e.label} ${e.figure} (${shareOf(e.value, total)})`);
   return `${title}: ${rows.join('; ')} — ${totalFigure} total`;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * v2.207.0 — the quiet minis speak.
+ *
+ * The admin desk's latency sparkline, the transactions tab's daily trend,
+ * the analytics sales trend and the two score rings all rode silent
+ * pictures. These composers give each an honest aria from data the caller
+ * ALREADY holds — same one-writer law, same pre-formatted-figure contract,
+ * same zero-day law (a nothing never speaks).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The API-latency sparkline's voice. Samples ride in CALLER ORDER (oldest
+ * first — a check history is a timeline, not a ranking). The extremes are
+ * named from the same samples; a single sample has no extremes to compare.
+ * Figures are pre-formatted ("120ms") so the caller keeps one unit voice.
+ */
+export function composeLatencyVoice(
+  title: string,
+  samples: { label: string; value: number; figure: string }[],
+): string {
+  if (samples.length === 0) return `${title} — no completed checks yet.`;
+  const spoken = samples.map((s) => s.figure).join(', ');
+  if (samples.length === 1) return `${title}, one check so far: ${spoken}.`;
+  const finite = samples.filter((s) => Number.isFinite(s.value));
+  if (finite.length < 2) return `${title}, in order: ${spoken}.`;
+  const slowest = finite.reduce((a, b) => (b.value > a.value ? b : a), finite[0]);
+  const fastest = finite.reduce((a, b) => (b.value < a.value ? b : a), finite[0]);
+  return `${title} across ${samples.length} checks, oldest first: ${spoken} — slowest ${slowest.figure}, fastest ${fastest.figure}.`;
+}
+
+/**
+ * The daily-revenue trend's voice. Days ride in CALLER ORDER (oldest first —
+ * calendar order, the week-door law). A day with nothing recorded says "no
+ * sales" (the zero-day law); the loudest day is named only when something
+ * was recorded at all.
+ */
+export function composeDailyRevenueVoice(title: string, entries: VoiceEntry[]): string {
+  if (entries.length === 0) return `${title} — no days on record in this range.`;
+  const spoken = entries
+    .map((e) => (e.value > 0 ? `${e.label} ${e.figure}` : `${e.label} no sales`))
+    .join(', ');
+  const loudest = entries.reduce((best, e) => (e.value > best.value ? e : best), entries[0]);
+  const loudestPart = loudest.value > 0 ? ` — the loudest day: ${loudest.label} ${loudest.figure}` : '';
+  return `${title} across ${entries.length} ${entries.length === 1 ? 'day' : 'days'}, oldest first: ${spoken}${loudestPart}.`;
+}
+
+/**
+ * The sales-trend area chart's voice: every bucket in order with its revenue
+ * and its real transaction count, the period totals once, and the dashed
+ * previous-period line named once. `hasPrevSeries` is the caller's honest
+ * answer to "does the wire carry a previous period?" — a chart that draws
+ * the dash speaks it; one that doesn't, doesn't.
+ */
+export function composeTrendVoice(
+  title: string,
+  points: { label: string; value: number; figure: string; transactions: number }[],
+  opts: { totalFigure: string; totalTransactions: number; hasPrevSeries: boolean },
+): string {
+  if (points.length === 0) return `${title} — no data in this period.`;
+  const spoken = points
+    .map((p) => {
+      const tx = p.transactions > 0 ? ` (${p.transactions} tx)` : ' (no transactions)';
+      return `${p.label} ${p.figure}${tx}`;
+    })
+    .join(', ');
+  const totalTx = opts.totalTransactions > 0 ? ` across ${opts.totalTransactions} transactions` : '';
+  const prev = opts.hasPrevSeries ? ' The dashed line draws the previous period for comparison.' : '';
+  return `${title}, in order: ${spoken} — ${opts.totalFigure} total${totalTx}.${prev}`;
+}
+
+/**
+ * The score-ring voice: the ring's fill IS the score, so the aria names the
+ * score, its ceiling and the verdict the caller already computed. A missing
+ * score speaks the honest absence instead of a percentage of nothing.
+ */
+export function composeScoreVoice(title: string, score: number | null, max: number, verdict: string): string {
+  if (score == null || !Number.isFinite(score)) return `${title} — not measured yet.`;
+  return `${title} ${score} of ${max} — ${verdict}.`;
+}
