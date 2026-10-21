@@ -105,7 +105,7 @@ export interface KpiSummaryData {
     // (the reconciliation); the tax/net lens rides additively — optional so
     // an older cached answer renders the calm gross story, never a crash.
     revenue: { today: number; weekTotal: number; priorWeekTotal: number; variancePct: number; spark: number[]; taxWeekTotal?: number; taxPriorWeekTotal?: number; netWeekTotal?: number; netTodayTotal?: number; netPriorWeekTotal?: number; netSpark?: number[]; taxSpark?: number[] };
-    transactions: { today: number; weekTotal: number; priorWeekTotal: number; variancePct: number };
+    transactions: { today: number; weekTotal: number; priorWeekTotal: number; variancePct: number; spark?: number[] };
     lowStock: { count: number };
     overdueRentals: { count: number };
     debt: { total: number; count: number; aging: { current: number; d30: number; d60: number; d90plus: number } };

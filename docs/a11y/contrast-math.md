@@ -270,3 +270,36 @@ recorded under the 3:1 non-text bar for completeness: 3.06:1 light, 6.20:1
 dark — the svg is aria-hidden decoration and the strip's figures speak the
 face. The fix is a code change: this section closes as FIXED, not
 reviewed-passing.
+
+## Fixed: the transactions lens + the modal's REAL ground (v2.195.0)
+
+THE DISCOVERY: v2.194.0's dark-voice numbers above were derived over the
+DIALOG ground — but the modal's body panel (`rounded-xl ... bg-slate-50`,
+no dark half) paints between the dialog and every interior token, and the
+DOM composites against the NEAREST painted ancestor. Measured live
+(agent-browser, the dark class forced): the dark dialog owned the page
+while the panel stayed LIGHT, so `dark:text-slate-100` values sat on
+near-white at **1.05:1** and the `-300` strip voices at 1.54–1.57:1 — the
+v2.194.0 dark fix was true to its math and false to its surface.
+`scripts/contrast-math-transactions-lens-v2195.mjs` proves the bug in
+reverse (three discovery rows must stay under 2:1) and re-derives every
+interior family over the REAL chain: dialog → panel → strip → chip.
+
+v2.195.0 fixes the ground: both body panels gain `dark:border-slate-700
+dark:bg-slate-900` (the lens toggle's dark face since v2.187.0), and the
+v2.194.0 tokens become true over it. **46/46 families pass** — the script
+supersedes the v2.194.0 numbers (same tokens, truer grounds): light margins
+4.55–14.00:1 (grid label and flat verdict chip the tight corners, 4.55:1),
+dark margins 5.46–16.28:1 over the slate-900 panel (flat verdict chip
+tightest), branch rows measured on the dialog ground they actually sit on
+(7.25–13.33:1). The new transactions face rides the same audit: the card
+stays white in BOTH modes by design (like every KPI card — the light voice
+on it is correct; legacy line 4.77:1, the settled chip 6.26:1), and its
+drill-down wears the blue family (strip label 8.21 light / 8.78 dark, week
+figure 9.66 / 11.18, prior chip 6.72 / 6.73). Spark strokes recorded under
+the 3:1 non-text bar (aria-hidden decoration; the figures speak): the
+count face's `#2563eb` 5.17 card / 4.94 light panel / 3.45 dark panel, the
+VAT amber re-derived over the panels 3.05 light / 5.59 dark, the title
+glyph 5.04:1. The fix is a code change: this section closes as FIXED, not
+reviewed-passing — and the v2.194.0 section above is annotated by this one
+(same tokens, the ground the numbers are true over).

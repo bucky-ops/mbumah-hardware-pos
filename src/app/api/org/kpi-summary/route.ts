@@ -133,10 +133,15 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     // computed in one pass. v2.194.0: the THIRD face joins the pass — the
     // VAT buckets (tax per day) bucket the SAME rows' taxAmount, so the
     // modal's VAT strip can wear its own spark with ZERO additional reads
-    // (three faces of one read, one pass, no second query).
+    // (three faces of one read, one pass, no second query). v2.195.0: the
+    // FOURTH face — the settled rows are COUNTED one each into their own
+    // buckets, so the transactions card and its new drill-down modal speak
+    // the same read the money speaks (four faces of one read, still one
+    // pass, still no second query).
     const sparkBuckets = new Array<number>(7).fill(0);
     const netBuckets = new Array<number>(7).fill(0);
     const taxBuckets = new Array<number>(7).fill(0);
+    const txBuckets = new Array<number>(7).fill(0);
     for (let i = 0; i < 7; i++) {
       const dayStart = new Date(startToday.getTime() - (6 - i) * DAY_MS);
       const dayEnd = new Date(dayStart.getTime() + DAY_MS);
@@ -145,12 +150,17 @@ async function orgKpiSummaryHandler(): Promise<Response> {
           sparkBuckets[i] += toDec(row.totalAmount).toNumber();
           netBuckets[i] += toDec(row.totalAmount).toNumber() - toDec(row.taxAmount).toNumber();
           taxBuckets[i] += toDec(row.taxAmount).toNumber();
+          txBuckets[i] += 1;
         }
       }
     }
     const spark = sparkBuckets.map((v) => round2(v));
     const netSpark = netBuckets.map((v) => round2(v));
     const taxSpark = taxBuckets.map((v) => round2(v));
+    // Counts are integers by construction — the map keeps the faces' shared
+    // shape (and forgives a pathological fractional row) without pretending
+    // a checkout can arrive in halves.
+    const txSpark = txBuckets.map((v) => Math.round(v));
 
     // ── Debt: org-wide outstanding + aging buckets (precomputed column) ─────
     const debtGrouped = await rawDb.debtLedger.groupBy({
@@ -369,7 +379,10 @@ async function orgKpiSummaryHandler(): Promise<Response> {
             // cached answer simply renders no spark, never a NaN.
             taxSpark,
           },
-          transactions: { today: txToday, weekTotal: txWeek, priorWeekTotal: txPrior, variancePct: txVariancePct },
+          // v2.195.0: the count face gains its own `spark` — the SAME rows
+          // counted one each, additive under a NEW name (an older cached
+          // answer simply renders no spark, never a NaN).
+          transactions: { today: txToday, weekTotal: txWeek, priorWeekTotal: txPrior, variancePct: txVariancePct, spark: txSpark },
           lowStock: { count: lowStock },
           overdueRentals: { count: rentalsOverdue },
           debt: { total: debtTotal, count: debtCount, aging: { current: debtCurrent, d30: debtD30, d60: debtD60, d90plus: debtD90 } },

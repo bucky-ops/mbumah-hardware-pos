@@ -318,9 +318,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0) + this round\u2019s verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.194.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.194.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.194.0');
+    expect(pkg.version).toBe('2.195.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.195.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.195.0');
     expect(pkg.scripts['verify:v2-175-0']).toBe('node scripts/verify-v2-175-0.mjs');
   });
 });
