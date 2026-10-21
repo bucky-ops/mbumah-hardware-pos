@@ -228,8 +228,9 @@ describe('the tolerances - the honest absences and the dark ground from birth', 
   });
 
   it('the third panel owns its dark half from birth - the v2.195.0 discovery is house law', () => {
-    // exactly THREE panels now paint the dark half (revenue, transactions, debt)
-    expect(kpi.split('bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900').length - 1).toBe(3);
+    // exactly FOUR panels now paint the dark half (revenue, transactions,
+    // debt; v2.197.0's reorder watchlist joins from birth — the law holds)
+    expect(kpi.split('bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900').length - 1).toBe(4);
   });
 
   it('the type contract already carried the named ledger - zero wire changes', () => {
@@ -261,10 +262,10 @@ describe('the a11y surface - the REAL-chain math for the ledger families', () =>
 });
 
 describe('the release surfaces', () => {
-  it('package.json rides at 2.196.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.196.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.196.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.196.0');
+  it('package.json rides at 2.197.0 (all three slots) and the verify script is wired', () => {
+    expect(pkg.version).toBe('2.197.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.197.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.197.0');
     expect(pkg.scripts['verify:v2-196-0']).toBeTruthy();
     // the prior surfaces stay wired
     expect(pkg.scripts['verify:v2-195-0']).toBeTruthy();

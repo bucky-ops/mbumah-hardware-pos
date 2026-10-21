@@ -16,6 +16,21 @@
 // payload already carried (debtExpert.topDebtors — the Debt Expert
 // panel's wire since the Expert panel shipped). Zero new queries; the
 // drill-down composes, it never invents.
+// v2.197.0: the stock tile opens the watchlist — the row's FOURTH voice,
+// and the door arc's fourth door (revenue v2.173, transactions v2.195,
+// debt v2.196). The SKU count the card has shown since v2.176.0 now
+// draws its SEVERITY bar (at level → below → critical → out — the same
+// hue scale the debt buckets speak, deepening with heat), and the
+// drill-down speaks the named watchlist the payload already carried
+// (inventory.lowStockItems — the Stock Expert panel's wire since the
+// Expert panel shipped): each shelf its own coverage figure, the units-
+// short face summed into its own amber strip, the items loudest-deficit-
+// first, the watchlist grouped by the branch that holds it. Zero new
+// queries; the drill-down composes, it never invents. AND the round's
+// honest find: the card's hot number and icon rode text-orange-500
+// (2.81:1 over white) — below even the 3:1 large-text/non-text bar —
+// since the card shipped; the face re-hues to amber-600 (3.20:1), the
+// discovery pinned in reverse in the round's contrast script.
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +65,8 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   const [txOpen, setTxOpen] = useState(false);
   // v2.196.0: the debt drill-down — the KPI row's third voice.
   const [debtOpen, setDebtOpen] = useState(false);
+  // v2.197.0: the reorder-watchlist drill-down — the KPI row's fourth voice.
+  const [stockOpen, setStockOpen] = useState(false);
   // v2.187.0: the modal's lens — GROSS is the default and the contract
   // (v2.185.0); net is an explicit analyst turn, never a second meaning.
   const [lens, setLens] = useState<'gross' | 'net'>('gross');
@@ -164,6 +181,97 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   const debtorBucketLabel = (bucket: string): string =>
     bucket === 'CURRENT' ? 'current' : bucket === 'DAYS_30' ? '1-30d' : bucket === 'DAYS_60' ? '31-60d' : bucket === 'DAYS_90_PLUS' ? '90d+' : bucket.toLowerCase();
 
+  // ── v2.197.0: the reorder watchlist's derivations ───────────────────────
+  // Every figure below composes the SAME payload the card already spoke
+  // (data.inventory.lowStockItems — the Stock Expert panel's watchlist
+  // wire since the Expert panel shipped; zero new queries). A runtime
+  // answer may lack it (an older cached answer) — the honest step-aside
+  // speaks, the count story above never breaks.
+  const watchlistReady = Array.isArray(data.inventory?.lowStockItems);
+  // Did the answer arrive WITHOUT the named watchlist? The modal then
+  // speaks its honest step-aside — the count above still carries.
+  const watchlistStale = !watchlistReady;
+  // The route sorts most-critical-first and CAPS at 12; the modal
+  // re-derives its own order so it never depends on the route's choice:
+  // loudest DEFICIT first (units short = level − stock, floored at 0 —
+  // an at-level item is zero short, never negative).
+  const watchlist = watchlistReady
+    ? [...data.inventory.lowStockItems]
+        .map((p) => ({ ...p, deficit: Math.max(0, p.reorderLevel - p.stockQty) }))
+        .sort((a, b) => b.deficit - a.deficit)
+    : null;
+  // Coverage — the shelf against the reorder line, 0..1 on this payload
+  // (the route only ships items at/below level). A zero level cannot
+  // speak a percentage (0/0 is not 100%) — null, and the chip falls
+  // back to the out/level voices. The honesty rule the debt shares speak.
+  const stockCoverage = (p: { stockQty: number; reorderLevel: number }): number | null =>
+    p.reorderLevel > 0 ? p.stockQty / p.reorderLevel : null;
+  // The severity buckets — the four states at/below the level, ONE array
+  // so the card's mini bar and the modal's bar + grid speak the same
+  // four figures in the same order (the one-writer rule the debt buckets
+  // established). Hue deepens with severity: slate → amber → orange →
+  // red — the hotter the colour, the emptier the shelf (the SAME scale
+  // the debt aging speaks, read as urgency instead of age).
+  const stockBuckets: Array<{ key: string; label: string; hue: string; in: (p: { stockQty: number; coverage: number | null }) => boolean }> = [
+    { key: 'out', label: 'Out of stock', hue: 'bg-red-500', in: (p) => p.stockQty <= 0 },
+    { key: 'critical', label: 'Critical', hue: 'bg-orange-500', in: (p) => p.stockQty > 0 && p.coverage != null && p.coverage <= 0.5 },
+    { key: 'below', label: 'Below level', hue: 'bg-amber-400', in: (p) => p.coverage != null && p.coverage > 0.5 && p.coverage < 1 },
+    { key: 'at', label: 'At level', hue: 'bg-slate-400', in: (p) => p.coverage != null && p.coverage >= 1 },
+  ];
+  // Each bucket's count over the NAMED watchlist (the meta discloses the
+  // cap when the org list runs past the route's 12 — the named population
+  // is what the modal speaks, never a projected whole). ONE derivation
+  // carries the rows AND their counts, so every consumer reads the same
+  // shape without a bare assertion (the lint-baseline law).
+  const stockRows = watchlist?.map((p) => ({ ...p, coverage: stockCoverage(p) })) ?? null;
+  const levelSum = stockRows?.reduce((acc, p) => acc + p.reorderLevel, 0) ?? 0;
+  const shelfCoverage = stockRows && levelSum > 0 ? Math.round((stockRows.reduce((acc, p) => acc + p.stockQty, 0) / levelSum) * 1000) / 10 : null;
+  const severity = stockRows && stockRows.length > 0
+    ? {
+        rows: stockRows,
+        counts: stockBuckets.map((b) => ({ ...b, value: stockRows.filter((p) => b.in(p)).length })),
+      }
+    : null;
+  // Share of the named watchlist — the zero-total honesty rule: an empty
+  // watchlist renders NO percentage (never an invented "0%" of nothing).
+  const stockShare = (v: number): number | null =>
+    stockRows != null && stockRows.length > 0 ? Math.round((v / stockRows.length) * 1000) / 10 : null;
+  // The reorder face: every unit the shelves are short, summed — the
+  // strip's figure. Composed from the SAME rows the bar draws, never
+  // re-queried. An all-at-level watchlist sums to zero and renders no
+  // strip (honest absence, never an empty box).
+  const shortSum = stockRows?.reduce((acc, p) => acc + p.deficit, 0) ?? 0;
+  // The watchlist by branch — the same named items grouped by the branch
+  // that holds them (the route resolves the store name server-side; an
+  // unnamed item rests under "Unassigned" — still spoken, never dropped).
+  // Derived client-side from the SAME rows — zero new queries. The figure
+  // is the branch's units short (the actionable number a reorder run
+  // needs), the chip the item count.
+  const branchStock = stockRows && stockRows.length > 0
+    ? Object.entries(
+        stockRows.reduce<Record<string, { short: number; count: number }>>((acc, p) => {
+          const name = p.store ?? 'Unassigned';
+          acc[name] = acc[name] ?? { short: 0, count: 0 };
+          acc[name].short += p.deficit;
+          acc[name].count += 1;
+          return acc;
+        }, {}),
+      )
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.short - a.short)
+    : null;
+  // The coverage chip's voice — the four severity states wear the
+  // families; a null coverage (zero reorder level) stays calm slate
+  // (never a broken chip).
+  const coverageChip = (p: { stockQty: number; coverage: number | null }): { text: string; cls: string } => {
+    if (p.stockQty <= 0) return { text: 'out', cls: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' };
+    if (p.coverage == null) return { text: 'level 0', cls: 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30' };
+    const pct = Math.round(p.coverage * 100);
+    if (pct <= 50) return { text: `${pct}%`, cls: 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/30' };
+    if (pct < 100) return { text: `${pct}%`, cls: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30' };
+    return { text: `${pct}%`, cls: 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30' };
+  };
+
   return (
     <section aria-label="KPI command row" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {/* Revenue */}
@@ -240,15 +348,62 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
         )}
       </button>
 
-      {/* Low stock */}
-      <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${k.lowStock.count > 0 ? 'ring-1 ring-orange-200' : ''}`}>
-        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><PackageOpen className="h-3.5 w-3.5 text-orange-500" /> Low stock</div>
-        <div className="mt-1 flex items-center gap-2">
-          <CountUp value={k.lowStock.count} className={`text-2xl font-bold ${k.lowStock.count > 0 ? 'text-orange-500' : 'text-slate-700'}`} />
-          {k.lowStock.count > 0 && <span className="h-2 w-2 rounded-full bg-orange-500 anim-pulse-dot" />}
+      {/* Low stock — v2.197.0: a VOICE, not a tile. The Revenue card told
+          the money's story since v2.173.0, the count face found its voice
+          in v2.195.0 and the ledger in v2.196.0 while this card showed a
+          bare count in silence — even though the named watchlist was
+          already on the wire. The card is now the row's FOURTH button and
+          opens the reorder watchlist; it wears the face's amber edge +
+          live dot (the family vocabulary: orange revenue, blue
+          transactions, red debt, amber stock) and the watchlist qualifier
+          chip (the gross/settled/ledger chips' stock-face sibling). The
+          hot number and icon re-hue orange-500 → amber-600: the round's
+          contrast find (2.81:1 over white, under the 3:1 bars — pinned in
+          reverse in the round's script), fixed where it lived. */}
+      <button
+        onClick={() => setStockOpen(true)}
+        data-testid="lowstock-card"
+        className={`focus-ring group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${k.lowStock.count > 0 ? 'ring-1 ring-amber-300' : ''}`}
+      >
+        <span className="absolute inset-y-0 left-0 w-1 bg-amber-600" />
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <PackageOpen className="h-3.5 w-3.5 text-amber-600" /> Low stock
+            {/* v2.197.0: the watchlist qualifier — every item this card
+                and its modal speak is the SAME named population the Stock
+                Expert panel's reorder watchlist reads, so the count can
+                never be read as a different book. */}
+            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200" title="The named watchlist — the same items the Stock Expert panel speaks">watchlist</span>
+          </span>
+          {k.lowStock.count > 0 && <span className="h-2 w-2 rounded-full bg-amber-600 anim-pulse-dot" />}
         </div>
+        <div className="mt-1 flex items-center gap-2">
+          <CountUp value={k.lowStock.count} className={`text-2xl font-bold ${k.lowStock.count > 0 ? 'text-amber-600' : 'text-slate-700'}`} />
+        </div>
+        {/* v2.197.0: the card learns its shape — the severity mini bar,
+            the four buckets drawn as one stacked strip (slate at level →
+            amber below → orange critical → red out: the deeper the
+            shortage, the hotter the hue — the debt bar's scale read as
+            urgency). Widths are the buckets' honest shares of the NAMED
+            watchlist; a zero bucket draws nothing and an empty watchlist
+            draws the calm empty track — never a fabricated segment.
+            Tolerant: an older cached answer without the named items keeps
+            the calm card (no bar), the modal's step-aside speaks there. */}
+        {severity && k.lowStock.count > 0 && (
+          <div
+            className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-slate-100"
+            role="img"
+            aria-label={`Severity: ${severity.counts.map((b) => `${b.label.toLowerCase()} ${b.value}`).join(', ')}`}
+          >
+            {severity.counts.map((b) =>
+              b.value > 0 && severity.rows.length > 0 ? (
+                <span key={b.key} className={b.hue} style={{ width: `${(b.value / severity.rows.length) * 100}%` }} />
+              ) : null,
+            )}
+          </div>
+        )}
         <p className="mt-2 text-[10px] text-slate-500">at/below reorder level · org-wide</p>
-      </div>
+      </button>
 
       {/* Overdue rentals */}
       <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${k.overdueRentals.count > 0 ? 'ring-1 ring-red-200' : ''}`}>
@@ -784,6 +939,176 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
             <div className="mt-3 border-t border-slate-100 pt-3">
               <p data-testid="debt-ledger-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                 the named ledger is not on this cached answer — the aging story above still speaks. Reload to fetch it.
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.197.0: the reorder-watchlist drill-down — the KPI row's fourth
+          voice, the door arc's fourth door. The anatomy mirrors the three
+          modals above (panel, bar, grid, strip, rows, branch face) but
+          speaks the SHELF: the severity buckets drawn as one composition
+          bar (at level → below → critical → out — the hue deepens with
+          urgency), each bucket its own honest share of the named
+          watchlist, the units-short face summed into its own amber strip,
+          and the named items the payload already carried
+          (inventory.lowStockItems — the Stock Expert panel's wire).
+          Wears the face's amber so the four modals never merge at a
+          glance. Every figure composes the SAME payload — the drill-down
+          composes, it never invents. */}
+      <Dialog open={stockOpen} onOpenChange={setStockOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><PackageOpen className="h-4 w-4 text-amber-600" /> Reorder watchlist</DialogTitle>
+          </DialogHeader>
+          {/* The panel owns its dark half from birth — the v2.195.0
+              discovery (the DOM composites against the NEAREST painted
+              ancestor) is house law now: every new modal panel paints
+              dark:bg-slate-900 on day one, never a repeat of the
+              invisible-token bug. FOUR panels now paint it. */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">SKUs at/below reorder level</span>
+              <span data-testid="lowstock-watchlist-count" className="text-2xl font-bold text-amber-700 dark:text-amber-400">{num(k.lowStock.count)}</span>
+            </div>
+            <p data-testid="lowstock-watchlist-meta" className="text-[10px] text-slate-500 dark:text-slate-400">
+              of {num(data.inventory?.totalSkus ?? 0)} SKUs org-wide
+              {stockRows ? ` · ${stockRows.length} named on this answer` : ' · named watchlist not on this cached answer'}
+              {shelfCoverage != null && stockRows && stockRows.length > 0 ? ` · shelves hold ${shelfCoverage}% of the reorder line` : ''}
+            </p>
+            {/* The severity composition bar — the card's mini bar at
+                reading size: one stacked strip, the grid below spells each
+                bucket's count and its honest share. No stroke, no trend
+                window — stock has no 7-day story on this payload, so the
+                bar speaks severity where the sibling modals draw sparks
+                (a different face wears a different shape). Renders only
+                when the named watchlist arrived AND holds items — an
+                empty watchlist renders the honest empty state below
+                instead of a bar of zeros. */}
+            {severity && (
+              <div data-testid="lowstock-severity-bar" className="mt-2">
+                <div
+                  className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                  role="img"
+                  aria-label={`Severity: ${severity.counts.map((b) => `${b.label.toLowerCase()} ${b.value}`).join(', ')}`}
+                >
+                  {severity.counts.map((b) =>
+                    b.value > 0 ? (
+                      <span key={b.key} className={b.hue} style={{ width: `${(b.value / severity.rows.length) * 100}%` }} />
+                    ) : null,
+                  )}
+                </div>
+                {/* The four buckets, each its own cell (no invented merges)
+                    with the bucket's dot so the bar and the grid read as one
+                    shape. The share speaks only when the watchlist does —
+                    the zero-total honesty rule. */}
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  {severity.counts.map((b) => (
+                    <div key={b.key} data-testid={`lowstock-bucket-${b.key}`}>
+                      <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${b.hue}`} />
+                        {b.label}
+                      </span>
+                      <p className="font-bold text-slate-800 dark:text-slate-100">{num(b.value)}</p>
+                      {stockShare(b.value) != null && <p className="text-[10px] tabular-nums text-slate-500 dark:text-slate-400">{stockShare(b.value)}% of watchlist</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* The reorder face — every unit the shelves are short, summed
+                into its own amber strip (the wow-strips' stock sibling:
+                label, figure, item-count chip). An all-at-level watchlist
+                sums to zero and renders nothing here — honest absence,
+                never an empty box. */}
+            {stockRows && stockRows.length > 0 && shortSum > 0 && (
+              <div data-testid="lowstock-short-strip" className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-amber-100 bg-amber-50/70 px-2.5 py-1.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">units short</span>
+                <span data-testid="lowstock-short-amount" className="text-xs font-semibold tabular-nums text-amber-900 dark:text-amber-200">{num(shortSum)}</span>
+                <span
+                  data-testid="lowstock-short-items"
+                  title="Named items below their level (at-level items are zero short)"
+                  className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:ring-amber-500/30"
+                >
+                  {stockRows.filter((p) => p.deficit > 0).length} of {stockRows.length} items
+                </span>
+              </div>
+            )}
+          </div>
+          {/* The named watchlist — the items the Stock Expert panel reads,
+              loudest deficit first (re-derived here so the modal never
+              depends on the route's ordering choice). Each row: the
+              product, the sku beneath it, the branch + category line, the
+              coverage chip (out red / critical orange / below amber / at
+              level calm slate), and the qty/reorder pair the Expert
+              table's column speaks, in the face's amber. */}
+          {stockRows && stockRows.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The named watchlist</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">deepest shortage first — the same items the Stock Expert panel speaks</p>
+              <ul className="space-y-1.5">
+                {stockRows.map((p) => (
+                  <li key={p.id} data-testid="lowstock-item-row" className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-slate-700 dark:text-slate-200">{p.name}</span>
+                      <span className="block truncate text-[10px] text-slate-500 dark:text-slate-400">{p.sku}{p.store ? ` · ${p.store}` : ''}{p.category ? ` · ${p.category}` : ''}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tabular-nums tracking-wide ring-1 ${coverageChip(p).cls}`}
+                        title={p.coverage != null ? `Coverage: ${num(p.stockQty)} of ${num(p.reorderLevel)} units (${Math.round(p.coverage * 100)}% of the level)` : 'No reorder level set'}
+                      >
+                        {coverageChip(p).text}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400">{num(p.stockQty)} / {num(p.reorderLevel)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The watchlist by branch — the same named items grouped by the
+              branch that holds them, loudest shortage first, with each
+              branch's item count as its quiet chip. Derived from the SAME
+              rows (zero new queries); an unnamed item rests under
+              "Unassigned" — still spoken, never dropped. The figure is the
+              branch's units short — the number a reorder run needs. */}
+          {branchStock && branchStock.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The watchlist by branch</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">the same named items, grouped by the branch that holds them</p>
+              <ul className="space-y-1.5">
+                {branchStock.map((b) => (
+                  <li key={b.name} data-testid="lowstock-branch-row" className="flex items-center justify-between gap-3">
+                    <span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span
+                        className="rounded bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-slate-500 ring-1 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30"
+                        title="Named items at this branch"
+                      >
+                        {b.count} {b.count === 1 ? 'item' : 'items'}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-amber-700 dark:text-amber-400">{num(b.short)} short</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The honest absences: a fully stocked floor says so (the
+              Expert panel's line); an older cached answer without the
+              named watchlist speaks its step-aside — the count story
+              above still carries, never a silent void. */}
+          {watchlistReady && stockRows && stockRows.length === 0 && (
+            <p data-testid="lowstock-watchlist-empty" className="mt-3 border-t border-slate-100 pt-3 text-[10px] text-slate-500 dark:text-slate-400">
+              Everything is above its reorder level.
+            </p>
+          )}
+          {watchlistStale && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p data-testid="lowstock-watchlist-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                the named watchlist is not on this cached answer — the count story above still speaks. Reload to fetch it.
               </p>
             </div>
           )}
