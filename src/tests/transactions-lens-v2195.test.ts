@@ -199,10 +199,11 @@ describe('the drill-down - the revenue modal\'s anatomy, speaking counts', () =>
 });
 
 describe('the modal ground fix - the panel owns its dark half', () => {
-  it('the body panels paint dark:bg-slate-900 - exactly three mounts (v2.196.0: the debt ledger joins the law)', () => {
+  it('the body panels paint dark:bg-slate-900 - exactly four mounts (v2.197.0: the reorder watchlist joins the law)', () => {
     // v2.195.0 fixed the two shipped panels; v2.196.0's debt modal was born
-    // with the dark half — the law the discovery wrote is now house-wide.
-    expect(kpi.match(/bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/g)?.length).toBe(3);
+    // with the dark half — the law the discovery wrote is now house-wide;
+    // v2.197.0's watchlist modal joins from birth too (four panels).
+    expect(kpi.match(/bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/g)?.length).toBe(4);
   });
 
   it('the discovery is recorded where the fix lives', () => {
@@ -231,10 +232,10 @@ describe('the modal ground fix - the panel owns its dark half', () => {
 });
 
 describe('docs and release surfaces', () => {
-  it('package.json rides at 2.196.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.196.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.196.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.196.0');
+  it('package.json rides at 2.197.0 (all three slots) and the verify script is wired', () => {
+    expect(pkg.version).toBe('2.197.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.197.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.197.0');
     expect(pkg.scripts['verify:v2-195-0']).toBe('node scripts/verify-v2-195-0.mjs');
     expect(pkg.scripts['verify:v2-194-0']).toBe('node scripts/verify-v2-194-0.mjs');
     expect(readRepo('scripts/verify-v2-195-0.mjs')).toContain('v2.195.0 verification');
@@ -253,9 +254,9 @@ describe('docs and release surfaces', () => {
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(85);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(86);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(85);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(86);");
   });
 
   it('the workspace doc speaks the transactions lens', () => {

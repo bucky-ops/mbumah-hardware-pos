@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.197.0',
+    title: 'The stock tile opens the watchlist',
+    bullets: [
+      'The Low-stock card on the console now opens its own drill-down — the severity bar (at level, below, critical, out), each bucket’s share of the watchlist, and the named items behind the number — mirroring the Revenue, Transactions and Debt modals in the face’s amber.',
+      'The named watchlist lists what needs reordering, deepest shortage first, with each item’s coverage chip and its qty/reorder pair; “The watchlist by branch” groups the same items by branch with the units each is short.',
+      'The units-short strip sums every unit the shelves are short, and the meta line speaks how much of the reorder line the shelves actually hold.',
+      'The card itself learned a quieter, truer voice — its hot number moved to a deeper amber after the contrast math found the old orange under the readability bar.',
+    ],
+  },
+  {
     version: '2.196.0',
     title: 'The debt card opens the ledger',
     bullets: [

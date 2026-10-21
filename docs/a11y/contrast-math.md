@@ -330,3 +330,35 @@ bar's pastel fills are DOCUMENTED DECORATION, deliberately not asserted:
 the bar is aria-labeled and its figures spoken twice beside it (the card's
 badges; the modal's four cells with shares), so asserting amber-400 against
 the track would flatter the math, not inform it.
+
+## Fixed: the reorder watchlist + the card face's re-hue (v2.197.0)
+
+THE DISCOVERY: the low-stock card's hot number AND its icon rode
+`text-orange-500` since the card shipped (v2.176.0 era) — orange-500 over
+the card's white computes **2.89:1**, below even the 3:1 bar the 24px-bold
+headline (large text) and the 14px icon (non-text UI) must meet. Unnoticed
+because every prior KPI audit measured the MODALS' interiors; the mute
+tiles' own voices were never on the ledger until the tile became a voice.
+v2.197.0 re-hues the face to **amber-600** (**3.19:1** — passes both 3:1
+bars; amber-500 would have FAILED at 2.15:1, which is why the face goes one
+step deeper) and the pre-fix combinations are pinned below the 3 bar in
+reverse (3 discovery rows). The MODAL's 24px headline count goes one step
+deeper still (**amber-700**, 4.82:1 over the slate-50 panel): the debt
+modal's headline held the full 4.5 text bar and the count face keeps that
+stricter house line.
+
+The new face — `scripts/contrast-math-stock-watchlist-v2197.mjs`, **49/49
+families pass** over the REAL chain (dialog → panel → strip → chip; the
+watchlist sections sit outside the panel on the dialog ground): light
+4.55-14.00:1 (the slate-500 voices the tight corners at 4.55; amber strip
+label 6.86, amount 8.74, items chip 4.86; coverage chips 4.87 amber / 4.93
+orange / 5.88 red; the count amber-700 4.82; the qty/reorder pair 4.84),
+dark 6.79-16.28:1 over the slate-900 panel (headline amber-400 10.39, strip
+10.63-12.34, items chip stack 7.22, coverage chips 6.98-12.08 on their
+-500/10 dialog stacks). The card stays white by design: the watchlist chip
+4.87:1, the 24px-bold headline takes the 3:1 large-text bar (3.19:1) and so
+do the icon and the amber edge stroke (3.19:1). The severity bar's pastel
+fills are DOCUMENTED DECORATION, deliberately not asserted: the bar is
+aria-labeled and its figures spoken twice beside it (the card's aria-label;
+the modal's four cells with shares), so asserting amber-400 against the
+track would flatter the math, not inform it.

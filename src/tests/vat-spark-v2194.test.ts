@@ -134,10 +134,12 @@ describe('the dark voice fixed - the house pattern over the dialog ground', () =
     // 4 label+value cells joined (13/12 mounts total); v2.196.0: the debt
     // ledger's families join (its grid labels + shares + headline + meta)
     // AND the section headers/sub-lines gain the dark voice (the 4.15:1
-    // discovery fix) — 27 mounts total
-    expect(kpi.match(/text-slate-500 dark:text-slate-400/g)?.length).toBe(27);
-    // v2.196.0: the debt ledger's four bucket values join the value voice (13)
-    expect(kpi.match(/text-slate-800 dark:text-slate-100/g)?.length).toBe(13);
+    // discovery fix); v2.197.0: the reorder watchlist's families join (its
+    // meta, grid label + share, item sub-line, and its two section
+    // headers + sub-lines) — 37 mounts total
+    expect(kpi.match(/text-slate-500 dark:text-slate-400/g)?.length).toBe(37);
+    // v2.197.0: the watchlist's four bucket values join the value voice (14)
+    expect(kpi.match(/text-slate-800 dark:text-slate-100/g)?.length).toBe(14);
     expect(kpi).toContain('className="text-[10px] text-slate-500 dark:text-slate-400"');
   });
 
@@ -174,10 +176,10 @@ describe('the dark voice fixed - the house pattern over the dialog ground', () =
 });
 
 describe('docs and release surfaces', () => {
-  it('package.json rides at 2.196.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.196.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.196.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.196.0');
+  it('package.json rides at 2.197.0 (all three slots) and the verify script is wired', () => {
+    expect(pkg.version).toBe('2.197.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.197.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.197.0');
     expect(pkg.scripts['verify:v2-194-0']).toBe('node scripts/verify-v2-194-0.mjs');
     expect(pkg.scripts['verify:v2-193-0']).toBe('node scripts/verify-v2-193-0.mjs');
     expect(readRepo('scripts/verify-v2-194-0.mjs')).toContain('v2.194.0 verification');
@@ -196,8 +198,8 @@ describe('docs and release surfaces', () => {
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(85);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(86);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(85);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(86);");
   });
 });
