@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.198.0',
+    title: 'The overdue tile opens the yard',
+    bullets: [
+      'The Overdue card on the console now opens its own drill-down — the breach-age bar (≤7d, 8-30d, 31-60d, 60d+), each bucket’s share of the overdue roster, and the named rentals behind the number — mirroring the Revenue, Transactions, Debt and Stock modals in the face’s rose.',
+      'The named roster lists what’s past return, deepest breach first, with each rental’s status, its days past, and the daily rate; “The yard by branch” groups the same rentals by branch with each branch’s per-day exposure.',
+      'The per-day exposure strip sums what the breaches cost per day while they sit, and the yard’s calm half lists the still-out rentals with their honest due dates.',
+      'The Expert panel’s OVERDUE badge learned a truer voice — its old red sat just under the readability bar for its small text; the deeper red now carries it.',
+    ],
+  },
+  {
     version: '2.197.0',
     title: 'The stock tile opens the watchlist',
     bullets: [

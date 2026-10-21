@@ -298,7 +298,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                       <TableCell className="text-xs text-slate-500">{r.customer}</TableCell>
                       <TableCell className="text-right text-xs tabular-nums">{kes(r.ratePerDay)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${r.status === 'ACTIVE' ? 'border-emerald-200 text-emerald-700' : r.status === 'OVERDUE' ? 'border-red-200 bg-red-50 text-red-600' : 'text-slate-500'}`}>{r.status}</Badge>
+                        <Badge variant="outline" className={`text-[10px] ${r.status === 'ACTIVE' ? 'border-emerald-200 text-emerald-700' : r.status === 'OVERDUE' ? 'border-red-200 bg-red-50 text-red-700' : 'text-slate-500'}`}>{r.status}</Badge>
                       </TableCell>
                     </TableRow>
                   ))}
