@@ -1407,6 +1407,47 @@ model SecurityEvent {
   @@map("security_events")
 }
 
+// v2.209.0: the Phase-6 dead-letter queue gains its table. The lib
+// (src/lib/dead-letter-queue.ts) has written every query against
+// db.deadLetterQueue since Phase 6, but this model never existed in any
+// schema — the cast in src/lib/db.ts (as unknown as PrismaClient) hid the
+// missing delegate from TypeScript, and every DLQ-shaped route was a
+// runtime 500 masked by zero-fallbacks. This table is the contract the
+// code always assumed. `resolvedAt` is the terminal-state stamp
+// (COMPLETED / DEAD / CANCELLED) that the retention purge's dateField
+// reads; `enqueuedAt` drives list order + the composition's oldest-in-
+// flight figure. NOT in STORE_SCOPED_MODELS: the ops desk reads across
+// stores by design and self-scopes via an explicit, validated storeId
+// query param (the zero-trust extension would silently hide other
+// branches' failures from the desk that exists to see them).
+model DeadLetterQueue {
+  id               String    @id @default(cuid())
+  storeId          String?
+  operationType    String
+  targetService    String
+  payload          String
+  status           String    @default("PENDING") // PENDING, RETRYING, COMPLETED, DEAD, CANCELLED
+  retryCount       Int       @default(0)
+  maxRetries       Int       @default(5)
+  priority         Int       @default(0) // 0 = highest (payments); notifications 10+
+  sourceEntityId   String?
+  sourceEntityType String?
+  lastError        String?
+  nextRetryAt      DateTime?
+  resolvedAt       DateTime?
+  metadata         String? // JSON string with enqueue context
+  enqueuedAt       DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status, nextRetryAt])
+  @@index([status, resolvedAt])
+  @@index([enqueuedAt])
+  @@index([operationType])
+  @@index([targetService])
+  @@index([storeId])
+  @@map("dead_letter_queue")
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PAYROLL & HUMAN RESOURCES (Phase 1 - ERP Enhancement)
 // ─────────────────────────────────────────────────────────────────────────────

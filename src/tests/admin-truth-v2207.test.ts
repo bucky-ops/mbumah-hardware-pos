@@ -410,9 +410,9 @@ describe('v2.207.0 — the contrast re-voices ride source (probe parity)', () =>
 
 describe('v2.207.0 — the release surfaces speak the version', () => {
   it('package.json leads 2.207.0 with the mbumah metadata', () => {
-    expect(PKG.version).toBe('2.208.0');
-    expect(PKG.mbumah.releaseVersion).toBe('2.208.0');
-    expect(PKG.mbumah.baseVersion).toBe('2.208.0');
+    expect(PKG.version).toBe('2.209.0');
+    expect(PKG.mbumah.releaseVersion).toBe('2.209.0');
+    expect(PKG.mbumah.baseVersion).toBe('2.209.0');
   });
 
   it('whats-new heads the 2.207.0 entry', () => {

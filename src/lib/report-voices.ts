@@ -217,3 +217,35 @@ export function composeScoreVoice(title: string, score: number | null, max: numb
   if (score == null || !Number.isFinite(score)) return `${title} — not measured yet.`;
   return `${title} ${score} of ${max} — ${verdict}.`;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * v2.209.0 — the dead-letter queue's composition speaks.
+ *
+ * The /api/health/dlq wire has carried `byOperationType`, `byTargetService`
+ * and `oldestPendingAt` since Phase 8; the desk fetched them and rendered
+ * nothing. This composer is the one writer for the in-flight composition's
+ * aria. The counts count the work IN FLIGHT (pending + retrying) — the
+ * wire's own groupBy scope — never the queue's history (completed and
+ * cancelled items are the past, not composition). Zero-count and non-finite
+ * entries speak nothing (the zero law); the oldest age is named only when
+ * the wire carries one, pre-formatted by the caller.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export function composeDlqCompositionVoice(
+  byOperationType: Record<string, number> | null | undefined,
+  byTargetService: Record<string, number> | null | undefined,
+  oldestPendingFigure: string | null,
+): string {
+  const ops = Object.entries(byOperationType ?? {}).filter(
+    ([, n]) => Number.isFinite(n) && n > 0,
+  );
+  const svcs = Object.entries(byTargetService ?? {}).filter(
+    ([, n]) => Number.isFinite(n) && n > 0,
+  );
+  const inFlight = ops.reduce((sum, [, n]) => sum + (n as number), 0);
+  if (inFlight === 0) return 'The in-flight queue is empty — nothing is waiting or retrying.';
+  const opPart = ops.map(([k, n]) => `${k} ${n}`).join(', ');
+  const svcPart = svcs.length > 0 ? ` By service: ${svcs.map(([k, n]) => `${k} ${n}`).join(', ')}.` : '';
+  const oldPart = oldestPendingFigure ? ` The oldest item has waited ${oldestPendingFigure}.` : '';
+  return `In flight: ${inFlight} ${inFlight === 1 ? 'item' : 'items'} — ${opPart}.${svcPart}${oldPart}`;
+}

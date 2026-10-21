@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.209.0',
+    title: 'The dead-letter queue speaks its composition',
+    bullets: [
+      'The Dead Letter desk\u2019s In-Flight Composition strip is live: a proportional bar of what is actually waiting — by operation type with a colour-matched legend, the target services named, and the oldest item\u2019s waiting time called out — all from data the wire always carried.',
+      'The strip is honest about its scope: it counts pending + retrying work only — completed and cancelled items are history, not composition — and a quiet queue says plainly that nothing is waiting.',
+      'The bar\u2019s colours ride the same measured palette as the rest of the app, and its description reads as one sentence: how many items are in flight, which operations they belong to, which services they target, and how long the oldest has waited.',
+    ],
+  },
+  {
     version: '2.208.0',
     title: 'The system health desk finds its door',
     bullets: [
