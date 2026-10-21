@@ -111,7 +111,12 @@ describe('the org console amber family passes at cell size', () => {
     // adjacent mounts (the docs-beside-assets-door branch + the plain
     // fallback), so 7 + 2 - 1 = 8; the low-stock cell words its classes
     // differently and is pinned separately.
-    expect(org().match(/text-amber-700 dark:text-amber-400/g)?.length).toBe(8);
+    // v2.193.0 pin evolution (deliberate): the absence cell became the
+    // absence door — the amber pair no longer rides as an adjacent string
+    // (the door's affordance classes sit between text-amber-700 and
+    // dark:text-amber-400), so 8 - 1 = 7; the door's own voice is pinned
+    // in hr-absence-door-v2193.
+    expect(org().match(/text-amber-700 dark:text-amber-400/g)?.length).toBe(7);
     expect(org()).toContain("tone === 'warn' ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'");
     expect(org()).toContain('text-amber-700 font-medium dark:text-amber-400');
   });

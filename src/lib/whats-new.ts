@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.193.0',
+    title: 'The absence cell opens the report',
+    bullets: [
+      'A branch whose absence rate crosses 10% in the People & Payroll tables is now a door: click the amber percentage to open that branch\u2019s absence report, already narrowed to the branch and the month.',
+      'The door lives on both surfaces \u2014 the org dashboard\u2019s drill-down and the shared People & Payroll panel (desktop table and mobile cards) \u2014 and it opens for every role that can see the cell.',
+      'Below 10% the calm percentage stays exactly as it was \u2014 the click appears where attention is needed, not on quiet branches.',
+      'The desk report\u2019s scope chips, action buttons, and status chips carry their audited contrast numbers \u2014 23 of 23 combinations pass the accessibility bar in light and dark mode.',
+    ],
+  },
+  {
     version: '2.192.0',
     title: 'The drill-down opens the alerts',
     bullets: [

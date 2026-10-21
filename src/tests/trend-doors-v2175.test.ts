@@ -272,7 +272,12 @@ describe('the card contract - the 7d column and the door', () => {
     // doors the People & Payroll panel opens, reusing the ONE link-lib
     // writers (reasoning comment where the pin lives; the card still
     // imports NO trend lib).
-    expect(card).toContain("import {\n  buildExpiringEmployeesHref,\n  buildOverdueAssetsHref,\n  buildPeoplePayrollDeepLink,\n  buildRunDeepLinkHref,\n} from '@/lib/workspace/links';");
+    // v2.193.0 pin evolution (deliberate): the import grew the absence-door
+    // builder (buildAbsenceReportHref, alphabetically first) — the
+    // drill-down's absence cell opens the HR reports desk at the 10%
+    // attention threshold through the same ONE link-lib writer (reasoning
+    // comment where the pin lives; the card still imports NO trend lib).
+    expect(card).toContain("import {\n  buildAbsenceReportHref,\n  buildExpiringEmployeesHref,\n  buildOverdueAssetsHref,\n  buildPeoplePayrollDeepLink,\n  buildRunDeepLinkHref,\n} from '@/lib/workspace/links';");
   });
 });
 
@@ -313,9 +318,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0) + this round\u2019s verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.192.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.192.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.192.0');
+    expect(pkg.version).toBe('2.193.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.193.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.193.0');
     expect(pkg.scripts['verify:v2-175-0']).toBe('node scripts/verify-v2-175-0.mjs');
   });
 });

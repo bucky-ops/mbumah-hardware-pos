@@ -24,7 +24,7 @@
 import { useState } from 'react';
 import { ChevronDown, ExternalLink, SlidersHorizontal, Users } from 'lucide-react';
 import type { OrgSummaryData } from '@/components/org/primitives';
-import { buildExpiringEmployeesHref, buildOverdueAssetsHref, buildRunDeepLinkHref } from '@/lib/workspace/links';
+import { buildAbsenceReportHref, buildExpiringEmployeesHref, buildOverdueAssetsHref, buildRunDeepLinkHref } from '@/lib/workspace/links';
 import { ASSET_LIST_READ_ROLES, EMPLOYEE_LIST_READ_ROLES } from '@/lib/app-config';
 import { useAuthStore } from '@/lib/stores';
 
@@ -119,6 +119,42 @@ function LatestRunCell({ run, storeName }: { run: HrPerStoreRow['latestPayroll']
         {run.periodName}
       </span>
       {statusBadge}
+    </span>
+  );
+}
+
+function AbsenceCell({ row }: { row: HrPerStoreRow }) {
+  // v2.193.0: the absence door — the amber voice the cell has worn since
+  // v2.110.0 becomes the affordance at the 10% attention threshold: the rate
+  // opens the HR reports desk on the absence tab, narrowed to this branch
+  // (the destination's OWN established deep-link contract — the tab key +
+  // the v2.23.0 storeId param — via the links lib's ONE writer). No role
+  // gate: every viewer of this panel passes the reports API's guard
+  // (SUPER_ADMIN via the hrGuard bypass, STORE_OWNER and ACCOUNTANT are
+  // REPORT_ROLES members) — a door that 403s is a lie, and this one cannot.
+  // Below the threshold the calm plain text keeps the exact voice this
+  // release replaces. ONE cell, two mounts (the table and the mobile card)
+  // — the panel renders EXACTLY one absence vocabulary.
+  if (row.monthAbsenceRatePct >= 10) {
+    return (
+      <a
+        href={buildAbsenceReportHref(row.storeId)}
+        data-testid="people-payroll-absence-door"
+        aria-label={`${row.monthAbsenceRatePct}% absence rate at ${row.storeName} this month — open the absence report narrowed to ${row.storeName}`}
+        title="Absence rate: ABSENT days over all recorded days this month — open the absence report narrowed to this branch"
+        className="inline-flex items-center gap-1 rounded-md font-semibold text-amber-700 underline-offset-2 transition-colors hover:text-orange-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400"
+      >
+        {row.monthAbsenceRatePct}%
+        <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+      </a>
+    );
+  }
+  return (
+    <span
+      className="text-slate-700 dark:text-slate-300"
+      title="Absence rate: ABSENT days over all recorded days this month"
+    >
+      {row.monthAbsenceRatePct}%
     </span>
   );
 }
@@ -352,15 +388,8 @@ export function PeoplePayrollByBranch({
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{row.headcountActive}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700 dark:text-slate-300">{kesMoney(row.monthEmploymentCost)}</td>
-                    <td
-                      className={`px-3 py-2 text-right tabular-nums ${
-                        row.monthAbsenceRatePct >= 10
-                          ? 'font-semibold text-amber-700 dark:text-amber-400'
-                          : 'text-slate-700 dark:text-slate-300'
-                      }`}
-                      title="Absence rate: ABSENT days over all recorded days this month"
-                    >
-                      {row.monthAbsenceRatePct}%
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      <AbsenceCell row={row} />
                     </td>
                     <td className="px-3 py-2">
                       <LatestRunCell run={row.latestPayroll} storeName={row.storeName} />
@@ -404,8 +433,8 @@ export function PeoplePayrollByBranch({
                     </div>
                     <div>
                       <dt className="text-[10px] uppercase tracking-wide text-slate-400">Absence</dt>
-                      <dd className={`tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-semibold text-amber-700 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {row.monthAbsenceRatePct}%
+                      <dd className="mt-0.5 text-right tabular-nums">
+                        <AbsenceCell row={row} />
                       </dd>
                     </div>
                     <div>

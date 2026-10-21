@@ -193,3 +193,50 @@ signature). The unknown-status fallback reuses the CANCELLED shape, so it
 is covered by that row. The chips stay as-is — no code change, the
 numbers are the deliverable — and the next axe run's identical
 incomplete on these alphas is a known quantity.
+
+## Reviewed-passing: the desk report's emerald action + status families (v2.193.0)
+
+The desk REPORT page (`desk-report-view.tsx`) wears five emerald-voiced
+surfaces the digest panel's v2.192.0 table does not cover: the ACTIVE
+window/branch scope chips (the roving group's pressed face), the Print
+button (the same literals as the active chip), the "File all visits"
+button, the ledger's "via" chip, and the page's OWN REPORT_STATUS_CHIP
+statuses (PENDING amber, APPROVED emerald, REJECTED rose, CANCELLED slate
+— the digest timeline's same four states, but over a DIFFERENT ground).
+The page paints no local bg: the real ground is the app BACKGROUND token
+(the root layout paints `bg-background`) — dark oklch(0.145 0.015 260),
+NOT the digest's literal slate-900 — so the v2.192.0 numbers do not
+transfer and these are first numbers, not a re-run. Two honest wrinkles
+the math must respect: the File-all button's LIGHT half is the family's
+only light ALPHA (`bg-emerald-50/70` — composited over the light
+background, unlike the opaque `-50` chips), and the ledger rows carry
+their own hover tints (`hover:bg-emerald-50/40`,
+`dark:hover:bg-emerald-500/5`) that sit UNDER the translucent dark chips
+and under the via chip's own `slate-900/60` in BOTH row states. Computed
+by `scripts/contrast-math-desk-report-chips-v2193.mjs` (committed; the
+literals asserted FROM the component source, the palette from the
+INSTALLED theme.css, the ground from globals.css). Everything here is
+9-12px semibold/bold text → 4.5:1 applies:
+
+| family                     | light            | dark calm        | dark hover       |
+| -------------------------- | ---------------- | ---------------- | ---------------- |
+| active scope chip / print  | 5.09:1 pass      | 10.70:1 pass     | 8.74:1 pass (print) |
+| file-all (50/70 light alpha) | **4.73:1** pass (hover 100) | 11.62:1 pass | 9.72:1 pass |
+| via chip                   | 5.37:1 pass      | 12.34:1 pass     | 12.05:1 pass (row-hover) / 10.70:1 pass (chip-hover) |
+| status PENDING (amber)     | 4.87:1 pass      | 12.08:1 pass     | 11.33:1 pass     |
+| status APPROVED (emerald)  | 5.09:1 pass      | 11.62:1 pass     | 10.80:1 pass     |
+| status REJECTED (rose)     | 5.51:1 pass      | 9.70:1 pass      | 9.27:1 pass      |
+| status CANCELLED (slate)   | **4.55:1** pass  | 6.46:1 pass      | 6.26:1 pass      |
+
+**23/23 families pass** the small-text bar. The dark margins are the
+widest of any surface yet measured over the background token (the deep
+0.145 ground under the bright `-300` text), and the light corners repeat
+the house's known signatures: CANCELLED slate the tightest status corner
+(4.55:1, the same number the digest timeline reports — the `-50` chip is
+stack-independent, so the grounds agree) with the amber PENDING right
+behind (4.87:1). The file-all hover is the family's one new tight corner
+(4.73:1, emerald-700 on the opaque emerald-100). The unknown-status
+fallback reuses the CANCELLED shape, so it is covered by that row. The
+chips stay as-is — no code change, the numbers are the deliverable — and
+the next axe run's identical incomplete on these alphas is a known
+quantity.
