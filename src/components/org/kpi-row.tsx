@@ -187,7 +187,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                     </button>
                   ))}
                 </div>
-                <span data-testid="revenue-lens-note" className="text-[10px] text-slate-500">
+                <span data-testid="revenue-lens-note" className="text-[10px] text-slate-500 dark:text-slate-400">
                   {lens === 'gross' ? 'the till face — includes VAT' : 'one read, two faces'}
                 </span>
               </div>
@@ -202,20 +202,20 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
               {lens === 'gross' ? (
                 <>
-                  <div><span className="text-slate-500">Today</span><p className="font-bold text-slate-800">{kes(k.revenue.today)}</p></div>
-                  <div><span className="text-slate-500">7d total</span><p className="font-bold text-slate-800">{kes(k.revenue.weekTotal)}</p></div>
-                  <div><span className="text-slate-500">Prior 7d</span><p className="font-bold text-slate-800">{kes(k.revenue.priorWeekTotal)}</p></div>
-                  <div><span className="text-slate-500">Avg / day (7d)</span><p className="font-bold text-slate-800">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">Today</span><p className="font-bold text-slate-800 dark:text-slate-100">{kes(k.revenue.today)}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">7d total</span><p className="font-bold text-slate-800 dark:text-slate-100">{kes(k.revenue.weekTotal)}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">Prior 7d</span><p className="font-bold text-slate-800 dark:text-slate-100">{kes(k.revenue.priorWeekTotal)}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">Avg / day (7d)</span><p className="font-bold text-slate-800 dark:text-slate-100">{kes(Math.round(k.revenue.weekTotal / 7))}</p></div>
                 </>
               ) : (
                 // The net grid — every cell the gross face has, minus VAT.
                 // The three net fields ship together (v2.187.0 payload); the
                 // ?? guards a pathological mixed answer, never a NaN.
                 <>
-                  <div><span className="text-slate-500">Today</span><p data-testid="revenue-net-today" className="font-bold text-slate-800">{kes(k.revenue.netTodayTotal ?? 0)}</p></div>
-                  <div><span className="text-slate-500">7d total</span><p data-testid="revenue-net-week" className="font-bold text-slate-800">{kes(k.revenue.netWeekTotal ?? k.revenue.weekTotal - (k.revenue.taxWeekTotal ?? 0))}</p></div>
-                  <div><span className="text-slate-500">Prior 7d</span><p data-testid="revenue-net-prior" className="font-bold text-slate-800">{kes(k.revenue.netPriorWeekTotal ?? 0)}</p></div>
-                  <div><span className="text-slate-500">Avg / day (7d)</span><p data-testid="revenue-net-avg" className="font-bold text-slate-800">{kes(Math.round((k.revenue.netWeekTotal ?? k.revenue.weekTotal - (k.revenue.taxWeekTotal ?? 0)) / 7))}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">Today</span><p data-testid="revenue-net-today" className="font-bold text-slate-800 dark:text-slate-100">{kes(k.revenue.netTodayTotal ?? 0)}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">7d total</span><p data-testid="revenue-net-week" className="font-bold text-slate-800 dark:text-slate-100">{kes(k.revenue.netWeekTotal ?? k.revenue.weekTotal - (k.revenue.taxWeekTotal ?? 0))}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">Prior 7d</span><p data-testid="revenue-net-prior" className="font-bold text-slate-800 dark:text-slate-100">{kes(k.revenue.netPriorWeekTotal ?? 0)}</p></div>
+                  <div><span className="text-slate-500 dark:text-slate-400">Avg / day (7d)</span><p data-testid="revenue-net-avg" className="font-bold text-slate-800 dark:text-slate-100">{kes(Math.round((k.revenue.netWeekTotal ?? k.revenue.weekTotal - (k.revenue.taxWeekTotal ?? 0)) / 7))}</p></div>
                 </>
               )}
             </div>
@@ -238,17 +238,25 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
               const netDelta = netWeek - netPrior;
               const netPct = netPrior > 0 ? Math.round((netDelta / netPrior) * 1000) / 10 : null;
               return (
-                <div data-testid="revenue-net-wow-strip" className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-violet-100 bg-violet-50/70 px-2.5 py-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-800">net week-over-week</span>
-                  <span data-testid="revenue-net-wow-week" className="text-xs font-semibold tabular-nums text-violet-900">{kes(netWeek)}</span>
+                <div data-testid="revenue-net-wow-strip" className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-violet-100 bg-violet-50/70 px-2.5 py-1.5 dark:border-violet-500/30 dark:bg-violet-500/10">
+                  {/* v2.194.0: the strip learns its dark half — the light
+                      paint (violet-50/70) over the dark dialog ground measured
+                      3.3:1 for its smallest text (the 10px label), so the
+                      strip now wears the house's proven dark chip pattern
+                      (the panels' STATUS_CHIP family: {c}-500/10 ground under
+                      a -300 voice, the /30 ring) instead of pretending the
+                      light alpha survives the dark dialog. The verdict chip's
+                      three states wear the same pattern's dark halves. */}
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">net week-over-week</span>
+                  <span data-testid="revenue-net-wow-week" className="text-xs font-semibold tabular-nums text-violet-900 dark:text-violet-200">{kes(netWeek)}</span>
                   <span
                     data-testid="revenue-net-wow"
                     title={`Net week-over-week: ${kes(netWeek)} vs prior ${kes(netPrior)}`}
-                    className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ${netDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : netDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-slate-50 text-slate-500 ring-slate-200'}`}
+                    className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ${netDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : netDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' : 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30'}`}
                   >
                     {netDelta > 0 ? '▲' : netDelta < 0 ? '▼' : '—'} {netPct == null ? 'vs prior' : `${netDelta > 0 ? '+' : ''}${netPct}% vs prior`}
                   </span>
-                  <span data-testid="revenue-net-wow-prior" className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-violet-700 ring-1 ring-violet-100" title="Prior week net of VAT">prior {kes(netPrior)}</span>
+                  <span data-testid="revenue-net-wow-prior" className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-violet-700 ring-1 ring-violet-100 dark:bg-violet-500/20 dark:text-violet-300 dark:ring-violet-500/30" title="Prior week net of VAT">prior {kes(netPrior)}</span>
                 </div>
               );
             })()}
@@ -257,12 +265,14 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                 Tolerant by type (optional fields): an older cached answer
                 renders nothing here, never a NaN, never a crash. */}
             {k.revenue.taxWeekTotal != null && (
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">incl. VAT (7d)</span>
-                <span className="text-xs font-semibold tabular-nums text-emerald-900">{kes(k.revenue.taxWeekTotal)}</span>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2.5 py-1.5 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">incl. VAT (7d)</span>
+                <span className="text-xs font-semibold tabular-nums text-emerald-900 dark:text-emerald-200">{kes(k.revenue.taxWeekTotal)}</span>
                 {/* v2.187.0: the VAT week-over-week — taxPriorWeekTotal's
                     first consumer. Quiet, arrowed, honest about a zero
-                    prior (no invented %, the WeekDeltaChip honesty rule). */}
+                    prior (no invented %, the WeekDeltaChip honesty rule).
+                    v2.194.0: the three states wear the dark chip pattern's
+                    dark halves (the strip's own fix — same recipe). */}
                 {k.revenue.taxPriorWeekTotal != null && (() => {
                   const vatDelta = k.revenue.taxWeekTotal - k.revenue.taxPriorWeekTotal;
                   const vatPct = k.revenue.taxPriorWeekTotal > 0 ? Math.round((vatDelta / k.revenue.taxPriorWeekTotal) * 1000) / 10 : null;
@@ -270,13 +280,30 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                     <span
                       data-testid="revenue-vat-wow"
                       title={`VAT week-over-week: ${kes(k.revenue.taxWeekTotal)} vs prior ${kes(k.revenue.taxPriorWeekTotal ?? 0)}`}
-                      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ${vatDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : vatDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-slate-50 text-slate-500 ring-slate-200'}`}
+                      className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ${vatDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : vatDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' : 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30'}`}
                     >
                       {vatDelta > 0 ? '▲' : vatDelta < 0 ? '▼' : '—'} {vatPct == null ? 'vs prior' : `${vatDelta > 0 ? '+' : ''}${vatPct}% vs prior`}
                     </span>
                   );
                 })()}
-                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-700 ring-1 ring-emerald-100" title="Week revenue net of VAT">net {kes(k.revenue.netWeekTotal ?? k.revenue.weekTotal - k.revenue.taxWeekTotal)}</span>
+                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-700 ring-1 ring-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-300 dark:ring-emerald-500/30" title="Week revenue net of VAT">net {kes(k.revenue.netWeekTotal ?? k.revenue.weekTotal - k.revenue.taxWeekTotal)}</span>
+              </div>
+            )}
+            {/* v2.194.0: the VAT face gets its spark — the wire's NEW
+                taxSpark (the SAME rows' tax bucketed in the SAME pass as
+                the gross/net sparks, zero additional reads) renders under
+                the VAT strip in the face's own amber (a THIRD hue so the
+                modal's three faces never merge: emerald gross, violet
+                net, amber VAT). Height 36 under the 80px lens sparks —
+                the lens chart stays the lead, this is the strip's quiet
+                trend. Tolerant: an older cached answer (no taxSpark)
+                renders nothing here, never a NaN; Sparkline itself emits
+                nothing for an empty array. The svg is aria-hidden
+                decoration (the primitive hard-codes it) — the strip's
+                figures above already speak the face. */}
+            {k.revenue.taxSpark != null && k.revenue.taxSpark.length > 0 && (
+              <div data-testid="revenue-vat-spark" className="mt-1" title="VAT collected per day, last 7 days">
+                <Sparkline data={k.revenue.taxSpark} stroke="#d97706" width={380} height={36} />
               </div>
             )}
           </div>

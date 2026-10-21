@@ -104,7 +104,7 @@ export interface KpiSummaryData {
     // v2.185.0: the headline numbers are GROSS of tax on BOTH org surfaces
     // (the reconciliation); the tax/net lens rides additively — optional so
     // an older cached answer renders the calm gross story, never a crash.
-    revenue: { today: number; weekTotal: number; priorWeekTotal: number; variancePct: number; spark: number[]; taxWeekTotal?: number; taxPriorWeekTotal?: number; netWeekTotal?: number; netTodayTotal?: number; netPriorWeekTotal?: number; netSpark?: number[] };
+    revenue: { today: number; weekTotal: number; priorWeekTotal: number; variancePct: number; spark: number[]; taxWeekTotal?: number; taxPriorWeekTotal?: number; netWeekTotal?: number; netTodayTotal?: number; netPriorWeekTotal?: number; netSpark?: number[]; taxSpark?: number[] };
     transactions: { today: number; weekTotal: number; priorWeekTotal: number; variancePct: number };
     lowStock: { count: number };
     overdueRentals: { count: number };

@@ -306,9 +306,9 @@ describe('docs and release surfaces', () => {
   });
 
   it('package.json leads 2.181.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.193.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.193.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.193.0');
+    expect(pkg.version).toBe('2.194.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.194.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.194.0');
     expect(pkg.scripts['verify:v2-181-0']).toBe('node scripts/verify-v2-181-0.mjs');
     expect(readRepo('scripts/verify-v2-181-0.mjs')).toContain('v2.181.0 verification');
   });
@@ -323,7 +323,7 @@ describe('docs and release surfaces', () => {
       'src/tests/store-matrix-week-v2179.test.ts',
       'src/tests/store-matrix-sort-v2180.test.ts',
     ]) {
-      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.193.0');");
+      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.194.0');");
     }
   });
 

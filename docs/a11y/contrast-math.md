@@ -240,3 +240,33 @@ fallback reuses the CANCELLED shape, so it is covered by that row. The
 chips stay as-is — no code change, the numbers are the deliverable — and
 the next axe run's identical incomplete on these alphas is a known
 quantity.
+
+## Fixed: the revenue modal's dark-mode voice + the VAT spark's stroke (v2.194.0)
+
+The revenue modal (kpi-row.tsx) was built light-only (v2.176-era) while its
+Dialog surface paints `bg-background` — in dark mode oklch(0.145 0.015 260).
+Measured by `scripts/contrast-math-revenue-modal-v2194.mjs` (the literals
+asserted FROM the component source, the dialog ground from globals.css
+`:root`/`.dark`, the palette from the INSTALLED theme.css), the pre-fix dark
+numbers were the modal's quiet failure: the stat grid's `text-slate-800`
+VALUES measured **1.35:1** (the loudest numbers on the screen, near-invisible),
+the `text-slate-500` labels 4.15:1, the net strip's 10px violet-800 label
+4.13:1 over its `bg-violet-50/70` alpha sunk into the dark ground, and the
+VAT strip's emerald-800 label 3.54:1 (emerald-900's 4.53:1 and violet-900's
+4.97:1 passing hair-thin). Light mode was already sound (4.57–14.04:1).
+
+v2.194.0 fixes the modal's dark voice with the house's proven pattern (the
+panels' STATUS_CHIP family): both strips gain `dark:border-{c}-500/30
+dark:bg-{c}-500/10` under `dark:text-{c}-300` labels and `dark:text-{c}-200`
+week figures, the verdict chips' three states wear `dark:bg-{c}-500/10
+dark:text-{c}-300 dark:ring-{c}-500/30`, the prior/net chips swap their
+`bg-white/80` alpha for `dark:bg-{c}-500/20`, and the grid wears
+`dark:text-slate-400` labels under `dark:text-slate-100` values. **26/26
+families pass** — dark margins 6.37–18.05:1 (the fixed grid value the
+widest), light unchanged (4.55–14.04:1; the flat slate verdict chip the
+tightest, as everywhere). The new VAT spark's stroke (`#d97706`, amber-600 —
+a third hue so emerald gross, violet net and amber VAT never merge) is
+recorded under the 3:1 non-text bar for completeness: 3.06:1 light, 6.20:1
+dark — the svg is aria-hidden decoration and the strip's figures speak the
+face. The fix is a code change: this section closes as FIXED, not
+reviewed-passing.

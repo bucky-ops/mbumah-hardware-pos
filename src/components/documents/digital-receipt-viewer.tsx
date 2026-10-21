@@ -92,7 +92,11 @@ export function DigitalReceiptViewer({
     // Initial measurement MUST run synchronously before the first paint of
     // autofit mode (a full-size flash would defeat the purpose); the
     // ResizeObserver below only delivers asynchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // v2.194.0: the eslint-disable for react-hooks/set-state-in-effect was
+    // removed — the rule (downruled to warn this release) reports nothing
+    // here (measure() sets state through its own body, not synchronously
+    // in the effect), and the config's reportUnusedDisableDirectives
+    // errors on a suppression that no longer earns its keep.
     measure();
     const container = containerRef.current;
     const content = contentRef.current;

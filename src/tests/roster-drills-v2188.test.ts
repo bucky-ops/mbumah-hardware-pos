@@ -137,7 +137,12 @@ describe('the net verdict - the second face speaks its trend', () => {
 
   it('the arrows mirror the VAT chip: emerald up, red down, calm flat', () => {
     expect(modal).toContain("{netDelta > 0 ? '▲' : netDelta < 0 ? '▼' : '—'}");
-    expect(modal).toContain("netDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : netDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-slate-50 text-slate-500 ring-slate-200'");
+    // v2.194.0 pin evolution (deliberate): the ternary grew the dark halves
+    // (the house's dark chip pattern) — the light ternary stands verbatim,
+    // each state gaining dark:bg-{c}-500/10 dark:text-{c}-300/400
+    // dark:ring-{c}-500/30 after its light face (reasoning comment where
+    // the pin lives; the VAT chip's ternary evolved identically).
+    expect(modal).toContain("netDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : netDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' : 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30'");
   });
 
   it('the strip wears the NET face violet - the two faces stay distinguishable', () => {
@@ -146,6 +151,8 @@ describe('the net verdict - the second face speaks its trend', () => {
     expect(modal).toContain('data-testid="revenue-net-wow"');
     expect(modal).toContain('data-testid="revenue-net-wow-prior"');
     expect(modal).toContain('border border-violet-100 bg-violet-50/70');
+    // v2.194.0: the strip gained its dark half — the light literals stand
+    expect(modal).toContain('dark:border-violet-500/30 dark:bg-violet-500/10');
     expect(modal).toContain('text-[10px] font-semibold uppercase tracking-wide text-violet-800');
   });
 
@@ -171,9 +178,9 @@ describe('the net verdict - the second face speaks its trend', () => {
 });
 
 describe('the version contract', () => {
-  it('package.json rides at 2.193.0', () => {
-    expect(pkg.version).toBe('2.193.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.193.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.193.0');
+  it('package.json rides at 2.194.0', () => {
+    expect(pkg.version).toBe('2.194.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.194.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.194.0');
   });
 });
