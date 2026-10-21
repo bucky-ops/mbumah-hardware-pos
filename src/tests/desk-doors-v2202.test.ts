@@ -90,7 +90,7 @@ describe('v2.202.0 — the wire purity: the doors compose, never fork', () => {
   });
 
   it('null wire rows are filtered by type predicate, never a non-null assertion', () => {
-    expect(doors).toContain('.filter((s): s is NonNullable<typeof s> => !!s && s.storeId != null)');
+    expect(doors).toContain('.filter((s): s is NonNullable<typeof s> => !!s && s.id != null)');
     expect(doors).not.toContain('!.');
   });
 });
@@ -229,16 +229,16 @@ describe('v2.202.0 — the style: the six-hue vocabulary + the voice lint', () =
 
 describe('v2.202.0 — docs and release surfaces', () => {
   it('package.json rides at 2.202.0 (all three slots) and the scripts are wired', () => {
-    expect(pkg.version).toBe('2.202.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.202.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.202.0');
+    expect(pkg.version).toBe('2.202.1');
+    expect(pkg.mbumah.releaseVersion).toBe('2.202.1');
+    expect(pkg.mbumah.baseVersion).toBe('2.202.1');
     expect(pkg.scripts['verify:v2-202-0']).toBe('node scripts/verify-v2-202-0.mjs');
     expect(pkg.scripts['verify:v2-201-0']).toBe('node scripts/verify-v2-201-0.mjs');
   });
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(92);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(93);");
   });
 
   it('the whats-new feed heads the release', () => {
@@ -249,6 +249,15 @@ describe('v2.202.0 — docs and release surfaces', () => {
 
   it('the a11y doc records the round', () => {
     expect(a11yDoc).toContain('2.202.0');
+  });
+
+  it('the v2.202.1 wire guard: the field the summary actually carries', () => {
+    // the summary rows carry WorkspaceStoreRef.id — the subset reads the SAME
+    // field, and org-console pins the assignability at COMPILE time.
+    expect(doors).toContain('id?: string;');
+    expect(doors).not.toContain('storeId?: string;');
+    expect(orgConsole).toContain('type DeskWireCheck = OrgSummary extends OrgDeskWire ? true : never;');
+    expect(orgConsole).toContain('const deskWireCheck: DeskWireCheck = true;');
   });
 
   it('the changelog keeps the round above its predecessor (the treadmill-proof order)', () => {
