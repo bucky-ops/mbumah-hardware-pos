@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.210.0',
+    title: 'The currency wire finds its model',
+    bullets: [
+      'The exchange-rate endpoint finally stands on real ground: the CurrencyRate model it always queried now exists in the schema, so admin-set rates persist and the switcher can read them — the phantom-model sweep found the wire had been answered by silent static fallbacks since birth.',
+      'The currency switcher speaks each rate\u2019s source honestly: admin-set, API, or built-in — a measured chip on every row when the wire answers, and pure silence when it does not (no invented provenance).',
+      'A new sweep law pins the whole class shut: every database model the code touches must exist in the schema, enforced by tests — the same audit that caught this wire is now part of the suite.',
+    ],
+  },
+  {
     version: '2.209.0',
     title: 'The dead-letter queue speaks its composition',
     bullets: [

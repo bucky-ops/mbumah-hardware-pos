@@ -57,7 +57,7 @@ function useLazyEndpoint<T>(url: string, active: boolean): LazyState<T> {
 function Unavailable({ reason }: { reason: string }) {
   return (
     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-      <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-amber-500" />
+      <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-amber-600" />
       <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Unavailable in this release for your account</p>
       <p className="mt-1 text-[11px] text-slate-500">{reason}</p>
     </div>
@@ -91,7 +91,7 @@ function FinancialsExpert() {
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="space-y-2">
         <Tile label="Net profit basis" value={rows.length ? `${rows.length} accounts` : 'No journal rows'} sub={`as of ${state.data.asOfDate ? new Date(state.data.asOfDate).toLocaleDateString('en-KE') : 'today'}`} />
-        <Tile label="Trial balance" value={balanced ? 'Balanced' : 'Off'} tone={balanced ? 'text-emerald-700' : 'text-red-500'} sub={`${kes(totalDebit)} = ${kes(totalCredit)}`} />
+        <Tile label="Trial balance" value={balanced ? 'Balanced' : 'Off'} tone={balanced ? 'text-emerald-700' : 'text-red-700'} sub={`${kes(totalDebit)} = ${kes(totalCredit)}`} />
       </div>
       <div className="lg:col-span-2">
         <SubTitle>Chart of accounts - trial balance (double-entry)</SubTitle>
@@ -175,7 +175,7 @@ function SystemExpert({ kpi }: { kpi: KpiSummaryData }) {
         <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {['database', 'database_stats'].map((key) => (
             <div key={key} className="rounded-xl border border-slate-100 p-2 text-center">
-              <p className={`text-sm font-bold ${checks[key]?.status === 'ok' ? 'text-emerald-700' : checks[key]?.status === 'warning' ? 'text-amber-700' : 'text-red-500'}`}>{checks[key]?.status ?? 'n/a'}</p>
+              <p className={`text-sm font-bold ${checks[key]?.status === 'ok' ? 'text-emerald-700' : checks[key]?.status === 'warning' ? 'text-amber-700' : 'text-red-700'}`}>{checks[key]?.status ?? 'n/a'}</p>
               <p className="text-[10px] font-medium text-slate-600 dark:text-slate-400">{key.replace('_', ' ')}</p>
               <p className="truncate text-[9px] text-slate-500" title={checks[key]?.detail ?? ''}>{checks[key]?.detail ?? ''}</p>
             </div>
@@ -187,7 +187,7 @@ function SystemExpert({ kpi }: { kpi: KpiSummaryData }) {
         <SubTitle>Environment variables</SubTitle>
         <div className="flex flex-wrap gap-1.5">
           {envChecks.map(([key, value]) => (
-            <Badge key={key} variant="outline" className={`font-mono text-[10px] ${value.status === 'ok' ? 'text-emerald-700' : 'text-red-500'}`}>
+            <Badge key={key} variant="outline" className={`font-mono text-[10px] ${value.status === 'ok' ? 'text-emerald-700' : 'text-red-700'}`}>
               {key.replace('env_', '')}: {value.status}
             </Badge>
           ))}
@@ -224,7 +224,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
           <div className="space-y-2 lg:col-span-1">
             <Tile label="Stock health" value={e.inventory.totalSkus ? PCT(Math.round(100 - (100 * e.inventory.lowStock) / e.inventory.totalSkus)) : '100%'} tone={pctColor(e.inventory.totalSkus ? 100 - (100 * e.inventory.lowStock) / e.inventory.totalSkus : 100)} sub={`${num(e.inventory.totalSkus)} SKUs`} />
             <Tile label="Stock value (cost)" value={kes(e.inventory.stockValue)} sub={`retail ${kes(e.inventory.retailValue)}`} />
-            <Tile label="Low stock" value={num(e.inventory.lowStock)} tone={e.inventory.lowStock ? 'text-orange-500' : ''} sub="at/below reorder level" />
+            <Tile label="Low stock" value={num(e.inventory.lowStock)} tone={e.inventory.lowStock ? 'text-orange-700' : ''} sub="at/below reorder level" />
           </div>
           <div className="lg:col-span-2">
             <SubTitle>Low stock / reorder watchlist (org-wide)</SubTitle>
@@ -237,7 +237,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
                       <TableCell className="text-xs"><span className="font-medium text-slate-700">{p.name}</span> <span className="text-slate-500">{p.sku}</span></TableCell>
                       <TableCell className="text-xs text-slate-500">{p.category}</TableCell>
                       <TableCell className="text-xs text-slate-500">{p.store ?? '-'}</TableCell>
-                      <TableCell className="text-right text-xs font-semibold tabular-nums text-orange-600">{num(p.stockQty)} / {num(p.reorderLevel)}</TableCell>
+                      <TableCell className="text-right text-xs font-semibold tabular-nums text-orange-700">{num(p.stockQty)} / {num(p.reorderLevel)}</TableCell>
                     </TableRow>
                   ))}
                   {e.inventory.lowStockItems.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-xs text-slate-500">Everything is above its reorder level.</TableCell></TableRow>}
@@ -250,8 +250,8 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
         {/* Debt */}
         <TabsContent value="debt" className="mt-3 grid gap-4 lg:grid-cols-3">
           <div className="space-y-2">
-            <Tile label="Outstanding" value={kes(e.debtExpert.total)} tone={e.debtExpert.total > 400_000 ? 'text-red-500' : 'text-slate-800'} sub="org-wide" />
-            <Tile label="90+ days" value={kes(e.debtExpert.aging.d90plus)} tone="text-red-500" sub={`30d ${kes(e.debtExpert.aging.d30)} · 60d ${kes(e.debtExpert.aging.d60)}`} />
+            <Tile label="Outstanding" value={kes(e.debtExpert.total)} tone={e.debtExpert.total > 400_000 ? 'text-red-700' : 'text-slate-800'} sub="org-wide" />
+            <Tile label="90+ days" value={kes(e.debtExpert.aging.d90plus)} tone="text-red-700" sub={`30d ${kes(e.debtExpert.aging.d30)} · 60d ${kes(e.debtExpert.aging.d60)}`} />
             <Tile label="Active plans" value={num(e.debtExpert.activePlans)} sub={`${e.debtExpert.remindersSent} reminders sent`} />
           </div>
           <div className="lg:col-span-2">
@@ -282,7 +282,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
         <TabsContent value="rentals" className="mt-3 grid gap-4 lg:grid-cols-3">
           <div className="space-y-2">
             <Tile label="Active" value={num(e.rentals.active)} sub="on the yard" />
-            <Tile label="Overdue" value={num(e.rentals.overdue)} tone={e.rentals.overdue ? 'text-red-500' : ''} sub="damage fees may apply" />
+            <Tile label="Overdue" value={num(e.rentals.overdue)} tone={e.rentals.overdue ? 'text-red-700' : ''} sub="damage fees may apply" />
             <Tile label="On-rent ledger rows" value={num(e.rentals.items.length)} sub="latest 8 across stores" />
           </div>
           <div className="lg:col-span-2">
@@ -347,7 +347,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
         <TabsContent value="mpesa" className="mt-3 grid gap-4 lg:grid-cols-3">
           <div className="grid grid-cols-2 gap-2">
             <Tile label="Completed" value={num(e.mpesa.today.completed)} tone="text-emerald-700" sub="recent STK pushes" />
-            <Tile label="Mismatch" value={num(e.mpesa.today.stale)} tone={e.mpesa.today.stale ? 'text-red-500' : ''} sub="pending > 10 min" />
+            <Tile label="Mismatch" value={num(e.mpesa.today.stale)} tone={e.mpesa.today.stale ? 'text-red-700' : ''} sub="pending > 10 min" />
             <Tile label="Pending" value={num(e.mpesa.today.pending)} sub="awaiting callback" />
             <Tile label="Failed" value={num(e.mpesa.today.failed)} tone={e.mpesa.today.failed ? 'text-amber-700' : ''} sub="cancelled or failed" />
           </div>
@@ -408,7 +408,7 @@ export function ExpertModules({ data }: { data: KpiSummaryData }) {
             <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {e.health.breakdown.map((b: HealthBreakdownItem) => (
                 <div key={b.key} className="rounded-xl border border-slate-100 p-2 text-center">
-                  <p className={`text-lg font-bold ${b.score >= 80 ? 'text-emerald-700' : b.score >= 40 ? 'text-amber-700' : 'text-red-500'}`}>{b.score}</p>
+                  <p className={`text-lg font-bold ${b.score >= 80 ? 'text-emerald-700' : b.score >= 40 ? 'text-amber-700' : 'text-red-700'}`}>{b.score}</p>
                   <p className="text-[10px] font-medium text-slate-600 dark:text-slate-400">{b.label}</p>
                   <p className="text-[9px] text-slate-500">{b.detail}</p>
                 </div>
