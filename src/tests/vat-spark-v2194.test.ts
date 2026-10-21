@@ -105,14 +105,14 @@ describe('the third bucket executed - one pass, three faces, zero new reads', ()
 describe('the modal renders the amber spark - a third hue, the lens charts stay the lead', () => {
   it('the VAT spark mounts under the strip, tolerant and honest', () => {
     expect(kpi).toContain('{k.revenue.taxSpark != null && k.revenue.taxSpark.length > 0 && (');
-    expect(kpi).toContain('<Sparkline data={k.revenue.taxSpark} stroke="#d97706" width={380} height={36} />');
+    expect(kpi).toContain('<Sparkline data={k.revenue.taxSpark} stroke="#d97706" spokenLabel="VAT collected per day, KES" width={380} height={36} />');
     expect(kpi).toContain('data-testid="revenue-vat-spark"');
     expect(kpi).toContain('title="VAT collected per day, last 7 days"');
   });
 
   it('the three faces keep their hues - emerald gross, violet net, amber VAT', () => {
-    expect(kpi).toContain('<Sparkline data={k.revenue.spark} width={380} height={80} />');
-    expect(kpi).toContain('<Sparkline data={k.revenue.netSpark ?? []} stroke="#8b5cf6" width={380} height={80} />');
+    expect(kpi).toContain('<Sparkline data={k.revenue.spark} spokenLabel="Gross revenue per day, KES" width={380} height={80} />');
+    expect(kpi).toContain('<Sparkline data={k.revenue.netSpark ?? []} stroke="#8b5cf6" spokenLabel="Net revenue per day, KES" width={380} height={80} />');
     expect(kpi).toContain('stroke="#d97706"');
     // the height hierarchy is deliberate: 80 lead, 36 quiet
     expect(kpi).toContain('the lens chart stays the lead, this is the strip\'s quiet');
@@ -183,9 +183,9 @@ describe('the dark voice fixed - the house pattern over the dialog ground', () =
 
 describe('docs and release surfaces', () => {
   it('package.json rides at 2.198.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.203.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.203.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.203.0');
+    expect(pkg.version).toBe('2.204.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.204.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.204.0');
     expect(pkg.scripts['verify:v2-194-0']).toBe('node scripts/verify-v2-194-0.mjs');
     expect(pkg.scripts['verify:v2-193-0']).toBe('node scripts/verify-v2-193-0.mjs');
     expect(readRepo('scripts/verify-v2-194-0.mjs')).toContain('v2.194.0 verification');
@@ -204,8 +204,8 @@ describe('docs and release surfaces', () => {
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(94);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(95);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(94);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(95);");
   });
 });

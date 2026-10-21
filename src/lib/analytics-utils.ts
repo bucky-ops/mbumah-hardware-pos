@@ -467,15 +467,40 @@ export function toTransactionSlice(tx: SalesTransaction | TransactionSlice): Tra
 /**
  * Payment-method color palette used across all analytics charts so the donut,
  * bar, and heatmap legends stay visually consistent.
+ * v2.204.0: the mark voices re-voice to the -600 family — the analytics
+ * donut's segments and the fallback palette paint on the white card ground,
+ * and the old emerald-500 (2.54) / amber-500 (2.15) / cyan-500 (2.43) sat
+ * below the 3:1 non-text graphics bar. CARD blue-500 (3.68), DEBT red-500
+ * (3.76) and SPLIT violet-500 (4.23) already cleared it and stay.
  */
 export const PAYMENT_METHOD_COLORS: Record<string, string> = {
-  CASH: '#10b981',
-  MPESA: '#f59e0b',
+  CASH: '#059669',
+  MPESA: '#d97706',
   CARD: '#3b82f6',
   DEBT: '#ef4444',
   SPLIT: '#8b5cf6',
-  GIFT_CARD: '#06b6d4',
+  GIFT_CARD: '#0891b2',
 };
+
+/**
+ * v2.204.0: the TEXT voices for the same six methods — the analytics donut's
+ * legend paints its percentage cell with the method color, and a -600 mark
+ * voice is still a failing TEXT voice at 11px (emerald-600 measures 3.77:1
+ * against the 4.5:1 text bar). The -700 family clears it: emerald-700 5.05,
+ * amber-700 5.02, blue-700 6.68, red-700 6.47, violet-700 7.08, cyan-700 5.29.
+ */
+export const PAYMENT_METHOD_TEXT: Record<string, string> = {
+  CASH: '#047857',
+  MPESA: '#b45309',
+  CARD: '#1d4ed8',
+  DEBT: '#b91c1c',
+  SPLIT: '#6d28d9',
+  GIFT_CARD: '#0e7490',
+};
+
+export function paymentMethodTextColor(method: string): string {
+  return PAYMENT_METHOD_TEXT[method] ?? '#334155';
+}
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: 'Cash',
@@ -492,7 +517,7 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
  */
 export function paymentMethodColor(method: string, fallbackIndex = 0): string {
   if (PAYMENT_METHOD_COLORS[method]) return PAYMENT_METHOD_COLORS[method];
-  const palette = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+  const palette = ['#059669', '#d97706', '#3b82f6', '#ef4444', '#8b5cf6', '#0891b2', '#ec4899'];
   return palette[fallbackIndex % palette.length];
 }
 

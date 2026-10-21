@@ -76,32 +76,36 @@ import ReportsPanel from './financial/ReportsPanel';
 
 // Chart Configs
 
+// v2.204.0: the chart configs' mark colors re-voice to the -600 family on
+// the white card ground (emerald-500 2.54 / orange-500 2.80 / amber-500 2.15
+// / green-500 2.28 / yellow-500 1.92 all sat below the 3:1 graphics bar;
+// violet-500 4.23 and blue-500 3.68 already cleared it).
 const revenueChartConfig: ChartConfig = {
-  revenue: { label: 'Revenue', color: '#10b981' },
-  expenses: { label: 'Expenses', color: '#f97316' },
+  revenue: { label: 'Revenue', color: '#059669' },
+  expenses: { label: 'Expenses', color: '#ea580c' },
   movingAvg: { label: '7-Day Avg', color: '#8b5cf6' },
 };
 
 const paymentChartConfig: ChartConfig = {
-  CASH: { label: 'Cash', color: '#10b981' },
+  CASH: { label: 'Cash', color: '#059669' },
   MPESA: { label: 'M-Pesa', color: '#3b82f6' },
-  DEBT: { label: 'Debt', color: '#f59e0b' },
+  DEBT: { label: 'Debt', color: '#d97706' },
 };
 
 const expenseChartConfig: ChartConfig = {
-  amount: { label: 'Amount', color: '#f97316' },
+  amount: { label: 'Amount', color: '#ea580c' },
 };
 
 const profitChartConfig: ChartConfig = {
   margin: { label: 'Profit Margin %', color: '#8b5cf6' },
-  revenue: { label: 'Revenue', color: '#10b981' },
-  expenses: { label: 'Expenses', color: '#f97316' },
+  revenue: { label: 'Revenue', color: '#059669' },
+  expenses: { label: 'Expenses', color: '#ea580c' },
 };
 
 const debtAgingChartConfig: ChartConfig = {
-  current: { label: 'Current', color: '#22c55e' },
-  days30: { label: '1-30 Days', color: '#eab308' },
-  days60: { label: '31-60 Days', color: '#f97316' },
+  current: { label: 'Current', color: '#16a34a' },
+  days30: { label: '1-30 Days', color: '#a16207' },
+  days60: { label: '31-60 Days', color: '#ea580c' },
   days90Plus: { label: '90+ Days', color: '#ef4444' },
 };
 
@@ -1054,11 +1058,12 @@ export default function FinancialTab() {
   const journalTotalDebit = journals.reduce((s, je) => s + toNum(je.totalDebit), 0);
   const journalTotalCredit = journals.reduce((s, je) => s + toNum(je.totalCredit), 0);
 
-  // Debt aging chart data
+  // Debt aging chart data — v2.204.0: rides the debtAgingChartConfig's
+  // re-voiced -600 family (the CSS bar ground is the white card).
   const agingChartData = useMemo(() => [
-    { name: 'Current', value: agingSummary.current, color: '#22c55e' },
-    { name: '1-30 Days', value: agingSummary.days30, color: '#eab308' },
-    { name: '31-60 Days', value: agingSummary.days60, color: '#f97316' },
+    { name: 'Current', value: agingSummary.current, color: '#16a34a' },
+    { name: '1-30 Days', value: agingSummary.days30, color: '#a16207' },
+    { name: '31-60 Days', value: agingSummary.days60, color: '#ea580c' },
     { name: '90+ Days', value: agingSummary.days90Plus, color: '#ef4444' },
   ].filter(d => d.value > 0), [agingSummary]);
 
@@ -1087,7 +1092,8 @@ export default function FinancialTab() {
     }));
   }, [debts]);
 
-  const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'];
+  // v2.204.0: the pie voices ride the -600 family on the white card ground.
+  const PIE_COLORS = ['#059669', '#3b82f6', '#d97706', '#8b5cf6'];
 
   return (
     <div className="space-y-4">
@@ -1494,12 +1500,12 @@ export default function FinancialTab() {
                 <ComposedChart data={revenueTrendWithMA} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                   <defs>
                     <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#059669" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#059669" stopOpacity={0.02} />
                     </linearGradient>
                     <linearGradient id="expenseGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#f97316" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#ea580c" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#ea580c" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted-foreground/20" />
@@ -1657,8 +1663,8 @@ export default function FinancialTab() {
                 <BarChart data={expenseByAccount} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
                   <defs>
                     <linearGradient id="expenseBarGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.9} />
-                      <stop offset="95%" stopColor="#f97316" stopOpacity={0.5} />
+                      <stop offset="5%" stopColor="#ea580c" stopOpacity={0.9} />
+                      <stop offset="95%" stopColor="#ea580c" stopOpacity={0.5} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted-foreground/20" />

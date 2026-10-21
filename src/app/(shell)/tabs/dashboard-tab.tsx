@@ -1195,12 +1195,19 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
 
 // 5b. PAYMENT METHODS (conic-gradient donut)
 
+// v2.204.0: the segment colors re-voice to the -600 family — the donut and
+// the legend mini-bars sit on the white card ground, and the old -500 voices
+// measured below the 3:1 non-text graphics bar (emerald-500 2.54, amber-500
+// 2.15, slate-400 2.86). DEBT's rose-500 already cleared it at 3.67:1 and
+// SPLIT's slate-500 at 4.76:1 — both stay. The donut's aria composes the
+// split loudest-first (rows arrive pre-sorted by amount) so the picture says
+// its proportions instead of the generic "distribution".
 const PAYMENT_META: Record<string, { label: string; color: string }> = {
-  CASH: { label: 'Cash', color: '#10b981' },
-  MPESA: { label: 'M-Pesa', color: '#f59e0b' },
+  CASH: { label: 'Cash', color: '#059669' },
+  MPESA: { label: 'M-Pesa', color: '#d97706' },
   DEBT: { label: 'Debt', color: '#f43f5e' },
   SPLIT: { label: 'Split', color: '#64748b' },
-  GIFT_CARD: { label: 'Gift card', color: '#94a3b8' },
+  GIFT_CARD: { label: 'Gift card', color: '#7c3aed' },
 };
 
 function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
@@ -1229,6 +1236,12 @@ function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
     });
     return `conic-gradient(${stops.join(', ')})`;
   }, [rows, total]);
+  // v2.204.0: the donut speaks its split — loudest first (rows are
+  // pre-sorted), every named method with its honest share and amount, and
+  // the collected total closing the line.
+  const donutSpoken = rows.length > 0 && total > 0
+    ? `Payment methods today, loudest first: ${rows.map((r) => `${r.label} ${((r.amount / total) * 100).toFixed(1)}% (${formatKES(r.amount)})`).join('; ')} — ${formatKES(total)} collected`
+    : 'Payment methods distribution';
 
   return (
     <Card className="rounded-2xl border-slate-200 shadow-sm">
@@ -1247,7 +1260,7 @@ function PaymentMethodsCard({ data }: { data: DashboardData | null }) {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-5 sm:flex-row">
-            <div className="relative h-36 w-36 shrink-0" role="img" aria-label="Payment methods distribution">
+            <div className="relative h-36 w-36 shrink-0" role="img" aria-label={donutSpoken} data-testid="payment-donut">
               <div className="h-full w-full rounded-full" style={{ background: gradient }} />
               <div className="absolute inset-[22%] flex flex-col items-center justify-center rounded-full bg-white text-center">
                 <span className="max-w-full truncate px-1 text-[11px] font-bold tabular-nums text-slate-900" title={formatKES(total)}>
@@ -1534,11 +1547,24 @@ function RecentActivityCard({ data }: { data: DashboardData | null }) {
 // 7b. STORE HEALTH (SVG circular gauge)
 
 function healthColor(score: number, key?: string): string {
+  // v2.204.0: the GRAPHIC voice — gauge arc + breakdown bar fills sit on the
+  // white card ground and must clear the 3:1 non-text bar; the -500 family
+  // measured 2.15–2.80. The TEXT voice (the score numbers) split out into
+  // healthTextColor below — the same hex was painting both and failing the
+  // 4.5:1 text bar whenever the news was good.
   if (key === 'debt' && score < 30) return '#ef4444';
-  if (key === 'engagement' && score < 50) return '#f97316';
-  if (score >= 70) return '#10b981';
-  if (score >= 40) return '#f59e0b';
+  if (key === 'engagement' && score < 50) return '#ea580c';
+  if (score >= 70) return '#059669';
+  if (score >= 40) return '#d97706';
   return '#ef4444';
+}
+
+function healthTextColor(score: number, key?: string): string {
+  if (key === 'debt' && score < 30) return '#b91c1c';
+  if (key === 'engagement' && score < 50) return '#c2410c';
+  if (score >= 70) return '#047857';
+  if (score >= 40) return '#b45309';
+  return '#b91c1c';
 }
 
 function StoreHealthCard({ data }: { data: DashboardData | null }) {
@@ -1607,7 +1633,7 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
                         {item?.label ?? '-'}
                         <span className="ml-1.5 text-[10px] text-slate-500">{weight}% weight</span>
                       </span>
-                      <span className="font-semibold tabular-nums" style={{ color }}>
+                      <span className="font-semibold tabular-nums" style={{ color: healthTextColor(score, item?.key) }}>
                         {score}
                       </span>
                     </div>
@@ -1635,6 +1661,11 @@ function StoreHealthCard({ data }: { data: DashboardData | null }) {
 
 // 7c. HOURLY SALES HEATMAP
 
+// v2.204.0: the aria composes the peak hour — the per-cell titles only
+// answered a hover, the legend dl speaks peak/quiet/total, and the picture
+// itself now names the one hour that matters most in one honest clause.
+const INT_FMT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
 function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
   const hours = useMemo(() => {
     const breakdown = Array.isArray(data?.hourlySalesBreakdown) ? data?.hourlySalesBreakdown ?? [] : [];
@@ -1654,6 +1685,7 @@ function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
   const total = hours.reduce((s, h) => s + h.amount, 0);
   const peak = hours.reduce((best, h) => (h.amount > best.amount ? h : best), hours[0] ?? { hour: 6, amount: 0 });
   const quiet = hours.reduce((best, h) => (h.amount < best.amount ? h : best), hours[0] ?? { hour: 6, amount: 0 });
+  const heatmapSpoken = `Hourly sales intensity from 6 AM to 9 PM${peak.amount > 0 ? `, peak ${formatHour(peak.hour)} at ${formatKES(peak.amount)}` : ''}`;
 
   const cellColor = (amount: number): string => {
     if (max <= 0 || amount <= 0) return '#f1f5f9';
@@ -1678,7 +1710,7 @@ function HourlyHeatmapCard({ data }: { data: DashboardData | null }) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[repeat(16,minmax(0,1fr))] gap-1" role="img" aria-label="Hourly sales intensity from 6 AM to 9 PM">
+            <div className="grid grid-cols-[repeat(16,minmax(0,1fr))] gap-1" role="img" aria-label={heatmapSpoken}>
               {hours.map((h) => (
                 <div
                   key={h.hour}
@@ -1929,6 +1961,16 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
   const hasData = days.length > 0;
   const todayRevenue = num(days.find((d) => d?.isToday === true)?.revenue);
   const todayShare = forecast > 0 && todayRevenue > 0 ? Math.round((todayRevenue / forecast) * 100) : null;
+  // v2.204.0: the chart's aria carries the SHAPE — the seven named days with
+  // their revenues in calendar order plus the forecast line's position. The
+  // week door's modal speaks them as rows; the picture now says the same
+  // truth in one line instead of naming itself generically.
+  // (useMemo keeps the compiler's existing memoization graph intact — the
+  // lint gate counts the warnings and this one is not for sale.)
+  const weekSpoken = useMemo(
+    () => `Revenue trend, last 7 days, Ksh: ${days.map((d) => `${d?.label ?? ''} ${INT_FMT.format(num(d?.revenue))}`).join(' · ')}${forecast > 0 ? ` — forecast line at ${formatKES(forecast)}` : ''}`,
+    [days, forecast],
+  );
 
   const W = 320;
   const H = 130;
@@ -1975,11 +2017,11 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
           </div>
         ) : (
           <>
-            <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Revenue trend for the last 7 days with forecast line">
+            <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={weekSpoken}>
               <defs>
                 <linearGradient id="dashRevGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
+                  <stop offset="0%" stopColor="#059669" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#059669" stopOpacity="0.02" />
                 </linearGradient>
               </defs>
               {/* forecast dashed line — amber-600 (3.20:1) clears the 3:1 graphics bar the -500 voice sat below */}
@@ -2108,12 +2150,21 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
 
   const segments = buckets
     ? [
-        { key: 'current', label: 'Current', value: buckets.current, color: '#10b981' },
+        // v2.204.0: current + 60d re-voice to the -600 family on the white
+        // card ground (emerald-500 2.54 / orange-500 2.80 → 3.77 / 3.56);
+        // the 30d slate-500 (4.76) and 90d red-500 (3.76) already cleared it.
+        { key: 'current', label: 'Current', value: buckets.current, color: '#059669' },
         { key: 'd30', label: '30 days', value: buckets.d30, color: '#64748b' },
-        { key: 'd60', label: '60 days', value: buckets.d60, color: '#f97316' },
+        { key: 'd60', label: '60 days', value: buckets.d60, color: '#ea580c' },
         { key: 'd90plus', label: '90+ days', value: buckets.d90plus, color: '#ef4444' },
       ]
     : [];
+  // v2.204.0: the face bar speaks its buckets — the modal's bar has spoken
+  // since v2.201.0 and the bucket cells below speak their amounts, but the
+  // bar's own aria was the generic "distribution".
+  const agingSpoken = segments.length > 0 && total > 0
+    ? `Debt aging: ${segments.map((seg) => `${seg.label} ${formatKES(seg.value)}`).join(' · ')} — ${formatKES(total)} outstanding`
+    : 'Debt aging distribution';
 
   return (
     <>
@@ -2152,7 +2203,7 @@ function DebtAgingCard({ data }: { data: DashboardData | null }) {
             {buckets && (
               <>
                 {/* Segmented aging bar - shares of the total */}
-                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label="Debt aging distribution">
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label={agingSpoken} data-testid="debt-aging-bar">
                   {segments.map((seg) => (
                     <div
                       key={seg.key}

@@ -146,7 +146,7 @@ describe('the card speaks - the row\'s second button, the blue face', () => {
   it('the card learns its shape, tolerantly - the legacy line stays as the fallback', () => {
     expect(kpi).toContain('const txSparkReady = Array.isArray(k.transactions.spark) && k.transactions.spark.length === 7;');
     expect(kpi).toContain('{txSparkReady ? (');
-    expect(kpi).toContain('<Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" />');
+    expect(kpi).toContain('<Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" spokenLabel="Settled transactions per day, last seven days" />');
     expect(kpi).toContain('7d {num(k.transactions.weekTotal)}</span>');
     // the legacy text line survives as the older-cached-answer fallback
     expect(kpi).toContain('<p className="mt-2 text-[10px] text-slate-500">today · 7d {num(k.transactions.weekTotal)} vs prior {num(k.transactions.priorWeekTotal)}</p>');
@@ -159,7 +159,7 @@ describe('the drill-down - the revenue modal\'s anatomy, speaking counts', () =>
     expect(kpi).toContain('<CalendarCheck2 className="h-4 w-4 text-blue-600" /> Transactions trend</DialogTitle>');
     expect(kpi).toContain('data-testid="transactions-spark"');
     expect(kpi).toContain('title="Settled checkouts per day, last 7 days"');
-    expect(kpi).toContain('<Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" width={380} height={80} />');
+    expect(kpi).toContain('<Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" spokenLabel="Settled transactions per day, last seven days" width={380} height={80} />');
     // the honest absence note when the shape is not on the cached answer
     expect(kpi).toContain('data-testid="transactions-spark-absent"');
     expect(kpi).toContain('the per-day shape is not on this cached answer');
@@ -233,9 +233,9 @@ describe('the modal ground fix - the panel owns its dark half', () => {
 
 describe('docs and release surfaces', () => {
   it('package.json rides at 2.198.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.203.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.203.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.203.0');
+    expect(pkg.version).toBe('2.204.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.204.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.204.0');
     expect(pkg.scripts['verify:v2-195-0']).toBe('node scripts/verify-v2-195-0.mjs');
     expect(pkg.scripts['verify:v2-194-0']).toBe('node scripts/verify-v2-194-0.mjs');
     expect(readRepo('scripts/verify-v2-195-0.mjs')).toContain('v2.195.0 verification');
@@ -254,9 +254,9 @@ describe('docs and release surfaces', () => {
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(94);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(95);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(94);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(95);");
   });
 
   it('the workspace doc speaks the transactions lens', () => {

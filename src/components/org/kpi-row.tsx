@@ -517,7 +517,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
           </span>
         </div>
         <div className="mt-2 flex items-end justify-between">
-          <Sparkline data={k.revenue.spark} />
+          <Sparkline data={k.revenue.spark} spokenLabel="Seven-day gross revenue, KES per day" />
           <span className="text-[10px] text-slate-500">{kes(k.revenue.weekTotal)} · 7d</span>
         </div>
       </button>
@@ -560,7 +560,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
             legacy text line, and the card opens the modal either way. */}
         {txSparkReady ? (
           <div className="mt-2 flex items-end justify-between">
-            <Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" />
+            <Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" spokenLabel="Settled transactions per day, last seven days" />
             <span className="text-[10px] text-slate-500">7d {num(k.transactions.weekTotal)}</span>
           </div>
         ) : (
@@ -830,11 +830,11 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
               </div>
             )}
             {lens === 'gross' ? (
-              <Sparkline data={k.revenue.spark} width={380} height={80} />
+              <Sparkline data={k.revenue.spark} spokenLabel="Gross revenue per day, KES" width={380} height={80} />
             ) : (
               // The net line wears violet — a different face wears a
               // different hue, so a glance can never mistake the two.
-              <Sparkline data={k.revenue.netSpark ?? []} stroke="#8b5cf6" width={380} height={80} />
+              <Sparkline data={k.revenue.netSpark ?? []} stroke="#8b5cf6" spokenLabel="Net revenue per day, KES" width={380} height={80} />
             )}
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
               {lens === 'gross' ? (
@@ -935,12 +935,13 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                 the lens chart stays the lead, this is the strip's quiet
                 trend. Tolerant: an older cached answer (no taxSpark)
                 renders nothing here, never a NaN; Sparkline itself emits
-                nothing for an empty array. The svg is aria-hidden
-                decoration (the primitive hard-codes it) — the strip's
-                figures above already speak the face. */}
+                nothing for an empty array. v2.204.0: the spark now SPEAKS
+                its seven per-day values through the spokenLabel voice —
+                the strip's figures above speak the aggregates, the shape
+                speaks itself. */}
             {k.revenue.taxSpark != null && k.revenue.taxSpark.length > 0 && (
               <div data-testid="revenue-vat-spark" className="mt-1" title="VAT collected per day, last 7 days">
-                <Sparkline data={k.revenue.taxSpark} stroke="#d97706" width={380} height={36} />
+                <Sparkline data={k.revenue.taxSpark} stroke="#d97706" spokenLabel="VAT collected per day, KES" width={380} height={36} />
               </div>
             )}
           </div>
@@ -959,7 +960,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                 {branchWeek.map((b) => (
                   <li key={b.storeId} className="flex items-center justify-between gap-3">
                     <span className="flex min-w-0 items-center gap-2">
-                      <Sparkline data={b.spark} stroke="#64748b" width={72} height={20} />
+                      <Sparkline data={b.spark} stroke="#64748b" spokenLabel={`${b.name}, seven-day gross revenue per day, KES`} width={72} height={20} />
                       <span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
@@ -1014,7 +1015,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                 → chip). */}
             {txSparkReady ? (
               <div data-testid="transactions-spark" title="Settled checkouts per day, last 7 days">
-                <Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" width={380} height={80} />
+                <Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" spokenLabel="Settled transactions per day, last seven days" width={380} height={80} />
               </div>
             ) : (
               // The honest absence: an older cached answer carries no

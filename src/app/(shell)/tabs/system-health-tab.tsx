@@ -885,13 +885,16 @@ export default function SystemHealthTab() {
                     <div className="relative h-36 w-36">
                       <svg className="h-36 w-36 transform -rotate-90" viewBox="0 0 120 120">
                         <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
-                        <circle
-                          cx="60" cy="60" r="50" fill="none"
-                          stroke={status.compliance.overallScore >= 90 ? '#10b981' : status.compliance.overallScore >= 70 ? '#f59e0b' : '#ef4444'}
-                          strokeWidth="8"
-                          strokeDasharray={`${(status.compliance.overallScore / 100) * 314} 314`}
-                          strokeLinecap="round"
-                        />
+                          {/* v2.204.0: the gauge arc re-voices to the -600 family
+                              on the white card ground (emerald-500 2.54 / amber-500
+                              2.15 sat below the 3:1 graphics bar; red-500 3.76 stays). */}
+                          <circle
+                            cx="60" cy="60" r="50" fill="none"
+                            stroke={status.compliance.overallScore >= 90 ? '#059669' : status.compliance.overallScore >= 70 ? '#d97706' : '#ef4444'}
+                            strokeWidth="8"
+                            strokeDasharray={`${(status.compliance.overallScore / 100) * 314} 314`}
+                            strokeLinecap="round"
+                          />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <span className="text-3xl font-bold">{status.compliance.overallScore}</span>

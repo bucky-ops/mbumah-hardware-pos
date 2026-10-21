@@ -258,8 +258,19 @@ export function CountUp({ value, format = num, duration = 1000, className }: {
 }
 
 // ── Sparkline (7d revenue) ───────────────────────────────────────────────────
-export function Sparkline({ data, stroke = '#10b981', width = 96, height = 28 }: {
-  data: number[]; stroke?: string; width?: number; height?: number;
+// v2.204.0 "the pictures learn to speak": the spark was aria-hidden decoration
+// while its seven per-day values were spoken NOWHERE — the face shows the
+// today figure and the week total, but the SHAPE (which day was loud, which
+// was quiet) existed only for eyes. A caller that passes `spokenLabel` gets
+// an honest picture: role="img" with every value read out in day order. A
+// caller that omits it keeps the old silent decoration (the spark is then
+// guaranteed to sit beside text that already speaks its figures).
+// The default stroke re-voices emerald-500 → emerald-600 (2.54:1 → 3.77:1 on
+// the white card ground — the 3:1 non-text graphics bar, the v2.203 forecast
+// line's law applied to every spark at once).
+const SPARK_FMT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+export function Sparkline({ data, stroke = '#059669', width = 96, height = 28, spokenLabel }: {
+  data: number[]; stroke?: string; width?: number; height?: number; spokenLabel?: string;
 }) {
   if (!data.length) return null;
   const max = Math.max(...data, 1);
@@ -269,8 +280,15 @@ export function Sparkline({ data, stroke = '#10b981', width = 96, height = 28 }:
     .map((v, i) => `${(i / (data.length - 1)) * (width - 4) + 2},${height - 2 - ((v - min) / range) * (height - 6)}`)
     .join(' ');
   const last = points.split(' ').slice(-1)[0].split(',');
+  const spoken = spokenLabel
+    ? `${spokenLabel}: ${data.map((v) => SPARK_FMT.format(v)).join(' · ')}`
+    : null;
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden className="overflow-visible">
+    <svg
+      width={width} height={height} viewBox={`0 0 ${width} ${height}`}
+      className="overflow-visible"
+      {...(spoken ? { role: 'img' as const, 'aria-label': spoken } : { 'aria-hidden': true as const })}
+    >
       <polyline points={points} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={last[0]} cy={last[1]} r="2.5" fill={stroke} className="anim-pulse-dot" />
     </svg>
@@ -343,7 +361,12 @@ export function HealthGauge({ score, label, size = 56 }: { score: number; label?
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [score]);
-  const stroke = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+  // v2.204.0: the stroke and the score number SPLIT — the arc is a graphic
+  // (3:1 bar → the -600 family) while the number inside it is TEXT at 13px
+  // bold (4.5:1 bar → the -700 family). The old single voice painted both,
+  // failing the text bar at 2.54:1 whenever the news was good.
+  const stroke = score >= 80 ? '#059669' : score >= 60 ? '#d97706' : '#ef4444';
+  const textColor = score >= 80 ? '#047857' : score >= 60 ? '#b45309' : '#b91c1c';
   const r = (size - 8) / 2;
   const c = 2 * Math.PI * r;
   return (
@@ -354,7 +377,7 @@ export function HealthGauge({ score, label, size = 56 }: { score: number; label?
           strokeDasharray={c} strokeDashoffset={c - (shown / 100) * c} style={{ transition: 'stroke-dashoffset 0.2s' }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-        <span className="text-[13px] font-bold" style={{ color: stroke }}>{shown}</span>
+        <span className="text-[13px] font-bold" style={{ color: textColor }}>{shown}</span>
         {label ? <span className="text-[7px] uppercase tracking-wide text-slate-500">{label}</span> : null}
       </div>
     </div>
@@ -382,14 +405,26 @@ const FALLBACK_GEO = [
 ];
 export function KenyaMap({ stores }: { stores: StoreRow[] }) {
   const maxRev = Math.max(...stores.map((s) => s.todayRevenue), 1);
+  // v2.204.0: the map speaks its ranks — the dots' <title> only answered a
+  // hover, so the whole picture was silence for a screen reader. Now the aria
+  // names every branch loudest-first, the quiet ones included (a quiet branch
+  // is never dropped — the door law, applied to pictures).
+  const ranked = [...stores].sort((a, b) => b.todayRevenue - a.todayRevenue);
+  const loud = ranked.filter((s) => s.todayRevenue > 0).map((s) => `${s.name} ${kes(s.todayRevenue)}`);
+  const quiet = ranked.filter((s) => !(s.todayRevenue > 0)).map((s) => s.name);
+  const mapSpoken = loud.length
+    ? `Store heatmap of today's revenue, loudest first: ${loud.join(', ')}${quiet.length ? `; quiet: ${quiet.join(', ')}` : ''}`
+    : `Store heatmap of today's revenue${quiet.length ? `: every branch quiet so far (${quiet.join(', ')})` : ''}`;
   return (
-    <svg viewBox="0 0 130 130" className="mx-auto h-44 w-44" role="img" aria-label="Store heatmap - Kenya">
+    <svg viewBox="0 0 130 130" className="mx-auto h-44 w-44" role="img" aria-label={mapSpoken}>
       <path d={KENYA_PATH} fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
       {stores.map((s, idx) => {
         const key = s.slug ?? s.code ?? '';
         const geo = STORE_GEO[key] ?? FALLBACK_GEO[idx % FALLBACK_GEO.length];
         const heat = s.todayRevenue / maxRev;
-        const color = heat > 0.5 ? '#FF8C00' : heat > 0 ? '#10b981' : '#94a3b8';
+        // the dots re-voice to the -600 family on the slate-100 land fill:
+        // darkorange 2.33 / emerald-500 2.36 / slate-400 2.60 → 3.25 / 3.44 / 4.34
+        const color = heat > 0.5 ? '#ea580c' : heat > 0 ? '#059669' : '#64748b';
         return (
           <g key={s.id} className="anim-drop" style={{ animationDelay: `${idx * 90}ms` }}>
             <circle cx={geo.x} cy={geo.y} r={6 + heat * 5} fill={color} opacity={0.25}>
