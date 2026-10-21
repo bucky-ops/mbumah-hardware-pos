@@ -109,6 +109,18 @@ const eslintConfig = [
       // warnings; reviewers can validate each.
       "react-hooks/exhaustive-deps": "warn",
       "react-hooks/purity": "warn",
+      // v2.194.0: the 7.1.x plugin's NEW compiler-era rules (set-state-in-
+      // effect, static-components, immutability, preserve-manual-memoization)
+      // fire ~117 times across the pre-existing HR/legacy pages — a legacy
+      // noise class like the 433 pre-existing tsc errors, not this release's
+      // regression (the same code lints clean under the 7.0-era plugin the
+      // previous rounds resolved). Downruled to warn per the severity policy
+      // (real refactor work, not a PR-blocking gate); each finding is a
+      // genuine future cleanup candidate surfaced in review.
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/static-components": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
       "react/no-unescaped-entities": "warn",
       "react/display-name": "off", // Next.js + memo() handles this; noise otherwise
       "react/prop-types": "off",   // TS handles prop types

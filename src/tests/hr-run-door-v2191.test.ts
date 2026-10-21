@@ -24,7 +24,7 @@ import { buildRunDeepLinkHref } from '../lib/workspace/links';
  * deep-link shape), the degradation is pinned as source text, the CSV is
  * pinned NOT to carry runId (doors don't belong in files — the file keeps
  * its v2.152.0 shape), the status-badge families carry their
- * contrast-math numbers, and the release surfaces speak 2.193.0.
+ * contrast-math numbers, and the release surfaces speak 2.194.0.
  */
 
 const readRepo = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8');
@@ -108,10 +108,10 @@ describe('the styling math - the status-badge families carry their numbers', () 
 });
 
 describe('docs and release surfaces', () => {
-  it('package.json rides at 2.193.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.193.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.193.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.193.0');
+  it('package.json rides at 2.194.0 (all three slots) and the verify script is wired', () => {
+    expect(pkg.version).toBe('2.194.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.194.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.194.0');
     expect(pkg.scripts['verify:v2-191-0']).toBe('node scripts/verify-v2-191-0.mjs');
     expect(pkg.scripts['verify:v2-190-0']).toBe('node scripts/verify-v2-190-0.mjs');
     expect(readRepo('scripts/verify-v2-191-0.mjs')).toContain('v2.191.0 verification');

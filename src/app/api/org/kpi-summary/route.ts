@@ -130,9 +130,13 @@ async function orgKpiSummaryHandler(): Promise<Response> {
     // as the headline, per the v2.185.0 reconciliation. v2.187.0: the SAME
     // rows also fill the NET buckets (gross − tax per day) so the modal's
     // lens toggle never costs a second query — two faces of one read,
-    // computed in one pass.
+    // computed in one pass. v2.194.0: the THIRD face joins the pass — the
+    // VAT buckets (tax per day) bucket the SAME rows' taxAmount, so the
+    // modal's VAT strip can wear its own spark with ZERO additional reads
+    // (three faces of one read, one pass, no second query).
     const sparkBuckets = new Array<number>(7).fill(0);
     const netBuckets = new Array<number>(7).fill(0);
+    const taxBuckets = new Array<number>(7).fill(0);
     for (let i = 0; i < 7; i++) {
       const dayStart = new Date(startToday.getTime() - (6 - i) * DAY_MS);
       const dayEnd = new Date(dayStart.getTime() + DAY_MS);
@@ -140,11 +144,13 @@ async function orgKpiSummaryHandler(): Promise<Response> {
         if (row.createdAt >= dayStart && row.createdAt < dayEnd) {
           sparkBuckets[i] += toDec(row.totalAmount).toNumber();
           netBuckets[i] += toDec(row.totalAmount).toNumber() - toDec(row.taxAmount).toNumber();
+          taxBuckets[i] += toDec(row.taxAmount).toNumber();
         }
       }
     }
     const spark = sparkBuckets.map((v) => round2(v));
     const netSpark = netBuckets.map((v) => round2(v));
+    const taxSpark = taxBuckets.map((v) => round2(v));
 
     // ── Debt: org-wide outstanding + aging buckets (precomputed column) ─────
     const debtGrouped = await rawDb.debtLedger.groupBy({
@@ -358,6 +364,10 @@ async function orgKpiSummaryHandler(): Promise<Response> {
             netTodayTotal: netToday,
             netPriorWeekTotal: netPrior,
             netSpark,
+            // v2.194.0: the VAT face's own spark — the SAME rows' tax
+            // per day, bucketed in the SAME pass. Additive: an older
+            // cached answer simply renders no spark, never a NaN.
+            taxSpark,
           },
           transactions: { today: txToday, weekTotal: txWeek, priorWeekTotal: txPrior, variancePct: txVariancePct },
           lowStock: { count: lowStock },

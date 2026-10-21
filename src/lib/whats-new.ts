@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.194.0',
+    title: 'The VAT face gets its spark',
+    bullets: [
+      'The revenue modal\u2019s VAT strip now wears its own 7-day spark in amber \u2014 the tax collector\u2019s daily rhythm (flat, spiky, seasonal) is visible beside the figures, computed from the same read as the other two charts (no extra load).',
+      'A third color keeps the faces apart at a glance: gross wears emerald, net wears violet, VAT wears amber.',
+      'The modal\u2019s dark mode is fixed: the big numbers and labels were near-invisible on the dark dialog \u2014 they now meet the same accessibility bar as everything else, audited 26 of 26 combinations in both modes.',
+    ],
+  },
+  {
     version: '2.193.0',
     title: 'The absence cell opens the report',
     bullets: [
