@@ -297,9 +297,9 @@ describe('v2.210.0 — the suite rides at the head', () => {
   };
 
   it('the release is 2.210.0 in all three version fields', () => {
-    expect(pkg.version).toBe('2.210.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.210.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.210.0');
+    expect(pkg.version).toBe('2.211.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.211.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.211.0');
   });
 
   it('the What\u2019s New feed heads this release', () => {
@@ -307,6 +307,6 @@ describe('v2.210.0 — the suite rides at the head', () => {
     const feed = read('src/lib/whats-new.ts');
     const head = feed.slice(feed.indexOf('export const WHATS_NEW'));
     expect(head).toMatch(/version: '2\.210\.0'/);
-    expect(head.indexOf("version: '2.210.0'")).toBeLessThan(head.indexOf("version: '2.209.0'"));
+    expect(head.indexOf("version: '2.211.0'")).toBeLessThan(head.indexOf("version: '2.209.0'"));
   });
 });

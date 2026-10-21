@@ -32,6 +32,9 @@ import { FleetRemoteOpsSection } from '@/components/admin/fleet-remote-ops-secti
 import { SystemHealthSection } from '@/components/admin/system-health-section';
 // v2.26.0: read-only email delivery log over /api/notifications/logs.
 import { EmailDeliveryLogSection } from '@/components/admin/email-delivery-log-section';
+// v2.211.0: the exchange-rates writer surface — the CurrencyRate wire's
+// admin card (list, set, reset-to-built-in) over /api/currency/rates.
+import { CurrencyRatesSection } from '@/components/admin/currency-rates-section';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -2029,6 +2032,11 @@ export default function AdminTab() {
       {/* System Configuration Editor                               */}
       {/* ================================================================== */}
       <ConfigEditor storeId={currentStoreId} />
+
+      {/* ================================================================== */}
+      {/* Exchange Rates (v2.211.0) — the currency wire's writer surface  */}
+      {/* ================================================================== */}
+      <CurrencyRatesSection />
 
       {/* ================================================================== */}
       {/* Updates, Rollback & Backups (v2.9.0 architecture plan)          */}

@@ -374,11 +374,11 @@ describe('whatsNewUnreadCount - the heading counter (v2.75.0)', () => {
     // 2.77.0 flag counts 2.78.0 … 2.160.0 (the head never joins this count).
     // Re-anchored for 2.206.0 joining the feed (95/96/97/128 → 96/97/98/129
     // → 97/98/99/130), 2.208.0 joining it (→ 99/100/101/132), 2.209.0
-    // joining it (→ 100/101/102/133) and 2.210.0 joining it (→ 101/102/103/134).
-    expect(whatsNewUnreadCount('2.110.0')).toBe(101);
-    expect(whatsNewUnreadCount('2.109.0')).toBe(102);
-    expect(whatsNewUnreadCount('2.108.0')).toBe(103);
-    expect(whatsNewUnreadCount('2.77.0')).toBe(134);
+    // joining it (→ 100/101/102/133) and 2.210.0 joining it (→ 101/102/103/134), 2.211.0 joining it (→ 102/103/104/135).
+    expect(whatsNewUnreadCount('2.110.0')).toBe(102);
+    expect(whatsNewUnreadCount('2.109.0')).toBe(103);
+    expect(whatsNewUnreadCount('2.108.0')).toBe(104);
+    expect(whatsNewUnreadCount('2.77.0')).toBe(135);
     expect(whatsNewUnreadCount('2.70.0')).toBeGreaterThanOrEqual(10);
   });
 
