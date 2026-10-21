@@ -315,9 +315,9 @@ describe('v2.206.0 — the recommendations call is SEEDED (the guaranteed-400 is
 
 describe('v2.206.0 — the release scaffolding', () => {
   it('package.json rides 2.206.0 (version + releaseVersion + baseVersion)', () => {
-    expect(PKG.version).toBe('2.207.0');
-    expect(PKG.mbumah.releaseVersion).toBe('2.207.0');
-    expect(PKG.mbumah.baseVersion).toBe('2.207.0');
+    expect(PKG.version).toBe('2.208.0');
+    expect(PKG.mbumah.releaseVersion).toBe('2.208.0');
+    expect(PKG.mbumah.baseVersion).toBe('2.208.0');
   });
 
   it('whats-new heads the 2.206.0 entry with the round title', () => {

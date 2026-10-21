@@ -2,6 +2,36 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.208.0] The system health desk finds its door
+
+The round the app's largest orphan got its route. The Phase-8 System Health surface — 1,266 lines of live-wire monitoring (aggregated system status, circuit breakers with admin actions, a dead-letter queue with retry/purge, ISO compliance rings, retention + audit + access-control views) — had been COMPLETE for a hundred versions and unit-voiced in v2.207, but **no tab id, loader, sidebar row or switch case ever pointed at it**: `rg system-health-tab` matched only its own tests. This round routes it and finishes the voice + contrast pass its routing finally makes testable live.
+
+### Added — THE ROUTE (five wiring points, all type-enforced)
+- **`AppTab` gains `'system-health'`** (`src/lib/stores.ts`) — the union, `TAB_LOADERS`' `Record<AppTab, TabLoader>` and `TAB_CONFIG` now must agree at compile time.
+- **`src/lib/tab-preload.ts`** carries the loader entry pointing at the real tab file (sidebar pointer-enter prefetch warms the chunk for free).
+- **`TAB_CONFIG`** gains the door: `{ id: 'system-health', label: 'System Health', icon: HeartPulse, roles: ADMIN_ROLES }` — ADMIN_ROLES matches the privileged detail `/api/health/system-status` serves (SUPER_ADMIN + STORE_OWNER full view; the server re-validates per request and serves a summarised view to everyone else, and the retention/audit sections name their own SUPER_ADMIN requirement in the surface).
+- **`NAV_GROUPS`** places it as the final item of Compliance & System — the admin cluster reads security → admin → the desk that watches them.
+- **The shell switch** renders it behind `SectionErrorBoundary sectionName="System Health"` + `Suspense` (the lazy case takes no props, like security/admin).
+
+### Added — THE SILENT PICTURES SPEAK (the routing makes them E2E-provable)
+- **The database response-time bar speaks**: an honest aria composed from the wire — "Database response time Nms — within the 1,000ms caution line" (or "past" it). The voice names the WIRE's own warning threshold (the 1,000ms branch that flips the server verdict); the 2,000ms bar scale is a paint choice and is never called a threshold.
+- **Both ISO score bars speak**: "ISO 27001 score N of 100 — strong/fair/at risk" — the verdict derives from the SCORE itself (>= 90 / >= 70, the same thresholds the quick-stat compliance card paints), never from the system's overall status (a different wire).
+- **The refresh cadence is stated on the surface**: the header subtitle now says "auto-refreshes every 30s" — the `refetchInterval: 30000` the code always had, made visible.
+
+### Fixed — THE DEAD WEIGHT (cut, not commented)
+- **The hand-rolled `Loader2` SVG died**: a 17-line lucide clone at the file's bottom shadowed nothing and everything — the real `Loader2` is imported from `lucide-react` like every other surface.
+- **The never-opens `ConfirmDialog` died**: a controlled dialog bound to `confirmAction` state that was only ever set to `null` (the real confirmations all use per-action wrappers with children). The state and the orphan block are gone; the mutation callbacks' toast + invalidation behaviour is untouched and pinned.
+- **The dark-mode caption stragglers** (`dark:text-emerald-500` / `dark:text-amber-500`) joined the badge family's `dark:text-*-400`.
+
+### Fixed — THE CONTRAST LAW HOLDS ON THE NEW DOOR (measured pairs, same WCAG machinery)
+- The quick-stat icons rode emerald-500 (2.54) / amber-500 (2.15) → emerald-600 (3.30) / amber-600 (3.19); the DLQ stat-card icon map likewise (amber-500 → amber-600, blue-500 → blue-600, emerald-500 → emerald-600). red-500 (3.76), slate-500 (4.76) and the card-header blue-500 (3.68) already clear the 3:1 graphics bar and stay.
+- The card-header accents re-voiced: teal-500 (2.49) → teal-600 (3.74), purple-500 (borderline) → purple-600, amber-500 (2.15) → amber-600 — including the failure-state icon.
+
+### Tests
+- NEW `src/tests/system-health-route-v2208.test.ts` (22 tests): the route exists end to end (union, loader→file, TAB_CONFIG row with ADMIN_ROLES + real icon, NAV_GROUPS placement, shell case with SectionErrorBoundary + Suspense, no duplicate ids/labels, the server wire's requireAuth guard); the silent pictures' aria compositions pinned (wire-derived caution-line voice, score-derived ISO verdicts, the stated cadence, the v2.207 ring voice kept); the measured pairs hold (light-ground -500 bans, the exact -600 maps, the v2.207 PulseIndicator dots); the dead weight stays dead (no hand-rolled Loader2, no confirmAction, the three live wires still read).
+- `scripts/probe-graphics-v2207.mjs` still 63/63 — the probe's Scene 2 already watched this tab and every pin survived the round.
+- The v2.109 nav order pin re-anchored with a round stamp (Compliance & System ends admin → system-health); the 37 suite-level pkg pins and the four whats-new head-pin counters re-anchored 98/99/100/131 → 99/100/101/132; whats-new heads the 2.208.0 entry.
+
 ## [2.207.0] The admin desk tells the truth; the quiet minis speak
 
 The round the admin desk stopped lying and the last quiet pictures learned to speak. The v2.205 honesty pass swept the reports tab; this round caught the SAME disease living on the admin tab — four invented constants and a fake check history rendered as system health — plus the v2.204 graphics-bar audit's blind spot (the admin/system-health desks' -500 marks) and four silent pictures (two sparklines, one trend chart, two score rings).

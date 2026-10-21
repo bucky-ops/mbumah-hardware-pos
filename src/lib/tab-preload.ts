@@ -53,6 +53,11 @@ export const TAB_LOADERS: Record<AppTab, TabLoader> = {
   analytics: () => import('../app/(shell)/tabs/analytics-tab'),
   'data-exports': () => import('../app/(shell)/tabs/data-exports-tab'),
   'shift-scheduling': () => import('../app/(shell)/tabs/shift-scheduling-tab'),
+  // v2.208.0: the Phase-8 System Health desk finally gets its door — the
+  // 1,266-line surface was complete (and unit-voiced in v2.207) but NO route
+  // ever pointed at it. Aggregated live wires: /api/health/system-status,
+  // /api/health/dlq, /api/health/circuit-breaker.
+  'system-health': () => import('../app/(shell)/tabs/system-health-tab'),
 };
 
 /**

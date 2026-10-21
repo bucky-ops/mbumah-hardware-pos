@@ -30,6 +30,7 @@ import {
   Cpu,
   FileText, Lock, Unlock, Award,
   CircleDollarSign,
+  Loader2,
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -233,7 +234,6 @@ export default function SystemHealthTab() {
   const queryClient = useQueryClient();
   const [selectedBreaker, setSelectedBreaker] = useState<string | null>(null);
   const [dlqFilter, setDlqFilter] = useState<string>('all');
-  const [confirmAction, setConfirmAction] = useState<{ type: string; target?: string } | null>(null);
 
   // Fetch system status
   const {
@@ -288,11 +288,9 @@ export default function SystemHealthTab() {
       toast.success(data.data?.message || `Action completed (${data.data?.affected} affected)`);
       queryClient.invalidateQueries({ queryKey: ['dlq-items'] });
       queryClient.invalidateQueries({ queryKey: ['system-status'] });
-      setConfirmAction(null);
     },
     onError: (err) => {
       toast.error(err.message);
-      setConfirmAction(null);
     },
   });
 
@@ -313,15 +311,19 @@ export default function SystemHealthTab() {
     onSuccess: (data) => {
       toast.success(`Circuit breaker action completed (${data.data?.affected} affected)`);
       queryClient.invalidateQueries({ queryKey: ['system-status'] });
-      setConfirmAction(null);
     },
     onError: (err) => {
       toast.error(err.message);
-      setConfirmAction(null);
     },
   });
 
   const status = statusData;
+
+  // v2.208.0: the ISO bars speak the same thresholds the quick-stat card
+  // paints (>= 90 strong, >= 70 fair, else at risk) — derived from the
+  // score itself, never from the system's overall status (a different
+  // wire).
+  const isoVerdict = (score: number) => (score >= 90 ? 'strong' : score >= 70 ? 'fair' : 'at risk');
 
   // Render
 
@@ -336,7 +338,7 @@ export default function SystemHealthTab() {
           <div>
             <h2 className="text-xl font-bold tracking-tight">System Health</h2>
             <p className="text-sm text-muted-foreground">
-              Real-time monitoring & operations dashboard
+              Real-time monitoring & operations dashboard · auto-refreshes every 30s
             </p>
           </div>
         </div>
@@ -470,6 +472,11 @@ export default function SystemHealthTab() {
                     <Progress
                       value={Math.min(100, (status.database.responseTime / 2000) * 100)}
                       className={`h-2 ${status.database.responseTime > 1000 ? '[&>div]:bg-amber-600' : '[&>div]:bg-emerald-600'}`}
+                      aria-label={
+                        status.database.responseTime > 1000
+                          ? `Database response time ${status.database.responseTime}ms — past the 1,000ms caution line.`
+                          : `Database response time ${status.database.responseTime}ms — within the 1,000ms caution line.`
+                      }
                     />
                     {status.database.stats && (
                       <div className="grid grid-cols-2 gap-2 mt-3">
@@ -487,7 +494,7 @@ export default function SystemHealthTab() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-purple-500" />
+                        <Shield className="h-4 w-4 text-purple-600" />
                         <CardTitle className="text-base">Security</CardTitle>
                       </div>
                       <StatusBadge status={status.security.status} />
@@ -517,7 +524,7 @@ export default function SystemHealthTab() {
                 <Card>
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-2">
-                      <Cpu className="h-4 w-4 text-teal-500" />
+                      <Cpu className="h-4 w-4 text-teal-600" />
                       <CardTitle className="text-base">Resilience Pipeline</CardTitle>
                     </div>
                     <CardDescription className="text-xs">
@@ -572,7 +579,7 @@ export default function SystemHealthTab() {
                     <CheckCircle className="h-8 w-8 text-emerald-600" />
                     <div>
                       <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{status.circuitBreakers.closed}</p>
-                      <p className="text-xs text-emerald-700 dark:text-emerald-500">Closed (Healthy)</p>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400">Closed (Healthy)</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -581,7 +588,7 @@ export default function SystemHealthTab() {
                     <AlertTriangle className="h-8 w-8 text-amber-600" />
                     <div>
                       <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">{status.circuitBreakers.halfOpen}</p>
-                      <p className="text-xs text-amber-700 dark:text-amber-500">Half-Open (Probing)</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">Half-Open (Probing)</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -935,7 +942,7 @@ export default function SystemHealthTab() {
                       <span className="text-sm text-muted-foreground">Score</span>
                       <span className="text-2xl font-bold text-emerald-700">{status.compliance.iso27001Score}%</span>
                     </div>
-                    <Progress value={status.compliance.iso27001Score} className="h-2 [&>div]:bg-emerald-600" />
+                    <Progress value={status.compliance.iso27001Score} className="h-2 [&>div]:bg-emerald-600" aria-label={`ISO 27001 score ${status.compliance.iso27001Score} of 100 — ${isoVerdict(status.compliance.iso27001Score)}.`} />
                     <div className="space-y-1.5">
                       {Object.entries(status.compliance.resilienceStatus).slice(0, 4).map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between text-xs">
@@ -952,7 +959,7 @@ export default function SystemHealthTab() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Award className="h-4 w-4 text-teal-500" />
+                        <Award className="h-4 w-4 text-teal-600" />
                         <CardTitle className="text-base">ISO 9001</CardTitle>
                       </div>
                       <Badge variant="outline" className="text-xs">Quality Management</Badge>
@@ -964,7 +971,7 @@ export default function SystemHealthTab() {
                       <span className="text-sm text-muted-foreground">Score</span>
                       <span className="text-2xl font-bold text-teal-600">{status.compliance.iso9001Score}%</span>
                     </div>
-                    <Progress value={status.compliance.iso9001Score} className="h-2 [&>div]:bg-teal-600" />
+                    <Progress value={status.compliance.iso9001Score} className="h-2 [&>div]:bg-teal-600" aria-label={`ISO 9001 score ${status.compliance.iso9001Score} of 100 — ${isoVerdict(status.compliance.iso9001Score)}.`} />
                     <div className="space-y-1.5">
                       {Object.entries(status.compliance.resilienceStatus).slice(4).map(([key, value]) => (
                         <div key={key} className="flex items-center justify-between text-xs">
@@ -985,7 +992,7 @@ export default function SystemHealthTab() {
                 <Card>
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-purple-500" />
+                      <Clock className="h-4 w-4 text-purple-600" />
                       <CardTitle className="text-base">Data Retention Policies</CardTitle>
                     </div>
                     <CardDescription className="text-xs">ISO 27001 A.12.4 compliance</CardDescription>
@@ -1063,7 +1070,7 @@ export default function SystemHealthTab() {
                   <Card className="md:col-span-2">
                     <CardHeader className="pb-3">
                       <div className="flex items-center gap-2">
-                        <Lock className="h-4 w-4 text-amber-500" />
+                        <Lock className="h-4 w-4 text-amber-600" />
                         <CardTitle className="text-base">Access Control Metrics</CardTitle>
                       </div>
                       <CardDescription className="text-xs">ISO 27001 A.9 compliance</CardDescription>
@@ -1091,7 +1098,7 @@ export default function SystemHealthTab() {
       ) : (
         <Card>
           <CardContent className="p-8 text-center">
-            <AlertTriangle className="h-10 w-10 mx-auto mb-2 text-amber-500" />
+            <AlertTriangle className="h-10 w-10 mx-auto mb-2 text-amber-600" />
             <p className="text-sm font-medium">Failed to load system status</p>
             <p className="text-xs text-muted-foreground">Check your connection and try again</p>
             <Button variant="outline" size="sm" className="mt-3" onClick={() => refetchStatus()}>
@@ -1100,22 +1107,6 @@ export default function SystemHealthTab() {
           </CardContent>
         </Card>
       )}
-
-      {/* ── Confirmation Dialog ──────────────────────────────────────────── */}
-      <ConfirmDialog
-        open={!!confirmAction}
-        onOpenChange={(open) => { if (!open) setConfirmAction(null); }}
-        title="Confirm Action"
-        description="Are you sure you want to proceed?"
-        onConfirm={() => {
-          if (confirmAction) {
-            if (confirmAction.type === 'breaker-reset-all') {
-              breakerAction.mutate({ action: 'resetAll' });
-            }
-          }
-        }}
-        loading={breakerAction.isPending || dlqAction.isPending}
-      />
     </div>
   );
 }
@@ -1129,6 +1120,9 @@ function QuickStatCard({ title, icon: Icon, value, status, detail }: {
   status: string;
   detail: string;
 }) {
+  // v2.208.0: the quick-stat icons ride the measured -600 pairs on the
+  // white card ground (emerald-500 2.54 and amber-500 2.15 sat below the
+  // 3:1 graphics bar; red-500 3.76 stays).
   return (
     <Card className={`transition-colors ${
       status === 'ok' || status === 'healthy' ? 'border-emerald-200/60 dark:border-emerald-900/40' :
@@ -1138,8 +1132,8 @@ function QuickStatCard({ title, icon: Icon, value, status, detail }: {
       <CardContent className="p-3">
         <div className="flex items-center gap-2 mb-1.5">
           <Icon className={`h-3.5 w-3.5 ${
-            status === 'ok' || status === 'healthy' ? 'text-emerald-500' :
-            status === 'warning' || status === 'degraded' ? 'text-amber-500' :
+            status === 'ok' || status === 'healthy' ? 'text-emerald-600' :
+            status === 'warning' || status === 'degraded' ? 'text-amber-600' :
             'text-red-500'
           }`} />
           <span className="text-xs text-muted-foreground font-medium">{title}</span>
@@ -1176,9 +1170,12 @@ function DLQStatCard({ label, value, color, icon: Icon }: {
   };
 
   const iconColorMap: Record<string, string> = {
-    amber: 'text-amber-500',
-    blue: 'text-blue-500',
-    emerald: 'text-emerald-500',
+    // v2.208.0: measured pairs on the tinted card ground — amber-500 2.15
+    // and emerald-500 2.54 died for their -600 elders; blue-500 (3.68),
+    // red-500 (3.76) and slate-500 (4.76) already clear the 3:1 bar.
+    amber: 'text-amber-600',
+    blue: 'text-blue-600',
+    emerald: 'text-emerald-600',
     red: 'text-red-500',
     slate: 'text-slate-500',
   };
@@ -1242,24 +1239,5 @@ function ConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Loader2(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
   );
 }

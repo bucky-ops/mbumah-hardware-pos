@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.208.0',
+    title: 'The system health desk finds its door',
+    bullets: [
+      'The System Health desk is finally reachable: the full monitoring surface — live database, circuit breakers, dead-letter queue, ISO compliance rings and retention policies — now lives under Compliance & System for owners and system administrators.',
+      'The health desk\u2019s bars learned to talk: the database response-time gauge names its reading against the 1,000ms caution line, and the ISO 27001 / ISO 9001 bars speak their scores with a verdict drawn from the score itself.',
+      'The desk tells you its rhythm: the header now says it auto-refreshes every 30 seconds, so the figures you read are the figures the server just served.',
+      'Status colours on the health desk cleared the same contrast bar as the rest of the app — every icon, dot and summary card rides the measured pairs.',
+      'Dead weight cut: the duplicated loader icon and a confirmation dialog that could never open are gone from the surface.',
+    ],
+  },
+  {
     version: '2.207.0',
     title: 'The admin desk tells the truth; the quiet minis speak',
     bullets: [

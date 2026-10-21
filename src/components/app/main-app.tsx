@@ -62,6 +62,7 @@ const LazyDataExportsTab = lazy(TAB_LOADERS['data-exports']);
 const LazyConversationsTab = lazy(TAB_LOADERS.conversations);
 const LazyPurchaseOrdersTab = lazy(TAB_LOADERS['purchase-orders']);
 const LazyShiftSchedulingTab = lazy(TAB_LOADERS['shift-scheduling']);
+const LazySystemHealthTab = lazy(TAB_LOADERS['system-health']);
 const LazyPOSTab = lazy(TAB_LOADERS.pos);
 
 /**
@@ -204,6 +205,9 @@ export function MainApp() {
       case 'banking': return <SectionErrorBoundary sectionName="Banking"><Suspense fallback={<TabLoadingFallback />}><LazyBankingTab /></Suspense></SectionErrorBoundary>;
       case 'loyalty': return <SectionErrorBoundary sectionName="Loyalty"><Suspense fallback={<TabLoadingFallback />}><LazyLoyaltyTab /></Suspense></SectionErrorBoundary>;
       case 'security': return <SectionErrorBoundary sectionName="Security"><Suspense fallback={<TabLoadingFallback />}><LazySecurityTab /></Suspense></SectionErrorBoundary>;
+      // v2.208.0: the Phase-8 System Health desk — live wires, admin actions
+      // guarded server-side; the surface was voiced in v2.207 (ring + dots).
+      case 'system-health': return <SectionErrorBoundary sectionName="System Health"><Suspense fallback={<TabLoadingFallback />}><LazySystemHealthTab /></Suspense></SectionErrorBoundary>;
       case 'payroll': return <SectionErrorBoundary sectionName="Payroll"><Suspense fallback={<TabLoadingFallback />}><LazyPayrollTab /></Suspense></SectionErrorBoundary>;
       case 'people-payroll': return <SectionErrorBoundary sectionName="People & Payroll"><Suspense fallback={<TabLoadingFallback />}><LazyPeoplePayrollTab /></Suspense></SectionErrorBoundary>;
       case 'etims': return <SectionErrorBoundary sectionName="eTIMS"><Suspense fallback={<TabLoadingFallback />}><LazyEtimsTab /></Suspense></SectionErrorBoundary>;
