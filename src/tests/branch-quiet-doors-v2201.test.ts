@@ -310,18 +310,18 @@ describe('v2.201.0 — the dark-panel law and the carried nit', () => {
 
 describe('v2.201.0 — docs and release surfaces', () => {
   it('package.json rides at 2.201.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.201.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.201.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.201.0');
+    expect(pkg.version).toBe('2.201.1');
+    expect(pkg.mbumah.releaseVersion).toBe('2.201.1');
+    expect(pkg.mbumah.baseVersion).toBe('2.201.1');
     expect(pkg.scripts['verify:v2-201-0']).toBe('node scripts/verify-v2-201-0.mjs');
     expect(pkg.scripts['verify:v2-200-0']).toBe('node scripts/verify-v2-200-0.mjs');
   });
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(90);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(91);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(90);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(91);");
   });
 
   it('the whats-new feed heads the release', () => {
@@ -344,6 +344,13 @@ describe('v2.201.0 — docs and release surfaces', () => {
   it('the changelog keeps the round above its predecessor (the treadmill-proof order)', () => {
     expect(changelog.indexOf('## [2.201.0] The debt book and the movers speak')).toBeGreaterThan(-1);
     expect(changelog.indexOf('## [2.201.0] The debt book and the movers speak')).toBeLessThan(changelog.indexOf('## [2.200.0] The branch row speaks'));
+  });
+
+  it('the v2.201.1 voice fix: one currency word, never two', () => {
+    const doorsSrc = readRepo('src/components/dashboard/branch-doors.tsx');
+    expect(doorsSrc).not.toContain('KES ${formatKES');
+    expect(doorsSrc).not.toContain('KES {formatKES');
+    expect(doorsSrc).toContain('${formatKES(row.lifetimeSpend)} lifetime spend');
   });
 
   it("the round's test file exists and pins the round", () => {

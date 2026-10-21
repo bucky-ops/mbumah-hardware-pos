@@ -80,6 +80,13 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.201.1',
+    title: 'A cleaner debt book voice',
+    bullets: [
+      'The debt book and the movers spoke one word twice: figures now read “Ksh 88,400.00” where they briefly said “KES Ksh 88,400.00” — same numbers, one currency voice.',
+    ],
+  },
+  {
     version: '2.201.0',
     title: 'The debt book and the movers speak',
     bullets: [
