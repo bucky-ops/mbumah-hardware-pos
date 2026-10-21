@@ -235,9 +235,9 @@ describe('v2.203.0 — the round\u2019s style: the forecast line clears the grap
 
 describe('v2.203.0 — the release surfaces', () => {
   it('the version rides at 2.203.0 in all three slots and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.204.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.204.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.204.0');
+    expect(pkg.version).toBe('2.205.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.205.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.205.0');
     expect(pkg.scripts['verify:v2-203-0']).toBe('node scripts/verify-v2-203-0.mjs');
   });
 

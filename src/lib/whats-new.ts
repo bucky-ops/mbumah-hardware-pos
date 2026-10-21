@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.205.0',
+    title: 'The reports learn to speak, honestly',
+    bullets: [
+      'Every picture on the Reports tab now says its numbers: the valuation, hourly and top-products charts read out every bar and point, the growth and forecast charts name their rows, and the stock-health gauge speaks its real counts.',
+      'The honesty pass: the fake "+12.5%" chips and the made-up hourly numbers are gone \u2014 the quick cards now speak real figures (who led the day, the average per sale, how many items are out of stock), and the hourly chart shows the day\u2019s ACTUAL recorded hours.',
+      'Chart labels grew a step for readability and the figures align in tidy columns.',
+      'Nothing new was queried \u2014 every spoken figure rides the data the page already had.',
+    ],
+  },
+  {
     version: '2.204.0',
     title: 'The pictures learn to speak',
     bullets: [
