@@ -321,9 +321,9 @@ describe('the docs speak the fourth section', () => {
 describe('release surfaces', () => {
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0) and the verify script is wired', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.198.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.198.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.198.0');
+    expect(pkg.version).toBe('2.199.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.199.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.199.0');
     expect(pkg.scripts['verify:v2-178-0']).toBe('node scripts/verify-v2-178-0.mjs');
   });
 

@@ -288,7 +288,7 @@ describe('the tolerances - the honest absences and the dark ground from birth', 
   it('the fourth panel owns its dark half from birth - the v2.195.0 discovery is house law', () => {
     // exactly FIVE panels now paint the dark half (revenue, transactions,
     // debt, watchlist; v2.198.0's rental yard joins from birth — the law holds)
-    expect(kpi.split('bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900').length - 1).toBe(5);
+    expect(kpi.split('bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900').length - 1).toBe(6);
   });
 
   it('the type contract already carried the named watchlist - zero wire changes', () => {
@@ -323,9 +323,9 @@ describe('the a11y surface - the REAL-chain math for the watchlist families', ()
 
 describe('the release surfaces', () => {
   it('package.json rides at 2.198.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.198.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.198.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.198.0');
+    expect(pkg.version).toBe('2.199.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.199.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.199.0');
     expect(pkg.scripts['verify:v2-197-0']).toBeTruthy();
     // the prior surfaces stay wired
     expect(pkg.scripts['verify:v2-196-0']).toBeTruthy();

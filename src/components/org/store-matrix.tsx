@@ -228,7 +228,7 @@ export function StoreMatrix({
       { key: 'txns', label: 'Txns', width: 62, min: 52, align: 'right', render: (s) => <span className="tabular-nums">{s.todayTransactions}</span> },
       { key: 'low', label: 'Low Stock', width: 86, min: 72, align: 'right', render: (s) => (s.lowStockCount > 0 ? <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">{s.lowStockCount}</Badge> : <span className="text-slate-500">0</span>) },
       { key: 'overdue', label: 'Overdue Rentals', width: 110, min: 90, align: 'right', render: (s) => (s.overdueRentals > 0 ? <Badge className="bg-red-100 text-red-800 hover:bg-red-100">{s.overdueRentals}</Badge> : <span className="text-slate-500">0</span>) },
-      { key: 'debt', label: 'Debt Total', width: 112, min: 92, align: 'right', render: (s) => <span className={s.debtOutstanding > 150_000 ? 'font-semibold text-red-600' : 'text-slate-700'}>{kes(s.debtOutstanding)}</span> },
+      { key: 'debt', label: 'Debt Total', width: 112, min: 92, align: 'right', render: (s) => <span className={s.debtOutstanding > 150_000 ? 'font-semibold text-red-700' : 'text-slate-700'}>{kes(s.debtOutstanding)}</span> },
       { key: 'debtcount', label: 'Debt Accts', width: 88, min: 76, align: 'right', render: (s) => <span className="tabular-nums text-slate-500">{s.debtCount}</span> },
       { key: 'mpesa', label: 'M-Pesa Pending', width: 110, min: 90, align: 'right', render: (s) => (s.pendingMpesa > 0 ? <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">{s.pendingMpesa}</Badge> : <span className="text-slate-500">0</span>) },
       { key: 'actions', label: 'Actions', width: 220, min: 190, render: (s) => (
