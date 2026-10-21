@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.203.0',
+    title: 'The week speaks',
+    bullets: [
+      'The Sales trend card found its voice: it now opens the branch\u2019s week \u2014 all seven named days with what each collected, its honest share of the week, the loudest day in words, and the quiet days saying \u201cno sales\u201d instead of a percentage of nothing.',
+      'The card\u2019s face gained today\u2019s honest progress: \u201cToday so far\u201d against the forecast, a progress read rather than a verdict \u2014 the day is not over.',
+      'The forecast\u2019s dashed line and legend swatch moved from amber-500 to amber-600 \u2014 the old voice sat at 2.15:1, below the 3:1 bar graphics must clear; the new one reads 3.19:1.',
+      'Every figure the week speaks rides the answer the dashboard already carries \u2014 zero new queries, the forecast\u2019s method and the outlier note are the server\u2019s own words.',
+    ],
+  },
+  {
     version: '2.202.1',
     title: 'The branch slice fixed',
     bullets: [

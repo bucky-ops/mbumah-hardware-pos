@@ -27,6 +27,7 @@
  *   8. Top customers - debtCrisis.customers sorted by lifetimeSpend
  *   9. Top products - topProducts with revenue share bars
  *  10. Sales trend - revenueTrend7d days + forecast + outlier note
+ *        (v2.203.0: the card is the branch's week door — WeekLedgerModal)
  *  11. Debt aging - debtCrisis.aging buckets (sum verified)
  *  12. Alerts - data.alerts + alertsCount + severity actions
  */
@@ -48,7 +49,7 @@ import {
   type ShiftXRead,
 } from '@/lib/api';
 import { DayLedgerModal, DayReceiptsModal, BasketLadderModal } from '@/components/dashboard/kpi-doors';
-import { DebtBookModal, MoversModal } from '@/components/dashboard/branch-doors';
+import { DebtBookModal, MoversModal, WeekLedgerModal } from '@/components/dashboard/branch-doors';
 import type {
   DashboardStats, TopProduct, ShiftSnapshot, DebtCrisisSummary,
   DashboardAlert, StoreHealthSummary, RevenueTrend7d,
@@ -1182,7 +1183,7 @@ function HourlyRevenueChart({ data }: { data: DashboardData | null }) {
         {/* X labels */}
         <div className="mt-1.5 flex gap-1 pl-12 sm:gap-1.5">
           {hours.map((h) => (
-            <span key={h.hour} className="flex-1 text-center text-[9px] text-slate-500">
+            <span key={h.hour} className="flex-1 text-center text-[10px] text-slate-500">
               {labelEvery.has(parseInt(h.hour, 10)) ? formatHour(parseInt(h.hour, 10)).replace(' ', '') : ''}
             </span>
           ))}
@@ -1912,6 +1913,9 @@ function TopProductsCard({ data }: { data: DashboardData | null }) {
 // 10. SALES TREND (7 DAYS) + FORECAST
 
 function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
+  // v2.203.0: the card becomes the branch's week door — the state is
+  // declared BEFORE anything else (the rules-of-hooks law).
+  const [weekOpen, setWeekOpen] = useState(false);
   const trend: RevenueTrend7d | null | undefined = data?.revenueTrend7d;
   const days = useMemo(
     () => (Array.isArray(trend?.days) ? trend.days : []),
@@ -1919,6 +1923,12 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
   );
   const forecast = num(trend?.forecast);
   const canChart = days.length >= 2;
+  // The door's face voices: the wire's today row and its honest progress
+  // against the wire's own forecast (a share of a zero forecast is never
+  // spoken — the zero-total rule).
+  const hasData = days.length > 0;
+  const todayRevenue = num(days.find((d) => d?.isToday === true)?.revenue);
+  const todayShare = forecast > 0 && todayRevenue > 0 ? Math.round((todayRevenue / forecast) * 100) : null;
 
   const W = 320;
   const H = 130;
@@ -1937,13 +1947,24 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
   }, [canChart, days, forecast]);
 
   return (
-    <Card className="rounded-2xl border-slate-200 shadow-sm">
+    <>
+    <Card
+      data-testid="branch-week-card"
+      role="button"
+      tabIndex={0}
+      aria-label="Sales trend - open details"
+      onClick={() => setWeekOpen(true)}
+      onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setWeekOpen(true); } }}
+      className={`relative cursor-pointer overflow-hidden rounded-2xl border-slate-200 shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${hasData ? 'ring-1 ring-slate-300 dark:ring-slate-600' : ''}`}
+    >
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-emerald-600" />
+      {hasData ? <span aria-hidden="true" className="absolute right-3 top-3 h-2 w-2 rounded-full bg-emerald-600 anim-pulse-dot" /> : null}
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
           <TrendingUp className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           Sales trend · 7 days
         </CardTitle>
-        <CardDescription className="text-xs">Net revenue with forecast</CardDescription>
+        <CardDescription className="text-xs">Net revenue with forecast — open the branch&rsquo;s week</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {!canChart || !geometry ? (
@@ -1961,13 +1982,13 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
                   <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
                 </linearGradient>
               </defs>
-              {/* forecast dashed line */}
+              {/* forecast dashed line — amber-600 (3.20:1) clears the 3:1 graphics bar the -500 voice sat below */}
               <line
                 x1={PAD}
                 x2={W - PAD}
                 y1={geometry.forecastY}
                 y2={geometry.forecastY}
-                stroke="#f59e0b"
+                stroke="#d97706"
                 strokeWidth="1.5"
                 strokeDasharray="5 4"
               />
@@ -1996,16 +2017,42 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
                 );
               })}
             </svg>
-            <div className="flex justify-between px-0.5 text-[9px] text-slate-500">
-              {days.map((d, i) => (
-                <span key={d?.date ?? i} className={d?.isToday ? 'font-semibold text-emerald-700' : ''}>
-                  {d?.label ?? ''}
-                </span>
-              ))}
+            <div className="flex justify-between px-0.5 text-[10px] text-slate-500">
+              {days.map((d, i) => {
+                const isToday = d?.isToday === true;
+                return (
+                  <span
+                    key={d?.date ?? i}
+                    className={isToday
+                      ? 'inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30'
+                      : ''}
+                  >
+                    {d?.label ?? ''}
+                  </span>
+                );
+              })}
             </div>
+            {/* v2.203.0: today's honest progress against the wire's forecast —
+                a progress read, never a verdict (the day is not over). */}
+            {todayRevenue > 0 ? (
+              <div className="rounded-xl bg-emerald-50 p-2.5 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:ring-emerald-500/30" data-testid="branch-week-progress">
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="font-medium text-slate-700 dark:text-slate-200">Today so far</span>
+                  <span className="tabular-nums text-slate-700 dark:text-slate-200">
+                    {formatKES(todayRevenue)}
+                    {todayShare != null ? <span className="text-slate-500 dark:text-slate-400"> · {todayShare}% of the forecast</span> : null}
+                  </span>
+                </div>
+                {todayShare != null ? (
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-500/20" aria-hidden="true">
+                    <div className="h-full rounded-full bg-emerald-600 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, todayShare))}%` }} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
-              <span className="inline-block h-0 w-5 border-t-2 border-dashed border-amber-500" aria-hidden="true" />
-              Forecast {formatKES(forecast)} · {trend?.forecastMethod || 'median of prior 6 days'}
+              <span className="inline-block h-0 w-5 border-t-2 border-dashed border-amber-600" aria-hidden="true" />
+              Forecast <span className="tabular-nums">{formatKES(forecast)}</span> · {trend?.forecastMethod || 'median of prior 6 days'}
             </p>
             {trend?.todayIsOutlier === true && (
               <p className="flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-700">
@@ -2029,6 +2076,12 @@ function SalesTrendForecastCard({ data }: { data: DashboardData | null }) {
         </div>
       </CardContent>
     </Card>
+    <WeekLedgerModal
+      trend={data?.revenueTrend7d ?? null}
+      open={weekOpen}
+      onClose={() => setWeekOpen(false)}
+    />
+    </>
   );
 }
 

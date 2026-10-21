@@ -2,7 +2,8 @@
 
 /**
  * The branch dashboard's quiet cards speak (v2.201.0) — "the branch's debt
- * book and the day's movers".
+ * book and the day's movers"; the week joins them (v2.203.0) — "the week
+ * speaks".
  *
  * The branch KPI row found its three voices in v2.200.0; this round walks
  * the door arc down the page's bottom grid, where TWO cards still rendered
@@ -42,7 +43,7 @@
  * views — no anchors, no deep links (the honest-door law: the pointer is
  * not a door).
  *
- * Zero new queries: both doors compose fields the GET /api/dashboard
+ * Zero new queries: every door composes fields the GET /api/dashboard
  * response already carries. Money is coerced at the boundary (the
  * DECIMAL-STRING AUDIT precedent — never trust wire types for money).
  */
@@ -52,7 +53,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { formatKES } from '@/lib/api';
-import { CircleDollarSign, Package } from 'lucide-react';
+import { AlertTriangle, CircleDollarSign, Package, TrendingUp } from 'lucide-react';
 
 // ── The wire slices the two doors read ──────────────────────────────────────
 // Structural subsets of the dashboard payload (DashboardData satisfies
@@ -442,6 +443,156 @@ export function MoversModal({ products, categories, open, onClose }: { products:
             {/* The honest window note — the doors read the named answer */}
             <p className="border-t border-slate-100 pt-2 text-[10px] text-slate-500 dark:border-slate-800 dark:text-slate-400" data-testid="branch-movers-window">
               The movers read the {rows.length} product{rows.length === 1 ? '' : 's'} named on this answer — the shares read against the named window, the card&rsquo;s headline stays the truth.
+            </p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── The branch's week (v2.203.0 — the week speaks) ──────────────────────────
+
+export interface BranchWeekWire {
+  revenueTrend7d?: {
+    days?: Array<{
+      date: string;
+      label: string;
+      revenue: number | string;
+      isToday: boolean;
+    } | null>;
+    forecast?: number | string;
+    forecastMethod?: string | null;
+    todayIsOutlier?: boolean;
+  } | null;
+}
+
+/**
+ * The named days IN CALENDAR ORDER — a week is a timeline, not a ranking,
+ * so the rows speak in the order the days happened; the loudest day earns
+ * its own spoken line instead of a reorder. Null rows are filtered by
+ * predicate, never a non-null assertion.
+ */
+function weekDays(days: NonNullable<BranchWeekWire['revenueTrend7d']>['days']): Array<{
+  date: string; label: string; revenue: number; isToday: boolean;
+}> {
+  return (days ?? [])
+    .filter((d): d is NonNullable<typeof d> => !!d && d.date != null)
+    .map((d) => ({
+      date: d.date,
+      label: d.label,
+      revenue: num(d.revenue),
+      isToday: !!d.isToday,
+    }));
+}
+
+/**
+ * The branch's week — the seven named days' revenues, the wire's forecast
+ * and its own method, today's honest progress against that forecast, and
+ * the wire's own outlier voice. The zero-total rule holds: a share of a
+ * zero week is never spoken, a zero day says "no sales" instead of a
+ * percentage of nothing.
+ */
+export function WeekLedgerModal({ trend, open, onClose }: { trend: BranchWeekWire['revenueTrend7d']; open: boolean; onClose: () => void }) {
+  const rows = trend ? weekDays(trend.days) : [];
+  const weekTotal = rows.reduce((s, r) => s + r.revenue, 0);
+  const loudest = rows.reduce<(typeof rows)[number] | null>(
+    (best, r) => (best == null || r.revenue > best.revenue ? r : best),
+    null,
+  );
+  const forecast = num(trend?.forecast);
+  const method = trend?.forecastMethod ?? '';
+  const outlier = trend?.todayIsOutlier === true;
+  const today = rows.find((r) => r.isToday) ?? null;
+  const todayShare = today && forecast > 0 ? shareOf(today.revenue, forecast) : null;
+  const empty = rows.length === 0;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className={PANEL_CLS} aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+            <TrendingUp className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+            The branch&rsquo;s week — v2.203.0
+          </DialogTitle>
+          <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
+            Day by day, what the week collected — composed from the answer the chart already draws.
+          </DialogDescription>
+        </DialogHeader>
+
+        {empty ? (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500 ring-1 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30" data-testid="branch-week-empty">
+            Not enough history yet — the week speaks after a couple of trading days.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {/* The headline — the named week's own total */}
+            <div>
+              <p className="text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100" data-testid="branch-week-total">{formatKES(weekTotal)}</p>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400" data-testid="branch-week-meta">
+                {rows.length} named day{rows.length === 1 ? '' : 's'} · forecast {formatKES(forecast)}
+              </p>
+              {loudest ? (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400" data-testid="branch-week-loudest">
+                  Loudest: <span className="font-medium text-slate-700 dark:text-slate-200">{loudest.label}</span> at {formatKES(loudest.revenue)}
+                </p>
+              ) : null}
+            </div>
+
+            {/* The named days, in calendar order — zero days speak, never dropped */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The named days</p>
+              <ol className="mt-2 space-y-2">
+                {rows.map((r) => {
+                  const share = shareOf(r.revenue, weekTotal);
+                  return (
+                    <li key={r.date} className="grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-2.5 py-2 ring-1 ring-slate-200 dark:ring-slate-700" data-testid="branch-week-row">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-slate-100">
+                          <span className="truncate">{r.label}</span>
+                          {r.isToday ? (
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30" data-testid="branch-week-today-chip">today</span>
+                          ) : null}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {r.revenue > 0 && share != null ? (
+                            <span className="tabular-nums" data-testid="branch-week-share">{shareLabel(share, 'the week')}</span>
+                          ) : (
+                            <span data-testid="branch-week-zero">no sales</span>
+                          )}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">{formatKES(r.revenue)}</p>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+
+            {/* The forecast block — the wire's method verbatim + today's honest progress */}
+            <div className="rounded-lg bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200 dark:bg-slate-500/10 dark:ring-slate-500/30">
+              <p className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300" data-testid="branch-week-forecast">
+                <span className="inline-block h-0 w-5 border-t-2 border-dashed border-amber-600" aria-hidden="true" />
+                <span>Forecast <span className="font-semibold tabular-nums">{formatKES(forecast)}</span></span>
+                {method ? <span className="text-slate-500 dark:text-slate-400"> · {method}</span> : null}
+              </p>
+              {today && today.revenue > 0 ? (
+                <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300" data-testid="branch-week-delta">
+                  Today so far {formatKES(today.revenue)}
+                  {todayShare != null ? <span className="tabular-nums"> · {todayShare}% of the forecast</span> : null}
+                </p>
+              ) : null}
+              {outlier ? (
+                <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30" data-testid="branch-week-outlier">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Today is a bulk-sale outlier — the forecast rides the median of the previous 6 days.
+                </p>
+              ) : null}
+            </div>
+
+            {/* The honest window note — the doors read the named answer */}
+            <p className="border-t border-slate-100 pt-2 text-[10px] text-slate-500 dark:border-slate-800 dark:text-slate-400" data-testid="branch-week-window">
+              The week reads the {rows.length} day{rows.length === 1 ? '' : 's'} named on this answer — the shares read against the named week, the chart stays the picture.
             </p>
           </div>
         )}

@@ -535,3 +535,27 @@ aria-hidden decoration per the v2.198.0 law (the figure each hints at is
 the card's own value text). The committed script —
 `scripts/contrast-math-desk-doors-v2202.mjs`, **42/42** — pins the whole
 vocabulary so it cannot drift silently.
+
+
+## The week door's emerald family + the forecast line's re-voice (v2.203.0)
+
+THE PROBE (`scripts/probe-week-doors-v2203.mjs`, **16/16**): the branch
+dashboard's Sales trend card became the week's EMERALD door and every
+voice was measured BEFORE anything shipped — the `-700`/slate accents
+**4.77-9.81:1** on their light grounds (emerald-50 chips, slate-50
+forecast block, amber-50 outlier banner), the chart's graphics against
+the 3:1 non-text bar, and in dark the `-300` accents **6.79-12.02:1** on
+slate-900 and the `-500/10` chip stacks.
+
+RECORDED AS A FIX, not alignment: the trend chart's FORECAST DASHED LINE
+rode amber-500 on white — **2.15:1, BELOW the 3:1 graphics bar** (the
+legend text carried the figure, but the line is the graphic that carries
+the forecast's position). The line and the legend swatch re-voiced to
+amber-600 — **3.19:1** — and the ghost amber-500 value is pinned BELOW
+the bar in REVERSE so the old voice cannot return silently. The trend
+polyline (emerald-600 3.67:1) and the door's edge bar (emerald-600
+3.67:1) pass untouched. The progress-bar track (emerald-100 light) and
+the live dot are aria-hidden decoration per the v2.198.0 law — the
+figures they illustrate are the text beside them. The committed script —
+`scripts/contrast-math-week-doors-v2203.mjs`, **18/18** — pins the whole
+family.
