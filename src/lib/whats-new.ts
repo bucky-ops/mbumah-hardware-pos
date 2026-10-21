@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.196.0',
+    title: 'The debt card opens the ledger',
+    bullets: [
+      'The Debt card on the console now opens its own drill-down — the aging composition bar, each bucket’s share of the ledger, the overdue total, and the named accounts behind the number — mirroring the Revenue and Transactions modals in the face’s red.',
+      'The named ledger lists who owes what, loudest first, with each account’s status and age; “The ledger by branch” groups the same accounts by the branch that holds them.',
+      'The modal section headers learned a dark voice — a marginal contrast gap (4.15:1) that rode along since the first drill-down is fixed everywhere.',
+    ],
+  },
+  {
     version: '2.195.0',
     title: 'The transactions card finds its week',
     bullets: [

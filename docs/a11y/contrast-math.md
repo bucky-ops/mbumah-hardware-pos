@@ -303,3 +303,30 @@ VAT amber re-derived over the panels 3.05 light / 5.59 dark, the title
 glyph 5.04:1. The fix is a code change: this section closes as FIXED, not
 reviewed-passing — and the v2.194.0 section above is annotated by this one
 (same tokens, the ground the numbers are true over).
+
+## Fixed: the debt ledger + the section headers' dark voice (v2.196.0)
+
+THE DISCOVERY: the modal section headers ("The week by branch" and their
+sub-lines) rode `text-slate-500` with NO dark variant since v2.176.0 — the
+v2.195.0 audit measured the panel interiors and the rows but not the
+headers between them. On the dark dialog the combination measures
+**4.15:1** — a marginal but real gap under the 4.5 bar these 10-11px lines
+must meet. v2.196.0 fixes all four headers and their sub-lines
+(`dark:text-slate-400`, **7.53:1**) as part of the debt ledger's birth;
+the pre-fix combination is pinned below the bar in reverse (3 discovery
+rows) so it cannot return silently.
+
+The new face — `scripts/contrast-math-debt-ledger-v2196.mjs`, **45/45
+families pass** over the REAL chain (dialog → panel → strip → chip; the
+ledger sections sit outside the panel on the dialog ground): light
+4.55-14.00:1 (the slate-500 voices the tight corners at 4.55; rose strip
+label 7.31, amount 8.88, share chip 5.59; status chips 4.87 amber / 5.88
+red), dark 6.17-16.28:1 over the slate-900 panel (headline red-400 6.17,
+rose strip 8.70-11.83, share chip stack 7.02, status chips 12.08 amber /
+9.68 red on their -500/10 dialog stacks). The card stays white by design:
+the ledger chip 5.88:1, the 20px-bold headline takes the 3:1 large-text
+bar (3.82:1) and so does the red edge stroke (3.82:1). The composition
+bar's pastel fills are DOCUMENTED DECORATION, deliberately not asserted:
+the bar is aria-labeled and its figures spoken twice beside it (the card's
+badges; the modal's four cells with shares), so asserting amber-400 against
+the track would flatter the math, not inform it.

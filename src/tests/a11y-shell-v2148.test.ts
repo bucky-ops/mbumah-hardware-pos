@@ -255,9 +255,9 @@ describe('the live re-audit follow-ups (found on the rebuilt build)', () => {
 describe('the release surfaces speak the version', () => {
   it('package.json, whats-new and the changelog lead with 2.154.0 (re-anchored per release)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.195.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.195.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.195.0');
+    expect(pkg.version).toBe('2.196.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.196.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.196.0');
     const feed = readRepo('src/lib/whats-new.ts');
     expect(feed.indexOf("'2.189.0'")).toBeGreaterThan(-1);
     expect(feed.indexOf("'2.189.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
@@ -266,6 +266,6 @@ describe('the release surfaces speak the version', () => {
 
   it('the unread counter test is re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(84);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(85);");
   });
 });

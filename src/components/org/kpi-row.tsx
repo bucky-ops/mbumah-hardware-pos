@@ -10,6 +10,12 @@
 // backed by the per-day net buckets (`netSpark`, zero extra queries) and the
 // ribbon grows the VAT week-over-week. Gross stays the default: the toggle
 // is an analyst turn, never a quiet second meaning of the headline.
+// v2.196.0: the debt card finds its ledger — the row's THIRD voice. The
+// aging buckets the card has badge-summed since v2.176.0 now draw their
+// composition bar, and the drill-down speaks the named accounts the
+// payload already carried (debtExpert.topDebtors — the Debt Expert
+// panel's wire since the Expert panel shipped). Zero new queries; the
+// drill-down composes, it never invents.
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +48,8 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   const [trendOpen, setTrendOpen] = useState(false);
   // v2.195.0: the transactions drill-down — the KPI row's second voice.
   const [txOpen, setTxOpen] = useState(false);
+  // v2.196.0: the debt drill-down — the KPI row's third voice.
+  const [debtOpen, setDebtOpen] = useState(false);
   // v2.187.0: the modal's lens — GROSS is the default and the contract
   // (v2.185.0); net is an explicit analyst turn, never a second meaning.
   const [lens, setLens] = useState<'gross' | 'net'>('gross');
@@ -95,6 +103,66 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   // (a pre-2.195.0 cached answer)? The branch block then speaks its honest
   // step-aside instead of silently vanishing.
   const branchTxStale = perStoreTrend != null && stores.length > 0 && !branchTx;
+
+  // ── v2.196.0: the debt ledger's derivations ─────────────────────────────
+  // Every figure below composes the SAME payload the card already spoke
+  // (zero new queries). The named ledger rides debtExpert (typed since the
+  // Expert panel shipped); a runtime answer may lack it (an older cached
+  // answer) — the honest step-aside speaks, the aging above never breaks.
+  const ledgerReady = Array.isArray(data.debtExpert?.topDebtors);
+  // Did the answer arrive WITHOUT the named ledger (an older cached
+  // answer)? The modal then speaks its honest step-aside — the aging
+  // story above still carries, never a silent void.
+  const ledgerStale = !ledgerReady;
+  // Loudest balance first — the Expert panel's table order, re-derived here
+  // so the modal never depends on the route's ordering choice.
+  const debtors = ledgerReady ? [...data.debtExpert.topDebtors].sort((a, b) => b.outstanding - a.outstanding) : null;
+  // The buckets, one array so the card's bar and the modal's bar + grid
+  // speak the same four figures in the same order (no invented merges:
+  // each bucket its own cell). Hue deepens with age: slate → amber →
+  // orange → red — the hotter the colour, the older the money.
+  const agingBuckets: Array<{ key: string; label: string; value: number; hue: string }> = [
+    { key: 'current', label: 'Current', value: k.debt.aging.current, hue: 'bg-slate-400' },
+    { key: 'd30', label: '1-30d', value: k.debt.aging.d30, hue: 'bg-amber-400' },
+    { key: 'd60', label: '31-60d', value: k.debt.aging.d60, hue: 'bg-orange-500' },
+    { key: 'd90plus', label: '90d+', value: k.debt.aging.d90plus, hue: 'bg-red-500' },
+  ];
+  // Share of the ledger — the honesty rule the wow-strips speak: a zero
+  // total renders NO percentage (never an invented "0%" of nothing).
+  const debtShare = (v: number): number | null => (k.debt.total > 0 ? Math.round((v / k.debt.total) * 1000) / 10 : null);
+  // The overdue face: every bucket past due date, summed — the strip's
+  // figure. Composed from the SAME buckets the bar draws, never re-queried.
+  const overdueSum = k.debt.aging.d30 + k.debt.aging.d60 + k.debt.aging.d90plus;
+  const overduePct = debtShare(overdueSum);
+  // The ledger by branch — the named debtors grouped by the branch that
+  // holds them (the route resolves the store name server-side; an unnamed
+  // account rests under "Unassigned" — still spoken, never dropped).
+  // Derived client-side from the SAME rows — zero new queries.
+  const branchDebt = debtors && debtors.length > 0
+    ? Object.entries(
+        debtors.reduce<Record<string, { total: number; count: number }>>((acc, d) => {
+          const name = d.store ?? 'Unassigned';
+          acc[name] = acc[name] ?? { total: 0, count: 0 };
+          acc[name].total += d.outstanding;
+          acc[name].count += 1;
+          return acc;
+        }, {}),
+      )
+        .map(([name, v]) => ({ name, ...v }))
+        .sort((a, b) => b.total - a.total)
+    : null;
+  // The debtor's status voice — the three known states wear their
+  // families; any future state stays calm slate (never a broken chip).
+  const debtorStatusChip = (status: string): string =>
+    status === 'PARTIAL'
+      ? 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30'
+      : status === 'OVERDUE'
+        ? 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30'
+        : 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30';
+  // The bucket label as the card's badges speak it — a future bucket value
+  // falls back to its own lowercase (never a blank chip).
+  const debtorBucketLabel = (bucket: string): string =>
+    bucket === 'CURRENT' ? 'current' : bucket === 'DAYS_30' ? '1-30d' : bucket === 'DAYS_60' ? '31-60d' : bucket === 'DAYS_90_PLUS' ? '90d+' : bucket.toLowerCase();
 
   return (
     <section aria-label="KPI command row" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -192,9 +260,31 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
         <p className="mt-2 text-[10px] text-slate-500">rentals past return</p>
       </div>
 
-      {/* Debt */}
-      <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${debtHot ? 'ring-1 ring-red-300' : ''}`}>
-        <div className={`flex items-center gap-1.5 text-xs font-medium text-slate-500 ${debtHot ? 'anim-shake' : ''}`}><HandCoins className="h-3.5 w-3.5 text-red-500" /> Debt {debtHot ? '· shake alert' : ''}</div>
+      {/* Debt — v2.196.0: a VOICE, not a tile. The Revenue card told the
+          money's story since v2.173.0 and the count face found its voice in
+          v2.195.0 while this card badge-summed its aging in silence — even
+          though the named ledger was already on the wire. The card is now
+          the row's THIRD button and opens the debt ledger; it wears the
+          face's red edge + live dot (the family vocabulary: orange
+          revenue, blue transactions, red debt) and the ledger qualifier
+          chip (the gross/settled chips' ledger-face sibling). */}
+      <button
+        onClick={() => setDebtOpen(true)}
+        data-testid="debt-card"
+        className={`focus-ring group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${debtHot ? 'ring-1 ring-red-300' : ''}`}
+      >
+        <span className="absolute inset-y-0 left-0 w-1 bg-red-500" />
+        <div className={`flex items-center justify-between ${debtHot ? 'anim-shake' : ''}`}>
+          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <HandCoins className="h-3.5 w-3.5 text-red-500" /> Debt
+            {/* v2.196.0: the ledger qualifier — every account this card
+                and its modal speak is the SAME named population the Debt
+                Expert panel reads, so the headline can never be read as
+                a different book. */}
+            <span className="rounded-full bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-red-700 ring-1 ring-red-200" title="The named ledger — the same accounts the Debt Expert panel speaks">ledger</span>
+          </span>
+          {k.debt.total > 0 && <span className="h-2 w-2 rounded-full bg-red-500 anim-pulse-dot" />}
+        </div>
         <div className="mt-1">
           <CountUp value={k.debt.total} format={kes} className="text-xl font-bold text-red-500" />
         </div>
@@ -204,7 +294,24 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
           <Badge variant="outline" className="px-1 py-0 text-orange-800">60d {kShort(k.debt.aging.d60)}</Badge>
           <Badge variant="outline" className="px-1 py-0 text-red-600">90d+ {kShort(k.debt.aging.d90plus)}</Badge>
         </div>
-      </div>
+        {/* v2.196.0: the card learns its shape — the aging composition
+            bar, the four buckets drawn as one stacked strip (slate →
+            amber → orange → red: the deeper the age, the hotter the
+            hue). Widths are the buckets' honest shares of the total; a
+            zero bucket draws nothing and an empty ledger draws a calm
+            empty track — never a fabricated segment. */}
+        <div
+          className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-slate-100"
+          role="img"
+          aria-label={`Aging composition: current ${kes(k.debt.aging.current)}, 30d ${kes(k.debt.aging.d30)}, 60d ${kes(k.debt.aging.d60)}, 90d+ ${kes(k.debt.aging.d90plus)}`}
+        >
+          {agingBuckets.map((b) =>
+            b.value > 0 && k.debt.total > 0 ? (
+              <span key={b.key} className={b.hue} style={{ width: `${(b.value / k.debt.total) * 100}%` }} />
+            ) : null,
+          )}
+        </div>
+      </button>
 
       {/* Pending actions */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
@@ -386,8 +493,8 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
               renders nothing here — honest absence. */}
           {branchWeek && branchWeek.length > 0 && lens === 'gross' && (
             <div className="mt-3 border-t border-slate-100 pt-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">The week by branch</p>
-              <p className="mb-2 text-[10px] text-slate-500">branch shapes and the org line above speak the same gross till face</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The week by branch</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">branch shapes and the org line above speak the same gross till face</p>
               <ul className="space-y-1.5">
                 {branchWeek.map((b) => (
                   <li key={b.storeId} className="flex items-center justify-between gap-3">
@@ -494,8 +601,8 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
               counts are numbers), honest zeros stay visible. */}
           {branchTx && branchTx.length > 0 && (
             <div className="mt-3 border-t border-slate-100 pt-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">The week by branch</p>
-              <p className="mb-2 text-[10px] text-slate-500">the same settled rows the org line counts, branch by branch</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The week by branch</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">the same settled rows the org line counts, branch by branch</p>
               <ul className="space-y-1.5">
                 {branchTx.map((b) => (
                   <li key={b.storeId} className="flex items-center justify-between gap-3">
@@ -516,6 +623,167 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
             <div className="mt-3 border-t border-slate-100 pt-3">
               <p data-testid="transactions-branch-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                 counts by branch are not on this cached answer — the org story above still speaks. Reload to fetch them.
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.196.0: the debt drill-down — the KPI row's third voice. The
+          anatomy mirrors the two modals above (panel, bar, grid, strip,
+          rows) but speaks the LEDGER: the aging buckets drawn as one
+          composition bar, each bucket its own honest share, the overdue
+          face summed into its own strip, and the named accounts the
+          payload already carried. Wears the face's red so the three
+          modals never merge at a glance. Every figure composes the SAME
+          payload — the drill-down composes, it never invents. */}
+      <Dialog open={debtOpen} onOpenChange={setDebtOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><HandCoins className="h-4 w-4 text-red-600" /> Debt ledger</DialogTitle>
+          </DialogHeader>
+          {/* The panel owns its dark half from birth — the v2.195.0
+              discovery (the DOM composites against the NEAREST painted
+              ancestor) is house law now: every new modal panel paints
+              dark:bg-slate-900 on day one, never a repeat of the
+              invisible-token bug. */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">outstanding org-wide</span>
+              <span data-testid="debt-ledger-total" className="text-2xl font-bold text-red-600 dark:text-red-400">{kes(k.debt.total)}</span>
+            </div>
+            <p data-testid="debt-ledger-meta" className="text-[10px] text-slate-500 dark:text-slate-400">
+              {num(k.debt.count)} accounts{debtors ? ` · ${debtors.length} named on this answer` : ' · named ledger not on this cached answer'}
+            </p>
+            {/* The aging composition bar — the card's mini bar at reading
+                size: one stacked strip, the grid below spells each
+                bucket's amount and its honest share. No stroke, no trend
+                window — debt has no 7-day story on this payload, so the
+                bar speaks composition where the sibling modals draw
+                sparks (a different face wears a different shape). */}
+            <div data-testid="debt-aging-bar" className="mt-2">
+              <div
+                className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                role="img"
+                aria-label={`Aging composition: current ${kes(k.debt.aging.current)}, 30d ${kes(k.debt.aging.d30)}, 60d ${kes(k.debt.aging.d60)}, 90d+ ${kes(k.debt.aging.d90plus)}`}
+              >
+                {agingBuckets.map((b) =>
+                  b.value > 0 && k.debt.total > 0 ? (
+                    <span key={b.key} className={b.hue} style={{ width: `${(b.value / k.debt.total) * 100}%` }} />
+                  ) : null,
+                )}
+              </div>
+              {/* The four buckets, each its own cell (no invented merges)
+                  with the bucket's dot so the bar and the grid read as one
+                  shape. The share speaks only when the total does — the
+                  zero-total honesty rule. */}
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                {agingBuckets.map((b) => (
+                  <div key={b.key} data-testid={`debt-bucket-${b.key}`}>
+                    <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                      <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${b.hue}`} />
+                      {b.label}
+                    </span>
+                    <p className="font-bold text-slate-800 dark:text-slate-100">{kes(b.value)}</p>
+                    {debtShare(b.value) != null && <p className="text-[10px] tabular-nums text-slate-500 dark:text-slate-400">{debtShare(b.value)}% of ledger</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* The overdue face — every bucket past due, summed into its
+                own rose strip (the wow-strips' ledger sibling: label,
+                figure, share chip). A settled ledger renders nothing here
+                — honest absence, never an empty box. The share speaks
+                only when the total does (the strip cannot exist without
+                an overdue bucket, and an overdue bucket implies a total —
+                the null branch is the pathological-payload guard). */}
+            {overdueSum > 0 && (
+              <div data-testid="debt-overdue-strip" className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-rose-100 bg-rose-50/70 px-2.5 py-1.5 dark:border-rose-500/30 dark:bg-rose-500/10">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300">overdue buckets</span>
+                <span data-testid="debt-overdue-amount" className="text-xs font-semibold tabular-nums text-rose-900 dark:text-rose-200">{kes(overdueSum)}</span>
+                <span
+                  data-testid="debt-overdue-share"
+                  title="30d + 60d + 90d+ over the ledger total"
+                  className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-rose-700 ring-1 ring-rose-200 dark:bg-rose-500/20 dark:text-rose-300 dark:ring-rose-500/30"
+                >
+                  {overduePct == null ? 'of the ledger' : `${overduePct}% of the ledger`}
+                </span>
+              </div>
+            )}
+          </div>
+          {/* The named ledger — the accounts the Debt Expert panel reads,
+              loudest balance first (re-derived here so the modal never
+              depends on the route's ordering choice). Each row: the
+              customer, the branch that holds the account, the status
+              chip (partial amber / overdue red / anything else calm
+              slate), the aging bucket chip, the balance in the face's
+              red. */}
+          {debtors && debtors.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The named ledger</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">loudest balance first — the same accounts the Debt Expert panel speaks</p>
+              <ul className="space-y-1.5">
+                {debtors.map((d) => (
+                  <li key={d.id} data-testid="debt-debtor-row" className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-slate-700 dark:text-slate-200">{d.customer}</span>
+                      {d.store && <span className="block truncate text-[10px] text-slate-500 dark:text-slate-400">{d.store}</span>}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ring-1 ${debtorStatusChip(d.status)}`}
+                        title={`Account status: ${d.status.toLowerCase()}`}
+                      >
+                        {d.status.toLowerCase()}
+                      </span>
+                      <span className="inline-flex items-center rounded bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-slate-500 ring-1 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30">{debtorBucketLabel(d.bucket)}</span>
+                      <span className="text-xs font-semibold tabular-nums text-red-600 dark:text-red-400">{kes(d.outstanding)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The ledger by branch — the same named accounts grouped by the
+              branch that holds them, loudest balance first, with each
+              branch's account count as its quiet chip. Derived from the
+              SAME rows (zero new queries); an unnamed account rests under
+              "Unassigned" — still spoken, never dropped. */}
+          {branchDebt && branchDebt.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">The ledger by branch</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">the same named accounts, grouped by the branch that holds them</p>
+              <ul className="space-y-1.5">
+                {branchDebt.map((b) => (
+                  <li key={b.name} data-testid="debt-branch-row" className="flex items-center justify-between gap-3">
+                    <span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span
+                        className="rounded bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-slate-500 ring-1 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30"
+                        title="Named accounts at this branch"
+                      >
+                        {b.count} {b.count === 1 ? 'account' : 'accounts'}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{kes(b.total)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The honest absences: a fully settled ledger says so (the
+              Expert panel's line); an older cached answer without the
+              named ledger speaks its step-aside — the aging story above
+              still carries, never a silent void. */}
+          {debtors && debtors.length === 0 && (
+            <p data-testid="debt-ledger-empty" className="mt-3 border-t border-slate-100 pt-3 text-[10px] text-slate-500 dark:text-slate-400">
+              No outstanding balances — every account is settled.
+            </p>
+          )}
+          {ledgerStale && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p data-testid="debt-ledger-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                the named ledger is not on this cached answer — the aging story above still speaks. Reload to fetch it.
               </p>
             </div>
           )}
