@@ -146,10 +146,12 @@ describe('v2.109.0 — navigation order and icons', () => {
   });
 
   it('the workspace links follow Admin, in the exact requested order, with their icons', () => {
-    // Compliance & System is the LAST group and ends with ...security, admin.
+    // Compliance & System is the LAST group. v2.208.0 routed the Phase-8
+    // System Health desk as the group's final item (ADMIN_ROLES cluster:
+    // security, admin, then the admin ops desk that watches them).
     const last = NAV_GROUPS[NAV_GROUPS.length - 1];
     expect(last.label).toBe('Compliance & System');
-    expect(last.ids[last.ids.length - 1]).toBe('admin');
+    expect(last.ids.slice(-2)).toEqual(['admin', 'system-health']);
     // The sidebar renders WorkspaceLinks AFTER the nav (the only
     // WorkspaceLinks render site in the sidebar source).
     const sidebar = read('src/components/layout/app-sidebar.tsx');

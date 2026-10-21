@@ -66,7 +66,7 @@ import {
   CreditCard, Ticket, Receipt, Building2,
   CircleDollarSign, BadgeDollarSign, MessageSquare, MessagesSquare,
   ArrowUpDown, Landmark, Award, Wallet, Shield, ShieldCheck,
-  LineChart, Database, CalendarDays, UserCog,
+  LineChart, Database, CalendarDays, UserCog, HeartPulse,
 } from 'lucide-react';
 
 export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; roles: string[] }[] = [
@@ -106,6 +106,13 @@ export const TAB_CONFIG: { id: AppTab; label: string; icon: React.ElementType; r
   // v2.109.0: the Admin module wears ShieldCheck (the icon system's admin
   // mark — Settings remains a settings-page icon elsewhere).
   { id: 'admin', label: 'Admin', icon: ShieldCheck, roles: ADMIN_ROLES },
+  // v2.208.0: the Phase-8 System Health desk gets its door at last. The
+  // 1,266-line surface (breakers, DLQ, compliance rings, retention) was
+  // built and unit-voiced but no route pointed at it. ADMIN_ROLES matches
+  // the privileged detail the /api/health/system-status wire serves
+  // (SUPER_ADMIN/STORE_OWNER full view; the server still re-validates per
+  // request and shows a summarised view to everyone else).
+  { id: 'system-health', label: 'System Health', icon: HeartPulse, roles: ADMIN_ROLES },
 ];
 
 // Navigation Groups (used by AppSidebar)
@@ -115,7 +122,7 @@ export const NAV_GROUPS: { label: string; ids: AppTab[] }[] = [
   { label: 'Sales & Credit', ids: ['invoices', 'delivery', 'credits', 'debt-management', 'debt-plans', 'vouchers', 'gift-cards', 'loyalty'] },
   { label: 'Finance & Insights', ids: ['financial', 'analytics', 'banking', 'payroll', 'people-payroll', 'transfers'] },
   { label: 'Operations', ids: ['rentals', 'suppliers', 'messaging', 'conversations', 'shift-scheduling'] },
-  { label: 'Compliance & System', ids: ['etims', 'reports', 'data-exports', 'security', 'admin'] },
+  { label: 'Compliance & System', ids: ['etims', 'reports', 'data-exports', 'security', 'admin', 'system-health'] },
 ];
 
 // Category Images
