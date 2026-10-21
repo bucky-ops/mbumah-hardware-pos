@@ -149,6 +149,26 @@ export function buildOverdueAssetsHref(storeId: string): string {
 }
 
 /**
+ * v2.193.0: the People & Payroll surfaces' absence door — a branch's amber
+ * absence rate (>= 10%, the threshold both cells already wear) opens the HR
+ * reports desk on the absence tab, narrowed to that branch. Both params are
+ * the destination's OWN established contract (the tab key is one of the
+ * reports page's REPORT_TAB_KEYS; `storeId` is the page's v2.23.0
+ * per-branch deep link), so this builder composes what already exists —
+ * no wire change, no destination change. Every viewer of the two People &
+ * Payroll surfaces (ORG_SUMMARY_ROLES) passes the reports API's guard
+ * (SUPER_ADMIN via the hrGuard bypass, STORE_OWNER and ACCOUNTANT are
+ * REPORT_ROLES members), so the door never renders where it would 403.
+ * Pure: URLSearchParams-encoded, relative, never throws.
+ */
+export function buildAbsenceReportHref(storeId: string): string {
+  const params = new URLSearchParams();
+  params.set('tab', 'absence');
+  params.set('storeId', storeId || '');
+  return `/hr/reports?${params.toString()}`;
+}
+
+/**
  * The configured workspace mode as a safe hint string (v2.18.1). Pure and
  * env-derived: 'path' | 'subdomain' | 'auto' | 'off'. The actual per-request
  * decision (path fallback on localhost and raw IPs) always happens in the

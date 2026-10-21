@@ -65,9 +65,9 @@ describe('the People & payroll module finishes its own pass', () => {
 describe('the release surfaces speak 2.154.0 (re-anchored per release)', () => {
   it('package.json, changelog and the feed lead with 2.154.0', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.192.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.192.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.192.0');
+    expect(pkg.version).toBe('2.193.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.193.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.193.0');
     expect(readRepo('CHANGELOG.md')).toContain('## [2.189.0]');
     const feed = readRepo('src/lib/whats-new.ts');
     expect(feed.indexOf("'2.189.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));

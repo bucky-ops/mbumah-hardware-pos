@@ -171,9 +171,9 @@ describe('the net verdict - the second face speaks its trend', () => {
 });
 
 describe('the version contract', () => {
-  it('package.json rides at 2.192.0', () => {
-    expect(pkg.version).toBe('2.192.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.192.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.192.0');
+  it('package.json rides at 2.193.0', () => {
+    expect(pkg.version).toBe('2.193.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.193.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.193.0');
   });
 });

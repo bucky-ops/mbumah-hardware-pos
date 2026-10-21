@@ -115,6 +115,7 @@ import {
 // payroll + reports; every other org role may cross both).
 import { ASSET_LIST_READ_ROLES, EMPLOYEE_LIST_READ_ROLES, ORG_SUMMARY_ROLES } from '@/lib/app-config';
 import {
+  buildAbsenceReportHref,
   buildExpiringEmployeesHref,
   buildOverdueAssetsHref,
   buildPeoplePayrollDeepLink,
@@ -1650,8 +1651,40 @@ export function OrgConsole() {
                               </td>
                               <td className="px-3 py-2 text-right tabular-nums">{row.headcountActive}</td>
                               <td className="px-3 py-2 text-right tabular-nums">{formatKES(row.monthEmploymentCost)}</td>
-                              <td className={`px-3 py-2 text-right tabular-nums ${row.monthAbsenceRatePct >= 10 ? 'font-medium text-amber-700 dark:text-amber-400' : ''}`}>
-                                {row.monthAbsenceRatePct}%
+                              <td className="px-3 py-2 text-right tabular-nums">
+                                {row.monthAbsenceRatePct >= 10 ? (
+                                  // v2.193.0: the absence door — the amber voice the
+                                  // cell has worn since v2.23.0 becomes the affordance
+                                  // it always deserved: at the 10% attention threshold
+                                  // the rate opens the HR reports desk on the absence
+                                  // tab, narrowed to this branch (the destination's
+                                  // OWN established deep-link contract — the tab key
+                                  // and the v2.23.0 storeId param — composed by the
+                                  // links lib's ONE writer, never re-derived). No role
+                                  // gate: every viewer of this drill-down passes the
+                                  // reports API's guard (SUPER_ADMIN via the hrGuard
+                                  // bypass, STORE_OWNER and ACCOUNTANT are
+                                  // REPORT_ROLES members) — a door that 403s is a
+                                  // lie, and this one cannot. Below the threshold
+                                  // the calm plain text stays — the drill affordance
+                                  // appears exactly where the number demands
+                                  // attention, never on a quiet branch (the branch
+                                  // name's headcount link remains the always-on
+                                  // per-branch entry; the reports page's own tab
+                                  // switcher carries the storeId across tabs).
+                                  <a
+                                    href={buildAbsenceReportHref(row.storeId)}
+                                    data-testid="org-console-hr-absence-door"
+                                    aria-label={`${row.monthAbsenceRatePct}% absence rate at ${row.storeName} this month — open the absence report narrowed to ${row.storeName}`}
+                                    title={`Absence rate: ABSENT days over all recorded days this month — open the absence report narrowed to ${row.storeName}`}
+                                    className="inline-flex items-center gap-1 rounded-md font-semibold text-amber-700 underline-offset-2 transition-colors hover:text-orange-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 dark:text-amber-400 dark:hover:text-orange-400"
+                                  >
+                                    {row.monthAbsenceRatePct}%
+                                    <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                                  </a>
+                                ) : (
+                                  `${row.monthAbsenceRatePct}%`
+                                )}
                               </td>
                               <td className="px-3 py-2">
                                 {(() => {
