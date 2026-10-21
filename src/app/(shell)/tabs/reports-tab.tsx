@@ -21,6 +21,7 @@ import {
   reportsApi, dashboardApi,
   customersApi, rentalsApi, transactionsApi,
   formatKES,
+  FastMovingReportData,
 } from '@/lib/api';
 import { handleError } from '@/lib/error-handler';
 import {
@@ -55,7 +56,8 @@ interface GrowingProduct {
   category?: string;
   currentQty: number;
   previousQty: number;
-  growthPct: number;
+  /** null = NEW: no previous period — a growth % of nothing is never spoken. */
+  growthPct: number | null;
   revenue?: number;
 }
 
@@ -67,7 +69,9 @@ interface DecliningProduct {
   currentQty: number;
   previousQty: number;
   declinePct: number;
-  remainingStock: number;
+  /** Real on-hand stock off the trend wire (v2.206.0); null = unknown —
+   *  the render drops the "units left" chip instead of inventing a zero. */
+  remainingStock: number | null;
   reorderLevel?: number;
 }
 
@@ -84,14 +88,12 @@ interface CategoryTrendRow {
   current: number;
   previous: number;
   changePct: number;
+  /** false = the wire returned null growth (no previous period to measure
+   *  against) — the cell speaks "new" instead of a fabricated percentage. */
+  changeKnown: boolean;
+  /** Honest share of the range's category revenue; 0 when the total is 0
+   *  (the old undefined-row share rendered NaN% — the live-E2E catch). */
   share: number;
-}
-
-interface FrequentlyBoughtPair {
-  productA: { id: string; name: string; sku?: string };
-  productB: { id: string; name: string; sku?: string };
-  coOccurrence: number;
-  confidence?: number;
 }
 
 interface TrendsAnalysis {
@@ -104,45 +106,142 @@ interface TrendsAnalysis {
   isDemo?: boolean;
 }
 
+interface RecoItem {
+  productId: string;
+  name: string;
+  sku: string;
+  pricePerUnit: number;
+  quantityInStock: number;
+  coOccurrenceCount: number;
+  categoryName: string | null;
+}
+
 interface FrequentlyBoughtResult {
-  pairs: FrequentlyBoughtPair[];
+  /** Co-bought items for the seeded movers (the route is PRODUCT-scoped:
+   *  it rejects a seed-less call with 400 — the imagined store-level "pairs"
+   *  call this tab made for its whole life was a guaranteed 400). */
+  items: RecoItem[];
+  seeds: string[];
   isDemo?: boolean;
+  skippedNoSeeds?: boolean;
+}
+
+/** Defensive number read for wire fields (module scope: the adapter runs
+ *  outside the component; string-typed wire amounts can never poison a row). */
+function trendNum(v: unknown): number {
+  const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN;
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** The trend wire's per-product row shape (GET /api/trends/analysis). */
+interface WireTrendProduct {
+  productId?: string;
+  productName?: string;
+  sku?: string;
+  categoryName?: string | null;
+  currentStock?: number | null;
+  recentQty?: number | string;
+  previousQty?: number | string;
+  recentRevenue?: number | string;
+  qtyGrowthPct?: number | null;
+}
+
+/** Map ONE wire trend row into the render contract (v2.206.0: the adapter
+ *  used to pass the wire through UNMAPPED — the tab rendered
+ *  `row.current`/`row.share`/`row.changePct` off a wire that carries
+ *  `recentRevenue`/`growthPct`, so every cell was undefined and the table
+ *  painted Ksh 0.00 / NaN% on live data, and `trends.growing` was ALWAYS
+ *  empty because the wire names it `topGrowing`. The names below are the
+ *  contract — checked against the route, pinned by the unit tests. */
+function mapTrendProduct(p: WireTrendProduct): GrowingProduct {
+  return {
+    productId: String(p?.productId ?? ''),
+    name: String(p?.productName ?? 'Unnamed product'),
+    sku: p?.sku ?? undefined,
+    category: p?.categoryName ?? undefined,
+    currentQty: trendNum(p?.recentQty),
+    previousQty: trendNum(p?.previousQty),
+    growthPct: typeof p?.qtyGrowthPct === 'number' ? p.qtyGrowthPct : null,
+    revenue: p?.recentRevenue != null ? trendNum(p.recentRevenue) : undefined,
+  };
+}
+
+/** The SPA session rides localStorage (mbt_token) — the raw fetches below
+ *  MUST carry the Authorization header like request() does, or the section
+ *  401s on every cookie-less session (the live-E2E caught the whole Trends
+ *  section silently dead on a token-only session). */
+function sessionAuthHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('mbt_token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 /** Fetch trends analysis with graceful fallback - works whether or not BE-1
  *  has shipped /api/trends/analysis. Returns a safe empty shape on failure. */
 async function fetchTrendsAnalysis(storeId: string, range: TrendsRange): Promise<TrendsAnalysis> {
   const params = new URLSearchParams({ storeId, range });
-  const res = await fetch(`/api/trends/analysis?${params.toString()}`, { credentials: 'same-origin' });
+  const res = await fetch(`/api/trends/analysis?${params.toString()}`, { credentials: 'same-origin', headers: sessionAuthHeaders() });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(txt || `Trends API returned ${res.status}`);
   }
   const json = await res.json();
   const d = json?.data ?? json;
+  // v2.206.0 THE WIRE'S ACTUAL NAMES: topGrowing / topDeclining /
+  // categoryTrends (the old `growing` / `declining` reads mapped nothing —
+  // both sections silently rendered their empty states forever).
+  const growing = Array.isArray(d?.topGrowing) ? d.topGrowing.map(mapTrendProduct) : [];
+  const declining = Array.isArray(d?.topDeclining)
+    ? d.topDeclining.map((p: WireTrendProduct) => ({
+        ...mapTrendProduct(p),
+        declinePct: Math.abs(typeof p?.qtyGrowthPct === 'number' ? p.qtyGrowthPct : 0),
+        remainingStock: typeof p?.currentStock === 'number' ? p.currentStock : null,
+      }))
+    : [];
+  const categoryTrends = Array.isArray(d?.categoryTrends)
+    ? (() => {
+        const rows = d.categoryTrends.map((row: { categoryName?: string | null; recentRevenue?: number | string; previousRevenue?: number | string; growthPct?: number | null }) => ({
+          category: String(row?.categoryName ?? 'Uncategorised'),
+          current: trendNum(row?.recentRevenue),
+          previous: trendNum(row?.previousRevenue),
+          changePct: typeof row?.growthPct === 'number' ? row.growthPct : 0,
+          changeKnown: typeof row?.growthPct === 'number',
+        }));
+        // Honest share: current / the range's real category total; a total
+        // of nothing shares nothing (0), never NaN.
+        const total = rows.reduce((s: number, r: { current: number }) => s + r.current, 0);
+        return rows.map((r: (typeof rows)[number]) => ({ ...r, share: total > 0 ? r.current / total : 0 }));
+      })()
+    : [];
   return {
-    growing: Array.isArray(d?.growing) ? d.growing : [],
-    declining: Array.isArray(d?.declining) ? d.declining : [],
+    growing,
+    declining,
     forecast: Array.isArray(d?.forecast) ? d.forecast : [],
-    categoryTrends: Array.isArray(d?.categoryTrends) ? d.categoryTrends : [],
+    categoryTrends,
     range: (d?.range as TrendsRange) || range,
     generatedAt: d?.generatedAt,
     isDemo: !!d?.isDemo,
   };
 }
 
-async function fetchFrequentlyBought(storeId: string, range?: TrendsRange): Promise<FrequentlyBoughtResult> {
-  const params = new URLSearchParams({ storeId });
+/** Fetch the co-bought recommendations FOR THE SEEDED MOVERS — the route
+ *  is product-scoped and rejects a seed-less call (400). The seeds are the
+ *  trends wire's top gainers (the same section already holds them): the
+ *  pairing speaks "what moves WITH what moves", never a fabricated pair. */
+async function fetchFrequentlyBought(storeId: string, range: TrendsRange | undefined, seedIds: string[]): Promise<FrequentlyBoughtResult> {
+  if (seedIds.length === 0) {
+    return { items: [], seeds: [], skippedNoSeeds: true };
+  }
+  const params = new URLSearchParams({ storeId, productIds: seedIds.slice(0, 5).join(',') });
   if (range) params.set('range', range);
-  const res = await fetch(`/api/recommendations/frequently-bought?${params.toString()}`, { credentials: 'same-origin' });
+  const res = await fetch(`/api/recommendations/frequently-bought?${params.toString()}`, { credentials: 'same-origin', headers: sessionAuthHeaders() });
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(txt || `Recommendations API returned ${res.status}`);
   }
   const json = await res.json();
   const d = json?.data ?? json;
-  const pairs = Array.isArray(d?.pairs) ? d.pairs : Array.isArray(d) ? d : [];
-  return { pairs, isDemo: !!d?.isDemo };
+  const items = Array.isArray(d) ? d : Array.isArray(d?.items) ? d.items : [];
+  return { items, seeds: seedIds.slice(0, 5) };
 }
 
 function ReportTypeCard({
@@ -466,10 +565,18 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
     staleTime: 60_000,
   });
 
-  // Frequently bought together - uses direct fetch with graceful fallback
+  // Frequently bought together — v2.206.0 THE SEEDED CALL: the route is
+  // product-scoped (a seed-less call is a guaranteed 400 — the old store-level
+  // fetch failed silently forever, so "Pairs Found" always read 0). The seeds
+  // are the trends wire's own top gainers; the query waits for them.
+  const seedProductIds = useMemo(
+    () => (trends?.growing ?? []).slice(0, 5).map((p) => p.productId).filter(Boolean),
+    [trends],
+  );
   const { data: reco, isLoading: recoLoading } = useQuery<FrequentlyBoughtResult>({
-    queryKey: ['frequently-bought', storeId, range],
-    queryFn: () => fetchFrequentlyBought(storeId, range),
+    queryKey: ['frequently-bought', storeId, range, seedProductIds.join(',')],
+    queryFn: () => fetchFrequentlyBought(storeId, range, seedProductIds),
+    enabled: seedProductIds.length > 0,
     retry: false,
     staleTime: 60_000,
   });
@@ -484,21 +591,30 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
   }, [trendsError]);
 
   // Chart data transforms
+  // v2.206.0: the GROWTH BAR only plots MEASURABLE growth — a new product
+  // (no previous period) has no percentage to plot, so it stays out of the
+  // bars and speaks as "new" in the voice + drill-down instead (a zero
+  // bar for a new gainer would be a lie too).
   const growingChart = useMemo(() => {
-    return (trends?.growing ?? []).slice(0, 8).map((p) => ({
+    return (trends?.growing ?? []).slice(0, 8).filter((p) => p.growthPct != null).map((p) => ({
       label: p.name.length > 16 ? p.name.slice(0, 16) + '…' : p.name,
       fullName: p.name,
-      growth: Math.round(p.growthPct || 0),
+      growth: Math.round(p.growthPct ?? 0),
       revenue: p.revenue ?? 0,
     }));
   }, [trends]);
+
+  const growingNewCount = useMemo(
+    () => (trends?.growing ?? []).filter((p) => p.growthPct == null).length,
+    [trends],
+  );
 
   const decliningChart = useMemo(() => {
     return (trends?.declining ?? []).slice(0, 8).map((p) => ({
       label: p.name.length > 16 ? p.name.slice(0, 16) + '…' : p.name,
       fullName: p.name,
       decline: Math.round(p.declinePct || 0),
-      remaining: p.remainingStock ?? 0,
+      remaining: p.remainingStock,
     }));
   }, [trends]);
 
@@ -513,7 +629,16 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
   }, [trends]);
 
   const categoryTrendRows = trends?.categoryTrends ?? [];
-  const recoPairs = reco?.pairs ?? [];
+  // v2.206.0: the co-bought items + the honest seed names (the wire's own
+  // movers — the card names WHAT the pairings are relative to).
+  const recoItems = reco?.items ?? [];
+  const recoSeeds = useMemo(
+    () => (trends?.growing ?? []).slice(0, 5).filter((p) => seedProductIds.includes(p.productId)).map((p) => p.name),
+    [trends, seedProductIds],
+  );
+  const recoSeedsSpoken = recoSeeds.length > 0
+    ? recoSeeds.slice(0, 3).join(', ') + (recoSeeds.length > 3 ? ` +${recoSeeds.length - 3} more` : '')
+    : null;
 
   const forecastTotal = forecastChart.reduce((s, f) => s + f.predicted, 0);
   const forecastPeak = forecastChart.reduce((m, f) => Math.max(m, f.predicted), 0);
@@ -538,7 +663,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
     (trends?.declining ?? []).map(p => ({
       name: p.name,
       growthPct: Math.abs(p.declinePct || 0),
-      revenueFigure: `${p.remainingStock} units left`,
+      revenueFigure: p.remainingStock != null ? `${p.remainingStock} units left` : 'on-hand stock unknown',
     })),
   ), [trends?.declining]);
 
@@ -606,8 +731,10 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <ArrowUpRight className="h-4 w-4 text-emerald-500" />
               <p className="text-sm text-muted-foreground">Growing</p>
             </div>
-            <p className="text-2xl font-bold">{growingChart.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Top gainers</p>
+            {/* v2.206.0: the count speaks the WIRE's full gainer list (new
+                products included); the bars plot measurable growth only. */}
+            <p className="text-2xl font-bold">{(trends?.growing ?? []).length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Top gainers{growingNewCount > 0 ? ` · ${growingNewCount} new` : ''}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-red-500 backdrop-blur-sm bg-card/80">
@@ -626,8 +753,8 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <Sparkle className="h-4 w-4 text-primary" />
               <p className="text-sm text-muted-foreground">Pairs Found</p>
             </div>
-            <p className="text-2xl font-bold">{recoPairs.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Frequently bought</p>
+            <p className="text-2xl font-bold">{recoItems.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">{recoSeeds.length > 0 ? `Co-bought with ${recoSeeds.length} mover${recoSeeds.length !== 1 ? 's' : ''}` : 'Awaiting movers to seed'}</p>
           </CardContent>
         </Card>
       </div>
@@ -669,9 +796,13 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                             <TableCell className="text-right">{p.currentQty}</TableCell>
                             <TableCell className="text-right text-muted-foreground">{p.previousQty}</TableCell>
                             <TableCell className="text-right">
-                              <Badge className="bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">
-                                +{Math.round(p.growthPct || 0)}%
-                              </Badge>
+                              {p.growthPct != null ? (
+                                <Badge className="bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                                  +{Math.round(p.growthPct || 0)}%
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">new</Badge>
+                              )}
                             </TableCell>
                             <TableCell className="text-right">{p.revenue != null ? formatKES(p.revenue) : '-'}</TableCell>
                           </TableRow>
@@ -691,7 +822,11 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
             ) : growingChart.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center">
                 <TrendingUp className="h-10 w-10 text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">No growing products in this range.</p>
+                <p className="text-sm text-muted-foreground">
+                  {growingNewCount > 0
+                    ? `No measurable growth yet — ${growingNewCount} product${growingNewCount !== 1 ? 's' : ''} sold with no previous-period baseline.`
+                    : 'No growing products in this range.'}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">Try a wider range or check back after more sales are recorded.</p>
               </div>
             ) : (
@@ -799,12 +934,12 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                         cursor={{ fill: 'rgba(239,68,68,0.08)' }}
                         content={({ active, payload }) => {
                           if (!active || !payload || payload.length === 0) return null;
-                          const p = payload[0].payload as { fullName: string; decline: number; remaining: number };
+                          const p = payload[0].payload as { fullName: string; decline: number; remaining: number | null };
                           return (
                             <div className="rounded-md border bg-background p-2 shadow-md text-xs space-y-1">
                               <div className="font-medium">{p.fullName}</div>
                               <div className="text-muted-foreground">Decline: <span className="font-medium text-red-600">-{p.decline}%</span></div>
-                              <div className="text-muted-foreground">Remaining: <span className="font-medium">{p.remaining} units</span></div>
+                              <div className="text-muted-foreground">Remaining: <span className="font-medium">{p.remaining != null ? `${p.remaining} units` : 'unknown'}</span></div>
                             </div>
                           );
                         }}
@@ -951,12 +1086,19 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                         <TableCell className="text-right text-muted-foreground">{formatKES(row.previous)}</TableCell>
                         <TableCell className="text-right">{(row.share * 100).toFixed(1)}%</TableCell>
                         <TableCell className="text-right">
-                          <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${
-                            row.changePct >= 0 ? 'text-green-700' : 'text-red-600'
-                          }`}>
-                            {row.changePct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                            {Math.abs(Math.round(row.changePct))}%
-                          </span>
+                          {/* v2.206.0: no previous period → the cell speaks
+                              "new"; a fabricated % of nothing is never rendered
+                              (the NaN% table the live E2E caught is dead). */}
+                          {!row.changeKnown ? (
+                            <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400" variant="outline">new</Badge>
+                          ) : (
+                            <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${
+                              row.changePct >= 0 ? 'text-green-700' : 'text-red-600'
+                            }`}>
+                              {row.changePct >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                              {Math.abs(Math.round(row.changePct))}%
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -976,7 +1118,11 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                   <Link2 className="h-4 w-4 text-primary" />
                   Frequently Bought Together
                 </CardTitle>
-                <CardDescription className="text-xs">Cross-sell opportunities for the sales team</CardDescription>
+                <CardDescription className="text-xs">
+                  {recoSeedsSpoken
+                    ? `Co-bought with the tracked movers: ${recoSeedsSpoken}`
+                    : 'Cross-sell opportunities for the sales team'}
+                </CardDescription>
               </div>
               {reco?.isDemo && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
@@ -990,34 +1136,37 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
-            ) : recoPairs.length === 0 ? (
+            ) : recoItems.length === 0 ? (
               <div className="h-48 flex flex-col items-center justify-center text-center">
                 <Link2 className="h-10 w-10 text-muted-foreground/30 mb-2" />
-                <p className="text-sm text-muted-foreground">No associations found yet.</p>
+                <p className="text-sm text-muted-foreground">
+                  {reco?.skippedNoSeeds
+                    ? 'No tracked movers yet to seed the pairing.'
+                    : 'No co-bought patterns in the recorded transactions yet.'}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">Patterns emerge once multi-item transactions are recorded.</p>
               </div>
             ) : (
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {recoPairs.slice(0, 10).map((pair, i) => (
+                {recoItems.slice(0, 10).map((item, i) => (
                   <div
-                    key={`${pair.productA.id}-${pair.productB.id}-${i}`}
+                    key={`${item.productId}-${i}`}
                     className="rounded-lg border bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors"
                   >
                     <div className="flex items-center gap-2 flex-wrap text-sm">
-                      <span className="font-medium">{pair.productA.name}</span>
+                      <span className="font-medium">{item.name}</span>
                       <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20">
-                        + {pair.productB.name}
+                        co-bought {item.coOccurrenceCount}×
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between mt-1.5">
                       <span className="text-xs text-muted-foreground">
-                        Bought together <strong className="text-foreground">{pair.coOccurrence}×</strong>
-                        {pair.confidence != null && (
-                          <> · confidence {(pair.confidence * 100).toFixed(0)}%</>
-                        )}
+                        {item.categoryName ?? 'Uncategorised'}
+                        {' · '}{formatKES(item.pricePerUnit)}
+                        {' · '}<span className="tabular-nums">{item.quantityInStock} in stock</span>
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        {pair.productA.sku ? `SKU: ${pair.productA.sku}` : ''}
+                        {item.sku ? `SKU: ${item.sku}` : ''}
                       </span>
                     </div>
                   </div>
@@ -1079,6 +1228,18 @@ export default function ReportsTab() {
   const { data: dashboardData } = useQuery({
     queryKey: ['dashboard', currentStoreId],
     queryFn: () => dashboardApi.getStats(currentStoreId),
+  });
+
+  // Fast-moving aggregation — v2.206.0 THE REAL SOURCE: the step-aside is
+  // GONE. The reports tab now fetches GET /api/reports/fast-moving (the
+  // purpose-built sold-quantity aggregation: SaleItems → per-product
+  // quantity/revenue/saleCount over the picked range) and the Top Products
+  // section speaks REAL figures — chart, ranks, CSV export all ride the
+  // same array. Only fetched when the tab actually shows top products.
+  const { data: fastMovingData, isLoading: fastMovingLoading } = useQuery({
+    queryKey: ['fast-moving-report', currentStoreId, dateFrom, dateTo],
+    queryFn: () => reportsApi.getFastMovingReport({ storeId: currentStoreId, dateFrom, dateTo, limit: 20 }),
+    enabled: reportType === 'top_products',
   });
 
   // Customer data for customer analysis report
@@ -1165,11 +1326,48 @@ export default function ReportsTab() {
     return [...byCat.values()].sort((a, b) => b.totalValue - a.totalValue);
   }, [inventoryProducts]);
 
-  // The wire carries no sold-quantity figure (only the last 3 stock
-  // movements per product) — "top selling" cannot be honestly computed from
-  // it, so the list stays empty and its section speaks the step-aside. A
-  // future wire that carries sales quantities can fill this in honestly.
-  const topProducts: { productId: string; productName: string; quantitySold: number; revenue: number }[] = [];
+  // v2.205.0 THE HONESTY PASS (helper hoisted v2.206.0 above its first
+  // caller — the fast-moving useMemo reads it during render, a const arrow
+  // below that point would be a temporal-dead-zone throw):
+  /** Defensive number read (the dashboard-tab's num(), mirrored here so the
+   *  hourly wire's string amounts can never poison the chart). */
+  const num = (v: unknown): number => {
+    const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN;
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  // v2.206.0 THE REAL SOURCE: topProducts now rides the fast-moving wire —
+  // the per-product sold-quantity aggregation the tab never had. The old
+  // step-aside ("the wire carries no sold-quantity figure") is history; the
+  // chart, the rank list, the voice and the CSV export all speak the same
+  // real array. Quantity comes off the wire as a number (the route emits
+  // .toNumber()); the defensive read keeps a hostile payload at zero.
+  const topProducts: { productId: string; productName: string; quantitySold: number; revenue: number }[] =
+    useMemo(() => {
+      const wire = fastMovingData?.data as FastMovingReportData | undefined;
+      const rows = Array.isArray(wire?.fastMovers) ? wire.fastMovers : [];
+      return rows
+        .map((p) => ({
+          productId: p.productId,
+          productName: p.productName,
+          quantitySold: num(p.totalQuantitySold),
+          revenue: num(p.totalRevenue),
+        }))
+        .filter((p) => p.quantitySold > 0 || p.revenue > 0);
+    }, [fastMovingData]);
+
+  // The wire's own summary — the honest totals above the list (units moved,
+  // products moved, revenue collected) instead of a fabricated chip.
+  const fastMovingSummary = useMemo(() => {
+    const wire = fastMovingData?.data as FastMovingReportData | undefined;
+    if (!wire?.summary) return null;
+    return {
+      totalUnitsSold: num(wire.summary.totalUnitsSold),
+      totalProductsSold: num(wire.summary.totalProductsSold),
+      totalRevenue: num(wire.summary.totalRevenue),
+    };
+  }, [fastMovingData]);
+
   const maxCategoryValue = Math.max(...categoryBreakdown.map((c) => c.totalValue), 1);
 
   const pieSegments = useMemo(() => {
@@ -1220,10 +1418,6 @@ export default function ReportsTab() {
 
   /** Defensive number read (the dashboard-tab's num(), mirrored here so the
    *  hourly wire's string amounts can never poison the chart). */
-  const num = (v: unknown): number => {
-    const n = typeof v === 'string' ? parseFloat(v) : typeof v === 'number' ? v : NaN;
-    return Number.isFinite(n) ? n : 0;
-  };
 
   const dailyHourlyData = useMemo(() => {
     // The envelope vs the data slot (the live-E2E caught this): the query
@@ -1266,6 +1460,10 @@ export default function ReportsTab() {
       color: ['#16a34a', '#3b82f6', '#ea580c', '#a855f7', '#0d9488', '#ec4899', '#a16207', '#0891b2'][topProducts.indexOf(p) % 8],
     }));
   }, [topProducts]);
+
+  // Hoisted (v2.206.0): the rank list's share denominator — was recomputed
+  // per row inside the map (an O(n²) re-spread every row).
+  const maxTopProductsRevenue = Math.max(...topProducts.map(p => p.revenue), 1);
 
   // Customer Analysis data
   const customerAnalysis = useMemo(() => {
@@ -1377,11 +1575,19 @@ export default function ReportsTab() {
     dailyHourlyData.map(d => ({ label: d.label, value: d.value, figure: formatKES(d.value) })),
   ), [dailyHourlyData]);
 
+  // v2.206.0: the voice now carries the REAL quantity beside each figure —
+  // "Cement (12 sold) Ksh 50,200.00 (40%)" — composed from the same
+  // fast-moving array the chart and the rank list speak. Ksh voice kept
+  // (the v2.205 guard test bans a literal KES here).
   const topProductsVoice = useMemo(() => composeSeriesVoice(
     'Top products by revenue',
-    topProductsChartData.map(d => ({ label: d.label, value: d.value, figure: formatKES(d.value) })),
-    formatKES(topProductsChartData.reduce((s, d) => s + d.value, 0)),
-  ), [topProductsChartData]);
+    topProducts.slice(0, 8).map(p => ({
+      label: `${p.productName} (${p.quantitySold} sold)`,
+      value: p.revenue,
+      figure: formatKES(p.revenue),
+    })),
+    formatKES(topProducts.slice(0, 8).reduce((s, p) => s + p.revenue, 0)),
+  ), [topProducts]);
 
   const customerChartVoice = useMemo(() => composeNamedTotalsVoice(
     'Top customers by spending',
@@ -1966,7 +2172,7 @@ export default function ReportsTab() {
                         {topProducts.slice(0, 5).map((product, i) => {
                           const maxRevenue = Math.max(...topProducts.map(p => p.revenue), 1);
                           const pct = (product.revenue / maxRevenue) * 100;
-                          const rankColors = ['bg-yellow-500 text-white', 'bg-gray-400 text-white', 'bg-amber-600 text-white'];
+                          const rankColors = ['bg-yellow-700 text-white', 'bg-slate-600 text-white', 'bg-orange-700 text-white'];
                           return (
                             <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors">
                               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'}`}>
@@ -1981,12 +2187,12 @@ export default function ReportsTab() {
                                   <div className="flex-1">
                                     <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
                                       <div
-                                        className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500"
+                                        className="h-full rounded-full bg-primary transition-all duration-500"
                                         style={{ width: `${pct}%` }}
                                       />
                                     </div>
                                   </div>
-                                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">{product.quantitySold} sold</span>
+                                  <span className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">{product.quantitySold} sold</span>
                                 </div>
                               </div>
                             </div>
@@ -2399,13 +2605,34 @@ export default function ReportsTab() {
         {/* ================================================================== */}
         {reportType === 'top_products' && (
           <>
-            {(salesLoading || inventoryLoading) ? (
+            {(fastMovingLoading) ? (
               <div className="space-y-3">
                 <Skeleton className="h-24" />
                 <Skeleton className="h-64" />
               </div>
             ) : topProducts.length > 0 ? (
               <>
+                {/* v2.206.0 THE WIRE'S OWN SUMMARY — the honest totals strip.
+                    Real units moved / products moved / revenue collected over
+                    the picked range, straight off the fast-moving summary —
+                    NOT a fabricated chip. Chip labels 10px muted (the tab's
+                    sub-line voice), figures 16px bold tabular-nums. */}
+                {fastMovingSummary && (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Units moved</p>
+                      <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{fastMovingSummary.totalUnitsSold}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Products sold</p>
+                      <p className="text-lg font-bold text-blue-700 dark:text-blue-400 tabular-nums">{fastMovingSummary.totalProductsSold}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Revenue in range</p>
+                      <p className="text-lg font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatKES(fastMovingSummary.totalRevenue)}</p>
+                    </div>
+                  </div>
+                )}
                 <Card className="backdrop-blur-sm bg-card/80">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
@@ -2436,9 +2663,14 @@ export default function ReportsTab() {
                   <CardContent>
                     <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
                       {topProducts.map((product, i) => {
-                        const maxRevenue = Math.max(...topProducts.map(p => p.revenue), 1);
-                        const pct = (product.revenue / maxRevenue) * 100;
-                        const rankColors = ['bg-yellow-500 text-white', 'bg-gray-400 text-white', 'bg-amber-600 text-white'];
+                        const pct = (product.revenue / maxTopProductsRevenue) * 100;
+                        // v2.206.0 THE RANK CHIPS LEARN THE 4.5:1 LAW: the old
+                        // trio (yellow-500 2.14 / gray-400 2.54 / amber-600 3.07
+                        // with white text) all FAILED the text bar — the rank
+                        // NUMBER is text riding a fill, not a graphic. Re-voiced
+                        // gold/silver/bronze: yellow-700 4.93 / slate-600 7.60 /
+                        // orange-700 5.18 (pinned by the probe, reverse-checked).
+                        const rankColors = ['bg-yellow-700 text-white', 'bg-slate-600 text-white', 'bg-orange-700 text-white'];
                         return (
                           <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-border/30">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'}`}>
@@ -2447,18 +2679,22 @@ export default function ReportsTab() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-sm font-medium truncate">{product.productName}</span>
-                                <span className="text-sm font-bold ml-2">{formatKES(product.revenue)}</span>
+                                <span className="text-sm font-bold ml-2 tabular-nums">{formatKES(product.revenue)}</span>
                               </div>
                               <div className="flex items-center gap-3">
                                 <div className="flex-1">
-                                  <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
+                                  <div className="h-2 bg-muted/30 rounded-full overflow-hidden" role="presentation">
+                                    {/* v2.206.0: the /60 gradient ghost DIED (the
+                                        v2.204 law — a dimmed mark is a ghost).
+                                        Solid primary; the bar carries the real
+                                        share of the top product's revenue. */}
                                     <div
-                                      className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500"
+                                      className="h-full rounded-full bg-primary transition-all duration-500"
                                       style={{ width: `${pct}%` }}
                                     />
                                   </div>
                                 </div>
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[60px] text-right">{product.quantitySold} sold</span>
+                                <span className="text-[11px] text-muted-foreground whitespace-nowrap min-w-[64px] text-right tabular-nums">{product.quantitySold} sold</span>
                               </div>
                             </div>
                           </div>
@@ -2634,7 +2870,7 @@ export default function ReportsTab() {
                       {customerAnalysis.topCustomers.map((customer, i) => {
                         const maxSpent = Math.max(...customerAnalysis.topCustomers.map(c => c.totalSpent), 1);
                         const pct = (customer.totalSpent / maxSpent) * 100;
-                        const rankColors = ['bg-yellow-500 text-white', 'bg-gray-400 text-white', 'bg-amber-600 text-white'];
+                        const rankColors = ['bg-yellow-700 text-white', 'bg-slate-600 text-white', 'bg-orange-700 text-white'];
                         return (
                           <div key={i} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-border/30">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? rankColors[i] : 'bg-muted text-muted-foreground'}`}>
@@ -2648,10 +2884,10 @@ export default function ReportsTab() {
                               <div className="flex items-center gap-3">
                                 <div className="flex-1">
                                   <div className="h-2 bg-muted/30 rounded-full overflow-hidden">
-                                    <div className="h-full rounded-full bg-gradient-to-r from-primary/60 to-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+                                    <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
                                   </div>
                                 </div>
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap min-w-[60px] text-right">{customer.transactionCount} txns</span>
+                                <span className="text-[11px] text-muted-foreground whitespace-nowrap min-w-[60px] text-right tabular-nums">{customer.transactionCount} txns</span>
                               </div>
                               {customer.debtBalance > 0 && (
                                 <div className="mt-1">

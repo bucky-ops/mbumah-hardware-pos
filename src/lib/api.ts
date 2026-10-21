@@ -2046,6 +2046,29 @@ export interface InventoryReportData {
   topSelling: { productId: string; productName: string; quantitySold: number; revenue: number }[];
 }
 
+/** v2.206.0: the real sold-quantity wire (GET /api/reports/fast-moving).
+ *  Feeds the reports tab's Top Products section with figures the sales
+ *  wire never carried — quantity sold per product, revenue, sale count,
+ *  current stock, category — aggregated over the picked date range.
+ *  NAMING AS CONTRACT: the array rides `fastMovers` (NOT `products`) so
+ *  the SPA's request() normalizer — which flattens id-less envelopes
+ *  carrying a `products`/`items`/`data` array — leaves the wire whole;
+ *  `summary` and `period` survive the trip. */
+export interface FastMovingReportData {
+  period: { from: string; to: string };
+  summary: { totalProductsSold: number; totalUnitsSold: number; totalRevenue: number };
+  fastMovers: {
+    productId: string;
+    productName: string;
+    sku: string;
+    totalQuantitySold: number;
+    totalRevenue: number;
+    saleCount: number;
+    category: string | null;
+    currentStock: number;
+  }[];
+}
+
 export const reportsApi = {
   getSalesReport: async (filter: ReportFilter) => {
     const params = new URLSearchParams();
@@ -2059,6 +2082,17 @@ export const reportsApi = {
 
   getInventoryReport: async (storeId: string) => {
     return request<InventoryReportData>(`/reports/inventory?storeId=${storeId}`);
+  },
+
+  /** v2.206.0: the fast-moving aggregation — the Top Products section's
+   *  real source. Date-range aware, same contract as the route. */
+  getFastMovingReport: async (filter: ReportFilter & { limit?: number }) => {
+    const params = new URLSearchParams();
+    params.set('storeId', filter.storeId);
+    params.set('dateFrom', filter.dateFrom);
+    params.set('dateTo', filter.dateTo);
+    if (filter.limit) params.set('limit', String(filter.limit));
+    return request<FastMovingReportData>(`/reports/fast-moving?${params.toString()}`);
   },
 
   exportCSV: async (filter: ReportFilter & { type: 'sales' | 'inventory' }) => {

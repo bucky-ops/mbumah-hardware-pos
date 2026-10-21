@@ -348,7 +348,14 @@ export default function HrReportsPage() {
   // rejects narrowing for branch-scoped sessions fail-closed. The chip below
   // the toolbar shows the active branch and clears the filter.
   const [storeId, setStoreId] = useState<string | null>(null);
-  const [storeName, setStoreName] = useState<string | null>(null);
+  // v2.206.0: storeName is now DERIVED, not synced. The old per-storeId
+  // effect reset the name with a SYNCHRONOUS setState (a cascading render)
+  // on every filter clear, then re-fetched the whole /api/hr/stores list
+  // for each picked branch. One fetch fills the id→name map once; the
+  // chip's name is a plain lookup, so clearing the filter clears the name
+  // by derivation — no reset, no race, no cascading render. A failed
+  // lookup leaves the map empty and the chip falls back to the id.
+  const [storeNames, setStoreNames] = useState<Record<string, string>>({});
   // v2.27.0: per-schedule deep link (?schedule=<id> from the notification
   // center's "Manage schedule" affordance) - passed down to the Schedules
   // tab, which scrolls to and ring-highlights the matching card.
@@ -362,23 +369,16 @@ export default function HrReportsPage() {
     if (requested) setStoreId(requested);
   }, []);
   useEffect(() => {
-    if (!storeId) {
-      setStoreName(null);
-      return;
-    }
-    let cancelled = false;
     void (async () => {
       try {
         const stores = await apiGet<Array<{ id: string; name: string; code: string | null }>>('/api/hr/stores');
-        if (!cancelled) setStoreName(stores.find((s) => s.id === storeId)?.name ?? null);
+        setStoreNames(Object.fromEntries(stores.map((s) => [s.id, s.name])));
       } catch {
-        if (!cancelled) setStoreName(null);
+        // the chip speaks the id when the lookup fails — never a wrong name
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [storeId]);
+  }, []);
+  const storeName = storeId ? storeNames[storeId] ?? null : null;
   const changeStoreId = (next: string | null) => {
     setStoreId(next);
     const url = new URL(window.location.href);

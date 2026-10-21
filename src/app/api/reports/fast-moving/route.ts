@@ -144,7 +144,14 @@ async function getFastMovingProductsHandler(...args: unknown[]): Promise<Respons
         totalUnitsSold,
         totalRevenue,
       },
-      products: fastMovingProducts.map((p) => ({
+      // v2.206.0 NAMING AS CONTRACT: the field is `fastMovers`, NOT
+      // `products`. The SPA's request() normalizer flattens an id-less
+      // envelope whose payload carries a `products` (or `items`/`data`)
+      // ARRAY down to that bare array — the summary and period would be
+      // silently dropped client-side (the v2.205 envelope-vs-slot class,
+      // caught by the live E2E before the push). `fastMovers` is outside
+      // the normalizer's unwrap list, so the wire arrives whole.
+      fastMovers: fastMovingProducts.map((p) => ({
         ...p,
         totalQuantitySold: p.totalQuantitySold.toNumber(),
         totalRevenue: round2(p.totalRevenue),

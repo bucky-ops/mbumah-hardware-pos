@@ -312,18 +312,18 @@ describe('v2.201.0 — the dark-panel law and the carried nit', () => {
 
 describe('v2.201.0 — docs and release surfaces', () => {
   it('package.json rides at 2.201.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.205.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.205.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.205.0');
+    expect(pkg.version).toBe('2.206.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.206.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.206.0');
     expect(pkg.scripts['verify:v2-201-0']).toBe('node scripts/verify-v2-201-0.mjs');
     expect(pkg.scripts['verify:v2-200-0']).toBe('node scripts/verify-v2-200-0.mjs');
   });
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(96);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(97);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(96);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(97);");
   });
 
   it('the whats-new feed heads the release', () => {
