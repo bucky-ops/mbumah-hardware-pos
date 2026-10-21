@@ -47,6 +47,7 @@ import {
   dashboardApi, shiftsApi, formatKES,
   type ShiftXRead,
 } from '@/lib/api';
+import { DayLedgerModal, DayReceiptsModal, BasketLadderModal } from '@/components/dashboard/kpi-doors';
 import type {
   DashboardStats, TopProduct, ShiftSnapshot, DebtCrisisSummary,
   DashboardAlert, StoreHealthSummary, RevenueTrend7d,
@@ -723,7 +724,7 @@ function ActiveShiftCard({ shift }: { shift: ShiftSnapshot }) {
 
 // 4. KPI ROW
 
-function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, sparkline, sparklineClass, valueClass }: {
+function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, sparkline, sparklineClass, valueClass, testId, edgeClass, dotClass, hotRing }: {
   label: string;
   value: string;
   icon: React.ElementType;
@@ -734,6 +735,12 @@ function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, spa
   sparkline?: number[] | null;
   sparklineClass?: string;
   valueClass?: string;
+  /** v2.200.0: QA handle for the row's doors. */
+  testId?: string;
+  /** v2.200.0: the door vocabulary — the tile's left edge bar + live dot + hot ring. */
+  edgeClass?: string;
+  dotClass?: string;
+  hotRing?: boolean;
 }) {
   const interactive = typeof onClick === 'function';
   // v2.148.0: a non-interactive card is a GROUP (a container that accepts a
@@ -741,14 +748,19 @@ function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, spa
   // aria-prohibited-attr); the interactive variant keeps its button role.
   return (
     <div
+      data-testid={testId}
       {...(interactive
         ? { role: 'button', tabIndex: 0, onClick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } }
         : { role: 'group' })}
-      className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow ${
+      className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow ${
         interactive ? 'cursor-pointer hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40' : ''
-      }`}
+      } ${interactive && hotRing ? 'ring-1 ring-slate-300 dark:ring-slate-600' : ''}`}
       aria-label={interactive ? `${label} - open details` : label}
     >
+      {interactive && edgeClass ? <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${edgeClass}`} /> : null}
+      {interactive && dotClass && hotRing ? (
+        <span aria-hidden="true" className={`absolute right-3 top-3 h-2 w-2 rounded-full ${dotClass} anim-pulse-dot`} />
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconClass}`}>
           <Icon className="h-4 w-4" aria-hidden="true" />
@@ -770,6 +782,9 @@ function KpiCard({ label, value, icon: Icon, iconClass, sub, badge, onClick, spa
 }
 
 function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppTab) => void }) {
+  // v2.200.0: the three doors' state — declared BEFORE the early return so the
+  // hook order never depends on the data (the rules-of-hooks law).
+  const [door, setDoor] = useState<'ledger' | 'receipts' | 'ladder' | null>(null);
   if (!data) return null;
 
   const todayRevenue = num(data.todayRevenue);
@@ -817,6 +832,7 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
     .filter((v) => v > 0);
 
   return (
+    <>
     <section aria-label="Today's key metrics" className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
       <KpiCard
         label="Today's Revenue"
@@ -824,27 +840,42 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         icon={Banknote}
         iconClass="bg-emerald-100 text-emerald-700"
         badge={noSalesToday ? zeroSalesTrendBadge : showTrendBadge ? <TrendBadge pct={revenueChange} /> : undefined}
-        sub={<span>{noSalesToday ? 'No sales yet today - start selling!' : 'net of VAT · today'}</span>}
+        sub={<span>{noSalesToday ? 'No sales yet today - start selling!' : 'net of VAT · today — open the ledger'}</span>}
         sparkline={revenueSpark.length >= 2 ? revenueSpark : null}
         sparklineClass="text-emerald-500"
+        testId="branch-revenue-card"
+        onClick={() => setDoor('ledger')}
+        edgeClass="bg-emerald-600"
+        dotClass="bg-emerald-600"
+        hotRing={!noSalesToday}
       />
       <KpiCard
         label="Transactions"
         value={String(txns)}
         icon={ShoppingCart}
         iconClass="bg-green-100 text-green-700"
-        sub={<span>ATV {formatKES(atv)}</span>}
+        sub={<span>ATV {formatKES(atv)} · open the receipts</span>}
         sparkline={txnSpark.some((v) => v > 0) ? txnSpark : null}
         sparklineClass="text-green-700"
+        testId="branch-transactions-card"
+        onClick={() => setDoor('receipts')}
+        edgeClass="bg-teal-600"
+        dotClass="bg-teal-600"
+        hotRing={txns > 0}
       />
       <KpiCard
         label="Avg Transaction"
         value={formatKES(atv)}
         icon={Calculator}
         iconClass="bg-amber-100 text-amber-700"
-        sub={<span>per sale today</span>}
+        sub={<span>per sale today — climb the ladder</span>}
         sparkline={atvSpark.some((v) => v > 0) ? atvSpark : null}
         sparklineClass="text-amber-500"
+        testId="branch-atv-card"
+        onClick={() => setDoor('ladder')}
+        edgeClass="bg-amber-600"
+        dotClass="bg-amber-600"
+        hotRing={atv > 0}
       />
       <KpiCard
         label="Stock Alerts"
@@ -882,6 +913,12 @@ function KpiRow({ data, onTab }: { data: DashboardData | null; onTab: (tab: AppT
         }
       />
     </section>
+    {/* v2.200.0: the three doors — focus views composing the SAME answer the
+        cards show. Zero new queries, zero anchors (the honest-door law). */}
+    <DayLedgerModal data={data} open={door === 'ledger'} onClose={() => setDoor(null)} />
+    <DayReceiptsModal data={data} open={door === 'receipts'} onClose={() => setDoor(null)} />
+    <BasketLadderModal data={data} open={door === 'ladder'} onClose={() => setDoor(null)} />
+    </>
   );
 }
 
