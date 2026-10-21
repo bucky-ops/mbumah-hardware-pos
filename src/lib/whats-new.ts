@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.199.0',
+    title: 'The pending tile opens the approval desk',
+    bullets: [
+      'The Pending card on the console now opens its own drill-down — the three queues (purchase orders, open shifts, expenses) draw their composition bar, each queue its count and honest share of the desk — mirroring the Revenue, Transactions, Debt, Stock and Overdue modals in the face’s indigo.',
+      'The named queue lists the purchase orders awaiting approval, loudest order first, with each order’s status, its expected-date voice (days late, due today, due in — or an honest “no date set”), and the order total; when the named rows are a window on the answer, the cap note says so.',
+      'The two count-only queues speak where their rosters live in words — no role-gated doors — and a clean desk says so plainly.',
+      'The revenue modal’s Gross lens chip learned a truer voice — its old green sat under the readability bar for its small text; the deeper green now carries it — and the login error and the Store Matrix’s hot debt figure joined the house’s deeper red.',
+    ],
+  },
+  {
     version: '2.198.0',
     title: 'The overdue tile opens the yard',
     bullets: [

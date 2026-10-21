@@ -106,7 +106,7 @@ describe('the modal - the explicit Gross/Net lens toggle', () => {
   });
 
   it('the active face wears its own hue - emerald gross, violet net', () => {
-    expect(kpiRow).toContain("'bg-emerald-600 text-white shadow'");
+    expect(kpiRow).toContain("'bg-emerald-700 text-white shadow'"); // v2.199.0: the ACTIVE GROSS chip re-voices up (3.67:1 → 5.37:1)
     expect(kpiRow).toContain("'bg-violet-600 text-white shadow'");
   });
 
@@ -172,9 +172,9 @@ describe('the recorded history - the doc tells the deepening', () => {
 
 describe('the version contract', () => {
   it('package.json rides at 2.198.0', () => {
-    expect(pkg.version).toBe('2.198.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.198.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.198.0');
+    expect(pkg.version).toBe('2.199.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.199.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.199.0');
   });
 
   it('the fresh verify surface is wired beside the prior one', () => {

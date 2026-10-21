@@ -45,6 +45,30 @@
 // the Expert ledger's OVERDUE badge rode text-red-600 on red-50
 // (4.40:1 — under the 4.5 bar its 10px text must meet); the badge
 // re-voices to red-700 and the discovery is pinned in reverse.
+// v2.199.0: the pending tile opens the approval desk — the row's SIXTH
+// voice, and the row's last silent card speaks. The three queues the
+// tile badge-summed since v2.176.0 (pending.purchaseOrders/openShifts/
+// expenses — the route's DB-derived action queue) now draw their
+// composition bar (indigo-600 → 500 → 400, one family three queues),
+// and the drill-down speaks the named PO rows the payload already
+// carried (suppliers.purchaseOrders — the Suppliers Expert panel's
+// wire): filtered to the SAME two statuses the count reads, loudest
+// order first, each order its status chip (draft / approval), its
+// expected-date chip (Nd late amber / due today indigo / future slate /
+// no date set — honest absence, never a fabricated "on time") and its
+// total. The two count-only queues speak where their rosters live in
+// WORDS (no deep links — a shell-tab link would be a role-gated door
+// for some console viewers; the honest-door law), and the roster's 8-row
+// window speaks its cap note when the count outruns it. The modal is
+// self-contained like its five siblings — the pointer is not a door.
+// AND the round's contrast finds, pinned in reverse: the revenue lens
+// toggle's ACTIVE GROSS chip rode white-on-emerald-600 (3.67:1 — under
+// the 4.5 bar its 10px uppercase text must meet) → emerald-700
+// (5.37:1); the login error line rode red-600-on-red-50 (4.36:1) →
+// red-700 (5.88:1); the Store Matrix's hot debt figure re-voices
+// red-600 → red-700 for family alignment (the pre-fix 4.76:1 passes
+// the installed palette's bar — the v2.159 knife-edge number came from
+// the older palette — but the house's hot REAL text speaks red-700).
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +107,8 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   const [stockOpen, setStockOpen] = useState(false);
   // v2.198.0: the rental-yard drill-down — the KPI row's fifth voice.
   const [yardOpen, setYardOpen] = useState(false);
+  // v2.199.0: the approval-desk drill-down — the KPI row's sixth voice.
+  const [deskOpen, setDeskOpen] = useState(false);
   // v2.187.0: the modal's lens — GROSS is the default and the contract
   // (v2.185.0); net is an explicit analyst turn, never a second meaning.
   const [lens, setLens] = useState<'gross' | 'net'>('gross');
@@ -98,6 +124,72 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   const txSparkReady = Array.isArray(k.transactions.spark) && k.transactions.spark.length === 7;
   const debtHot = k.debt.total > 400_000;
   const pendingTotal = k.pending.purchaseOrders + k.pending.openShifts + k.pending.expenses;
+
+  // ── v2.199.0: the approval desk's derivations ──────────────────────────
+  // Every figure below composes the SAME payload the tile already spoke
+  // (zero new queries). The three queues are the counts the tile has
+  // badge-summed since v2.176.0 (`pending.purchaseOrders/openShifts/
+  // expenses` — the route's DB-derived action-queue figures); the named
+  // PO rows ride `suppliers.purchaseOrders` — the Suppliers Expert
+  // panel's wire since the Expert panel shipped. The modal is a
+  // self-contained triage board: ONE story (what waits on a human
+  // today), three queues under it, honest step-asides where the wire
+  // carries only counts. No deep links: the sibling modals never
+  // navigate, and a shell-tab link would be a role-gated door for some
+  // console viewers (the honest-door law) — the pointer lines speak
+  // the destination in words instead.
+  // The three queues, one array so the card's mini bar and the modal's
+  // bar + grid speak the same three figures in the same order. The hue
+  // steps down (indigo-600 → 500 → 400) — one family, three queues,
+  // the legend dots tie each band to its cell.
+  const deskQueues: Array<{ key: 'purchaseOrders' | 'openShifts' | 'expenses'; label: string; hue: string; value: number }> = [
+    { key: 'purchaseOrders', label: 'Purchase orders', hue: 'bg-indigo-600', value: k.pending.purchaseOrders },
+    { key: 'openShifts', label: 'Open shifts', hue: 'bg-indigo-500', value: k.pending.openShifts },
+    { key: 'expenses', label: 'Expenses', hue: 'bg-indigo-400', value: k.pending.expenses },
+  ];
+  // Share of the desk — the zero-total honesty rule the siblings speak:
+  // a zero total renders NO percentage (never an invented "0%").
+  const deskShare = (v: number): number | null => (pendingTotal > 0 ? Math.round((v / pendingTotal) * 1000) / 10 : null);
+  // The named PO queue — the roster filtered to the SAME two statuses
+  // the route's action-queue count reads (DRAFT | PENDING_APPROVAL),
+  // loudest order first (re-derived here so the modal never depends on
+  // the route's ordering choice). A runtime answer may lack the roster
+  // (an older cached answer) — the honest step-aside speaks, the count
+  // story above never breaks.
+  const poRosterReady = Array.isArray(data.suppliers?.purchaseOrders);
+  const deskPOs = poRosterReady
+    ? data.suppliers.purchaseOrders
+        .filter((p) => p.status === 'DRAFT' || p.status === 'PENDING_APPROVAL')
+        .sort((a, b) => b.total - a.total)
+    : null;
+  // The roster cap: the route slices the PO roster to 8 rows. When the
+  // DB-derived count speaks MORE queues than the named rows show, the
+  // note says so — the count stays the truth, the roster a window.
+  const poRosterCapped = !!deskPOs && deskPOs.length < k.pending.purchaseOrders;
+  // The expected-date voice — today composed at render (a modal open is
+  // a same-day read): a past expected date speaks "Nd late" in the amber
+  // chip, today speaks "due today", a real future date speaks its day
+  // count, and a PO sent without a date says so honestly (never a
+  // fabricated "on time").
+  const poDateChip = (expectedDate: string | null): { text: string; cls: string; title: string } => {
+    if (!expectedDate) return { text: 'no date set', cls: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30', title: 'This PO was sent without an expected date' };
+    const today = new Date();
+    const d = new Date(expectedDate);
+    const days = Math.floor((today.getTime() - d.getTime()) / 86_400_000);
+    if (days > 0) return { text: `${days}d late`, cls: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30', title: `Expected ${expectedDate.slice(0, 10)} — ${days} day${days === 1 ? '' : 's'} past it` };
+    if (days === 0) return { text: 'due today', cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/30', title: `Expected ${expectedDate.slice(0, 10)} — today` };
+    return { text: `due in ${-days}d`, cls: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30', title: `Expected ${expectedDate.slice(0, 10)}` };
+  };
+  const poStatusChip = (status: string): { text: string; cls: string; title: string } =>
+    status === 'PENDING_APPROVAL'
+      ? { text: 'approval', cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:ring-indigo-500/30', title: 'Waiting on an approval decision' }
+      : { text: 'draft', cls: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30', title: 'Still a draft — not yet sent for approval' };
+  // HONESTY NOTE: `suppliers.purchaseOrders` status filter on the route
+  // is WIDER (open POs of every stage) than the pending count's two
+  // statuses — the named rows here are the pending SLICE of that
+  // roster, so a row count below the PO queue figure above is honest
+  // shape (cap + slice), never a contradiction. When MORE pending POs
+  // exist than the window carried, the capped note speaks it.
 
   // v2.176.0: the drill-down's branch rows — joined by storeId (never row
   // order), loudest week first; a quiet branch still speaks (honest zeros,
@@ -404,6 +496,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
       {/* Revenue */}
       <button
         onClick={() => setTrendOpen(true)}
+        data-testid="revenue-card"
         className="focus-ring group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
       >
         <span className="absolute inset-y-0 left-0 w-1 bg-orange-500" />
@@ -639,12 +732,53 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
         </div>
       </button>
 
-      {/* Pending actions */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><ShoppingCart className="h-3.5 w-3.5 text-slate-500" /> Pending</div>
-        <div className="mt-1"><CountUp value={pendingTotal} className="text-2xl font-bold text-slate-600 dark:text-slate-400" /></div>
+      {/* Pending actions — v2.199.0: a VOICE, not a tile. The Revenue card
+          told the money's story since v2.173.0, the count face found its
+          week in v2.195.0, the ledger in v2.196.0, the shelf in v2.197.0
+          and the yard in v2.198.0 while this tile badge-summed three
+          queues in silence — even though the named PO roster was already
+          on the wire. The tile is now the row's SIXTH button and opens
+          the approval desk; it wears the face's indigo edge + live dot
+          (the family vocabulary: orange revenue, blue transactions, red
+          debt, amber stock, rose rentals, indigo pending) and the queue
+          qualifier chip. The mini bar draws the three queues' honest
+          shares (indigo-600 POs → 500 shifts → 400 expenses); a clean
+          desk draws the calm empty track — never a fabricated segment. */}
+      <button
+        onClick={() => setDeskOpen(true)}
+        data-testid="pending-card"
+        className={`focus-ring group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${pendingTotal > 0 ? 'ring-1 ring-indigo-300' : ''}`}
+      >
+        <span className="absolute inset-y-0 left-0 w-1 bg-indigo-600" />
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <ShoppingCart className="h-3.5 w-3.5 text-indigo-600" /> Pending
+            {/* v2.199.0: the queue qualifier — every queue this card and
+                its modal speak is the SAME DB-derived action-queue the
+                route counts, so the headline can never be read as a
+                different book. */}
+            <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-indigo-700 ring-1 ring-indigo-200" title="The DB-derived action queue — the same counts the route's actionQueue speaks">queue</span>
+          </span>
+          {pendingTotal > 0 && <span className="h-2 w-2 rounded-full bg-indigo-600 anim-pulse-dot" />}
+        </div>
+        <div className="mt-1">
+          <CountUp value={pendingTotal} className={`text-2xl font-bold ${pendingTotal > 0 ? 'text-indigo-700' : 'text-slate-600 dark:text-slate-400'}`} />
+        </div>
+        {pendingTotal > 0 && (
+          <div
+            className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-slate-100"
+            role="img"
+            aria-label={`Approval queues: ${deskQueues.map((q) => `${q.label} ${q.value}`).join(', ')}`}
+          >
+            {deskQueues.map((q) =>
+              q.value > 0 ? (
+                <span key={q.key} className={q.hue} style={{ width: `${(q.value / pendingTotal) * 100}%` }} />
+              ) : null,
+            )}
+          </div>
+        )}
         <p className="mt-2 text-[10px] text-slate-500">POs {k.pending.purchaseOrders} · shifts {k.pending.openShifts} · expenses {k.pending.expenses}</p>
-      </div>
+      </button>
 
       {/* Revenue trend drill-down modal (real 7d series only) */}
       <Dialog open={trendOpen} onOpenChange={setTrendOpen}>
@@ -682,7 +816,7 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                       title={l === 'gross' ? 'The till face — includes VAT' : 'VAT removed — the revenue that is actually yours'}
                       className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${lens === l
                         ? l === 'gross'
-                          ? 'bg-emerald-600 text-white shadow'
+                          ? 'bg-emerald-700 text-white shadow'
                           : 'bg-violet-600 text-white shadow'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'}`}
                     >
@@ -1494,6 +1628,142 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
               <p data-testid="rental-yard-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                 the rental roster is not on this cached answer — the count story above still speaks. Reload to fetch it.
               </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* The approval desk — v2.199.0: the pending tile's drill-down, the
+          row's sixth modal. ONE story: what waits on a human today. The
+          three queues the tile badge-summed since v2.176.0 draw their
+          composition bar + grid (the siblings' shape), the PO queue
+          speaks its named rows (the Suppliers Expert panel's wire —
+          filtered to the SAME two statuses the count reads, loudest
+          order first), and the two count-only queues speak their honest
+          step-asides with the destination in words (no deep links: a
+          shell-tab link would be a role-gated door for some console
+          viewers — the honest-door law). The panel paints its dark half
+          from birth — house law since the v2.195.0 discovery. */}
+      <Dialog open={deskOpen} onOpenChange={setDeskOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ShoppingCart className="h-4 w-4 text-indigo-600" /> The approval desk</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">queues waiting on a human</span>
+              <span data-testid="approval-desk-count" className={`text-2xl font-bold ${pendingTotal > 0 ? 'text-indigo-700 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'}`}>{num(pendingTotal)}</span>
+            </div>
+            <p data-testid="approval-desk-meta" className="text-[10px] text-slate-500 dark:text-slate-400">
+              POs {k.pending.purchaseOrders} · shifts {k.pending.openShifts} · expenses {k.pending.expenses} — the DB-derived action queue
+            </p>
+            {/* The composition bar — the card's mini bar at reading size,
+                the grid below spells each queue's count and its honest
+                share (the zero-total rule: no invented "0%"). Renders
+                only when the desk holds work — a clean desk speaks the
+                honest clear note below instead of a bar of zeros. */}
+            {pendingTotal > 0 && (
+              <div data-testid="approval-desk-bar" className="mt-2">
+                <div
+                  className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                  role="img"
+                  aria-label={`Approval queues: ${deskQueues.map((q) => `${q.label} ${q.value}`).join(', ')}`}
+                >
+                  {deskQueues.map((q) =>
+                    q.value > 0 ? (
+                      <span key={q.key} className={q.hue} style={{ width: `${(q.value / pendingTotal) * 100}%` }} />
+                    ) : null,
+                  )}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
+                  {deskQueues.map((q) => (
+                    <div key={q.key} data-testid={`approval-desk-queue-${q.key}`}>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${q.hue}`} />
+                        {q.label}
+                      </span>
+                      <p className="font-bold text-slate-800 dark:text-slate-100">{num(q.value)}</p>
+                      {deskShare(q.value) != null && <p className="text-[10px] tabular-nums text-slate-500 dark:text-slate-400">{deskShare(q.value)}% of desk</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* The named PO queue — pending purchase orders, loudest order
+              first. Each row: the supplier, the branch beneath it, the
+              status chip (draft calm slate / approval indigo — the queue's
+              own voice), the expected-date chip (Nd late amber / due today
+              indigo / future slate / no date set — honest absence, never a
+              fabricated "on time"), and the order total. An older cached
+              answer without the roster speaks its step-aside — the count
+              story above still carries, never a silent void. */}
+          {deskPOs && deskPOs.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Purchase orders awaiting approval</p>
+              <p className="mb-2 text-[10px] text-slate-500 dark:text-slate-400">loudest order first — the same roster the Suppliers panel reads, the pending slice</p>
+              <ul className="space-y-1.5">
+                {deskPOs.map((p) => (
+                  <li key={p.id} data-testid="approval-desk-po-row" className="flex items-center justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-slate-700 dark:text-slate-200">{p.supplier}</span>
+                      <span className="block truncate text-[10px] text-slate-500 dark:text-slate-400">{p.store ?? 'Unassigned'}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ring-1 ${poStatusChip(p.status).cls}`}
+                        title={poStatusChip(p.status).title}
+                      >
+                        {poStatusChip(p.status).text}
+                      </span>
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tabular-nums tracking-wide ring-1 ${poDateChip(p.expectedDate).cls}`}
+                        title={poDateChip(p.expectedDate).title}
+                      >
+                        {poDateChip(p.expectedDate).text}
+                      </span>
+                      <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{kes(p.total)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {/* The cap note: the route's roster is a window (8 rows), the
+                  count above is the DB truth — when the window shows fewer
+                  pending POs than the count reads, the note says so. Never
+                  a quiet contradiction. */}
+              {poRosterCapped && (
+                <p data-testid="approval-desk-po-capped" className="mt-2 rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                  the named rows are a window on this answer — {k.pending.purchaseOrders} pending PO{k.pending.purchaseOrders === 1 ? '' : 's'} wait in the queue. Open the Purchase Orders tab for the full book.
+                </p>
+              )}
+            </div>
+          )}
+          {/* The honest absences: a clean desk says so; a count-only queue
+              speaks where its roster lives (in words — the pointer is not
+              a door); an older cached answer without the PO roster speaks
+              its step-aside. */}
+          {pendingTotal === 0 && (
+            <p data-testid="approval-desk-clear" className="mt-3 border-t border-slate-100 pt-3 text-[10px] text-slate-500 dark:text-slate-400">
+              Nothing waits on a human — the desk is clear.
+            </p>
+          )}
+          {pendingTotal > 0 && (
+            <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+              {k.pending.openShifts > 0 && (
+                <p data-testid="approval-desk-shifts-note" className="text-[10px] text-slate-500 dark:text-slate-400">
+                  The {k.pending.openShifts} open shift{k.pending.openShifts === 1 ? '' : 's'} live{k.pending.openShifts === 1 ? 's' : ''} on the Shift Scheduling tab — the shift roster is not on this answer.
+                </p>
+              )}
+              {k.pending.expenses > 0 && (
+                <p data-testid="approval-desk-expenses-note" className="text-[10px] text-slate-500 dark:text-slate-400">
+                  The {k.pending.expenses} pending expense{k.pending.expenses === 1 ? '' : 's'} live{k.pending.expenses === 1 ? 's' : ''} on the Financial tab — the expense ledger is not on this answer.
+                </p>
+              )}
+              {!poRosterReady && (
+                <p data-testid="approval-desk-po-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                  the named PO roster is not on this cached answer — the count story above still speaks. Reload to fetch it.
+                </p>
+              )}
             </div>
           )}
         </DialogContent>

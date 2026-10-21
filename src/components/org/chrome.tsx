@@ -643,7 +643,7 @@ export function LoginDialog({ open, onOpenChange, onToast, onSignedIn }: {
         <div className="space-y-3">
           <Input value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email" placeholder="you@mbumahhardware.co.ke" autoComplete="username" />
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} aria-label="Password" placeholder="Password" autoComplete="current-password" />
-          {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{err}</p>}
+          {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
           <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={submit} disabled={busy}>{busy ? 'Signing in...' : 'Sign in'}</Button>
           <p className="text-center text-[10px] text-slate-400">Login is rate-limited (5 attempts / 15 minutes). Seeded demo accounts use password123 on local databases only.</p>
         </div>

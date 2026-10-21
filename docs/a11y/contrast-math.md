@@ -392,3 +392,43 @@ DECORATION, deliberately not asserted: the bar is aria-labeled and its
 figures spoken twice beside it (the card's aria-label; the modal's four
 cells with shares), so asserting amber-400 against the track would
 flatter the math, not inform it.
+
+## Fixed: the lens toggle + the sweep's re-voices + the approval desk (v2.199.0)
+
+THE DISCOVERY: the revenue modal's lens toggle has voiced its ACTIVE
+GROSS chip white-on-`emerald-600` since v2.187.0 — the combination
+computes **3.67:1**, under the 4.5 bar the chip's 10px uppercase text
+must meet. Unnoticed because the toggle was audited at birth over the
+OLD palette numbers (the round's notes recorded the INACTIVE voice's
+4.75:1 and the ACTIVE net's 5.70:1 — both pass — and the gross chip
+rode along on the emerald family's good name). v2.199.0 re-voices the
+gross chip to **emerald-700 (5.37:1)**; the net chip (violet-600,
+5.88:1) always passed and stays. Two sweep companions re-voice in the
+same round: the login error line rode **red-600-on-red-50 (4.36:1)** —
+the exact pairing v2.198.0 found on the Expert OVERDUE badge — to
+**red-700 (5.88:1)**, and the Store Matrix's hot debt figure moved
+red-600 → **red-700 (6.42:1)** for FAMILY ALIGNMENT (the pre-fix state
+measures 4.76:1 with the installed palette — ABOVE the bar; the v2.159
+"knife-edge 4.53:1" number came from the older palette — so this one is
+honest consistency, not a violation; the house's hot REAL text speaks
+red-700 and the siblings already do). All pre-fix states are pinned
+below their bars in reverse (2 discovery rows) so the gaps cannot
+return silently.
+
+The new face — `scripts/contrast-math-approval-desk-v2199.mjs`, **42/42
+families pass** over the REAL chain (card white; desk panel slate-50
+light / slate-900 dark, painted dark on day one): light 4.55-14.00:1
+(the hot number indigo-700 8.07; the qualifier/queue chips indigo-700 on
+indigo-50 7.22; the draft/no-date chips slate-600 on slate-100 6.90; the
+Nd-late chip amber-700 on amber-50 4.87 — the tight corner; the slate-500
+voices 4.55-4.77), dark 5.72-16.28:1 over the panel (count indigo-400
+5.72, labels slate-400 6.79, chips on their -500/10 stacks 6.16-10.63).
+The org-console mover family — the a11y backlog's audit half — is
+RECORDED here: emerald-700/red-700 light (5.37/6.42) and
+emerald-400/red-400 dark over the bg-card token (9.55/6.39) **already
+pass; no fix owed**. The desk's composition-bar fills follow the
+v2.198.0 DOCUMENTED DECORATION law — aria-labeled on the bar and spoken
+twice beside it (the card's aria-label; the modal's three cells with
+shares) — deliberately not asserted (the lightest fill indigo-400
+measures 2.85:1 on the light track, the darkest indigo-600 2.28:1 on the
+dark track; the bar adds no figure the text does not already carry).
