@@ -2,6 +2,39 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.207.0] The admin desk tells the truth; the quiet minis speak
+
+The round the admin desk stopped lying and the last quiet pictures learned to speak. The v2.205 honesty pass swept the reports tab; this round caught the SAME disease living on the admin tab — four invented constants and a fake check history rendered as system health — plus the v2.204 graphics-bar audit's blind spot (the admin/system-health desks' -500 marks) and four silent pictures (two sparklines, one trend chart, two score rings).
+
+### Fixed — THE HONESTY PASS (the admin desk's fabrications deleted)
+- **The invented system metrics died**: `cpuUsage = 23`, `memoryUsed = 67`, `activeSessions = 3` and `dbSizeMB = 2.4` — four hardcoded constants rendered as real system health with progress bars, status colors and pulse dots — are DEAD. The browser has no CPU wire, so that gauge died with its fabrication and the card now speaks the health wire's actual verdict (Healthy / Degraded / Unhealthy + the wire's own response time). Memory is REAL heap-of-RSS math (two measured numbers, an honest "Measuring…" state while the wire answers). The DB-size card became the **App build** card: the version, database provider and app mode the wire actually runs. Active sessions read the wire's structured counts.
+- **The fake check history died**: the API-latency sparkline booted with TWELVE invented response times rendered as "Avg over last 12 checks". The history now starts EMPTY; the caption speaks "Measuring — the first live check is in flight" until a real check lands, then "Avg Xms over the last N checks" — N counted from real checks only. A failed MANUAL refresh is recorded (999) exactly like the interval path — the sparkline never hides a failure it lived through.
+- **The unconditional "Operational" badge died**: the header badge painted healthy green even while the health endpoint answered degraded. The verdict now rides `/api/health`'s real status, with an honest "Checking wire…" state before the first answer.
+- **The client-side "uptime" timer died**: the card counted seconds since the browser tab mounted and called it uptime. It now speaks the server process's real `uptimeSeconds` ("Since last restart · server process").
+- **THE HEALTH WIRE GREW STRUCTURED COUNTS (additive)**: `/api/health`'s `database_stats` check now carries `counts: { users, products, transactions, sessions }` alongside the unchanged human detail string — the panel reads structured fields instead of parsing prose, and the back-compat contract is pinned.
+
+### Added — THE QUIET MINIS SPEAK (four silent pictures + two rings)
+- **`src/lib/report-voices.ts` grew four composers** (the one-writer law holds): `composeLatencyVoice` (samples oldest-first, extremes named from the same samples, a single check never claims an extreme it cannot compare), `composeDailyRevenueVoice` (calendar order, the zero-day law — a day with nothing says "no sales", a range where nothing was ever sold names no loudest day), `composeTrendVoice` (every bucket with its real transaction count, totals once, the dashed previous-period line named ONLY when the wire carries one) and `composeScoreVoice` (the ring's fill IS the score; a missing score speaks the absence, never a percentage of nothing).
+- **The admin latency sparkline speaks** (both call sites): every real check in order with slowest/fastest named.
+- **The transactions tab's daily trend speaks**: every day in calendar order, quiet days honest, the loudest day named — figures pre-formatted through `formatKES` so the Ksh voice holds; a caption row rides under the chart ("N days on the chart · figures in Ksh").
+- **The analytics sales trend speaks**: every bucket's revenue + real transaction count, the period totals once, the dashed line's meaning declared.
+- **Both score rings speak**: the security gauge ("Security score 92 of 100 — Good") and the system-health compliance ring ("Overall compliance score N of 100 — healthy/degraded/unhealthy").
+
+### Fixed — THE CONTRAST BLIND SPOT (the measured pairs, same WCAG machinery)
+- **The admin health panel's marks re-voiced**: the good/warning bars and dots rode green-500 (2.28) / yellow-500 (1.92) — below the 3:1 graphics bar — now green-600 (3.30) / yellow-700 (4.92); the warning TEXT rode text-yellow-600 (3.3 — below the 4.5:1 text bar) now text-yellow-700; the latency card's spark rode text-orange-500 (2.15) now text-orange-600 (3.56). red-500 (3.76) passes and stays.
+- **The system-health tab's marks re-voiced**: the status pulse dots (emerald-500 2.54 / amber-500 2.15 → emerald-600 3.77 / amber-600 3.19), the DB-latency bars, the ISO 27001/9001 compliance bars (emerald-500 → emerald-600, teal-500 2.49 → teal-600 3.74) and the -500 icon accents.
+- **The latency bar caps at 100%** — a 999ms outlier used to render the track at 199.8% (an overflow, not a reading).
+- **The single-point NaN guard**: both mini charts divided by `length − 1` and painted an invisible NaN line for a single sample; a dot on the grounding line speaks now.
+
+### Style (mandatory)
+- Every 9px caption in the admin tab grew to 10px; the latency/memory captions and the trend caption ride `tabular-nums`; the sparklines gained a grounding baseline (muted/40, non-essential) and a marker dot on the latest point; the dimmed `/70` sub-voices on the stat cards died for `text-muted-foreground` (the v2.205 quick-stat pattern).
+- The transactions tab's `transactions` array is wrapped in its own `useMemo` — the conditional that re-created the array identity every render made every downstream memo's deps unstable (the whole `exhaustive-deps` warning class ended instead of growing).
+
+### Tests
+- NEW `src/tests/admin-truth-v2207.test.ts`: the fabrication bans (constants, seed array, fake badge, client uptime) pinned in reverse; the four composers unit-tested including the zero-day law, the NaN-poison drop and the single-sample no-extremes rule; the aria wiring per surface; the measured pairs verified against the WCAG math with the six buried -500 ghosts confirmed BELOW the bar in reverse; the additive counts contract.
+- `scripts/probe-graphics-v2207.mjs` (63 checks) runs the same law against source with CODE-only scans (the round's own comments name the ghosts they buried — the v2.204 lesson).
+- `verify:v2-207-0` wired — see `scripts/verify-v2-207-0.mjs`. whats-new heads the 2.207.0 entry.
+
 ## [2.206.0] The best-sellers stand up, honestly
 
 The round the reports tab's last honest-empty section got its real wire — and the live E2E earned its keep three more times: one client-normalizer flattening (a wire field name that silently destroyed the payload shape), one imagined-wire contract (the Trends view rendered a shape the API never sent), and one rank-chip contrast failure hiding in plain sight since the list was born.

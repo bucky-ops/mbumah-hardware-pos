@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import { transactionsApi, whatsappApi, formatKES, formatDateTime, type TransactionItem, type SaleItemDetail, type ReceiptDistributionResult } from '@/lib/api';
+import { composeDailyRevenueVoice } from '@/lib/report-voices';
 import { useAppStore } from '@/lib/stores';
 import { getStoreInfo, getLogoUrl, COMPANY } from '@/lib/store-info';
 import { printReceiptElement, generateReceiptPdf, buildReceiptFileName, RECEIPT_CONTENT_ID } from '@/lib/receipt-pdf';
@@ -235,26 +236,37 @@ function exportTransactionsCSV(transactions: TransactionItem[]): void {
 
 // MINI TREND CHART (SVG-based)
 
-function MiniTrendChart({ data, height = 40 }: { data: { label: string; value: number }[]; height?: number }) {
+function MiniTrendChart({ data, height = 40, ariaLabel }: { data: { label: string; value: number }[]; height?: number; ariaLabel?: string }) {
   if (data.length === 0) return null;
   const max = Math.max(...data.map(d => d.value), 1);
   const w = 160;
+  // A single day is a dot on the grounding line (the old (i/(len-1)) math
+  // divided by zero at length 1); a line needs two points.
+  const denom = Math.max(data.length - 1, 1);
+  const pts = data.map((d, i) => ({
+    x: (i / denom) * w,
+    y: height - (d.value / max) * (height - 6) - 3,
+  }));
+  const last = pts[pts.length - 1];
 
   return (
-    <svg width={w} height={height} className="w-full">
+    <svg
+      width={w} height={height} className="w-full"
+      role={ariaLabel ? 'img' : undefined}
+      aria-label={ariaLabel}
+      aria-hidden={ariaLabel ? undefined : true}
+    >
       <defs>
         <linearGradient id="trendGrad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="currentColor" stopOpacity="0.3" />
           <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
         </linearGradient>
       </defs>
+      {/* grounding baseline (non-essential, muted) */}
+      <line x1="0" y1={height - 0.5} x2={w} y2={height - 0.5} stroke="currentColor" strokeWidth="1" vectorEffect="non-scaling-stroke" className="text-muted-foreground/40" />
       {/* Area fill */}
       <path
-        d={data.map((d, i) => {
-          const x = (i / (data.length - 1)) * w;
-          const y = height - (d.value / max) * (height - 6) - 3;
-          return `${i === 0 ? 'M' : 'L'}${x},${y}`;
-        }).join(' ') + ` L${w},${height} L0,${height} Z`}
+        d={pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + ` L${w},${height} L0,${height} Z`}
         fill="url(#trendGrad)"
         className="text-primary"
       />
@@ -265,13 +277,11 @@ function MiniTrendChart({ data, height = 40 }: { data: { label: string; value: n
         strokeWidth="2"
         strokeLinejoin="round"
         strokeLinecap="round"
-        points={data.map((d, i) => {
-          const x = (i / (data.length - 1)) * w;
-          const y = height - (d.value / max) * (height - 6) - 3;
-          return `${x},${y}`;
-        }).join(' ')}
+        points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
         className="text-primary"
       />
+      {/* the latest day, marked */}
+      <circle cx={last.x} cy={last.y} r="2.5" fill="currentColor" className="text-primary" />
     </svg>
   );
 }
@@ -695,7 +705,14 @@ export default function TransactionsTab() {
     },
   });
 
-  const transactions = Array.isArray(transactionsData) ? transactionsData : [];
+  // v2.207.0: wrapped in its own useMemo — a conditional that re-created the
+  // array identity every render made EVERY downstream memo's deps unstable
+  // (the exhaustive-deps warning class fired for each one; the wrapper ends
+  // the class instead of growing it).
+  const transactions = useMemo(
+    () => (Array.isArray(transactionsData) ? transactionsData : []),
+    [transactionsData],
+  );
 
   // Filter by search query, type, and amount
   const filteredTransactions = useMemo(() => {
@@ -735,7 +752,8 @@ export default function TransactionsTab() {
     return { totalSales, totalRefunds, netRevenue, totalCount, avgValue };
   }, [filteredTransactions]);
 
-  // Mini trend chart data - daily totals
+  // Mini trend chart data - daily totals (REAL: summed off the transactions
+  // wire; the voice pre-formats each figure so the chart keeps the Ksh sound)
   const trendData = useMemo(() => {
     const dailyMap: Record<string, number> = {};
     transactions.forEach(t => {
@@ -746,6 +764,13 @@ export default function TransactionsTab() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, value]) => ({ label: date.slice(5), value }));
   }, [transactions]);
+
+  // v2.207.0: the one-writer aria — every day in calendar order, quiet days
+  // honest, the loudest day named (composeDailyRevenueVoice, report-voices).
+  const trendVoice = useMemo(
+    () => composeDailyRevenueVoice('Daily revenue', trendData.map((d) => ({ label: d.label, value: d.value, figure: formatKES(d.value) }))),
+    [trendData],
+  );
 
   const handleToggleRow = useCallback((id: string) => {
     setExpandedRow((prev) => (prev === id ? null : id));
@@ -940,7 +965,10 @@ export default function TransactionsTab() {
             {/* Mini Trend Chart */}
             {trendData.length > 1 && (
               <div className="mt-2 pt-2 border-t border-border/30">
-                <MiniTrendChart data={trendData} height={28} />
+                <MiniTrendChart data={trendData} height={28} ariaLabel={trendVoice} />
+                <p className="text-[10px] text-muted-foreground mt-1 tabular-nums">
+                  {trendData.length} day{trendData.length === 1 ? '' : 's'} on the chart · figures in Ksh
+                </p>
               </div>
             )}
           </CardContent>

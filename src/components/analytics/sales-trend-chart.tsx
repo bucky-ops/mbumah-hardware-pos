@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { formatKES } from '@/lib/api';
+import { composeTrendVoice } from '@/lib/report-voices';
 import type { AnalyticsPeriod } from '@/lib/analytics-utils';
 
 export interface SalesTrendBucket {
@@ -137,6 +138,19 @@ export function SalesTrendChart({
   const changePct = summary?.revenueChangePct ?? 0;
   const trendUp = changePct >= 0;
 
+  // v2.207.0: the one-writer aria — every bucket in order with its revenue
+  // and its real transaction count, the period totals once, and the dashed
+  // previous-period line named only when the wire actually carries one.
+  const trendVoice = useMemo(() => composeTrendVoice(
+    'Sales trend',
+    chartData.map((b) => ({ label: b.label, value: b.revenue, figure: formatKES(b.revenue), transactions: b.transactions })),
+    {
+      totalFigure: formatKES(summary?.totalRevenue ?? 0),
+      totalTransactions: summary?.totalTransactions ?? 0,
+      hasPrevSeries: (data?.previousSeries?.length ?? 0) > 0,
+    },
+  ), [chartData, summary, data]);
+
   return (
     <Card className={cn('flex flex-col', className)}>
       <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -199,7 +213,7 @@ export function SalesTrendChart({
               </div>
             </motion.div>
 
-            <div className="h-[280px] w-full">
+            <div className="h-[280px] w-full" role="img" aria-label={trendVoice}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
                   <defs>
