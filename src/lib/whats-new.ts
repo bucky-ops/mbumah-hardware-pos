@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.212.0',
+    title: 'One wire, two surfaces, one truth \u2014 now live',
+    bullets: [
+      'The currency switcher joined the rates wire\u2019s live cache: a rate the Exchange Rates card sets or resets now re-renders the switcher\u2019s chips and figures without a remount \u2014 the dropdown, the desk, and the database can no longer disagree.',
+      'The switcher speaks its freshness: the dropdown footer says when the wire last answered (hover for the full timestamp), and once the wire has spoken the trigger\u2019s tooltip names the active currency\u2019s figure and source \u2014 before that, silence stays silence.',
+      'Track a pair beyond KES: the card\u2019s new Track-a-pair dialog stores a cross rate like USD\u2192TZS from the desk (the last curl-only write), every custom badge speaks its provenance on hover and carries its own reset \u2014 and the confirm says honestly that a custom pair simply leaves the wire.',
+    ],
+  },
+  {
     version: '2.211.0',
     title: 'The wire\u2019s writer finds its surface',
     bullets: [

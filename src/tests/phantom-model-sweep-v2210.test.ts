@@ -207,8 +207,11 @@ describe('v2.210.0 — the currency switcher speaks each rate\u2019s source', ()
 
   it('the wire is fetched lazily on the FIRST open — never on mount', () => {
     expect(sw).toContain('<DropdownMenu onOpenChange={handleOpenChange}>');
-    expect(sw).toContain('if (next && !attemptedRef.current)');
-    expect(sw).toContain("fetch('/api/currency/rates')");
+    // v2.212.0: the lazy gate rides the shared query cache now — the query
+    // stays DISABLED until the first open (same law, new machinery).
+    expect(sw).toContain('enabled: opened,');
+    expect(sw).toContain('const [opened, setOpened] = useState(false);');
+    expect(sw).toContain("authedFetch('/api/currency/rates')");
     // No mount-time fetch: no useEffect around the fetch in this component.
     const fn = sw.slice(sw.indexOf('const handleOpenChange'), sw.indexOf('const handleSelect'));
     expect(fn).not.toContain('useEffect');
@@ -217,10 +220,12 @@ describe('v2.210.0 — the currency switcher speaks each rate\u2019s source', ()
   it('a wire that never answered renders NO chip (honest absence)', () => {
     expect(sw).toContain('dbRate={rates?.get(c.code)}');
     expect(sw).toContain('{dbRate && sourcePhrase && (');
-    // The catch stays silent — no toast, no invented provenance.
-    const catchBlock = sw.slice(sw.indexOf('.catch(() => {'), sw.indexOf('};', sw.indexOf('.catch(() => {')));
-    expect(catchBlock).toContain('Silence is the honest state');
-    expect(catchBlock).not.toContain('toast');
+    // v2.212.0: the silence lives in the map builder now — an empty or
+    // failed wire builds an EMPTY map, and an empty map renders nothing
+    // (no toast, no invented provenance).
+    const mapBlock = sw.slice(sw.indexOf('const rates = useMemo'), sw.indexOf('const handleOpenChange'));
+    expect(mapBlock).toContain('return map.size > 0 ? map : null;');
+    expect(mapBlock).not.toContain('toast');
   });
 
   it('the three provenance chips ride their measured literals', () => {
@@ -297,9 +302,9 @@ describe('v2.210.0 — the suite rides at the head', () => {
   };
 
   it('the release is 2.210.0 in all three version fields', () => {
-    expect(pkg.version).toBe('2.211.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.211.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.211.0');
+    expect(pkg.version).toBe('2.212.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.212.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.212.0');
   });
 
   it('the What\u2019s New feed heads this release', () => {
@@ -307,6 +312,6 @@ describe('v2.210.0 — the suite rides at the head', () => {
     const feed = read('src/lib/whats-new.ts');
     const head = feed.slice(feed.indexOf('export const WHATS_NEW'));
     expect(head).toMatch(/version: '2\.210\.0'/);
-    expect(head.indexOf("version: '2.211.0'")).toBeLessThan(head.indexOf("version: '2.209.0'"));
+    expect(head.indexOf("version: '2.212.0'")).toBeLessThan(head.indexOf("version: '2.209.0'"));
   });
 });

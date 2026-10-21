@@ -315,9 +315,9 @@ describe('v2.200.0 — the house laws', () => {
 
 describe('v2.200.0 — the release face', () => {
   it('the package speaks 2.200.0 in all three slots', () => {
-    expect(pkg.version).toBe('2.211.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.211.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.211.0');
+    expect(pkg.version).toBe('2.212.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.212.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.212.0');
   });
 
   it('the verify script for the round is registered', () => {
