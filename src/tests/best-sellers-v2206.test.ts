@@ -267,15 +267,11 @@ describe('v2.206.0 — the HR reports desk sheds its cascading render', () => {
     expect(hrCode).not.toContain('const [storeName, setStoreName]');
   });
 
-  it('the deep-link + localStorage one-shots carry documented downrules', () => {
-    const downrules = (HR.match(/eslint-disable-next-line react-hooks\/set-state-in-effect/g) ?? []).length;
-    expect(downrules).toBe(10);
-    expect(HR).toContain('hydration-safe one-shot URL init');
-    expect(HR).toContain('fetch-on-dep-change; sync busy flag is the documented pattern');
-  });
-
-  it('the group comment names the pattern the rule cannot see through', () => {
-    expect(HR).toContain('the five fetch-on-dep-change effects below carry a DOCUMENTED');
+  it('NO set-state downrules in this file — the CI toolchain (plugin 7.0.1 via the lockfile) does not flag these lines, so a disable there is an unused-directive ERROR', () => {
+    // The sandbox node_modules runs plugin 7.1.1 (drifted from the lockfile)
+    // and DOES flag them as warnings — that drift is an ops item, not
+    // something source-level downrules should fight.
+    expect(HR).not.toContain('eslint-disable-next-line react-hooks/set-state-in-effect');
   });
 });
 

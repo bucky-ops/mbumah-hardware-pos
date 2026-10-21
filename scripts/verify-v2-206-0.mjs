@@ -117,11 +117,10 @@ check('composeProductsVoice speaks the null-growth contract', () => {
   assert(TAB.includes('No measurable growth yet'), 'the honest empty state is missing');
 });
 
-check('the HR reports desk: derived storeName + documented downrules', () => {
+check('the HR reports desk: derived storeName, no downrules (the toolchain law)', () => {
   assert(HR.includes('const storeName = storeId ? storeNames[storeId] ?? null : null;'), 'storeName is not derived');
   assert(!HR.includes('setStoreName(null)'), 'the cascading reset survives');
-  const downrules = (HR.match(/eslint-disable-next-line react-hooks\/set-state-in-effect/g) ?? []).length;
-  assert(downrules === 10, `${downrules} downrules (expected 10)`);
+  assert(!HR.includes('eslint-disable-next-line react-hooks/set-state-in-effect'), 'a downrule here is an unused-directive ERROR on CI (plugin 7.0.1 does not flag these lines)');
 });
 
 check('the probe + guard suite exist', () => {

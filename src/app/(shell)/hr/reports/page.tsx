@@ -334,12 +334,6 @@ export default function HrReportsPage() {
   const [tab, setTab] = useState<string>('headcount');
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('tab');
-    // Hydration-safe one-shot URL init: the deep link must land BEFORE first
-    // paint of the client tree; useSearchParams() would force a Suspense
-    // boundary on this route, and a lazy initializer reading window.location
-    // would hydration-mismatch the SSR'd default tab. Once, on mount,
-    // guarded by inclusion.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe one-shot URL init
     if (requested && (REPORT_TAB_KEYS as readonly string[]).includes(requested)) setTab(requested);
   }, []);
   const changeTab = (next: string) => {
@@ -355,13 +349,12 @@ export default function HrReportsPage() {
   // the toolbar shows the active branch and clears the filter.
   const [storeId, setStoreId] = useState<string | null>(null);
   // v2.206.0: storeName is now DERIVED, not synced. The old per-storeId
-  // effect reset the name with a SYNCHRONOUS setState (a cascading render
-  // the compiler flags) on every filter clear, then re-fetched the whole
-  // /api/hr/stores list for each picked branch. One fetch fills the
-  // id→name map once; the chip's name is a plain lookup, so clearing the
-  // filter clears the name by derivation — no reset, no race, no cascading
-  // render. A failed lookup leaves the map empty and the chip falls back
-  // to the id it already spoke.
+  // effect reset the name with a SYNCHRONOUS setState (a cascading render)
+  // on every filter clear, then re-fetched the whole /api/hr/stores list
+  // for each picked branch. One fetch fills the id→name map once; the
+  // chip's name is a plain lookup, so clearing the filter clears the name
+  // by derivation — no reset, no race, no cascading render. A failed
+  // lookup leaves the map empty and the chip falls back to the id.
   const [storeNames, setStoreNames] = useState<Record<string, string>>({});
   // v2.27.0: per-schedule deep link (?schedule=<id> from the notification
   // center's "Manage schedule" affordance) - passed down to the Schedules
@@ -369,14 +362,10 @@ export default function HrReportsPage() {
   const [highlightScheduleId, setHighlightScheduleId] = useState<string | null>(null);
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('schedule');
-    // Hydration-safe one-shot URL init (same contract as the tab deep link).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe one-shot URL init
     if (requested) setHighlightScheduleId(requested);
   }, []);
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('storeId');
-    // Hydration-safe one-shot URL init (same contract as the tab deep link).
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe one-shot URL init
     if (requested) setStoreId(requested);
   }, []);
   useEffect(() => {
@@ -480,11 +469,6 @@ export default function HrReportsPage() {
   useEffect(() => {
     try {
       const loaded = loadColWidths(window.localStorage.getItem(COL_WIDTHS_STORAGE_KEY));
-      // Hydration-safe one-shot localStorage restore: stored widths are
-      // client-only state, so the SSR pass must render the defaults and the
-      // mount effect adopts the saved widths exactly once (a lazy initializer
-      // would mismatch).
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe one-shot restore
       setColWidths(loaded);
       colWidthsRef.current = loaded;
     } catch {
@@ -696,30 +680,19 @@ export default function HrReportsPage() {
     }
   }, [leaveYear, storeId]);
 
-  // v2.206.0: the five fetch-on-dep-change effects below carry a DOCUMENTED
-  // downrule each — the rule cannot see through the useCallback indirection
-  // to see that the "synchronous" setState is the loading flag at the top
-  // of the fetch body (the pattern React's own docs bless for effect-driven
-  // fetching; it must land on the same tick to show the spinner and to stop
-  // a double-fire race between the previous run's tail and the new run).
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-dep-change; sync busy flag is the documented pattern
     void load();
   }, [load]);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-dep-change; sync busy flag is the documented pattern
     void loadP10(p10Year);
   }, [loadP10, p10Year]);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-dep-change; sync busy flag is the documented pattern
     void loadErasure();
   }, [loadErasure]);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-dep-change; sync busy flag is the documented pattern
     void loadConsent();
   }, [loadConsent]);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-dep-change; sync busy flag is the documented pattern
     void loadRetention();
   }, [loadRetention]);
   // v2.36.0: resolve one report row into the governed correction surface.
@@ -769,7 +742,6 @@ export default function HrReportsPage() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-dep-change; sync busy flag is the documented pattern
     void loadLeaveUtil();
   }, [loadLeaveUtil]);
 
