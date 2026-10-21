@@ -1,7 +1,15 @@
 // MBUMAH HARDWARE POS - Exchange Rate API
 //
-// GET  /api/currency/rates - list all stored CurrencyRate rows
-// POST /api/currency/rates - upsert one or more rates (SUPER_ADMIN only)
+// GET    /api/currency/rates - list all stored CurrencyRate rows
+// POST   /api/currency/rates - upsert one or more rates (SUPER_ADMIN only)
+// DELETE /api/currency/rates - reset one pair to its built-in rate (SUPER_ADMIN only)
+//
+// DELETE (v2.211.0): the admin surface that writes rates also un-writes
+// them — deleting the (base, quote) row makes the pair fall back to the
+// static constant, which is exactly what "Reset to built-in" means. The
+// pair arrives as query params (?base=KES&quote=USD); a pair with no
+// stored row answers 404 honestly (nothing to reset — the pair already
+// reads its built-in rate) instead of pretending to have undone anything.
 //
 // Rates are stored as (base, quote) pairs in the `CurrencyRate` table
 // (the model landed in v2.210.0 — the route queried db.currencyRate since
@@ -179,6 +187,68 @@ async function postHandler(request: NextRequest): Promise<Response> {
 
 export const GET = withErrorBoundary(requireAuth(getHandler), 'CURRENCY_RATES');
 export const POST = requireAuth(postHandler, { roles: ['SUPER_ADMIN'] });
+
+// DELETE: reset one (base, quote) pair to its built-in rate (SUPER_ADMIN only).
+//
+// Query params: ?base=KES&quote=USD — the same pair enum the POST accepts.
+// Deleting the row removes the override; the GET falls back to the static
+// constant and the switcher's chip flips back to "built-in". A pair with
+// no stored row answers 404 (nothing to reset), never a silent 200.
+const deletePairSchema = z.object({
+  base: z.enum(['KES', 'USD', 'UGX', 'TZS']),
+  quote: z.enum(['KES', 'USD', 'UGX', 'TZS']),
+});
+
+async function deleteHandler(request: NextRequest): Promise<Response> {
+  const base = request.nextUrl.searchParams.get('base');
+  const quote = request.nextUrl.searchParams.get('quote');
+  const parsed = deletePairSchema.safeParse({ base, quote });
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Validation failed — base and quote query params are required (one of KES, USD, UGX, TZS).',
+        details: parsed.error.flatten(),
+      },
+      { status: 422 },
+    );
+  }
+
+  return runWithoutTenant(async () => {
+    const existing = await db.currencyRate.findUnique({
+      where: { base_quote: { base: parsed.data.base, quote: parsed.data.quote } },
+      select: { base: true, quote: true, rate: true, source: true, updatedAt: true },
+    });
+    if (!existing) {
+      // The honest nothing: the pair already rides its built-in constant,
+      // so there is nothing to un-write. 404, not a pretend-success.
+      return NextResponse.json(
+        {
+          success: false,
+          error: `No stored rate for ${parsed.data.base}→${parsed.data.quote} — this pair already reads its built-in rate.`,
+        },
+        { status: 404 },
+      );
+    }
+    await db.currencyRate.delete({
+      where: { base_quote: { base: parsed.data.base, quote: parsed.data.quote } },
+    });
+    return NextResponse.json({
+      success: true,
+      data: {
+        deleted: {
+          base: existing.base,
+          quote: existing.quote,
+          rate: existing.rate.toString(),
+          source: existing.source,
+          updatedAt: existing.updatedAt.toISOString(),
+        },
+      },
+    });
+  });
+}
+
+export const DELETE = requireAuth(deleteHandler, { roles: ['SUPER_ADMIN'] });
 
 // Suppress unused-import warning for CURRENCY_BY_CODE (kept for future
 // admin endpoints that need full metadata lookups).

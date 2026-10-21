@@ -2,6 +2,27 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.211.0] The wire's writer finds its surface
+
+The loop-closing round. Since v2.210.0 the `/api/currency/rates` endpoint could PERSIST admin-set rates — but the only writer was curl. A SUPER_ADMIN with a browser had no way to set, inspect, or undo a rate. The admin desk's new **Exchange Rates** card completes the loop over the SAME wire the switcher reads (one GET, one truth).
+
+### Added — THE EXCHANGE RATES CARD (the writer surface)
+- **`src/components/admin/currency-rates-section.tsx`** on the Admin desk (after the configuration editor): a table of every tracked currency with the KES figure ("1 KES equals"), the inverse ("1 unit equals"), the rate's honest source chip (the SAME measured palette the switcher uses — emerald admin-set 5.09, blue API 6.26, muted built-in 5.95 on the card ground; dark 9.88/8.75/5.80, measured by `scripts/contrast-math-rates-card-v2211.mjs` BEFORE the literals were written), and the last-updated timestamp on hover. The KES pivot row takes no actions ("the pivot never moves").
+- **The one-writer voice**: `composeRatesProvenanceVoice` (in `src/lib/report-voices.ts`, the house's one-writer law) condenses the SAME entries the table renders into one spoken sentence — "4 currencies tracked — 2 static, 2 manual." Counts come only from the wire; zero and non-finite groups speak nothing; singular/plural is honest; an unwired card says nothing is tracked yet.
+- **Set rate**: per-row dialog that POSTs one (KES, quote) pair. The dialog speaks the pair DIRECTION the route stores (KES-per-quote-unit — the v2.210 E2E's "pair semantics"), shows the switcher's figure live (1 KES = the inverse), validates a positive finite number, and CLOSES on success while the toast speaks the outcome ("Rate saved — 1 TZS = 0.055 KES is now admin-set."). A confirm surface must never outlive its own click (the v2.209 lesson).
+- **Reset to built-in**: per-row destructive AlertDialog for rows whose source is not STATIC — DELETEs the stored override so the pair falls back to its built-in constant. The dialog closes by its own action; the toast speaks the reset.
+- **THE DELETE ENDPOINT** (`DELETE /api/currency/rates?base=&quote=`, SUPER_ADMIN-only): the same pair enum the POST accepts, validated by zod; a pair with no stored row answers the honest 404 ("No stored rate for KES→TZS — this pair already reads its built-in rate.") — never a pretend success; a missing/unknown pair answers 422 with a spoken error.
+
+### The door law, restated for the new surface
+- Mutations are SUPER_ADMIN-only SERVER-side (POST and DELETE both `requireAuth(..., { roles: ['SUPER_ADMIN'] })` — verified live: STORE_OWNER 403 on both, unauthenticated 401). The client renders the action column and buttons only for SUPER_ADMIN and SPEAKS the restriction where they would have been ("Exchange rate management is restricted to the system administrator.") for every other admin-role eye. Read-only surfaces stay for everyone.
+
+### Honest states
+- A failed wire is an error row with a retry — "the figures are unavailable, not zero"; the empty sentence belongs to a loaded-and-empty wire only. Custom pairs (base ≠ KES, which the switcher does not read) render muted with their honest scope spoken ("Custom pairs stored (the switcher reads KES pairs only):"). The footer states the accounting truth ("the accounting currency remains KES") and what resetting means.
+- `src/tests/currency-rates-card-v2211.test.ts` (31 tests) pins the whole law on the source of record: the DELETE contract (SUPER_ADMIN guard, query-param pair, the honest 404, the delete shape, `runWithoutTenant`), the door (role gate, spoken restriction, action column behind `canManageRates`), the dialog laws (closes on success, positive-number validation, the pair direction spoken, the preview computed from the same input the POST sends), the honest states, the measured chip literals, the admin-tab placement, and the composer's zero law + singular/plural + unwired sentence.
+
+### E2E-proven live (on the shipped tree, SUPER_ADMIN persona)
+- The card's voice composed from the live wire; Set rate walked end to end (TZS 0.055 saved → toast → chip flipped admin-set → the switcher's own row spoke "admin-set rate" with "1 KES = TSh 18"); Reset walked end to end (AlertDialog → confirm → chip flipped built-in → the Reset button disappeared → the voice recomposed); Retry All re-queued the 6 demo seeds ("6 item(s) have been re-queued for retry."); Purge Old spoke the honest zero ("0 item(s) older than 7 day(s) have been purged." — the seeds are fresh); console zero app errors.
+
 ## [2.210.0] The currency wire finds its model
 
 The round the phantom-model sweep was born — and caught a second founding bug of the same class v2.209.0 killed. The `/api/currency/rates` route has queried `db.currencyRate` since birth while the model existed in NO schema: the `as unknown as PrismaClient` cast in `src/lib/db.ts` hid the missing delegate from TypeScript, the GET's try/catch masked it behind the static list (every rate labeled STATIC forever), and POST was a guaranteed runtime 500. Two files (`currency-utils.ts`, the route header) even documented the model as the designed store — the contract was written, the table never was.

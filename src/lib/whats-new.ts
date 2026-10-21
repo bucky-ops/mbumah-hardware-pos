@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.211.0',
+    title: 'The wire\u2019s writer finds its surface',
+    bullets: [
+      'Exchange rates finally have an admin surface: the System desk\u2019s new Exchange Rates card lists every tracked currency with its figure and provenance \u2014 the same wire the switcher reads, now with buttons that press back.',
+      'Set a rate or reset it to built-in, right from the table: saving marks the rate admin-set and the switcher picks it up; resetting deletes the stored override so the pair honestly falls back to its built-in constant \u2014 and resetting a pair that was never overridden says so instead of pretending.',
+      'The door stays honest: rate changes remain a system-administrator power \u2014 every other admin-role eye still reads the full table, with the restriction spoken where the buttons would have been.',
+    ],
+  },
+  {
     version: '2.210.0',
     title: 'The currency wire finds its model',
     bullets: [

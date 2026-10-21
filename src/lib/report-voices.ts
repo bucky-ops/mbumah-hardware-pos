@@ -249,3 +249,32 @@ export function composeDlqCompositionVoice(
   const oldPart = oldestPendingFigure ? ` The oldest item has waited ${oldestPendingFigure}.` : '';
   return `In flight: ${inFlight} ${inFlight === 1 ? 'item' : 'items'} — ${opPart}.${svcPart}${oldPart}`;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * composeRatesProvenanceVoice (v2.211.0) — the exchange-rates card's
+ * one-writer aria. The card fetches /api/currency/rates and shows a table
+ * whose every row already names its source (STATIC | MANUAL | API); this
+ * composer condenses the SAME wire into one spoken sentence: how many
+ * currencies the card tracks, and how each provenance group breaks down.
+ * The counts come ONLY from the entries the caller passes (the wire's own
+ * currencies array) — never from SUPPORTED_CURRENCIES guesses; zero-count
+ * and non-finite groups speak nothing (the zero law); singular/plural is
+ * honest ("1 currency", "2 currencies"); an empty or unwired table says
+ * plainly that nothing is tracked yet.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+export function composeRatesProvenanceVoice(
+  entries: { source: string }[] | null | undefined,
+): string {
+  const rows = Array.isArray(entries) ? entries.filter((e) => e && typeof e.source === 'string') : [];
+  if (rows.length === 0) return 'No currencies tracked yet — the rates wire has not answered.';
+  const groups = new Map<string, number>();
+  for (const row of rows) {
+    groups.set(row.source, (groups.get(row.source) ?? 0) + 1);
+  }
+  const parts = [...groups.entries()]
+    .filter(([, n]) => Number.isFinite(n) && n > 0)
+    .map(([source, n]) => `${n} ${source.toLowerCase()}`);
+  const tracked = `${rows.length} ${rows.length === 1 ? 'currency' : 'currencies'}`;
+  return parts.length > 0 ? `${tracked} tracked — ${parts.join(', ')}.` : `${tracked} tracked.`;
+}
