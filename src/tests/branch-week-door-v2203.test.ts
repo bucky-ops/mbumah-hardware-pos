@@ -235,15 +235,15 @@ describe('v2.203.0 — the round\u2019s style: the forecast line clears the grap
 
 describe('v2.203.0 — the release surfaces', () => {
   it('the version rides at 2.203.0 in all three slots and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.203.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.203.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.203.0');
+    expect(pkg.version).toBe('2.204.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.204.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.204.0');
     expect(pkg.scripts['verify:v2-203-0']).toBe('node scripts/verify-v2-203-0.mjs');
   });
 
   it('the whats-new feed leads with the release (ORDER pattern)', () => {
-    expect(whatsNew).toContain("version: '2.203.0'");
-    expect(whatsNew.indexOf("version: '2.203.0'")).toBeLessThan(whatsNew.indexOf("version: '2.202.1'"));
+    expect(whatsNew).toContain("version: '2.204.0'");
+    expect(whatsNew.indexOf("version: '2.204.0'")).toBeLessThan(whatsNew.indexOf("version: '2.202.1'"));
   });
 
   it('the changelog keeps the round above its predecessor', () => {

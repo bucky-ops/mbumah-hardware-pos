@@ -179,7 +179,7 @@ describe('the modal contract - the week by branch', () => {
   });
 
   it('each row: spark + name + week total, the spark aria-hidden decoration', () => {
-    expect(kpiRow).toContain('<Sparkline data={b.spark} stroke="#64748b" width={72} height={20} />');
+    expect(kpiRow).toContain('<Sparkline data={b.spark} stroke="#64748b" spokenLabel={`${b.name}, seven-day gross revenue per day, KES`} width={72} height={20} />');
     expect(kpiRow).toContain('<span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>');
     expect(kpiRow).toContain('{kes(b.weekTotal)}</span>');
   });
@@ -187,7 +187,7 @@ describe('the modal contract - the week by branch', () => {
   it('the modal keeps its org-wide gross lead — the branches speak underneath, not instead', () => {
     // v2.185.0: the lead is GROSS (the reconciliation) — same position rule.
     expect(kpiRow.indexOf('Revenue trend (gross)')).toBeLessThan(kpiRow.indexOf('The week by branch'));
-    expect(kpiRow).toContain('<Sparkline data={k.revenue.spark} width={380} height={80} />');
+    expect(kpiRow).toContain('<Sparkline data={k.revenue.spark} spokenLabel="Gross revenue per day, KES" width={380} height={80} />');
   });
 });
 
@@ -222,9 +222,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots + the verify script (re-anchored for 2.181.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.203.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.203.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.203.0');
+    expect(pkg.version).toBe('2.204.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.204.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.204.0');
     expect(pkg.scripts['verify:v2-176-0']).toBe('node scripts/verify-v2-176-0.mjs');
   });
 });

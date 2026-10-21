@@ -243,7 +243,7 @@ describe('the component contract - the matrix speaks the week', () => {
   });
 
   it('the cell stacks the total over the muted spark + chip (the branches table\u2019s exact vocabulary, sized to the cell)', () => {
-    expect(matrix).toContain('<Sparkline data={entry.spark} stroke="#64748b" width={64} height={18} />');
+    expect(matrix).toContain('<Sparkline data={entry.spark} stroke="#64748b" spokenLabel="Seven-day revenue per day, KES" width={64} height={18} />');
     expect(matrix).toContain('<WeekDeltaChip current={entry.weekTotal} prior={entry.priorWeekTotal ?? 0} />');
     expect(matrix).toContain('text-[13px] font-semibold tabular-nums text-slate-800');
   });
@@ -267,7 +267,7 @@ describe('the component contract - the matrix speaks the week', () => {
     expect(matrix).toContain('const wsWords = wsTrend ? weekDeltaWords(wsTrend.weekTotal, wsTrend.priorWeekTotal ?? 0) : null;');
     expect(matrix).toContain('7-day revenue (gross)');
     expect(matrix).toContain('border-orange-100 bg-orange-50/60 p-3 dark:border-orange-900/40 dark:bg-orange-950/20');
-    expect(matrix).toContain('<Sparkline data={wsTrend.spark} stroke="#64748b" width={72} height={20} />');
+    expect(matrix).toContain('<Sparkline data={wsTrend.spark} stroke="#64748b" spokenLabel="Seven-day revenue per day, KES" width={72} height={20} />');
   });
 
   it('the lib is the ONE writer of the CSV bytes - the inline assembly is gone', () => {
@@ -325,9 +325,9 @@ describe('docs and release surfaces', () => {
   });
 
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.203.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.203.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.203.0');
+    expect(pkg.version).toBe('2.204.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.204.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.204.0');
     expect(pkg.scripts['verify:v2-179-0']).toBe('node scripts/verify-v2-179-0.mjs');
     expect(readRepo('scripts/verify-v2-179-0.mjs')).toContain('v2.179.0 verification');
   });
@@ -340,7 +340,7 @@ describe('docs and release surfaces', () => {
       'src/tests/branch-variance-v2177.test.ts',
       'src/tests/branches-csv-week-v2178.test.ts',
     ]) {
-      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.203.0');");
+      expect(readRepo(f)).toContain("expect(pkg.version).toBe('2.204.0');");
     }
   });
 

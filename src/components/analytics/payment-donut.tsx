@@ -14,6 +14,7 @@ import {
   PAYMENT_METHOD_LABELS,
   paymentMethodColor,
   paymentMethodLabel,
+  paymentMethodTextColor,
 } from '@/lib/analytics-utils';
 
 export interface PaymentMethodRow {
@@ -191,7 +192,7 @@ export function PaymentDonut({ data, loading, className }: PaymentDonutProps) {
                   </span>
                   <span
                     className="w-10 text-right tabular-nums text-[11px]"
-                    style={{ color: paymentMethodColor(r.method) }}
+                    style={{ color: paymentMethodTextColor(r.method) }}
                   >
                     {r.percentage.toFixed(1)}%
                   </span>
@@ -208,7 +209,7 @@ export function PaymentDonut({ data, loading, className }: PaymentDonutProps) {
                     <span
                       className="h-2.5 w-2.5 rounded-full shrink-0 border"
                       style={{
-                        borderColor: PAYMENT_METHOD_COLORS[r.method] || '#94a3b8',
+                        borderColor: PAYMENT_METHOD_COLORS[r.method] || '#64748b',
                       }}
                     />
                     <span className="font-medium flex-1">

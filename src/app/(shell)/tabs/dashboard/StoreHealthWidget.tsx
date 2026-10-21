@@ -39,20 +39,20 @@ function scoreColor(score: number): { text: string; bg: string; stroke: string }
     return {
       text: 'text-emerald-700 dark:text-emerald-400',
       bg: 'bg-emerald-500',
-      stroke: '#10b981',
+      stroke: '#059669',
     };
   }
   if (score >= 40) {
     return {
       text: 'text-amber-700 dark:text-amber-400',
       bg: 'bg-amber-500',
-      stroke: '#f59e0b',
+      stroke: '#d97706',
     };
   }
   return {
     text: 'text-rose-600 dark:text-rose-400',
     bg: 'bg-rose-500',
-    stroke: '#f43f5e',
+    stroke: '#e11d48',
   };
 }
 

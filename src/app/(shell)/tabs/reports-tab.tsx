@@ -226,8 +226,14 @@ function ConicPieChart({ segments }: {
 
   return (
     <div className="flex items-center gap-4">
+      {/* v2.204.0: the pie speaks its split — the legend beside it carries
+          the figures, and the picture now says the same truth in one line
+          (loudest first: the segments arrive in caller order, which the
+          inventory page sorts by value). */}
       <div
         className="w-32 h-32 rounded-full shrink-0 shadow-inner"
+        role="img"
+        aria-label={`Category share of inventory value, loudest first: ${segments.map((seg) => `${seg.name} ${((seg.value / total) * 100).toFixed(0)}% (${formatKES(seg.value)})`).join('; ')} — ${formatKES(total)} total`}
         style={{ background: `conic-gradient(${gradientStops.join(', ')})` }}
       />
       <div className="space-y-1.5 min-w-0 flex-1">
@@ -401,7 +407,11 @@ const TRENDS_RANGE_OPTIONS: { value: TrendsRange; label: string }[] = [
   { value: '90d', label: 'Last 90 days' },
 ];
 
-const TREND_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899'];
+// v2.204.0: the legend dots ride the -600 family on the white card ground —
+// the old -500 marks measured below the 3:1 graphics bar (emerald 2.54,
+// amber 2.15, cyan 2.43); red-500 3.76, violet-500 4.23 and pink-500 3.52
+// already cleared it and stay.
+const TREND_COLORS = ['#059669', '#d97706', '#ef4444', '#0891b2', '#8b5cf6', '#ec4899'];
 
 function TrendsTooltipContent({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }>; label?: string }) {
   if (!active || !payload || payload.length === 0) return null;
@@ -647,7 +657,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                         );
                       }}
                     />
-                    <Bar dataKey="growth" name="Growth %" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                    <Bar dataKey="growth" name="Growth %" fill="#059669" radius={[0, 4, 4, 0]} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -788,8 +798,8 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                 <AreaChart data={forecastChart} margin={{ top: 5, right: 16, left: -10, bottom: 5 }}>
                   <defs>
                     <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="#059669" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#059669" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/30" />
@@ -806,9 +816,8 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                       type="monotone"
                       dataKey="upper"
                       name="Upper bound"
-                      stroke="#86efac"
+                      stroke="#16a34a"
                       strokeDasharray="4 4"
-                      strokeOpacity={0.6}
                       fill="none"
                     />
                   )}
@@ -816,7 +825,7 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                     type="monotone"
                     dataKey="predicted"
                     name="Predicted revenue"
-                    stroke="#10b981"
+                    stroke="#059669"
                     strokeWidth={2.5}
                     fill="url(#forecastGrad)"
                   />
@@ -825,9 +834,8 @@ function TrendsPredictionsSection({ storeId }: { storeId: string }) {
                       type="monotone"
                       dataKey="lower"
                       name="Lower bound"
-                      stroke="#f59e0b"
+                      stroke="#d97706"
                       strokeDasharray="4 4"
-                      strokeOpacity={0.6}
                       fill="none"
                     />
                   )}
@@ -1071,9 +1079,11 @@ export default function ReportsTab() {
   const maxCategoryValue = Math.max(...categoryBreakdown.map((c) => c.totalValue), 1);
 
   const pieSegments = useMemo(() => {
+    // v2.204.0: the category pie's voices re-voice to the -600 family (the
+    // same ground as the TREND_COLORS legend dots above).
     const colors = [
-      '#3b82f6', '#22c55e', '#f97316', '#a855f7',
-      '#14b8a6', '#ec4899', '#eab308', '#06b6d4', '#84cc16', '#f43f5e',
+      '#3b82f6', '#16a34a', '#ea580c', '#a855f7',
+      '#0d9488', '#ec4899', '#a16207', '#0891b2', '#65a30d', '#f43f5e',
     ];
     return categoryBreakdown.map((cat, i) => ({
       name: cat.name,
@@ -1118,7 +1128,8 @@ export default function ReportsTab() {
     return categoryBreakdown.map(cat => ({
       label: cat.name,
       value: cat.totalValue,
-      color: ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#14b8a6', '#ec4899'][categoryBreakdown.indexOf(cat) % 6],
+      // v2.204.0: same -600 re-voice as the pie (bars on the white card).
+      color: ['#3b82f6', '#16a34a', '#ea580c', '#a855f7', '#0d9488', '#ec4899'][categoryBreakdown.indexOf(cat) % 6],
     }));
   }, [inventoryReport, categoryBreakdown]);
 
@@ -1127,7 +1138,8 @@ export default function ReportsTab() {
     return topProducts.slice(0, 8).map(p => ({
       label: p.productName,
       value: p.revenue,
-      color: ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#14b8a6', '#ec4899', '#eab308', '#06b6d4'][topProducts.indexOf(p) % 8],
+      // v2.204.0: the -600 re-voice (bars on the white card ground).
+      color: ['#16a34a', '#3b82f6', '#ea580c', '#a855f7', '#0d9488', '#ec4899', '#a16207', '#0891b2'][topProducts.indexOf(p) % 8],
     }));
   }, [topProducts]);
 
@@ -1912,9 +1924,12 @@ export default function ReportsTab() {
                         <div className="relative w-20 h-20">
                           <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
                             <circle cx="40" cy="40" r="35" fill="none" stroke="currentColor" className="text-muted/30" strokeWidth="6" />
+                            {/* v2.204.0: the stock-health gauge re-voices to the -600
+                                family (green-500 2.28 / yellow-500 1.92 sat below the
+                                3:1 graphics bar; red-500 3.76 stays). */}
                             <circle
                               cx="40" cy="40" r="35" fill="none"
-                              stroke={stockHealth >= 70 ? '#22c55e' : stockHealth >= 40 ? '#eab308' : '#ef4444'}
+                              stroke={stockHealth >= 70 ? '#16a34a' : stockHealth >= 40 ? '#a16207' : '#ef4444'}
                               strokeWidth="6"
                               strokeLinecap="round"
                               strokeDasharray={`${(stockHealth / 100) * 220} 220`}
@@ -2182,7 +2197,9 @@ export default function ReportsTab() {
                       <ConicPieChart segments={dailyHourlyData.map((d, i) => ({
                         name: d.label,
                         value: d.value,
-                        color: ['#3b82f6', '#22c55e', '#f97316', '#a855f7', '#14b8a6', '#ec4899', '#eab308', '#06b6d4', '#84cc16', '#f43f5e', '#8b5cf6'][i % 11],
+                        // v2.204.0: the -600 re-voice (same ground as the
+                        // category pie above).
+                        color: ['#3b82f6', '#16a34a', '#ea580c', '#a855f7', '#0d9488', '#ec4899', '#a16207', '#0891b2', '#65a30d', '#f43f5e', '#8b5cf6'][i % 11],
                       }))} />
                     )}
                   </CardContent>

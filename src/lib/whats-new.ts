@@ -80,6 +80,16 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.204.0',
+    title: 'The pictures learn to speak',
+    bullets: [
+      'Every chart now tells its numbers, not just shows them: sparklines read out all seven days, the payment donut says its split loudest-first, the debt bar names its buckets, and the branch map ranks every branch \u2014 quiet ones included.',
+      'A full contrast audit re-voiced every chart color that sat below the accessibility bar \u2014 the -500 greens, ambers, oranges and teals moved up a step so lines, bars and donut slices are visible to every eye.',
+      'Health scores split their two jobs: the arc and the number now each wear a color that passes their own bar (the old single color failed the number whenever the news was good).',
+      'Nothing new was queried \u2014 every spoken figure rides the data the page already had.',
+    ],
+  },
+  {
     version: '2.203.0',
     title: 'The week speaks',
     bullets: [

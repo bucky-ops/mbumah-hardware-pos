@@ -54,12 +54,15 @@ interface SecurityDashboardData {
 
 // Color mappings
 
+// v2.204.0: the chart fill voices re-voice to the -600/-700 family on the
+// white card ground — orange-500 2.80 / yellow-500 1.92 / gray-400 2.54 sat
+// below the 3:1 graphics bar; red-500 3.76, blue-500 3.68 stay.
 const SEVERITY_COLORS: Record<string, string> = {
   CRITICAL: '#ef4444',
-  ERROR: '#f97316',
-  WARN: '#eab308',
+  ERROR: '#ea580c',
+  WARN: '#a16207',
   INFO: '#3b82f6',
-  DEBUG: '#9ca3af',
+  DEBUG: '#6b7280',
 };
 
 const SEVERITY_BG: Record<string, string> = {
@@ -87,10 +90,10 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
-  RATE_LIMITED: '#f97316',
+  RATE_LIMITED: '#ea580c',
   BRUTE_FORCE: '#ef4444',
-  CSRF_FAILED: '#eab308',
-  INVALID_INPUT: '#9ca3af',
+  CSRF_FAILED: '#a16207',
+  INVALID_INPUT: '#6b7280',
   SUSPICIOUS_ACTIVITY: '#8b5cf6',
   ACCOUNT_LOCKED: '#dc2626',
   SESSION_HIJACK_ATTEMPT: '#b91c1c',
@@ -154,8 +157,11 @@ function SecurityScoreGauge({ score }: { score: number }) {
   const circumference = normalizedRadius * 2 * Math.PI;
   const strokeDashoffset = circumference - (score / 100) * circumference;
 
-  const color = score >= 80 ? '#22c55e' : score >= 50 ? '#eab308' : '#ef4444';
-  const colorClass = score >= 80 ? 'text-green-500' : score >= 50 ? 'text-yellow-500' : 'text-red-500';
+  // v2.204.0: the arc rides the -600 family (green-500 2.28 / yellow-500 1.92
+  // sat below the 3:1 graphics bar) while the score TEXT below the arc rides
+  // the -700 classes (green-500 text was 2.28:1 against the 4.5:1 text bar).
+  const color = score >= 80 ? '#16a34a' : score >= 50 ? '#a16207' : '#ef4444';
+  const colorClass = score >= 80 ? 'text-green-700' : score >= 50 ? 'text-yellow-700' : 'text-red-700';
   const label = score >= 80 ? 'Good' : score >= 50 ? 'Fair' : 'Poor';
 
   return (

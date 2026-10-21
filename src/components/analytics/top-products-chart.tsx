@@ -46,17 +46,22 @@ interface TopProductsChartProps {
 }
 
 // Stable per-category color palette (no indigo/blue).
+// v2.204.0: the bar-fill voices re-voice to the -600 family — these bars sit
+// on the white card ground and the -500 marks measured below the 3:1
+// non-text graphics bar (emerald 2.54, amber 2.15, teal 2.49, orange 2.80,
+// cyan 2.43, lime 1.98, yellow 1.92). Violet 4.23 and pink 3.52 already
+// cleared it and stay.
 const CATEGORY_PALETTE = [
-  '#10b981', // emerald
-  '#f59e0b', // amber
-  '#8b5cf6', // violet
-  '#ec4899', // pink
-  '#14b8a6', // teal
-  '#f97316', // orange
-  '#06b6d4', // cyan
-  '#84cc16', // lime
-  '#eab308', // yellow
-  '#a855f7', // purple
+  '#059669', // emerald-600
+  '#d97706', // amber-600
+  '#8b5cf6', // violet-500 (passes)
+  '#ec4899', // pink-500 (passes)
+  '#0d9488', // teal-600
+  '#ea580c', // orange-600
+  '#0891b2', // cyan-600
+  '#65a30d', // lime-600
+  '#a16207', // yellow-700
+  '#a855f7', // purple-500 (passes)
 ];
 
 function trendBadge(trend: TopProductRow['trend']) {

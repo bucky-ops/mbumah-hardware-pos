@@ -69,7 +69,7 @@ function buildCardConfigs(
       sparkline: sparklines.todayRevenue || [],
       format: 'currency',
       gradient: 'from-emerald-500/10 via-emerald-500/5 to-transparent',
-      accent: '#10b981',
+      accent: '#059669',
     },
     {
       key: 'transactions',
@@ -80,7 +80,7 @@ function buildCardConfigs(
       sparkline: sparklines.transactions || [],
       format: 'number',
       gradient: 'from-sky-500/10 via-sky-500/5 to-transparent',
-      accent: '#0ea5e9',
+      accent: '#0284c7',
     },
     {
       key: 'averageOrderValue',
@@ -113,7 +113,7 @@ function buildCardConfigs(
       sparkline: sparklines.lowStockCount || [],
       format: 'number',
       gradient: 'from-amber-500/10 via-amber-500/5 to-transparent',
-      accent: '#f59e0b',
+      accent: '#d97706',
       invertTrend: true,
     },
     {
@@ -125,7 +125,7 @@ function buildCardConfigs(
       sparkline: sparklines.pendingOrders || [],
       format: 'number',
       gradient: 'from-orange-500/10 via-orange-500/5 to-transparent',
-      accent: '#f97316',
+      accent: '#ea580c',
       invertTrend: true,
     },
   ];

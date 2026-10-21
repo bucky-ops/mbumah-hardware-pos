@@ -465,7 +465,7 @@ export function StoreMatrix({
                         {wsWords ? <span className="sr-only">{wsWords}</span> : null}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Sparkline data={wsTrend.spark} stroke="#64748b" width={72} height={20} />
+                        <Sparkline data={wsTrend.spark} stroke="#64748b" spokenLabel="Seven-day revenue per day, KES" width={72} height={20} />
                         <WeekDeltaChip current={wsTrend.weekTotal} prior={wsTrend.priorWeekTotal ?? 0} />
                       </div>
                     </div>
@@ -533,7 +533,7 @@ export function StoreMatrix({
       >
         <span className="text-[13px] font-semibold tabular-nums text-slate-800">{kes(entry.weekTotal)}</span>
         <div className="flex items-center gap-1.5">
-          <Sparkline data={entry.spark} stroke="#64748b" width={64} height={18} />
+          <Sparkline data={entry.spark} stroke="#64748b" spokenLabel="Seven-day revenue per day, KES" width={64} height={18} />
           <WeekDeltaChip current={entry.weekTotal} prior={entry.priorWeekTotal ?? 0} />
         </div>
         <span className="sr-only">7-day revenue {kes(entry.weekTotal)}</span>

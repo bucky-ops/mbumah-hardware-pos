@@ -73,13 +73,18 @@ function num(v: number | string | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** The tender label map — same voices the page's payment-methods card speaks. */
+/** The tender label map — same voices the page's payment-methods card speaks.
+ *  v2.204.0: synced to the page card's re-voiced -600 family (CASH emerald-600
+ *  3.77:1, MPESA amber-600 3.19:1, GIFT_CARD violet-600 5.70:1 on the white
+ *  card ground — the old -500/-400 voices sat below the 3:1 graphics bar).
+ *  The color fields are carried for family consistency with the page card;
+ *  this file speaks the tender mix through label + class voices. */
 const PAYMENT_META: Record<string, { label: string; color: string }> = {
-  CASH: { label: 'Cash', color: '#10b981' },
-  MPESA: { label: 'M-Pesa', color: '#f59e0b' },
+  CASH: { label: 'Cash', color: '#059669' },
+  MPESA: { label: 'M-Pesa', color: '#d97706' },
   DEBT: { label: 'Debt', color: '#f43f5e' },
   SPLIT: { label: 'Split', color: '#64748b' },
-  GIFT_CARD: { label: 'Gift card', color: '#94a3b8' },
+  GIFT_CARD: { label: 'Gift card', color: '#7c3aed' },
 };
 
 /** "CASH" → "Cash", unknown → the raw code (never blank). */

@@ -123,11 +123,15 @@ function shareLabel(share: number | null, of: string): string {
 
 // ── The debt book ────────────────────────────────────────────────────────────
 
-/** The aging buckets' voices — the card's own four colors, reused verbatim. */
+/** The aging buckets' voices — the card's own four colors, reused verbatim.
+ *  v2.204.0: the modal rides the page card's re-voiced -600 family (the
+ *  modal's bars and dots sit on the same white card ground; emerald-500
+ *  measured 2.54 and orange-500 2.80, both under the 3:1 graphics bar).
+ *  The dot classes move with their hexes so the dot never out-lies the bar. */
 const DEBT_BUCKETS: Array<{ key: 'current' | 'd30' | 'd60' | 'd90plus'; label: string; color: string; dot: string }> = [
-  { key: 'current', label: 'Current', color: '#10b981', dot: 'bg-emerald-500' },
+  { key: 'current', label: 'Current', color: '#059669', dot: 'bg-emerald-600' },
   { key: 'd30', label: '1-30 days', color: '#64748b', dot: 'bg-slate-500' },
-  { key: 'd60', label: '31-60 days', color: '#f97316', dot: 'bg-orange-500' },
+  { key: 'd60', label: '31-60 days', color: '#ea580c', dot: 'bg-orange-600' },
   { key: 'd90plus', label: '90+ days', color: '#ef4444', dot: 'bg-red-500' },
 ];
 

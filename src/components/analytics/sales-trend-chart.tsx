@@ -204,8 +204,8 @@ export function SalesTrendChart({
                 <AreaChart data={chartData} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="#059669" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.08} vertical={false} />
@@ -229,13 +229,13 @@ export function SalesTrendChart({
                   />
                   <RechartsTooltip
                     content={<ChartTooltip />}
-                    cursor={{ stroke: '#10b981', strokeOpacity: hovered ? 0.4 : 0.2, strokeWidth: 1 }}
+                    cursor={{ stroke: '#059669', strokeOpacity: hovered ? 0.4 : 0.2, strokeWidth: 1 }}
                   />
                   <Area
                     type="monotone"
                     dataKey="revenue"
                     name="Revenue"
-                    stroke="#10b981"
+                    stroke="#059669"
                     strokeWidth={2.5}
                     fill="url(#salesGrad)"
                     isAnimationActive
@@ -245,7 +245,7 @@ export function SalesTrendChart({
                     type="monotone"
                     dataKey="previous"
                     name="Prev. period"
-                    stroke="#94a3b8"
+                    stroke="#64748b"
                     strokeWidth={1.5}
                     strokeDasharray="5 4"
                     dot={false}
