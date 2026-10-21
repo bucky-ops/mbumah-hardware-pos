@@ -84,7 +84,8 @@ describe('v2.201.0 — the wire purity: the doors compose, never fork', () => {
   it('the doors compose via structural subsets, not forked payload types', () => {
     expect(doors).toContain('export interface BranchDebtWire');
     expect(doors).toContain('export interface BranchMoversWire');
-    expect(tab).toContain("import { DebtBookModal, MoversModal } from '@/components/dashboard/branch-doors';");
+    // v2.203.0 re-anchor: the week door rides in the same import
+    expect(tab).toContain("import { DebtBookModal, MoversModal, WeekLedgerModal } from '@/components/dashboard/branch-doors';");
     // the tab declares NO forked crisis/product type: the wire is the doors'
     // structural contract, the tab's data flows in as-is
     expect(tab).not.toContain('interface BranchDebtWire');
@@ -298,8 +299,9 @@ describe('v2.201.0 — the contrast sweep: the -600 family closed on the branch'
 describe('v2.201.0 — the dark-panel law and the carried nit', () => {
   it('both new panels paint their dark half from birth', () => {
     expect(doors).toContain('dark:border-slate-700 dark:bg-slate-900');
-    // the two doors share one chrome constant (the one-writer panel)
-    expect(doors.match(/className=\{PANEL_CLS\}/g)?.length).toBe(2);
+    // the doors share one chrome constant (the one-writer panel)
+    // v2.203.0 re-anchor: the week door joins the same shared chrome
+    expect(doors.match(/className=\{PANEL_CLS\}/g)?.length).toBe(3);
   });
 
   it('the v2.200.0 pluralization nit is fixed at source', () => {
@@ -310,18 +312,18 @@ describe('v2.201.0 — the dark-panel law and the carried nit', () => {
 
 describe('v2.201.0 — docs and release surfaces', () => {
   it('package.json rides at 2.201.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.202.1');
-    expect(pkg.mbumah.releaseVersion).toBe('2.202.1');
-    expect(pkg.mbumah.baseVersion).toBe('2.202.1');
+    expect(pkg.version).toBe('2.203.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.203.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.203.0');
     expect(pkg.scripts['verify:v2-201-0']).toBe('node scripts/verify-v2-201-0.mjs');
     expect(pkg.scripts['verify:v2-200-0']).toBe('node scripts/verify-v2-200-0.mjs');
   });
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(93);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(94);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(93);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(94);");
   });
 
   it('the whats-new feed heads the release', () => {

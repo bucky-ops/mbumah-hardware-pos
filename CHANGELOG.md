@@ -2,6 +2,23 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.203.0] The week speaks
+
+The door arc's final quiet surface on the branch dashboard that carries unspoken wire figures: the Sales trend · 7 days card drew the week's shape as a picture — an `role="img"` SVG whose generic aria-label named the chart but whose seven per-day revenues were spoken NOWHERE as text — while `revenueTrend7d` carried every figure the week could speak: `days[]` (date, label, revenue, isToday), `forecast`, `forecastMethod`, `todayIsOutlier`. This release makes the card the branch page's EMERALD door and opens **the branch's week** — zero new queries. (Recorded honestly: PaymentMethodsCard stays deliberately door-less — its every figure — labels, counts, shares, amounts, the total — is already spoken on its face, and a door would duplicate the day ledger's tender-mix voice.)
+
+### Added
+- **The branch's week** (`src/components/dashboard/branch-doors.tsx`): `WeekLedgerModal` + the `BranchWeekWire` structural subset — the headline speaking the named week's total and day count (`branch-week-total`/`branch-week-meta`), the loudest day in words (`branch-week-loudest`), the seven named days IN CALENDAR ORDER (a week is a timeline, not a ranking — the rows speak in the order the days happened; the loudest earns a line instead of a reorder) each with its revenue and honest `% of the week` (`branch-week-row`/`branch-week-share`), the today chip on the wire's own `isToday` flag (`branch-week-today-chip`), the **zero days speaking "no sales"** instead of a percentage of nothing (`branch-week-zero`), the forecast block with the wire's method verbatim and today's honest progress — "Today so far Ksh X · NN% of the forecast" only when both figures are real (`branch-week-forecast`/`branch-week-delta`), the wire's own outlier voice (`branch-week-outlier`), the empty step-aside for a week with no named days yet, and the honest window note (`branch-week-window`). The dark half from birth; no anchors; null rows filtered by predicate; the zero-total rule (a share of a zero week is never spoken).
+- **The card face joins the door arc** (`dashboard-tab.tsx`): the Sales trend card wears the emerald door vocabulary — `branch-week-card` as a role=button with the "- open details" aria, keyboard open, the emerald edge bar + live dot lit only when the week has data, the family focus ring — and its description now says what it opens.
+- **Today's progress on the face** (`branch-week-progress`): an emerald "Today so far" row against the forecast with a capped bar (the TEXT speaks the real percentage even past 100; the BAR caps at full — the day is not over, so the voice is a progress read, never an UP/DOWN verdict).
+
+### Fixed
+- **THE ROUND'S STYLE — a real graphics-contrast catch, measured before ship**: the trend chart's FORECAST DASHED LINE rode amber-500 on white — **2.15:1, below the 3:1 non-text graphics bar** (the legend text carried the figure, but the line is the graphic that carries the forecast's position). The line and the legend swatch re-voice to **amber-600 (3.19:1)** and the ghost value is pinned BELOW the bar in REVERSE (`scripts/probe-week-doors-v2203.mjs` 16/16 pre-derivation; `scripts/contrast-math-week-doors-v2203.mjs` **18/18**). Both label rows grew from 9px to 10px for readability — the trend card's day labels (today's label became a real chip: emerald-50/emerald-700 ring-emerald-200, dark variants measured) and the hourly chart's hour labels — and the forecast figure rides tabular-nums. The tab's remaining 9px voices (axis ticks, badges, the donut's one-word caption) are pre-existing chip/numeric contexts, recorded and left.
+
+### Tests
+- NEW `src/tests/branch-week-door-v2203.test.ts`: the wire purity (structural subset + compile-time assignability guard against field drift, the v2.202.1 lesson); the calendar-order law (no reorder); the honest shares + zero-total rule; the zero-day "no sales" voice; the loudest line; the forecast block (method verbatim, the delta only when both figures are real); the outlier voice; the empty step-aside; the window note; the no-anchors law; the door face pins (testId, aria, edge bar, live dot only with data, hook order); the amber-600 re-voice + the ghost pinned in reverse; the release surfaces.
+- Deliberate pin evolutions with reasoning: prior suites' pkg pins ride to 2.203.0 (the treadmill tax); head-pin counters re-anchored (93/94/95/126 → 94/95/96/127).
+- `verify:v2-203-0` wired — see `scripts/verify-v2-203-0.mjs`. FULL vitest, lint, build gates green before push.
+
 ## [2.202.1] The branch slice fixed
 
 ### Fixed

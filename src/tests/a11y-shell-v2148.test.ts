@@ -142,7 +142,13 @@ describe('the muted-on-white family clears the bar', () => {
   it('dashboard-tab no longer renders text-slate-400 on white', () => {
     // 25 sites measured 2.63:1 (axe flagged the chart and donut nodes;
     // the rest are the same failure waiting for a render).
-    expect(readRepo(DASH).match(/text-slate-400/g)?.length ?? 0).toBe(0);
+    // v2.203.0 re-anchor: the law is a LIGHT-MODE law — the week door's
+    // progress voices ride `dark:text-slate-400` (6.79:1 on slate-900,
+    // measured) and only render in the dark half, so the dark-scoped
+    // variant is stripped before the count. A bare text-slate-400 on
+    // white remains forbidden.
+    const tab = readRepo(DASH).replace(/dark:text-slate-400/g, '');
+    expect(tab.match(/text-slate-400/g)?.length ?? 0).toBe(0);
   });
 
   it('"All stock healthy" rides emerald-700 (5.5:1), not emerald-600', () => {
@@ -255,9 +261,9 @@ describe('the live re-audit follow-ups (found on the rebuilt build)', () => {
 describe('the release surfaces speak the version', () => {
   it('package.json, whats-new and the changelog lead with 2.154.0 (re-anchored per release)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.202.1');
-    expect(pkg.mbumah.releaseVersion).toBe('2.202.1');
-    expect(pkg.mbumah.baseVersion).toBe('2.202.1');
+    expect(pkg.version).toBe('2.203.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.203.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.203.0');
     const feed = readRepo('src/lib/whats-new.ts');
     expect(feed.indexOf("'2.189.0'")).toBeGreaterThan(-1);
     expect(feed.indexOf("'2.189.0'")).toBeLessThan(feed.indexOf("'2.153.0'"));
@@ -266,6 +272,6 @@ describe('the release surfaces speak the version', () => {
 
   it('the unread counter test is re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(93);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(94);");
   });
 });
