@@ -107,7 +107,11 @@ export const GET = requireAuth(async (request: NextRequest, _session) => {
     const metrics = await dlq.getMetrics({ storeId });
 
     return successResponse({
-      items,
+      // v2.209.0: the desk's table reads `createdAt` — the lib's canonical
+      // stamp is `enqueuedAt` (same instant, the enqueue moment). The alias
+      // keeps the client contract honest instead of rendering "NaNd ago"
+      // for every row.
+      items: items.map((item) => ({ ...item, createdAt: item.enqueuedAt })),
       total,
       limit,
       offset,

@@ -58,8 +58,15 @@ export const GET = requireAuth(async (_request, session) => {
       halfOpenBreakers.length > 0 ? 'warning' : 'ok';
 
     // 3. DLQ status
+    // v2.209.0: the old catch fell back to ALL-ZERO metrics + 'warning' —
+    // the desk rendered "0 pending, 0 retrying" while the DLQ wire was
+    // 500ing (the model didn't even exist in any schema). The zeros were a
+    // lie; the degraded verdict the desk showed was the mask. Now a failed
+    // DLQ wire reports status 'error' with an honest detail — no figures
+    // are invented to fill the gap.
     let dlqMetrics;
     let dlqStatus: 'ok' | 'warning' | 'error' = 'ok';
+    let dlqDetail: string | undefined;
 
     try {
       dlqMetrics = await dlq.getMetrics({});
@@ -67,7 +74,8 @@ export const GET = requireAuth(async (_request, session) => {
       if (dlqMetrics.dead > 10 || dlqMetrics.pending > 50) dlqStatus = 'error';
     } catch {
       dlqMetrics = { pending: 0, retrying: 0, completed: 0, dead: 0, cancelled: 0, totalEnqueued: 0 };
-      dlqStatus = 'warning';
+      dlqStatus = 'error';
+      dlqDetail = 'The DLQ wire failed to answer — counts are unavailable, not zero.';
     }
 
     // 4. Security events (last hour)
@@ -203,6 +211,7 @@ export const GET = requireAuth(async (_request, session) => {
 
       deadLetterQueue: {
         status: dlqStatus,
+        ...(dlqDetail ? { detail: dlqDetail } : {}),
         ...dlqMetrics,
       },
 

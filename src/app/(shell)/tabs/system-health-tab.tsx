@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuthStore } from '@/lib/stores';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -49,7 +50,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { composeScoreVoice } from '@/lib/report-voices';
+import { composeScoreVoice, composeDlqCompositionVoice } from '@/lib/report-voices';
 
 
 // Types
@@ -114,6 +115,7 @@ interface SystemStatus {
   };
   deadLetterQueue: {
     status: 'ok' | 'warning' | 'error';
+    detail?: string;
   } & DLQMetrics;
   security: {
     status: 'ok' | 'warning' | 'error';
@@ -155,6 +157,24 @@ function formatTimeAgo(dateStr: string | null): string {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
+/**
+ * v2.209.0: a DURATION figure for the composition voice — "the oldest item
+ * has waited 4m" — distinct from formatTimeAgo's point-in-time voice ("4m
+ * ago"). Waiting time reads as a span, not a timestamp.
+ */
+function formatWaitedAge(dateStr: string): string {
+  const diff = Math.max(0, Date.now() - new Date(dateStr).getTime());
+  if (diff < 60000) return 'under a minute';
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  if (hours < 24) return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+}
+
 function getBreakerIcon(name: string) {
   if (name.includes('twilio-sms') || name.includes('sms')) return MessageSquare;
   if (name.includes('twilio-whatsapp') || name.includes('whatsapp')) return Smartphone;
@@ -163,8 +183,14 @@ function getBreakerIcon(name: string) {
   return Globe;
 }
 
-// Status Badge Component
+// v2.209.0: the DLQ composition bar's measured palette — every stop is a
+// -600 family member that clears the 3:1 graphics bar on the white card
+// ground (blue-600 5.17, purple-600 5.38, teal-600 3.74, amber-600 3.19,
+// emerald-600 3.77, cyan-600 3.68). Segments cycle when the operation-type
+// zoo exceeds six; the legend's chips carry the same stop per name.
+const DLQ_BAR_PALETTE = ['#2563eb', '#9333ea', '#0d9488', '#d97706', '#059669', '#0891b2'];
 
+// Status Badge Component
 function StatusBadge({ status, size = 'sm' }: { status: string; size?: 'sm' | 'md' | 'lg' }) {
   const sizeClass = size === 'lg' ? 'text-sm px-3 py-1' : size === 'md' ? 'text-xs px-2.5 py-0.5' : 'text-[10px] px-2 py-0.5';
 
@@ -232,6 +258,13 @@ function PulseIndicator({ status }: { status: string }) {
 
 export default function SystemHealthTab() {
   const queryClient = useQueryClient();
+  // v2.209.0: the honest door law — every mutation route on this desk
+  // (/api/health/dlq POST, /api/health/circuit-breaker POST) is
+  // SUPER_ADMIN-only server-side. Rendering the buttons to anyone else
+  // made doors that 403 — a lie the desk must not tell. The read-only
+  // surfaces stay for every admin-role eye; the buttons speak their
+  // restriction where they would have been.
+  const canOperateQueue = useAuthStore((s) => s.user?.role) === 'SUPER_ADMIN';
   const [selectedBreaker, setSelectedBreaker] = useState<string | null>(null);
   const [dlqFilter, setDlqFilter] = useState<string>('all');
 
@@ -256,6 +289,8 @@ export default function SystemHealthTab() {
   const {
     data: dlqData,
     isLoading: dlqLoading,
+    isError: dlqError,
+    refetch: refetchDlq,
   } = useQuery({
     queryKey: ['dlq-items', dlqFilter],
     queryFn: async () => {
@@ -324,6 +359,20 @@ export default function SystemHealthTab() {
   // score itself, never from the system's overall status (a different
   // wire).
   const isoVerdict = (score: number) => (score >= 90 ? 'strong' : score >= 70 ? 'fair' : 'at risk');
+
+  // v2.209.0: the DLQ wire's composition — byOperationType / byTargetService
+  // count the work IN FLIGHT (pending + retrying; the wire's own groupBy
+  // scope — completed and cancelled are history, not composition).
+  // Non-finite and zero-count entries speak nothing (the zero law).
+  const dlqMetrics = dlqData?.metrics;
+  const dlqOpEntries = Object.entries(dlqMetrics?.byOperationType ?? {}).filter(
+    ([, n]) => Number.isFinite(n) && n > 0,
+  );
+  const dlqSvcEntries = Object.entries(dlqMetrics?.byTargetService ?? {}).filter(
+    ([, n]) => Number.isFinite(n) && n > 0,
+  );
+  const dlqInFlight = dlqOpEntries.reduce((sum, [, n]) => sum + (n as number), 0);
+  const dlqOldestFigure = dlqMetrics?.oldestPendingAt ? formatWaitedAge(dlqMetrics.oldestPendingAt) : null;
 
   // Render
 
@@ -407,7 +456,10 @@ export default function SystemHealthTab() {
               icon={AlertOctagon}
               value={`${status.deadLetterQueue.dead} dead`}
               status={status.deadLetterQueue.status}
-              detail={`${status.deadLetterQueue.pending} pending, ${status.deadLetterQueue.retrying} retrying`}
+              detail={
+                status.deadLetterQueue.detail ||
+                `${status.deadLetterQueue.pending} pending, ${status.deadLetterQueue.retrying} retrying`
+              }
             />
             <QuickStatCard
               title="Security"
@@ -607,6 +659,7 @@ export default function SystemHealthTab() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">Circuit Breakers</CardTitle>
+                    {canOperateQueue ? (
                     <ConfirmDialog
                       title="Reset All Circuit Breakers"
                       description="This will reset all circuit breakers to CLOSED state and clear their counters. This should only be done when you're certain the downstream services have recovered."
@@ -618,6 +671,9 @@ export default function SystemHealthTab() {
                         Reset All
                       </Button>
                     </ConfirmDialog>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Operations are restricted to the system administrator</span>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -632,7 +688,17 @@ export default function SystemHealthTab() {
                             breaker.state === 'HALF_OPEN' ? 'border-amber-200 dark:border-amber-900/50 bg-amber-50/30 dark:bg-amber-950/10' :
                             'border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/10'
                           }`}
-                          onClick={() => setSelectedBreaker(selectedBreaker === breaker.name ? null : breaker.name)}
+                          onClick={(e) => {
+                            // v2.209.0: clicks from the row's OWN interactive
+                            // children (the Reset / Force Open / Force Close
+                            // dialog triggers) must not bubble into the
+                            // expand toggle — the bubble unmounted the row's
+                            // expanded block (and its just-opened dialog)
+                            // before Radix could render it, so the admin
+                            // could never actually press them.
+                            if ((e.target as HTMLElement).closest('button, [role="dialog"], a')) return;
+                            setSelectedBreaker(selectedBreaker === breaker.name ? null : breaker.name);
+                          }}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -702,6 +768,8 @@ export default function SystemHealthTab() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 pt-2">
+                                {canOperateQueue ? (
+                                  <>
                                 <ConfirmDialog
                                   title={`Reset "${breaker.name}"`}
                                   description="Reset this circuit breaker to CLOSED state and clear counters."
@@ -732,6 +800,10 @@ export default function SystemHealthTab() {
                                     <Lock className="h-3 w-3" /> Force Close
                                   </Button>
                                 </ConfirmDialog>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Breaker operations are restricted to the system administrator</span>
+                                )}
                               </div>
                             </div>
                           )}
@@ -754,6 +826,81 @@ export default function SystemHealthTab() {
                 <DLQStatCard label="Cancelled" value={status.deadLetterQueue.cancelled} color="slate" icon={Minus} />
               </div>
 
+              {/* v2.209.0 — the in-flight composition: the wire's
+                  byOperationType / byTargetService / oldestPendingAt were
+                  fetched since Phase 8 and never rendered. The bar speaks the
+                  work IN FLIGHT (pending + retrying — the wire's own groupBy
+                  scope); completed and cancelled items are history, not
+                  composition, and the badge says so. */}
+              {dlqMetrics && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <CardTitle className="text-base">In-Flight Composition</CardTitle>
+                      <Badge variant="outline" className="text-xs font-medium">pending + retrying only</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {dlqInFlight > 0 ? (
+                      <>
+                        <div
+                          role="img"
+                          aria-label={composeDlqCompositionVoice(
+                            dlqMetrics.byOperationType,
+                            dlqMetrics.byTargetService,
+                            dlqOldestFigure,
+                          )}
+                          className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted/40"
+                        >
+                          {dlqOpEntries.map(([name, count], i) => (
+                            <div
+                              key={name}
+                              style={{
+                                backgroundColor: DLQ_BAR_PALETTE[i % DLQ_BAR_PALETTE.length],
+                                width: `${((count as number) / dlqInFlight) * 100}%`,
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                          {dlqOpEntries.map(([name, count], i) => (
+                            <span key={name} className="inline-flex items-center gap-1.5 text-xs">
+                              <span
+                                className="h-2 w-2 rounded-full shrink-0"
+                                style={{ backgroundColor: DLQ_BAR_PALETTE[i % DLQ_BAR_PALETTE.length] }}
+                              />
+                              <span className="font-medium">{name}</span>
+                              <span className="font-mono tabular-nums text-muted-foreground">{count as number}</span>
+                            </span>
+                          ))}
+                        </div>
+                        {dlqSvcEntries.length > 0 && (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                            {dlqSvcEntries.map(([name, count]) => (
+                              <span key={name} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Server className="h-3 w-3" />
+                                <span>{name}</span>
+                                <span className="font-mono tabular-nums">{count as number}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {dlqOldestFigure
+                            ? `The oldest item in flight has waited ${dlqOldestFigure}. `
+                            : ''}
+                          Counts cover pending + retrying items only — completed and cancelled are history, not composition.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nothing is waiting or retrying — every external call is accounted for.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
@@ -772,6 +919,8 @@ export default function SystemHealthTab() {
                           </Button>
                         ))}
                       </div>
+                      {canOperateQueue ? (
+                        <>
                       <ConfirmDialog
                         title="Retry All DLQ Items"
                         description="Re-queue all pending and dead items for retry. Only use when you're certain the downstream services have recovered."
@@ -792,11 +941,28 @@ export default function SystemHealthTab() {
                           <Trash2 className="h-3 w-3" /> Purge Old
                         </Button>
                       </ConfirmDialog>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Queue operations are restricted to the system administrator</span>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {dlqLoading ? (
+                  {dlqError ? (
+                    // v2.209.0: a failed wire is NOT the empty state — the old
+                    // fallthrough painted "All external service calls are
+                    // processing normally" over a 500. The honest state names
+                    // the failure and offers the retry.
+                    <div className="text-center py-8">
+                      <AlertTriangle className="h-10 w-10 mx-auto mb-2 text-amber-600" />
+                      <p className="text-sm font-medium">The DLQ wire failed to answer</p>
+                      <p className="text-xs text-muted-foreground">The queue’s figures are unavailable, not zero — check the server logs.</p>
+                      <Button variant="outline" size="sm" className="mt-3" onClick={() => refetchDlq()}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+                      </Button>
+                    </div>
+                  ) : dlqLoading ? (
                     <div className="space-y-2">
                       {[...Array(3)].map((_, i) => (
                         <div key={i} className="h-14 bg-muted rounded animate-pulse" />
@@ -830,6 +996,7 @@ export default function SystemHealthTab() {
                                 {formatTimeAgo(item.createdAt)}
                               </TableCell>
                               <TableCell>
+                                {canOperateQueue ? (
                                 <div className="flex items-center gap-1">
                                   {(item.status === 'DEAD' || item.status === 'PENDING') && (
                                     <TooltipProvider>
@@ -839,6 +1006,7 @@ export default function SystemHealthTab() {
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 w-7 p-0"
+                                            aria-label={`Retry ${item.operationType} item`}
                                             onClick={() => dlqAction.mutate({ action: 'retry', id: item.id })}
                                           >
                                             <RotateCcw className="h-3 w-3" />
@@ -856,6 +1024,7 @@ export default function SystemHealthTab() {
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                            aria-label={`Cancel ${item.operationType} item`}
                                             onClick={() => dlqAction.mutate({ action: 'cancel', id: item.id })}
                                           >
                                             <X className="h-3 w-3" />
@@ -866,6 +1035,9 @@ export default function SystemHealthTab() {
                                     </TooltipProvider>
                                   )}
                                 </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -1229,7 +1401,14 @@ function ConfirmDialog({
           <Button
             size="sm"
             variant="destructive"
-            onClick={onConfirm}
+            onClick={() => {
+              // v2.209.0: confirming closes the dialog — the action's
+              // outcome speaks through the toast, not through a dialog that
+              // outlives its own click. The loading guard still gates
+              // double-fires while the mutation is in flight.
+              onConfirm();
+              setOpen(false);
+            }}
             disabled={loading}
             className="gap-1.5"
           >
