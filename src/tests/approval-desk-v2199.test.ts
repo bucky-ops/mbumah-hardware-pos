@@ -314,9 +314,9 @@ describe('the contrast round - the three re-voices pinned at the source', () => 
 
 describe('the release surfaces', () => {
   it('package.json slots ride at 2.199.0', () => {
-    expect(pkg.version).toBe('2.199.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.199.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.199.0');
+    expect(pkg.version).toBe('2.200.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.200.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.200.0');
   });
 
   it('whats-new leads with the desk story', () => {
@@ -327,9 +327,9 @@ describe('the release surfaces', () => {
     expect(whatsNew).toContain('The pending tile opens the approval desk');
   });
 
-  it('the changelog leads with 2.199.0', () => {
-    const head = changelog.slice(0, 400);
-    expect(head).toContain('## [2.199.0] The pending tile opens the approval desk');
+  it('the changelog still tells the desk story (v2.200.0 heads the feed)', () => {
+    expect(changelog).toContain('## [2.199.0] The pending tile opens the approval desk');
+    expect(changelog.indexOf('## [2.199.0]')).toBeLessThan(changelog.indexOf('## [2.198.0]'));
   });
 
   it('the a11y doc records the round\u2019s numbers', () => {

@@ -432,3 +432,35 @@ twice beside it (the card's aria-label; the modal's three cells with
 shares) — deliberately not asserted (the lightest fill indigo-400
 measures 2.85:1 on the light track, the darkest indigo-600 2.28:1 on the
 dark track; the bar adds no figure the text does not already carry).
+
+## Fixed: the branch doors' small print, re-voiced before ship (v2.200.0)
+
+THE DISCOVERY (caught by the round's pre-derivation probe BEFORE the
+first commit of the new faces): the branch KPI row's three new doors
+(the day's ledger, the day's receipts, the basket ladder —
+`src/components/dashboard/kpi-doors.tsx`) drafted their 10px window
+notes and hour-axis labels as `text-slate-400` in light — **2.63:1** on
+the white panel, under the 4.5 bar their small text must meet — with
+`text-slate-500` in dark, **3.74:1** on the panels' own slate-900 (the
+same miss on the dark half; the draft pair failed BOTH modes). The
+shipped voice is **`text-slate-500 dark:text-slate-400`** — **4.77:1**
+light / **6.79:1** dark — and the draft pair is pinned below the bar in
+reverse in the round's script so the ghost cannot return silently.
+
+The new faces — `scripts/contrast-math-branch-doors-v2200.mjs`, **28/28
+checks pass** over the REAL chain (each door's panel paints bg-white
+light / dark:bg-slate-900 dark from birth — the branch row's THREE new
+mounts of the dark-panel law): light 4.73-17.84:1 (the method chips
+emerald-700 on emerald-50 5.09 and teal-700 on teal-50 5.17, the status
+chip emerald-700 on emerald-100 4.73 — the tight corner — and slate-600
+on slate-100 6.90, the peak/busiest accents emerald-700/teal-700 on
+white 5.37/5.39, the meta voice slate-500 4.77), dark 6.16-16.28:1 over
+slate-900 (chips on their -500/10 stacks 6.16-10.43, the accents
+emerald-300/teal-300 11.76/12.13, the meta voice slate-400 6.79). The
+cards' edge/dot hues pass the 3:1 graphics bar (emerald-600 3.67,
+teal-600 3.66, amber-600 3.19). The bars' pastel fills follow the
+v2.198.0 DOCUMENTED DECORATION law — the key figures are aria-labeled
+on the bar containers AND spoken twice beside (the day-ledger-peak
+line, the day-receipts-busiest line, every bucket's count + share) —
+deliberately not asserted: the light fills measure 1.86-2.10:1 by
+design; the dark fills would pass even as graphics (5.08-5.59:1).

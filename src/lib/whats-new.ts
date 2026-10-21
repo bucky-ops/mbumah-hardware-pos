@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.200.0',
+    title: 'The branch row speaks',
+    bullets: [
+      'Your branch dashboard’s three quiet tiles found their voices: Today’s Revenue, Transactions and Avg Transaction now open their own drill-downs — the same family vocabulary the console’s cards speak, in the branch row’s own emerald, teal and amber.',
+      'The day’s ledger shows where the money came from hour by hour with the peak hour called out, the full tender mix with each method’s honest share of the day, and the latest receipts.',
+      'The day’s receipts names every receipt the wire carries, newest first, with method, status, customer and cashier — and says so plainly when the day outruns the wire’s window.',
+      'The basket ladder sorts the day’s named receipts into four sizes so you can see what a typical basket really runs — and the average always shows its composition.',
+      'The small print got easier to read: the notes under the new modals were re-voiced to a deeper grey in both light and dark mode before they ever shipped.',
+    ],
+  },
+  {
     version: '2.199.0',
     title: 'The pending tile opens the approval desk',
     bullets: [
