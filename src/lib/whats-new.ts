@@ -80,6 +80,17 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.202.0',
+    title: 'The org\'s quiet row speaks',
+    bullets: [
+      'The organization console\'s six metric tiles found their voices: Revenue, Transactions, Low stock, Overdue rentals, Debt and Pending M-Pesa now open the branch slice for each — every branch\'s share of the org total, loudest first, the quiet branches saying their zero.',
+      'The six doors wear the same faces the main console\'s cards speak — orange revenue, blue transactions, amber stock, rose rentals, red debt, indigo pending — measured for readability in both light and dark before they ever shipped.',
+      'The debt rows carry each branch\'s bill count and the revenue rows each branch\'s transaction count — the figures the summary already carried, now spoken.',
+      'A new guard rails the words the app speaks: a lint now blocks any double currency voice (the "KES Ksh" class the last patch fixed) from ever merging again.',
+      'The branches table\'s overdue figure joined the family\'s deeper red for consistency.',
+    ],
+  },
+  {
     version: '2.201.1',
     title: 'A cleaner debt book voice',
     bullets: [

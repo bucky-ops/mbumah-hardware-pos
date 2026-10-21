@@ -323,9 +323,9 @@ describe('the a11y surface - the REAL-chain math for the watchlist families', ()
 
 describe('the release surfaces', () => {
   it('package.json rides at 2.198.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.201.1');
-    expect(pkg.mbumah.releaseVersion).toBe('2.201.1');
-    expect(pkg.mbumah.baseVersion).toBe('2.201.1');
+    expect(pkg.version).toBe('2.202.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.202.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.202.0');
     expect(pkg.scripts['verify:v2-197-0']).toBeTruthy();
     // the prior surfaces stay wired
     expect(pkg.scripts['verify:v2-196-0']).toBeTruthy();

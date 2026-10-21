@@ -514,3 +514,24 @@ REVERSE so the ghosts cannot return silently. The aging bar's segments
 figures are aria-labeled on the bar containers AND spoken twice beside
 (the bucket cells' dot + label + amount + share; the warning banner; the
 high-risk line) — deliberately not asserted.
+
+
+## The org desk's six-hue vocabulary, measured before ship (v2.202.0)
+
+THE PROBE (`scripts/probe-desk-doors-v2202.mjs`, **36/36**): the org
+console's six new doors wear the /console KPI row's own face inventory —
+orange revenue, blue transactions, amber stock, rose rentals, red debt,
+indigo pending — and every voice was measured BEFORE anything shipped:
+the `-700` accents **5.05-8.07:1** on the white panel, the `-50` chip
+grounds **4.87-7.22:1**, the `-300` dark accents **8.88-12.34:1** on
+slate-900, the `-500/10` dark chip stacks **8.05-10.63:1**, and the edge
+bars **3.19-6.44:1** as graphics over the white card.
+
+RECORDED HONESTLY as ALIGNMENT, not violation: the branches table's
+overdue cell rode `text-red-600` on bg-card — **4.76:1** on the installed
+palette, a PASS — and re-voiced to `red-700` (**6.42:1**) as the Task-188
+family alignment plus margin against palette drift. The live dots are
+aria-hidden decoration per the v2.198.0 law (the figure each hints at is
+the card's own value text). The committed script —
+`scripts/contrast-math-desk-doors-v2202.mjs`, **42/42** — pins the whole
+vocabulary so it cannot drift silently.

@@ -12,6 +12,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+// v2.202.0: the org desk's doors — one parametrized branch-slice modal + the
+// metric registry (the /console KPI row's own face inventory).
+import { BranchSliceModal, ORG_DESK_METRICS, deskDoorVoice, type OrgDeskMetricId, type OrgDeskWire } from '@/components/org/desk-doors';
 import {
   ArrowDown,
   ArrowDownRight,
@@ -550,6 +553,14 @@ function StatCard({
   href,
   title,
   footer,
+  // v2.202.0: the door vocabulary — when onDoor is set the tile becomes the
+  // row's button (the family edge bar + live dot + hot ring + the open-details
+  // voice), composing its slice from the summary the viewer already receives.
+  onDoor,
+  doorTestId,
+  doorEdgeClass,
+  doorDotClass,
+  doorHot,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -562,6 +573,11 @@ function StatCard({
   // v2.173.0: optional trend strip (TrendFooter) rendered under the value.
   // Only the Revenue and Transactions cards pass one; the rest stay plain.
   footer?: React.ReactNode;
+  onDoor?: () => void;
+  doorTestId?: string;
+  doorEdgeClass?: string;
+  doorDotClass?: string;
+  doorHot?: boolean;
 }) {
   const body = (
     <>
@@ -576,6 +592,26 @@ function StatCard({
       {footer}
     </>
   );
+  if (onDoor) {
+    return (
+      <div
+        data-testid={doorTestId}
+        role="button"
+        tabIndex={0}
+        aria-label={`${label} - open details`}
+        onClick={onDoor}
+        onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDoor(); } }}
+        className={`group relative block cursor-pointer overflow-hidden rounded-lg border bg-card p-4 outline-none transition-all hover:border-primary/40 hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${doorHot ? 'ring-1 ring-slate-300 dark:ring-slate-600' : ''}`}
+      >
+        {doorEdgeClass ? <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${doorEdgeClass}`} /> : null}
+        {doorHot && doorDotClass ? <span aria-hidden="true" className={`absolute right-3 top-3 h-2 w-2 rounded-full anim-pulse-dot ${doorDotClass}`} /> : null}
+        {body}
+        <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          Open details
+        </span>
+      </div>
+    );
+  }
   if (href) {
     return (
       <Link
@@ -612,6 +648,20 @@ export function OrgConsole() {
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  // v2.202.0: the six tiles' door state — declared with the component's other
+  // states (the hook-order law), before any early return.
+  const [deskDoor, setDeskDoor] = useState<OrgDeskMetricId | null>(null);
+  // The door voice per metric: the family edge bar + live dot, the hot ring
+  // lit only when the metric's org total is nonzero (the family's live voice;
+  // a quiet figure stays quiet).
+  const deskDoorProps = (id: OrgDeskMetricId) => {
+    const voice = deskDoorVoice(id);
+    return {
+      doorEdgeClass: voice.edge,
+      doorDotClass: voice.dot,
+      doorHot: summary ? ORG_DESK_METRICS[id].total(summary) > 0 : false,
+    };
+  };
   // v2.18.4 expert diagnostics (per-row Expert affordance in the Branches table).
   const [expertStore, setExpertStore] = useState<OrgSummaryStore | null>(null);
   const [expertDiagnostic, setExpertDiagnostic] = useState<BranchDiagnostic | null>(null);
@@ -1434,6 +1484,9 @@ export function OrgConsole() {
               icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
               label="Revenue today"
               value={formatKES(summary.totals.revenue)}
+              onDoor={() => setDeskDoor('revenue')}
+              doorTestId="org-desk-card-revenue"
+              {...deskDoorProps('revenue')}
               footer={
                 summary.trend ? (
                   <TrendFooter
@@ -1452,6 +1505,9 @@ export function OrgConsole() {
               icon={<ReceiptText className="h-4 w-4" aria-hidden="true" />}
               label="Transactions today"
               value={String(summary.totals.transactions)}
+              onDoor={() => setDeskDoor('transactions')}
+              doorTestId="org-desk-card-transactions"
+              {...deskDoorProps('transactions')}
               footer={
                 summary.trend ? (
                   <TrendFooter
@@ -1467,11 +1523,19 @@ export function OrgConsole() {
                 ) : undefined
               }
             />
-            <StatCard icon={<PackageOpen className="h-4 w-4" aria-hidden="true" />} label="Low stock items" value={String(summary.totals.lowStock)} tone={summary.totals.lowStock > 0 ? 'warn' : undefined} />
-            <StatCard icon={<Clock className="h-4 w-4" aria-hidden="true" />} label="Overdue rentals" value={String(summary.totals.overdueRentals)} tone={summary.totals.overdueRentals > 0 ? 'warn' : undefined} />
-            <StatCard icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />} label="Debt outstanding" value={formatKES(summary.totals.debtOutstanding)} />
-            <StatCard icon={<Clock className="h-4 w-4" aria-hidden="true" />} label="Pending M-Pesa" value={String(summary.totals.pendingMpesa)} />
+            <StatCard icon={<PackageOpen className="h-4 w-4" aria-hidden="true" />} label="Low stock items" value={String(summary.totals.lowStock)} tone={summary.totals.lowStock > 0 ? 'warn' : undefined} onDoor={() => setDeskDoor('lowStock')} doorTestId="org-desk-card-lowStock" {...deskDoorProps('lowStock')} />
+            <StatCard icon={<Clock className="h-4 w-4" aria-hidden="true" />} label="Overdue rentals" value={String(summary.totals.overdueRentals)} tone={summary.totals.overdueRentals > 0 ? 'warn' : undefined} onDoor={() => setDeskDoor('overdueRentals')} doorTestId="org-desk-card-overdueRentals" {...deskDoorProps('overdueRentals')} />
+            <StatCard icon={<CircleDollarSign className="h-4 w-4" aria-hidden="true" />} label="Debt outstanding" value={formatKES(summary.totals.debtOutstanding)} onDoor={() => setDeskDoor('debt')} doorTestId="org-desk-card-debt" {...deskDoorProps('debt')} />
+            <StatCard icon={<Clock className="h-4 w-4" aria-hidden="true" />} label="Pending M-Pesa" value={String(summary.totals.pendingMpesa)} onDoor={() => setDeskDoor('pendingMpesa')} doorTestId="org-desk-card-pendingMpesa" {...deskDoorProps('pendingMpesa')} />
           </div>
+          {/* v2.202.0: the six doors' one modal — the branch slice for whichever
+              tile opened, composed from the summary the viewer already has. */}
+          <BranchSliceModal
+            metric={ORG_DESK_METRICS[deskDoor ?? 'revenue']}
+            wire={summary as OrgDeskWire}
+            open={deskDoor != null}
+            onClose={() => setDeskDoor(null)}
+          />
         </section>
 
         {/* EMS v2.20.0: HR tiles (spec Phase 4.8) — rendered only when the
@@ -2123,7 +2187,7 @@ export function OrgConsole() {
                       <td className={`px-4 py-3 text-right tabular-nums ${store.lowStockCount > 0 ? 'text-amber-700 font-medium dark:text-amber-400' : ''}`}>{store.lowStockCount}</td>
                       )}
                       {branchVisible.overdue !== false && (
-                      <td className={`px-4 py-3 text-right tabular-nums ${store.overdueRentals > 0 ? 'text-red-600 font-medium' : ''}`}>{store.overdueRentals}</td>
+                      <td className={`px-4 py-3 text-right tabular-nums ${store.overdueRentals > 0 ? 'text-red-700 font-medium' : ''}`}>{store.overdueRentals}</td>
                       )}
                       {branchVisible.debt !== false && (
                       <td className="px-4 py-3 text-right tabular-nums">{formatKES(store.debtOutstanding)}</td>
