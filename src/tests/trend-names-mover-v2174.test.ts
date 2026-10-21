@@ -232,8 +232,8 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots (re-anchored for 2.181.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.209.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.209.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.209.0');
+    expect(pkg.version).toBe('2.210.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.210.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.210.0');
   });
 });

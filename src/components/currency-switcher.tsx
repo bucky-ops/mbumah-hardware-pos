@@ -6,7 +6,14 @@
 // between KES, USD, UGX, and TZS for cross-border East African trade.
 //
 // • Trigger button shows the active currency's flag + code.
-// • Each menu item shows flag, code, name, and the static KES exchange rate.
+// • Each menu item shows flag, code, name, and the KES exchange rate.
+// • Since v2.210.0 the rows carry their rate's HONEST SOURCE: the first
+//   open fetches /api/currency/rates (the wire the CurrencyRate model
+//   backs) and overlays any admin-managed (MANUAL) or API-fetched (API)
+//   rows on the static list; each row names its source with a measured
+//   chip (emerald admin-set / blue API / muted built-in). If the wire is
+//   unreachable the rows render exactly as before — no chip, no invented
+//   provenance — and the footer's "indicative" sentence stays the truth.
 // • Selecting an item calls `switchCurrency()` from `useCurrency()`, which
 //   updates the persisted `activeCurrency` in `useAppStore` - every
 //   component that calls `useCurrency().format()` re-renders automatically.
@@ -14,6 +21,7 @@
 // This is a DISPLAY-ONLY conversion. The canonical accounting currency
 // remains KES; only the rendered strings change.
 
+import { useRef, useState } from 'react';
 import { Check, ChevronDown, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +50,30 @@ export interface CurrencySwitcherProps {
   onChange?: (currency: CurrencyCode) => void;
 }
 
+/** What one /api/currency/rates entry teaches this component. */
+interface RateWireEntry {
+  code: string;
+  /** How many units of this currency one KES equals (already rounded). */
+  kesToRate: number;
+  /** STATIC | MANUAL | API — the wire's own provenance. */
+  source: string;
+  updatedAt: string | null;
+}
+
+/** Per-row provenance + the DB-backed KES rate, when the wire answered. */
+interface RowRate {
+  /** 1 KES equals this many units of the row's currency. */
+  kesToRate: number;
+  source: string;
+  updatedAt: string | null;
+}
+
+const SOURCE_PHRASE: Record<string, string> = {
+  MANUAL: 'admin-set rate',
+  API: 'API rate',
+  STATIC: 'built-in rate',
+};
+
 /**
  * Render a single currency row in the dropdown. Extracted so the parent
  * component stays declarative and the row's aria-label is consistent.
@@ -50,16 +82,23 @@ function CurrencyRow({
   meta,
   active,
   onSelect,
+  dbRate,
 }: {
   meta: CurrencyMeta;
   active: boolean;
   onSelect: (code: CurrencyCode) => void;
+  /** Present only when the rates wire answered for this row. */
+  dbRate?: RowRate;
 }) {
   // Show "1 KES = N {symbol}" for non-KES currencies; for KES show "Base".
+  // A DB-backed row (admin-set or API) speaks its own figure; the static
+  // constant is only the fallback, never a claim about the wire.
   const rateLabel =
     meta.code === 'KES'
       ? 'Base currency'
-      : `1 KES = ${formatCurrency(1 / meta.exchangeRateToKES, meta.code)}`;
+      : `1 KES = ${formatCurrency(dbRate ? dbRate.kesToRate : 1 / meta.exchangeRateToKES, meta.code)}`;
+
+  const sourcePhrase = dbRate ? SOURCE_PHRASE[dbRate.source] : undefined;
 
   return (
     <DropdownMenuItem
@@ -74,7 +113,7 @@ function CurrencyRow({
         'flex items-center gap-2.5 px-2.5 py-2 cursor-pointer',
         'focus:bg-accent focus:text-accent-foreground',
       )}
-      aria-label={`Switch display currency to ${meta.name} (${meta.code})`}
+      aria-label={`Switch display currency to ${meta.name} (${meta.code})${sourcePhrase ? ` — ${sourcePhrase}` : ''}`}
       role="menuitemradio"
       aria-checked={active}
     >
@@ -88,9 +127,26 @@ function CurrencyRow({
             · {meta.name}
           </span>
         </div>
-        <p className="text-[10px] text-muted-foreground truncate">
-          {rateLabel}
-        </p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="text-[10px] text-muted-foreground tabular-nums truncate">
+            {rateLabel}
+          </p>
+          {dbRate && sourcePhrase && (
+            <span
+              title={dbRate.updatedAt ? `Rate updated ${dbRate.updatedAt}` : undefined}
+              className={cn(
+                'shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium leading-tight',
+                dbRate.source === 'MANUAL' &&
+                  'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+                dbRate.source === 'API' &&
+                  'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+                dbRate.source === 'STATIC' && 'text-muted-foreground',
+              )}
+            >
+              {dbRate.source === 'MANUAL' ? 'admin-set' : dbRate.source === 'API' ? 'API' : 'built-in'}
+            </span>
+          )}
+        </div>
       </div>
       {active && (
         <Check className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden />
@@ -106,13 +162,44 @@ export function CurrencySwitcher({
 }: CurrencySwitcherProps) {
   const { currency, switchCurrency, meta } = useCurrency();
 
+  // The rates wire is fetched lazily on the FIRST open — never on mount,
+  // never on a timer. One attempt per session of the dropdown: a failed
+  // wire leaves `rates` null and the rows render exactly as before
+  // (honest absence — the footer's "indicative" sentence covers it).
+  const [rates, setRates] = useState<Map<string, RowRate> | null>(null);
+  const attemptedRef = useRef(false);
+
+  const handleOpenChange = (next: boolean) => {
+    if (next && !attemptedRef.current) {
+      attemptedRef.current = true;
+      fetch('/api/currency/rates')
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+        .then((body: { data?: { currencies?: RateWireEntry[] } }) => {
+          const map = new Map<string, RowRate>();
+          for (const entry of body?.data?.currencies ?? []) {
+            if (typeof entry?.code !== 'string') continue;
+            map.set(entry.code, {
+              kesToRate: entry.kesToRate,
+              source: entry.source,
+              updatedAt: entry.updatedAt ?? null,
+            });
+          }
+          if (map.size > 0) setRates(map);
+        })
+        .catch(() => {
+          // Silence is the honest state: no chip can claim provenance the
+          // wire did not name. The static rows stand alone.
+        });
+    }
+  };
+
   const handleSelect = (code: CurrencyCode) => {
     switchCurrency(code);
     onChange?.(code);
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
@@ -158,6 +245,7 @@ export function CurrencySwitcher({
               meta={c}
               active={c.code === currency}
               onSelect={handleSelect}
+              dbRate={rates?.get(c.code)}
             />
           ))}
         </div>
@@ -166,6 +254,8 @@ export function CurrencySwitcher({
           Rates are indicative (display only).
           <br />
           Accounting currency remains KES.
+          <br />
+          Each chip names its source: admin-set, API, or built-in.
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

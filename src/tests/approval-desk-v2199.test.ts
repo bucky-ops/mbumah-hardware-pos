@@ -314,9 +314,9 @@ describe('the contrast round - the three re-voices pinned at the source', () => 
 
 describe('the release surfaces', () => {
   it('package.json slots ride at 2.199.0', () => {
-    expect(pkg.version).toBe('2.209.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.209.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.209.0');
+    expect(pkg.version).toBe('2.210.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.210.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.210.0');
   });
 
   it('whats-new leads with the desk story', () => {

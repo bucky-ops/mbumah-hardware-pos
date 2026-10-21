@@ -3,14 +3,20 @@
 // GET  /api/currency/rates - list all stored CurrencyRate rows
 // POST /api/currency/rates - upsert one or more rates (SUPER_ADMIN only)
 //
-// Rates are stored as (base, quote) pairs in the `CurrencyRate` table.
+// Rates are stored as (base, quote) pairs in the `CurrencyRate` table
+// (the model landed in v2.210.0 — the route queried db.currencyRate since
+// birth while the model existed in NO schema, so GET silently fell back
+// to the static list and POST was a guaranteed runtime 500).
 // KES is the canonical pivot currency - typical rows are (KES, USD),
 // (KES, UGX), (KES, TZS). The GET response always includes the static
 // fallback rates from `currency-utils.ts` so the client can display
-// something even before any DB rows exist.
+// something even when no DB rows exist (each entry names its own source:
+// STATIC vs MANUAL vs API — the switcher speaks it per row).
 //
 // Auth:
-//   • GET - any authenticated user can read rates (needed for the switcher).
+//   • GET - any authenticated user can read rates (needed for the switcher;
+//     enforced with requireAuth since v2.210.0 — the header always said so,
+//     but the handler shipped unauthenticated).
 //   • POST - SUPER_ADMIN only (financial configuration).
 
 import { type NextRequest, NextResponse } from 'next/server';
@@ -33,7 +39,10 @@ async function getHandler(): Promise<Response> {
         select: { base: true, quote: true, rate: true, source: true, updatedAt: true },
       });
     } catch {
-      // If the table doesn't exist yet (db:push not run), fall back to static.
+      // The table exists since v2.210.0; this catch now covers genuine DB
+      // outages only. The static fallback stays honest: every currency's
+      // `source` field reads STATIC so the client can never mistake a
+      // built-in constant for an admin-managed rate.
       rows = [];
     }
 
@@ -168,7 +177,7 @@ async function postHandler(request: NextRequest): Promise<Response> {
   });
 }
 
-export const GET = withErrorBoundary(getHandler, 'CURRENCY_RATES');
+export const GET = withErrorBoundary(requireAuth(getHandler), 'CURRENCY_RATES');
 export const POST = requireAuth(postHandler, { roles: ['SUPER_ADMIN'] });
 
 // Suppress unused-import warning for CURRENCY_BY_CODE (kept for future

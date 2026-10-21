@@ -2,6 +2,28 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.210.0] The currency wire finds its model
+
+The round the phantom-model sweep was born — and caught a second founding bug of the same class v2.209.0 killed. The `/api/currency/rates` route has queried `db.currencyRate` since birth while the model existed in NO schema: the `as unknown as PrismaClient` cast in `src/lib/db.ts` hid the missing delegate from TypeScript, the GET's try/catch masked it behind the static list (every rate labeled STATIC forever), and POST was a guaranteed runtime 500. Two files (`currency-utils.ts`, the route header) even documented the model as the designed store — the contract was written, the table never was.
+
+### Added — THE SWEEP LAW (the class-killer)
+- **`scripts/phantom-model-sweep.mjs` + `src/tests/phantom-model-sweep-v2210.test.ts`**: every `db.<delegate>` access in a file that imports the Prisma client must name a model the schema declares — comments and string literals stripped before matching (prose like `@db.Decimal` or "db.ts" can never read as a delegate), client-side IndexedDB code out of scope by construction (it never imports `@/lib/db`). The test re-implements the sweep on the source of record, so CI enforces the law without the script. The sweep converged on exactly ONE real phantom: `db.currencyRate`.
+- **The `CurrencyRate` model exists** (`prisma/schema.prisma` + migration `20261022040000_add_currency_rates`): (base, quote) pairs with the compound `@@unique` the route's `where: { base_quote }` always demanded (without it the upsert was unwritable), the Decimal rate, the `MANUAL | API` source, timestamps; `@@map("currency_rates")`; deliberately NOT store-scoped (global financial configuration, read inside `runWithoutTenant`).
+
+### Fixed — THE WIRE STANDS ON REAL GROUND
+- **POST /api/currency/rates works for the first time in the product's history** (E2E-proven: two rates upserted live, the upsert riding the new compound unique).
+- **GET /api/currency/rates is finally authenticated**: the header documented "any authenticated user" since birth, but the handler shipped unauthenticated — `withErrorBoundary(requireAuth(getHandler))` now matches the documented contract (verified live: no-cookie GET 401, no-cookie POST 403).
+- **The GET catch tells the truth about when it fires**: the old comment ("if the table doesn't exist yet") described a table that does now exist — the catch is outage-only, and the static fallback stays honest (every currency's `source` reads STATIC; the client can never mistake a built-in constant for an admin-managed rate).
+
+### Added — THE SWITCHER SPEAKS EACH RATE'S SOURCE
+- **`CurrencySwitcher` learns its consumer role** (the endpoint always needed one): the first open lazily fetches `/api/currency/rates` (never on mount, never on a timer, one attempt per mount), overlays DB rows on the static list, and each row speaks its provenance with a measured chip — emerald **admin-set** (MANUAL, 5.09:1), blue **API** (6.26:1), muted **built-in** (STATIC, 6.00:1) on the popover ground; dark variants 9.67/8.58/5.71 (measured by `scripts/contrast-math-switcher-chips-v2210.mjs` BEFORE the literals were written). The row's aria-label names the provenance too ("Switch display currency to US Dollar (USD) — admin-set rate").
+- **A wire that never answers renders NO chip** — honest absence, never an invented source; the footer's "indicative" sentence stays the truth and now explains the chips ("Each chip names its source: admin-set, API, or built-in.").
+
+### Style — THE EXPERT-TABLE CHIP AUDIT (the badge sweep's final third)
+- **Eleven stragglers re-voiced on the white-card ground** (`src/components/org/experts.tsx`, measured by `scripts/contrast-math-expert-chips-v2210.mjs`): ten TEXT sites riding `red-500` (3.82) or `orange-500/600` (2.89/3.59) — the System tab's check-fail text, the env badge's fail branch, the trial-balance "Off" tile, the debt "Outstanding"/"90+ days" tiles, the rentals "Overdue" tile, the M-Pesa "Mismatch" tile, the health breakdown's failing scores, the low-stock tile and the reorder-watchlist figures — now `red-700` (6.42) / `orange-700` (5.23). The Unavailable panel's AlertTriangle icon was GRAPHICS below the 3:1 bar (`amber-500`, 2.05) — now `amber-600` (3.05). The honest passers stay untouched (red-600 badges 4.76, amber-700 5.05, emerald-700 5.37, slate-500 4.77).
+
+**GATES**: vitest 4493/4493 (211 files; NEW phantom-model-sweep-v2210 22 tests: the sweep law + the stripping machinery + model/migration pins + route pins + switcher chips + the expert audit pins) · lint 0 errors / 532 warnings (exactly at baseline) · both contrast scripts green · build exit 0 (OOM-safe) · live E2E on :3200 @2.210.0: What's New heads 2.210.0, all four switcher rows speak their source (USD/UGX admin-set after the live POST, KES/TZS built-in), no-cookie GET 401 / POST 403, the expert Debt tab renders the re-voiced tiles, console zero app errors.
+
 ## [2.209.0] The dead-letter queue speaks its composition
 
 The round the DLQ desk rendered what its wire always carried — and the round the live E2E caught the desk's founding bug. Since Phase 8 the `/api/health/dlq` response has included a `metrics` block with `byOperationType`, `byTargetService` and `oldestPendingAt` — the desk's queryFn CAST the shape and the surface rendered none of it (the only mention was the type assertion). Then the E2E went to seed the queue for the button-press walk and the desk's own wire answered 500: **the `DeadLetterQueue` model never existed in any schema**.

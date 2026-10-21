@@ -1448,6 +1448,27 @@ model DeadLetterQueue {
   @@map("dead_letter_queue")
 }
 
+// CurrencyRate (v2.210.0) - the model the /api/currency/rates route queried
+// since birth without it ever existing (the same phantom class as
+// DeadLetterQueue v2.209.0, found by the phantom-model sweep). Stores
+// admin-managed (source MANUAL) or API-fetched (source API) exchange rates
+// as (base, quote) pairs, KES the canonical pivot. GLOBAL financial
+// configuration - deliberately NOT store-scoped and NOT in
+// STORE_SCOPED_MODELS (routes read it inside runWithoutTenant).
+model CurrencyRate {
+  id        String   @id @default(cuid())
+  base      String
+  quote     String
+  rate      Decimal
+  source    String   @default("MANUAL") // MANUAL | API
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([base, quote])
+  @@map("currency_rates")
+}
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PAYROLL & HUMAN RESOURCES (Phase 1 - ERP Enhancement)
 // ─────────────────────────────────────────────────────────────────────────────
