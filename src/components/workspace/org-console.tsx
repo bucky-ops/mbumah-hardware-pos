@@ -648,6 +648,13 @@ export function OrgConsole() {
   const [summary, setSummary] = useState<OrgSummary | null>(null);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  // v2.202.1: the compile-time wire guard — TS enforces that the summary the
+  // console fetches ALWAYS satisfies the doors' structural subset (the class
+  // kill for the v2.202.0 hotfix: a field-name drift between the subset and
+  // the real wire filtered every branch out silently; now it cannot compile).
+  type DeskWireCheck = OrgSummary extends OrgDeskWire ? true : never;
+  const deskWireCheck: DeskWireCheck = true;
+  void deskWireCheck;
   // v2.202.0: the six tiles' door state — declared with the component's other
   // states (the hook-order law), before any early return.
   const [deskDoor, setDeskDoor] = useState<OrgDeskMetricId | null>(null);

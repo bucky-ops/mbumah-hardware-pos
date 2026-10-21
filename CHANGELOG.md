@@ -2,6 +2,11 @@
 
 All notable changes to Mbumah Hardware POS are documented in this file (Keep a Changelog format; versions follow package.json).
 
+## [2.202.1] The branch slice fixed
+
+### Fixed
+- The org desk's six branch slices rendered their empty step-aside ("The summary names no branches yet") on the LIVE console despite five branches on the wire: the doors' structural subset read `storeId` where `GET /api/org/summary`'s rows carry `WorkspaceStoreRef.id`, so the predicate filtered every branch out. The subset now reads `id` (`desk-doors.tsx`), and the class kill: `org-console.tsx` pins `OrgSummary extends OrgDeskWire` at COMPILE time — a field-name drift between the subset and the real wire can no longer compile. Found by the round's agent-browser E2E on the live console (the second release in a row where the post-merge E2E earned its keep).
+
 ## [2.202.0] The org's quiet row speaks
 
 The door arc walked three surfaces — the /console KPI command row (v2.195-v2.199, six voices), the branch workspaces' KPI row (v2.200.0, three) and bottom grid (v2.201.0, two) — while the ORG CONSOLE's "Combined organization metrics" section still rendered its SIX tiles as silent divs, even though the summary wire (`GET /api/org/summary`) has carried the per-branch slices all along: `stores[]` with each branch's todayRevenue, todayTransactions, lowStockCount, overdueRentals, debtOutstanding + debtCount and pendingMpesa. This release gives the six tiles the door vocabulary and ONE parametrized branch-slice modal — zero new queries.

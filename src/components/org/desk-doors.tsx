@@ -58,7 +58,8 @@ export interface OrgDeskWire {
     pendingMpesa?: number;
   } | null;
   stores?: Array<{
-    storeId?: string;
+    /** WorkspaceStoreRef.id — the field the summary's rows actually carry. */
+    id?: string;
     name?: string;
     todayRevenue?: number;
     todayTransactions?: number;
@@ -191,9 +192,9 @@ function deskRows(metric: OrgDeskMetric, stores: NonNullable<OrgDeskWire['stores
   storeId: string; name: string; value: number; countText: string | null;
 }> {
   return stores
-    .filter((s): s is NonNullable<typeof s> => !!s && s.storeId != null)
+    .filter((s): s is NonNullable<typeof s> => !!s && s.id != null)
     .map((s) => ({
-      storeId: s.storeId as string,
+      storeId: s.id as string,
       name: s.name ?? 'Unnamed branch',
       value: metric.slice(s),
       countText: metric.countLine ? metric.countLine(s) : null,

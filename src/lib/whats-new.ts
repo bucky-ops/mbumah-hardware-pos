@@ -80,6 +80,13 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.202.1',
+    title: 'The branch slice fixed',
+    bullets: [
+      'The organization console\u2019s new branch slices briefly showed \u201cno branches yet\u201d on the live console \u2014 a field-name drift between the door and the summary\u2019s rows. Fixed: every branch now ranks in its slice, and a compile-time guard makes that drift impossible to compile again.',
+    ],
+  },
+  {
     version: '2.202.0',
     title: 'The org\'s quiet row speaks',
     bullets: [

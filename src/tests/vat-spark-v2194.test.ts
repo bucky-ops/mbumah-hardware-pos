@@ -183,9 +183,9 @@ describe('the dark voice fixed - the house pattern over the dialog ground', () =
 
 describe('docs and release surfaces', () => {
   it('package.json rides at 2.198.0 (all three slots) and the verify script is wired', () => {
-    expect(pkg.version).toBe('2.202.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.202.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.202.0');
+    expect(pkg.version).toBe('2.202.1');
+    expect(pkg.mbumah.releaseVersion).toBe('2.202.1');
+    expect(pkg.mbumah.baseVersion).toBe('2.202.1');
     expect(pkg.scripts['verify:v2-194-0']).toBe('node scripts/verify-v2-194-0.mjs');
     expect(pkg.scripts['verify:v2-193-0']).toBe('node scripts/verify-v2-193-0.mjs');
     expect(readRepo('scripts/verify-v2-194-0.mjs')).toContain('v2.194.0 verification');
@@ -204,8 +204,8 @@ describe('docs and release surfaces', () => {
 
   it('the head-pin counters re-anchored to the new head', () => {
     const counter = readRepo('src/tests/console-changelog.test.ts');
-    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(92);");
+    expect(counter).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(93);");
     const a11yShell = readRepo('src/tests/a11y-shell-v2148.test.ts');
-    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(92);");
+    expect(a11yShell).toContain("expect(whatsNewUnreadCount('2.110.0')).toBe(93);");
   });
 });

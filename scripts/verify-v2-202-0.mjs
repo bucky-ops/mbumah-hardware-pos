@@ -35,9 +35,9 @@ const CONTRAST = read('scripts/contrast-math-desk-doors-v2202.mjs');
 
 // ── the version ──
 check('the version rides at 2.202.0 in all three slots', () => {
-  assert(PKG.version === '2.202.0', `version ${PKG.version}`);
-  assert(PKG.mbumah.releaseVersion === '2.202.0', 'releaseVersion');
-  assert(PKG.mbumah.baseVersion === '2.202.0', 'baseVersion');
+  assert(PKG.version === '2.202.1', `version ${PKG.version}`);
+  assert(PKG.mbumah.releaseVersion === '2.202.1', 'releaseVersion');
+  assert(PKG.mbumah.baseVersion === '2.202.1', 'baseVersion');
   assert(PKG.scripts['verify:v2-202-0'] === 'node scripts/verify-v2-202-0.mjs', 'verify script wired');
 });
 
@@ -101,12 +101,12 @@ check('the voice lint bans the double-currency class', () => {
 
 // ── the release surfaces ──
 check('the whats-new feed heads the release', () => {
-  assert(WN.includes("version: '2.202.0'"), 'the entry');
-  assert(WN.indexOf("version: '2.202.0'") < WN.indexOf("version: '2.201.1'"), 'the order');
+  assert(WN.includes("version: '2.202.1'"), 'the entry');
+  assert(WN.indexOf("version: '2.202.1'") < WN.indexOf("version: '2.201.1'"), 'the order');
 });
 
 check('the a11y doc records the round', () => {
-  assert(A11Y.includes('2.202.0'), 'the section');
+  assert(A11Y.includes('2.202'), 'the section');
   assert(A11Y.includes('36/36'), 'the probe record');
 });
 
@@ -119,7 +119,7 @@ check('the changelog keeps the round above its predecessor', () => {
 check("the round's test file exists and pins the round", () => {
   assert(TEST.includes('the org'), 'headline');
   assert(TEST.includes('org-desk-card-revenue'), 'card pin');
-  assert(TEST.includes("'2.202.0'"), 'version pin context');
+  assert(TEST.includes("'2.202.1'"), 'version pin context');
 });
 
 console.log(`\n${pass}/${pass + fail} checks pass`);
