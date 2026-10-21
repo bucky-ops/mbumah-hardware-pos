@@ -278,6 +278,12 @@ async function orgSummaryHandler(request: NextRequest): Promise<Response> {
       spark: storeSparks(trendRows, s.id, windows.startToday, TREND_DAYS),
       weekTotal: round2(curMap.get(s.id)?.amount ?? 0),
       priorWeekTotal: round2(priMap.get(s.id)?.amount ?? 0),
+      // v2.195.0: the branch's settled COUNT and its prior — the SAME two
+      // groupBys' `_count._all` (fetched for the top mover since v2.174.0),
+      // mapped for the expert console's transactions drill-down rows. Zero
+      // new queries: the counts were already in memory, waiting.
+      txWeek: curMap.get(s.id)?.count ?? 0,
+      txPrior: priMap.get(s.id)?.count ?? 0,
     }));
 
     // EMS v2.20.0 (spec Phase 4.8): HR tiles for the organization console —

@@ -36,7 +36,11 @@ const kpiRow = readRepo('src/components/org/kpi-row.tsx');
 const doc = readRepo('docs/multi-store-workspaces.md');
 const whatsNew = readRepo('src/lib/whats-new.ts');
 
+// v2.195.0: the KPI row's declaration grows the optional txWeek/txPrior
+// count fields (the transactions drill-down's branch rows); the
+// primitives + dashboard declarations keep the v2.176.0 shape.
 const DECL = 'perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;';
+const KPI_DECL = 'perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number; txWeek?: number; txPrior?: number }> | null;';
 
 describe('weekDelta EXECUTED - the honesty rule', () => {
   it('a branch with NO prior week has NO comparison — null, never a fabricated "+0%"', () => {
@@ -131,7 +135,7 @@ describe('the tolerant declarations - one contract, three files', () => {
   });
 
   it('the KPI row carries the SAME declaration', () => {
-    expect(kpiRow).toContain(DECL);
+    expect(kpiRow).toContain(KPI_DECL);
   });
 });
 
@@ -273,9 +277,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads 2.177.0 in all three slots + the verify script', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.194.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.194.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.194.0');
+    expect(pkg.version).toBe('2.195.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.195.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.195.0');
     expect(pkg.scripts['verify:v2-177-0']).toBe('node scripts/verify-v2-177-0.mjs');
   });
 });

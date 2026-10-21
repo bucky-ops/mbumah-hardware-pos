@@ -80,6 +80,15 @@ export function whatsNewMarkAllTarget(): string | null {
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    version: '2.195.0',
+    title: 'The transactions card finds its week',
+    bullets: [
+      'The Transactions card on the console now opens its own drill-down — the 7-day checkout shape, the four count cells, the week-over-week verdict, and the week by branch — mirroring the Revenue card’s modal in the face’s blue.',
+      'The branch rows name which branch moved the week’s count, loudest first, with the same up/down verdict chip the revenue table speaks.',
+      'The modal’s dark mode is truly fixed: last release’s dark tokens sat on a panel that stayed white — measured 1.05:1 (invisible). The panel now goes dark with the dialog, and every combination was re-audited over the real surfaces: 46 of 46 pass.',
+    ],
+  },
+  {
     version: '2.194.0',
     title: 'The VAT face gets its spark',
     bullets: [

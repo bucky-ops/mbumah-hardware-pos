@@ -30,12 +30,18 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
    * nullable: a branch manager without matrix access (or an older cached
    * answer) keeps the modal's org-wide story only, never a crash or a
    * fabricated shape.
+   * v2.195.0: each entry may also carry the branch's settled COUNT windows
+   * (`txWeek`/`txPrior`) — the transactions drill-down's branch rows. Still
+   * optional: an older cached answer keeps the count modal's org-wide
+   * story, the branch block steps aside with its honest note.
    */
-  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;
+  perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number; txWeek?: number; txPrior?: number }> | null;
   /** Branch names for the drill-down rows, joined by storeId (never row order). */
   stores?: StoreRow[];
 }) {
   const [trendOpen, setTrendOpen] = useState(false);
+  // v2.195.0: the transactions drill-down — the KPI row's second voice.
+  const [txOpen, setTxOpen] = useState(false);
   // v2.187.0: the modal's lens — GROSS is the default and the contract
   // (v2.185.0); net is an explicit analyst turn, never a second meaning.
   const [lens, setLens] = useState<'gross' | 'net'>('gross');
@@ -44,6 +50,11 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
   // per-day net buckets — an older cached answer keeps the calm gross modal
   // (no toggle, no broken promises), the same tolerance the ribbon speaks.
   const netReady = Array.isArray(k.revenue.netSpark) && k.revenue.netSpark.length === 7;
+  // v2.195.0: the count face's shape — available only when the payload
+  // carried the per-day COUNT buckets (a v2.195.0 answer). An older cached
+  // answer keeps the legacy text line on the card and the honest note in
+  // the modal — no broken spark, no fabricated shape.
+  const txSparkReady = Array.isArray(k.transactions.spark) && k.transactions.spark.length === 7;
   const debtHot = k.debt.total > 400_000;
   const pendingTotal = k.pending.purchaseOrders + k.pending.openShifts + k.pending.expenses;
 
@@ -64,6 +75,26 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
         }))
         .sort((a, b) => b.weekTotal - a.weekTotal)
     : null;
+
+  // v2.195.0: the transactions modal's branch rows — the SAME perStoreTrend
+  // payload, now carrying each branch's settled count and its prior (both
+  // mapped from the summary route's existing per-store groupBys — zero new
+  // queries on either side). Built only when the fields arrived; loudest
+  // count first; a quiet branch still speaks (honest zeros).
+  const branchTx = perStoreTrend && stores.length > 0 && perStoreTrend.some((t) => t.txWeek != null)
+    ? perStoreTrend
+        .map((t) => ({
+          storeId: t.storeId,
+          txWeek: t.txWeek ?? 0,
+          txPrior: t.txPrior ?? 0,
+          name: stores.find((s) => s.id === t.storeId)?.name ?? 'Branch',
+        }))
+        .sort((a, b) => b.txWeek - a.txWeek)
+    : null;
+  // v2.195.0: did a perStoreTrend payload arrive WITHOUT the count fields
+  // (a pre-2.195.0 cached answer)? The branch block then speaks its honest
+  // step-aside instead of silently vanishing.
+  const branchTxStale = perStoreTrend != null && stores.length > 0 && !branchTx;
 
   return (
     <section aria-label="KPI command row" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -95,9 +126,30 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
         </div>
       </button>
 
-      {/* Transactions */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><CalendarCheck2 className="h-3.5 w-3.5 text-blue-500" /> Transactions</div>
+      {/* Transactions — v2.195.0: a VOICE, not a tile. The Revenue card
+          told the money's story since v2.173.0 while this card sat mute
+          beside it, even though its week was already on the wire. The card
+          is now the second button of the row and opens the transactions
+          drill-down; it wears the face's blue edge + live dot (the family
+          vocabulary the Revenue card speaks in orange) and the settled
+          qualifier chip (the v2.185.0 gross-chip's count-face sibling). */}
+      <button
+        onClick={() => setTxOpen(true)}
+        data-testid="transactions-card"
+        className="focus-ring group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+      >
+        <span className="absolute inset-y-0 left-0 w-1 bg-blue-500" />
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <CalendarCheck2 className="h-3.5 w-3.5 text-blue-500" /> Transactions
+            {/* v2.195.0: the settled-count qualifier — every number on this
+                card and in its modal counts the SAME settled rows the
+                Revenue card sums (COMPLETED or PARTIAL SALE rows), so the
+                two cards can never be read as different populations. */}
+            <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-blue-700 ring-1 ring-blue-200" title="Settled checkouts — the same rows the Revenue card sums">settled</span>
+          </span>
+          <span className="h-2 w-2 rounded-full bg-blue-500 anim-pulse-dot" />
+        </div>
         <div className="mt-1 flex items-baseline gap-2">
           <CountUp value={k.transactions.today} className="text-2xl font-bold text-blue-600" />
           <span className={`flex items-center text-xs font-semibold ${k.transactions.variancePct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
@@ -105,8 +157,20 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
             {k.transactions.variancePct >= 0 ? '+' : ''}{k.transactions.variancePct}%
           </span>
         </div>
-        <p className="mt-2 text-[10px] text-slate-500">today · 7d {num(k.transactions.weekTotal)} vs prior {num(k.transactions.priorWeekTotal)}</p>
-      </div>
+        {/* v2.195.0: the card learns its shape — the per-day COUNT spark
+            (the settled rows counted one each in the SAME pass as the
+            revenue spark) rides under the number, mirroring the Revenue
+            card's footer. Tolerant: an older cached answer keeps the
+            legacy text line, and the card opens the modal either way. */}
+        {txSparkReady ? (
+          <div className="mt-2 flex items-end justify-between">
+            <Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" />
+            <span className="text-[10px] text-slate-500">7d {num(k.transactions.weekTotal)}</span>
+          </div>
+        ) : (
+          <p className="mt-2 text-[10px] text-slate-500">today · 7d {num(k.transactions.weekTotal)} vs prior {num(k.transactions.priorWeekTotal)}</p>
+        )}
+      </button>
 
       {/* Low stock */}
       <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${k.lowStock.count > 0 ? 'ring-1 ring-orange-200' : ''}`}>
@@ -158,7 +222,13 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
                 the SAME series minus VAT, under its own honest name. */}
             <DialogTitle className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-emerald-700" /> {lens === 'gross' ? 'Revenue trend (gross)' : 'Revenue trend (net)'}</DialogTitle>
           </DialogHeader>
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+          {/* v2.195.0: this panel owns its dark half — same discovery, same
+              fix as the transactions modal below. The v2.194.0 dark tokens
+              inside were derived over the dialog ground, but the DOM
+              composites them against THIS panel, which stayed light;
+              dark:bg-slate-900 closes the gap (the lens toggle's dark face
+              since v2.187.0 was already slate-900). */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
             {/* v2.187.0: the lens toggle — an explicit two-face switch, not a
                 quiet second meaning. Renders ONLY when the payload carried
                 the per-day net buckets (a v2.187.0 answer): an older cached
@@ -345,6 +415,107 @@ export function KpiRow({ data, perStoreTrend, stores = [] }: {
             <div className="mt-3 border-t border-slate-100 pt-3">
               <p data-testid="revenue-net-branch-note" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
                 the branch rows speak the gross till face — net by branch is not on the wire, so they rest while the net lens is on. Flip back to Gross to compare branches.
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* v2.195.0: the transactions drill-down — the KPI row's second voice.
+          The anatomy mirrors the revenue modal's (spark, stat grid,
+          week-over-week strip, branch rows) but speaks COUNTS — the same
+          settled rows counted one each — and wears the face's blue so the
+          two modals never merge at a glance. Every number was already on
+          the wire; the drill-down composes, it never invents. */}
+      <Dialog open={txOpen} onOpenChange={setTxOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CalendarCheck2 className="h-4 w-4 text-blue-600" /> Transactions trend</DialogTitle>
+          </DialogHeader>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+            {/* v2.195.0: the panel owns its dark half. THE DISCOVERY: the
+                v2.194.0 dark-voice fix gave the modal's interior dark:text
+                tokens while this body panel kept its light paint — the DOM
+                composites against the NEAREST painted ancestor, so the
+                dialog's dark ground never reached the texts. Measured live:
+                dark:text-slate-100 values on the unpainted slate-50 panel
+                ≈ 1.09:1 (invisible), the -300 strip voices ≈ 1.5:1. The
+                panel now paints dark:bg-slate-900 in dark mode — the same
+                dark face the lens toggle already wore — and the v2.194
+                tokens become true over it (the contrast script re-derives
+                every family over the REAL chain: dialog → panel → strip
+                → chip). */}
+            {txSparkReady ? (
+              <div data-testid="transactions-spark" title="Settled checkouts per day, last 7 days">
+                <Sparkline data={k.transactions.spark ?? []} stroke="#2563eb" width={380} height={80} />
+              </div>
+            ) : (
+              // The honest absence: an older cached answer carries no
+              // per-day counts. The modal says so instead of drawing a
+              // fabricated flat line — the counts below still speak.
+              <p data-testid="transactions-spark-absent" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                the per-day shape is not on this cached answer — the counts below still speak. Reload to fetch it.
+              </p>
+            )}
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <div><span className="text-slate-500 dark:text-slate-400">Today</span><p data-testid="transactions-today" className="font-bold text-slate-800 dark:text-slate-100">{num(k.transactions.today)}</p></div>
+              <div><span className="text-slate-500 dark:text-slate-400">7d total</span><p data-testid="transactions-week" className="font-bold text-slate-800 dark:text-slate-100">{num(k.transactions.weekTotal)}</p></div>
+              <div><span className="text-slate-500 dark:text-slate-400">Prior 7d</span><p data-testid="transactions-prior" className="font-bold text-slate-800 dark:text-slate-100">{num(k.transactions.priorWeekTotal)}</p></div>
+              <div><span className="text-slate-500 dark:text-slate-400">Avg / day (7d)</span><p data-testid="transactions-avg" className="font-bold text-slate-800 dark:text-slate-100">{num(Math.round(k.transactions.weekTotal / 7))}</p></div>
+            </div>
+            {/* The week-over-week strip — the net lens strip's blue sibling
+                (same anatomy: label, week figure, arrowed verdict, prior
+                chip), speaking the face's blue family. The verdict is the
+                SAME honesty rule: up emerald, down red, flat calm, and a
+                zero prior renders NO percentage — never an invented "0%",
+                never a NaN. Core fields both — the strip always renders. */}
+            {(() => {
+              const txDelta = k.transactions.weekTotal - k.transactions.priorWeekTotal;
+              const txPct = k.transactions.priorWeekTotal > 0 ? Math.round((txDelta / k.transactions.priorWeekTotal) * 1000) / 10 : null;
+              return (
+                <div data-testid="transactions-wow-strip" className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg border border-blue-100 bg-blue-50/70 px-2.5 py-1.5 dark:border-blue-500/30 dark:bg-blue-500/10">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300">transactions week-over-week</span>
+                  <span data-testid="transactions-wow-week" className="text-xs font-semibold tabular-nums text-blue-900 dark:text-blue-200">{num(k.transactions.weekTotal)}</span>
+                  <span
+                    data-testid="transactions-wow"
+                    title={`Transactions week-over-week: ${num(k.transactions.weekTotal)} vs prior ${num(k.transactions.priorWeekTotal)}`}
+                    className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ${txDelta > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30' : txDelta < 0 ? 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30' : 'bg-slate-50 text-slate-500 ring-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-500/30'}`}
+                  >
+                    {txDelta > 0 ? '▲' : txDelta < 0 ? '▼' : '—'} {txPct == null ? 'vs prior' : `${txDelta > 0 ? '+' : ''}${txPct}% vs prior`}
+                  </span>
+                  <span data-testid="transactions-wow-prior" className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-blue-700 ring-1 ring-blue-100 dark:bg-blue-500/20 dark:text-blue-300 dark:ring-blue-500/30" title="Prior week settled checkouts">prior {num(k.transactions.priorWeekTotal)}</span>
+                </div>
+              );
+            })()}
+          </div>
+          {/* The week by branch — counts this time. The revenue modal's
+              branch block's sibling: same join by storeId, same loudest-
+              first order, same verdict chip primitive (it takes numbers,
+              counts are numbers), honest zeros stay visible. */}
+          {branchTx && branchTx.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">The week by branch</p>
+              <p className="mb-2 text-[10px] text-slate-500">the same settled rows the org line counts, branch by branch</p>
+              <ul className="space-y-1.5">
+                {branchTx.map((b) => (
+                  <li key={b.storeId} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-xs text-slate-600 dark:text-slate-400">{b.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <WeekDeltaChip current={b.txWeek} prior={b.txPrior} />
+                      <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{num(b.txWeek)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* The honest step-aside: the branch payload arrived but carried
+              no count fields (a pre-2.195.0 cached answer). One line, the
+              reason, and the way back — never a silent void. */}
+          {branchTxStale && (
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              <p data-testid="transactions-branch-stale" className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-2 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
+                counts by branch are not on this cached answer — the org story above still speaks. Reload to fetch them.
               </p>
             </div>
           )}

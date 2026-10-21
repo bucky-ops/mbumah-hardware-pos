@@ -110,7 +110,7 @@ describe('the type contract - one tolerant declaration, two surfaces', () => {
   });
 
   it('KpiRow carries the same optional prop shape + the stores list for names', () => {
-    expect(kpiRow).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number }> | null;');
+    expect(kpiRow).toContain('perStoreTrend?: Array<{ storeId: string; spark: number[]; weekTotal: number; priorWeekTotal?: number; txWeek?: number; txPrior?: number }> | null;');
     expect(kpiRow).toContain('stores?: StoreRow[];');
   });
 });
@@ -222,9 +222,9 @@ describe('the release surfaces', () => {
 
   it('package.json leads the current version in all three slots + the verify script (re-anchored for 2.181.0)', () => {
     const pkg = JSON.parse(readRepo('package.json'));
-    expect(pkg.version).toBe('2.194.0');
-    expect(pkg.mbumah.releaseVersion).toBe('2.194.0');
-    expect(pkg.mbumah.baseVersion).toBe('2.194.0');
+    expect(pkg.version).toBe('2.195.0');
+    expect(pkg.mbumah.releaseVersion).toBe('2.195.0');
+    expect(pkg.mbumah.baseVersion).toBe('2.195.0');
     expect(pkg.scripts['verify:v2-176-0']).toBe('node scripts/verify-v2-176-0.mjs');
   });
 });
